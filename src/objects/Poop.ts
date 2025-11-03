@@ -1,12 +1,10 @@
 import Phaser from 'phaser';
 
-export default class Poop extends Phaser.GameObjects.Text {
+export default class Poop extends Phaser.Physics.Arcade.Sprite {
   private fallSpeed: number;
 
   constructor(scene: Phaser.Scene, x: number, y: number, difficulty: number = 1) {
-    super(scene, x, y, '💩', {
-      fontSize: '30px'
-    });
+    super(scene, x, y, 'poop');
 
     // 원점을 중앙으로 설정
     this.setOrigin(0.5);
@@ -18,11 +16,14 @@ export default class Poop extends Phaser.GameObjects.Text {
     scene.add.existing(this);
     scene.physics.add.existing(this);
 
+    // 똥 이미지 크기 설정
+    this.setDisplaySize(40, 40);
+
     // 물리 바디가 생성된 후 설정 적용
     const body = this.body as Phaser.Physics.Arcade.Body;
     if (body) {
       // 히트박스 설정
-      body.setSize(20, 20);
+      body.setSize(500, 500);
       body.setCollideWorldBounds(false);
       body.setVelocityY(this.fallSpeed);
     }

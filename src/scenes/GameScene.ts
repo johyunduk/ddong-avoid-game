@@ -15,15 +15,26 @@ export default class GameScene extends Phaser.Scene {
     super('GameScene');
   }
 
+  preload() {
+    // 이미지 로드
+    this.load.image('background', 'assets/background.png');
+    this.load.image('front', 'assets/front.png');
+    this.load.image('left', 'assets/left.png');
+    this.load.image('right', 'assets/right.png');
+    this.load.image('poop', 'assets/poop.png');
+  }
+
   create() {
-    // 배경색 설정
-    this.cameras.main.setBackgroundColor('#87CEEB');
+    // 배경 이미지 추가
+    const background = this.add.image(200, 300, 'background');
+    // 배경을 화면에 맞게 조정
+    background.setDisplaySize(400, 600);
 
     // 월드 바운드 설정 (플레이어가 화면 안쪽에만 머무르도록)
     this.physics.world.setBounds(15, 0, 370, 600);
 
     // 플레이어 생성
-    this.player = new Player(this, 200, 500);
+    this.player = new Player(this, 200, 520);
 
     // 💩 그룹 생성
     this.poops = this.physics.add.group({
