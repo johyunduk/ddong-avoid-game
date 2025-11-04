@@ -10,6 +10,7 @@ export default class GameScene extends Phaser.Scene {
   private gameOver: boolean = false;
   private spawnTimer!: Phaser.Time.TimerEvent;
   private difficultyLevel: number = 2;
+  private bgMusic!: Phaser.Sound.BaseSound;
 
   constructor() {
     super('GameScene');
@@ -22,6 +23,9 @@ export default class GameScene extends Phaser.Scene {
     this.load.image('left', 'assets/left.png');
     this.load.image('right', 'assets/right.png');
     this.load.image('poop', 'assets/poop.png');
+
+    // 오디오 로드
+    this.load.audio('bgMusic', 'assets/poop.mp3');
   }
 
   create() {
@@ -29,6 +33,10 @@ export default class GameScene extends Phaser.Scene {
     const background = this.add.image(200, 300, 'background');
     // 배경을 화면에 맞게 조정
     background.setDisplaySize(400, 600);
+
+    // 배경음악 재생 (무한 반복)
+    this.bgMusic = this.sound.add('bgMusic', { loop: true, volume: 0.5 });
+    this.bgMusic.play();
 
     // 월드 바운드 설정 (플레이어가 화면 안쪽에만 머무르도록)
     this.physics.world.setBounds(15, 0, 370, 600);
@@ -164,6 +172,8 @@ export default class GameScene extends Phaser.Scene {
 
     // 재시작
     this.input.once('pointerdown', () => {
+      // 모든 사운드 정리
+      this.sound.stopAll();
       this.scene.restart();
       this.gameOver = false;
       this.score = 0;
