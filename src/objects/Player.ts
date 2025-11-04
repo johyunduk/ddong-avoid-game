@@ -43,16 +43,16 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
       this.setVelocityX(0);
     }
 
-    // 터치/마우스 입력 처리
+    // 터치/마우스 입력 처리 (화면 중앙 기준)
     if (this.scene.input.activePointer.isDown) {
       const pointerX = this.scene.input.activePointer.x;
-      const playerX = this.x;
+      const screenCenter = this.scene.cameras.main.width / 2;
 
-      if (pointerX < playerX - 20) {
+      if (pointerX < screenCenter) {
         this.setVelocityX(-this.speed);
         this.setTexture('left'); // 왼쪽 이미지
         isMoving = true;
-      } else if (pointerX > playerX + 20) {
+      } else if (pointerX > screenCenter) {
         this.setVelocityX(this.speed);
         this.setTexture('right'); // 오른쪽 이미지
         isMoving = true;
