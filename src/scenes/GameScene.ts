@@ -174,20 +174,32 @@ export default class GameScene extends Phaser.Scene {
     this.gameOver = true;
     this.physics.pause();
 
+    // 반투명 배경 추가
+    // const overlay = this.add.rectangle(200, 300, 380, 250, 0x000000, 0.7);
+
     // 게임 오버 화면
     this.add.text(200, 250, 'GAME OVER', {
       fontSize: '48px',
-      color: '#ff0000'
+      color: '#ff0000',
+      fontStyle: 'bold',
+      stroke: '#000000',
+      strokeThickness: 6
     }).setOrigin(0.5);
 
     this.add.text(200, 320, `최종 점수: ${this.score}`, {
       fontSize: '24px',
-      color: '#000'
+      color: '#ffffff',
+      fontStyle: 'bold',
+      stroke: '#000000',
+      strokeThickness: 4
     }).setOrigin(0.5);
 
     this.add.text(200, 370, '클릭하여 모드 선택으로', {
       fontSize: '20px',
-      color: '#000'
+      color: '#ffffff',
+      fontStyle: 'bold',
+      stroke: '#000000',
+      strokeThickness: 3
     }).setOrigin(0.5);
 
     // 재시작 - 모드 선택 씬으로 돌아가기
