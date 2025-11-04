@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import Player from '../objects/Player';
 import Poop from '../objects/Poop';
+import { GameMode } from '../types/GameMode';
 
 export default class GameScene extends Phaser.Scene {
   private player!: Player;
@@ -11,9 +12,18 @@ export default class GameScene extends Phaser.Scene {
   private spawnTimer!: Phaser.Time.TimerEvent;
   private difficultyLevel: number = 2;
   private bgMusic!: Phaser.Sound.BaseSound;
+  private gameMode: GameMode = GameMode.CLASSIC;
 
   constructor() {
     super('GameScene');
+  }
+
+  init(data: { gameMode?: GameMode }) {
+    // ModeSelectScene으로부터 게임 모드를 받음
+    if (data.gameMode) {
+      this.gameMode = data.gameMode;
+      console.log('Game Mode:', this.gameMode);
+    }
   }
 
   preload() {
@@ -94,6 +104,10 @@ export default class GameScene extends Phaser.Scene {
       callbackScope: this,
       loop: true
     });
+
+    // 히트박스 디버그 표시, hit box visibility
+    // this.physics.world.createDebugGraphic();
+    // this.physics.world.drawDebug = true;
   }
 
   update() {
@@ -119,6 +133,12 @@ export default class GameScene extends Phaser.Scene {
         poop.body.velocity.y = fallSpeed;
       }
     }
+
+    // TODO: 아이템 모드 구현
+    // if (this.gameMode === GameMode.ITEM) {
+    //   // 똥 사이에 아이템 하나씩 생성
+    //   this.spawnItem();
+    // }
   }
 
   private updateScore() {
@@ -165,19 +185,19 @@ export default class GameScene extends Phaser.Scene {
       color: '#000'
     }).setOrigin(0.5);
 
-    this.add.text(200, 370, '클릭하여 재시작', {
+    this.add.text(200, 370, '클릭하여 모드 선택으로', {
       fontSize: '20px',
       color: '#000'
     }).setOrigin(0.5);
 
-    // 재시작
+    // 재시작 - 모드 선택 씬으로 돌아가기
     this.input.once('pointerdown', () => {
       // 모든 사운드 정리
       this.sound.stopAll();
-      this.scene.restart();
       this.gameOver = false;
       this.score = 0;
       this.difficultyLevel = 2;
+      this.scene.start('ModeSelectScene');
     });
 
     // 토스 SDK 연동 부분 (나중에 활성화)

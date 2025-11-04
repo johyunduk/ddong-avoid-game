@@ -16,8 +16,8 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     this.setDisplaySize(60, 80);
 
     // 히트박스를 몸통 중심부만 (더 작게)
-    this.setSize(500, 750);
-    this.setOffset(285,200);
+    this.setSize(400, 750);
+    this.setOffset(340,200);
 
     // 물리 설정
     this.setCollideWorldBounds(true);
