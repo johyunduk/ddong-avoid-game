@@ -2,9 +2,21 @@ import Phaser from 'phaser';
 
 export default class Poop extends Phaser.Physics.Arcade.Sprite {
   private fallSpeed: number;
+  private static readonly POOP_TEXTURES = [
+    'poop',
+    'poop_glasses',
+    'poop_sunglass',
+    'poop_sunglass2',
+    'poop_smile'
+  ];
 
   constructor(scene: Phaser.Scene, x: number, y: number, difficulty: number = 1) {
-    super(scene, x, y, 'poop');
+    // 랜덤하게 똥 텍스처 선택
+    const randomTexture = Poop.POOP_TEXTURES[
+      Math.floor(Math.random() * Poop.POOP_TEXTURES.length)
+    ];
+
+    super(scene, x, y, randomTexture);
 
     // 원점을 중앙으로 설정
     this.setOrigin(0.5);

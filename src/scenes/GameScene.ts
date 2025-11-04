@@ -32,7 +32,13 @@ export default class GameScene extends Phaser.Scene {
     this.load.image('front', 'assets/front.png');
     this.load.image('left', 'assets/left.png');
     this.load.image('right', 'assets/right.png');
+
+    // 다양한 똥 이미지 로드
     this.load.image('poop', 'assets/poop.png');
+    this.load.image('poop_glasses', 'assets/poop_glasses.png');
+    this.load.image('poop_sunglass', 'assets/poop_sunglass.png');
+    this.load.image('poop_sunglass2', 'assets/poop_sunglass2.png');
+    this.load.image('poop_smile', 'assets/poop_smile.png');
 
     // 오디오 로드
     this.load.audio('bgMusic', 'assets/poop.mp3');
