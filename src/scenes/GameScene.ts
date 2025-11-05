@@ -112,8 +112,8 @@ export default class GameScene extends Phaser.Scene {
     });
 
     // 히트박스 디버그 표시, hit box visibility
-    // this.physics.world.createDebugGraphic();
-    // this.physics.world.drawDebug = true;
+    this.physics.world.createDebugGraphic();
+    this.physics.world.drawDebug = true;
   }
 
   update() {
