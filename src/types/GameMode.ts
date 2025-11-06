@@ -42,6 +42,7 @@ export interface DifficultyConfig {
   poopCount: number;
   baseSpeed: number;
   spawnDelay: number; // 초기 똥 생성 주기 (ms)
+  playerSpeed: number; // 플레이어 이동 속도
   color: number;
 }
 
@@ -53,6 +54,7 @@ export const DIFFICULTIES: DifficultyConfig[] = [
     poopCount: 4,
     baseSpeed: 125,
     spawnDelay: 1500, // 1.5초마다 생성
+    playerSpeed: 300, // 기본 속도
     color: 0x90EE90
   },
   {
@@ -62,6 +64,7 @@ export const DIFFICULTIES: DifficultyConfig[] = [
     poopCount: 5,
     baseSpeed: 150,
     spawnDelay: 1200, // 1.2초마다 생성
+    playerSpeed: 300, // 기본 속도
     color: 0xFFD700
   },
   {
@@ -71,6 +74,7 @@ export const DIFFICULTIES: DifficultyConfig[] = [
     poopCount: 6,
     baseSpeed: 200,
     spawnDelay: 1000, // 1초마다 생성 (기존과 동일)
+    playerSpeed: 300, // 기본 속도
     color: 0xFF8C00
   },
   {
@@ -80,6 +84,7 @@ export const DIFFICULTIES: DifficultyConfig[] = [
     poopCount: 8,
     baseSpeed: 250,
     spawnDelay: 800, // 0.8초마다 생성
+    playerSpeed: 380, // 빠른 속도
     color: 0xFF4500
   }
 ];

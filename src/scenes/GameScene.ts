@@ -90,8 +90,8 @@ export default class GameScene extends Phaser.Scene {
     // 월드 바운드 설정 (플레이어가 화면 안쪽에만 머무르도록)
     this.physics.world.setBounds(15, 0, 370, 600);
 
-    // 플레이어 생성
-    this.player = new Player(this, 200, 520);
+    // 플레이어 생성 (난이도별 속도 적용)
+    this.player = new Player(this, 200, 520, this.difficultyConfig.playerSpeed);
 
     // 💩 그룹 생성
     this.poops = this.physics.add.group({

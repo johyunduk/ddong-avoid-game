@@ -2,11 +2,12 @@ import Phaser from 'phaser';
 
 export default class Player extends Phaser.Physics.Arcade.Sprite {
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
-  private speed: number = 300;
+  private speed: number;
 
-  constructor(scene: Phaser.Scene, x: number, y: number) {
+  constructor(scene: Phaser.Scene, x: number, y: number, speed: number = 300) {
     // 기본 텍스처는 front (정면)
     super(scene, x, y, 'front');
+    this.speed = speed;
 
     // 씬에 추가
     scene.add.existing(this);
