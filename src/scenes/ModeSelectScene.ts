@@ -8,7 +8,7 @@ export default class ModeSelectScene extends Phaser.Scene {
 
   preload() {
     // 배경 이미지 로드
-    this.load.image('background', 'assets/background.png');
+    this.load.image('background', 'assets/backgrounds/background.png');
     this.load.image('title', 'assets/title.png');
   }
 

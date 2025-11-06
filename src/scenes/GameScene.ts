@@ -46,21 +46,21 @@ export default class GameScene extends Phaser.Scene {
 
   preload() {
     // 배경 이미지 로드 (난이도별)
-    this.load.image('background', 'assets/background.png');
-    this.load.image('background2', 'assets/background2.png');
-    this.load.image('background3', 'assets/background3.png');
+    this.load.image('background', 'assets/backgrounds/background.png');
+    this.load.image('background2', 'assets/backgrounds/background2.png');
+    this.load.image('background3', 'assets/backgrounds/background3.png');
 
     // 플레이어 이미지 로드
-    this.load.image('front', 'assets/front.png');
-    this.load.image('left', 'assets/left.png');
-    this.load.image('right', 'assets/right.png');
+    this.load.image('front', 'assets/players/front.png');
+    this.load.image('left', 'assets/players/left.png');
+    this.load.image('right', 'assets/players/right.png');
 
     // 다양한 똥 이미지 로드
-    this.load.image('poop', 'assets/poop.png');
-    this.load.image('poop_glasses', 'assets/poop_glasses.png');
-    this.load.image('poop_sunglass', 'assets/poop_sunglass.png');
-    this.load.image('poop_sunglass2', 'assets/poop_sunglass2.png');
-    this.load.image('poop_smile', 'assets/poop_smile.png');
+    this.load.image('poop', 'assets/poops/poop.png');
+    this.load.image('poop_glasses', 'assets/poops/poop_glasses.png');
+    this.load.image('poop_sunglass', 'assets/poops/poop_sunglass.png');
+    this.load.image('poop_sunglass2', 'assets/poops/poop_sunglass2.png');
+    this.load.image('poop_smile', 'assets/poops/poop_smile.png');
 
     // 오디오 로드
     this.load.audio('bgMusic', 'assets/poop.mp3');

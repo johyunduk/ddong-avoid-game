@@ -15,7 +15,7 @@ export default class DifficultySelectScene extends Phaser.Scene {
   }
 
   preload() {
-    this.load.image('background', 'assets/background.png');
+    this.load.image('background', 'assets/backgrounds/background.png');
   }
 
   create() {
