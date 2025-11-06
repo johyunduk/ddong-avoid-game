@@ -159,3 +159,5 @@ When integrating real Toss SDK:
 2. Replace mock implementations in `utils/tossSDK.ts`
 3. Uncomment SDK calls in GameScene
 4. Register app in Toss Developer Console
+
+npm run dev 는 내가 할거니 실행하지마

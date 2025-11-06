@@ -85,6 +85,12 @@ export default class ModeSelectScene extends Phaser.Scene {
   }
 
   private startGame(mode: GameMode) {
-    this.scene.start('GameScene', { gameMode: mode });
+    // 클래식 모드일 경우 난이도 선택 화면으로 이동
+    if (mode === GameMode.CLASSIC) {
+      this.scene.start('DifficultySelectScene', { gameMode: mode });
+    } else {
+      // 아이템 모드는 바로 게임 시작 (나중에 구현 시 수정 가능)
+      this.scene.start('GameScene', { gameMode: mode });
+    }
   }
 }
