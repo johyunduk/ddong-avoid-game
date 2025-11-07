@@ -174,7 +174,7 @@ export default class GameScene extends Phaser.Scene {
       // 💩이 화면 전체에서 생성되도록 (💩 크기 15를 고려해서 양쪽 여유)
       const x = Phaser.Math.Between(15, 385);
       const y = Phaser.Math.Between(-200, -20);
-      const poop = new Poop(this, x, y, this.difficultyLevel);
+      const poop = new Poop(this, x, y, this.difficultyLevel, this.difficulty);
       this.poops.add(poop, true);
 
       // 명시적으로 velocity 설정 (그룹 추가 후)
