@@ -671,24 +671,27 @@ export default class GameScene extends Phaser.Scene {
       strokeThickness: 3
     }).setOrigin(0.5);
 
-    // 재시작 - 모드 선택 씬으로 돌아가기
-    this.input.once('pointerdown', () => {
-      // HTML input이 남아있으면 제거
-      const existingInput = document.querySelector('input');
-      if (existingInput) {
-        document.body.removeChild(existingInput);
-      }
+    // 0.5초 지연 후 클릭 이벤트 활성화 (의도치 않은 즉시 클릭 방지)
+    this.time.delayedCall(500, () => {
+      // 재시작 - 모드 선택 씬으로 돌아가기
+      this.input.once('pointerdown', () => {
+        // HTML input이 남아있으면 제거
+        const existingInput = document.querySelector('input');
+        if (existingInput) {
+          document.body.removeChild(existingInput);
+        }
 
-      // 모든 사운드 정리
-      this.sound.stopAll();
-      // 플레이어 효과 정리
-      if (this.player) {
-        this.player.cleanupEffects();
-      }
-      this.gameOver = false;
-      this.score = 0;
-      this.difficultyLevel = 2;
-      this.scene.start('ModeSelectScene');
+        // 모든 사운드 정리
+        this.sound.stopAll();
+        // 플레이어 효과 정리
+        if (this.player) {
+          this.player.cleanupEffects();
+        }
+        this.gameOver = false;
+        this.score = 0;
+        this.difficultyLevel = 2;
+        this.scene.start('ModeSelectScene');
+      });
     });
   }
 }
