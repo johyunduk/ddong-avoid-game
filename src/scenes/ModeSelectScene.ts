@@ -40,48 +40,39 @@ export default class ModeSelectScene extends Phaser.Scene {
   }
 
   private createModeButton(modeConfig: GameModeConfig, x: number, y: number) {
-    const isDisabled = modeConfig.mode === GameMode.ITEM;
-
-    const button = this.add.rectangle(x, y, 300, 100, isDisabled ? 0x999999 : 0xffffff, 1);
-    button.setStrokeStyle(4, isDisabled ? 0x666666 : 0x000000);
+    const button = this.add.rectangle(x, y, 300, 100, 0xffffff, 1);
+    button.setStrokeStyle(4, 0x000000);
 
     const title = this.add.text(x, y - 20, modeConfig.name, {
       fontSize: '24px',
-      color: isDisabled ? '#666' : '#000',
+      color: '#000',
       fontStyle: 'bold'
     }).setOrigin(0.5);
 
     const description = this.add.text(x, y + 15, modeConfig.description, {
       fontSize: '14px',
-      color: isDisabled ? '#888' : '#333',
+      color: '#333',
       align: 'center'
     }).setOrigin(0.5);
 
-    if (!isDisabled) {
-      button.setInteractive({ useHandCursor: true });
-      title.setInteractive({ useHandCursor: true });
-      description.setInteractive({ useHandCursor: true });
+    button.setInteractive({ useHandCursor: true });
+    title.setInteractive({ useHandCursor: true });
+    description.setInteractive({ useHandCursor: true });
 
-      const elements = [button, title, description];
-      elements.forEach(element => {
-        element.on('pointerover', () => {
-          button.setFillStyle(0xffff99);
-        });
-
-        element.on('pointerout', () => {
-          button.setFillStyle(0xffffff);
-        });
-
-        element.on('pointerdown', () => {
-          this.startGame(modeConfig.mode);
-        });
+    const elements = [button, title, description];
+    elements.forEach(element => {
+      element.on('pointerover', () => {
+        button.setFillStyle(0xffff99);
       });
-    } else {
-      this.add.text(x, y + 40, '(준비 중)', {
-        fontSize: '12px',
-        color: '#999'
-      }).setOrigin(0.5);
-    }
+
+      element.on('pointerout', () => {
+        button.setFillStyle(0xffffff);
+      });
+
+      element.on('pointerdown', () => {
+        this.startGame(modeConfig.mode);
+      });
+    });
   }
 
   private startGame(mode: GameMode) {
@@ -89,8 +80,8 @@ export default class ModeSelectScene extends Phaser.Scene {
     if (mode === GameMode.CLASSIC) {
       this.scene.start('DifficultySelectScene', { gameMode: mode });
     } else {
-      // 아이템 모드는 바로 게임 시작 (나중에 구현 시 수정 가능)
-      this.scene.start('GameScene', { gameMode: mode });
+      // 아이템 모드는 바로 게임 시작 (기본 난이도 HARD)
+      this.scene.start('GameScene', { gameMode: mode, difficulty: 'HARD' });
     }
   }
 }
