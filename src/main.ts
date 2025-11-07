@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import ModeSelectScene from './scenes/ModeSelectScene';
 import DifficultySelectScene from './scenes/DifficultySelectScene';
 import GameScene from './scenes/GameScene';
+import LeaderboardScene from './scenes/LeaderboardScene';
 import './style.css';
 
 const config: Phaser.Types.Core.GameConfig = {
@@ -17,7 +18,7 @@ const config: Phaser.Types.Core.GameConfig = {
       debug: false
     }
   },
-  scene: [ModeSelectScene, DifficultySelectScene, GameScene],
+  scene: [ModeSelectScene, DifficultySelectScene, GameScene, LeaderboardScene],
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH

@@ -438,27 +438,31 @@ export default class GameScene extends Phaser.Scene {
    * 게임 오버 UI 표시 및 랭킹 시스템 연동
    */
   private async showGameOverUI(isNewRecord: boolean) {
-    // 게임 오버 타이틀
-    this.add.text(200, 100, 'GAME OVER', {
-      fontSize: '48px',
-      color: '#ff0000',
-      fontStyle: 'bold',
-      stroke: '#000000',
-      strokeThickness: 6
-    }).setOrigin(0.5);
-
-    // 최종 점수
-    this.add.text(200, 170, `점수: ${this.score}`, {
-      fontSize: '32px',
-      color: '#ffffff',
-      fontStyle: 'bold',
-      stroke: '#000000',
-      strokeThickness: 4
-    }).setOrigin(0.5);
+    // 반투명 검정 배경 추가 (가독성 향상)
+    this.add.rectangle(200, 300, 400, 600, 0x000000, 0.7);
 
     if (isNewRecord) {
-      // 새 기록! 이니셜 입력 후 랭킹 제출
-      this.add.text(200, 220, '🎉 NEW RECORD! 🎉', {
+      // === 새 기록 달성 시: 상단에 배치 ===
+      // 게임 오버 타이틀
+      this.add.text(200, 80, 'GAME OVER', {
+        fontSize: '48px',
+        color: '#ff0000',
+        fontStyle: 'bold',
+        stroke: '#000000',
+        strokeThickness: 6
+      }).setOrigin(0.5);
+
+      // 최종 점수
+      this.add.text(200, 150, `점수: ${this.score}`, {
+        fontSize: '32px',
+        color: '#ffffff',
+        fontStyle: 'bold',
+        stroke: '#000000',
+        strokeThickness: 4
+      }).setOrigin(0.5);
+
+      // 새 기록 메시지
+      this.add.text(200, 200, '🎉 개인 신기록 🎉', {
         fontSize: '28px',
         color: '#FFD700',
         fontStyle: 'bold',
@@ -469,16 +473,31 @@ export default class GameScene extends Phaser.Scene {
       // 이니셜 입력 UI 표시
       this.showInitialInputUI();
     } else {
-      // 최고 점수 미달 - 제출하지 않음
-      this.add.text(200, 230, '최고 점수를 갱신하세요!', {
-        fontSize: '20px',
-        color: '#888888',
-        fontStyle: 'bold'
+      // === 새 기록 미달성 시: 중앙에 배치 ===
+      // 게임 오버 타이틀
+      this.add.text(200, 180, 'GAME OVER', {
+        fontSize: '48px',
+        color: '#ff0000',
+        fontStyle: 'bold',
+        stroke: '#000000',
+        strokeThickness: 6
       }).setOrigin(0.5);
 
-      this.add.text(200, 270, `로컬 최고: ${this.highScore}`, {
-        fontSize: '18px',
-        color: '#FFD700'
+      // 최종 점수
+      this.add.text(200, 260, `점수: ${this.score}`, {
+        fontSize: '32px',
+        color: '#ffffff',
+        fontStyle: 'bold',
+        stroke: '#000000',
+        strokeThickness: 4
+      }).setOrigin(0.5);
+
+      // 로컬 최고 점수
+      this.add.text(200, 320, `개인 최고: ${this.highScore}`, {
+        fontSize: '24px',
+        color: '#FFD700',
+        stroke: '#000000',
+        strokeThickness: 3
       }).setOrigin(0.5);
 
       // 재시작 안내
@@ -491,10 +510,12 @@ export default class GameScene extends Phaser.Scene {
    */
   private showInitialInputUI() {
     // 안내 텍스트
-    this.add.text(200, 270, '이니셜 입력 (영어 대문자 3자)', {
+    this.add.text(200, 250, '이니셜 입력 (영어 대문자 3자)', {
       fontSize: '18px',
       color: '#ffffff',
-      fontStyle: 'bold'
+      fontStyle: 'bold',
+      stroke: '#000000',
+      strokeThickness: 3
     }).setOrigin(0.5);
 
     // HTML input 엘리먼트 생성
@@ -536,13 +557,12 @@ export default class GameScene extends Phaser.Scene {
     });
 
     // 제출 버튼 텍스트
-    const submitButtonText = this.add.text(200, 380, '랭킹 등록', {
+    const submitButtonText = this.add.text(200, 360, '랭킹 등록', {
       fontSize: '24px',
       color: '#00ff00',
       fontStyle: 'bold',
       stroke: '#000',
       strokeThickness: 4,
-      backgroundColor: '#333',
       padding: { x: 20, y: 10 }
     }).setOrigin(0.5).setInteractive();
 
@@ -556,20 +576,24 @@ export default class GameScene extends Phaser.Scene {
       // 검증
       if (initials.length !== 3) {
         if (errorText) errorText.destroy();
-        errorText = this.add.text(200, 430, '정확히 3글자를 입력하세요', {
+        errorText = this.add.text(200, 410, '정확히 3글자를 입력하세요', {
           fontSize: '16px',
           color: '#ff0000',
-          fontStyle: 'bold'
+          fontStyle: 'bold',
+          stroke: '#000',
+          strokeThickness: 3
         }).setOrigin(0.5);
         return;
       }
 
       if (!/^[A-Z]{3}$/.test(initials)) {
         if (errorText) errorText.destroy();
-        errorText = this.add.text(200, 430, '영어 대문자만 입력하세요', {
+        errorText = this.add.text(200, 410, '영어 대문자만 입력하세요', {
           fontSize: '16px',
           color: '#ff0000',
-          fontStyle: 'bold'
+          fontStyle: 'bold',
+          stroke: '#000',
+          strokeThickness: 3
         }).setOrigin(0.5);
         return;
       }
@@ -583,10 +607,12 @@ export default class GameScene extends Phaser.Scene {
       if (errorText) errorText.destroy();
 
       // 랭킹 제출
-      const submittingText = this.add.text(200, 320, '랭킹 제출 중...', {
+      const submittingText = this.add.text(200, 300, '랭킹 제출 중...', {
         fontSize: '18px',
         color: '#ffff00',
-        fontStyle: 'bold'
+        fontStyle: 'bold',
+        stroke: '#000',
+        strokeThickness: 3
       }).setOrigin(0.5);
 
       try {
@@ -596,7 +622,7 @@ export default class GameScene extends Phaser.Scene {
 
         // 순위 표시
         if (result.rank !== null) {
-          this.add.text(200, 320, `🏆 전체 ${result.rank}위! 🏆`, {
+          this.add.text(200, 340, `🏆 전체 ${result.rank}위! 🏆`, {
             fontSize: '24px',
             color: '#FFD700',
             fontStyle: 'bold',
@@ -606,10 +632,12 @@ export default class GameScene extends Phaser.Scene {
         }
 
         // 이니셜 표시
-        this.add.text(200, 360, `${initials}`, {
+        this.add.text(200, 380, `${initials}`, {
           fontSize: '20px',
           color: '#00ff00',
           fontStyle: 'bold',
+          stroke: '#000',
+          strokeThickness: 3,
           letterSpacing: 4
         }).setOrigin(0.5);
 

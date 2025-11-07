@@ -144,6 +144,32 @@ export async function getLeaderboard(
 ): Promise<LeaderboardResponse> {
   const userId = getUserId();
 
+  // 🚧 로컬 개발 모드: Mock 데이터 반환 (Vercel Functions가 없을 때)
+  if (import.meta.env.DEV) {
+    console.warn('⚠️ DEV MODE: Using mock leaderboard data. Deploy to Vercel to test real API.');
+
+    // 1초 지연으로 실제 API 호출처럼 보이게
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    // Mock 리더보드 데이터 생성
+    const mockNames = ['AAA', 'BBB', 'CCC', 'DDD', 'EEE', 'FFF', 'GGG', 'HHH', 'III', 'JJJ'];
+    const mockLeaderboard: LeaderboardEntry[] = mockNames.slice(0, limit).map((name, index) => ({
+      userId: `mock-user-${index + 1}`,
+      userName: name,
+      score: 1000 - (index * 50),
+      rank: index + 1,
+    }));
+
+    return {
+      success: true,
+      difficulty,
+      leaderboard: mockLeaderboard,
+      currentUserRank: null,
+      totalEntries: mockLeaderboard.length,
+    };
+  }
+
+  // 🚀 프로덕션: 실제 API 호출
   const response = await fetch(
     `${API_BASE_URL}/api/leaderboard/top?difficulty=${difficulty}&limit=${limit}&userId=${userId}`
   );
