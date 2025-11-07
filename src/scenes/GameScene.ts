@@ -5,6 +5,7 @@ import Star from '../objects/Star';
 import Item from '../objects/Item';
 import { GameMode, Difficulty, DIFFICULTIES, type DifficultyConfig } from '../types/GameMode';
 import { getHighScore, updateHighScore } from '../utils/localStorage';
+import { submitScore, getUserInitials, setUserInitials } from '../utils/leaderboard';
 
 export default class GameScene extends Phaser.Scene {
   private player!: Player;
@@ -345,66 +346,8 @@ export default class GameScene extends Phaser.Scene {
     // 최고 점수 업데이트 및 갱신 여부 확인
     const isNewRecord = updateHighScore(this.difficulty, this.score);
 
-    // 게임 오버 화면
-    this.add.text(200, 200, 'GAME OVER', {
-      fontSize: '48px',
-      color: '#ff0000',
-      fontStyle: 'bold',
-      stroke: '#000000',
-      strokeThickness: 6
-    }).setOrigin(0.5);
-
-    // 새 기록 메시지
-    if (isNewRecord) {
-      this.add.text(200, 270, '🎉 NEW RECORD! 🎉', {
-        fontSize: '28px',
-        color: '#FFD700',
-        fontStyle: 'bold',
-        stroke: '#000000',
-        strokeThickness: 4
-      }).setOrigin(0.5);
-    }
-
-    // 최종 점수
-    this.add.text(200, isNewRecord ? 320 : 290, `최종 점수: ${this.score}`, {
-      fontSize: '24px',
-      color: '#ffffff',
-      fontStyle: 'bold',
-      stroke: '#000000',
-      strokeThickness: 4
-    }).setOrigin(0.5);
-
-    // 최고 점수 표시
-    this.add.text(200, isNewRecord ? 355 : 325, `최고 점수: ${this.highScore}`, {
-      fontSize: '20px',
-      color: '#FFD700',
-      fontStyle: 'bold',
-      stroke: '#000000',
-      strokeThickness: 3
-    }).setOrigin(0.5);
-
-    this.add.text(200, isNewRecord ? 410 : 380, '클릭하여 모드 선택으로', {
-      fontSize: '20px',
-      color: '#ffffff',
-      fontStyle: 'bold',
-      stroke: '#000000',
-      strokeThickness: 3
-    }).setOrigin(0.5);
-
-    // 재시작 - 모드 선택 씬으로 돌아가기
-    this.input.once('pointerdown', () => {
-      // 모든 사운드 정리
-      this.sound.stopAll();
-      // 플레이어 효과 정리
-      this.player.cleanupEffects();
-      this.gameOver = false;
-      this.score = 0;
-      this.difficultyLevel = 2;
-      this.scene.start('ModeSelectScene');
-    });
-
-    // 토스 SDK 연동 부분 (나중에 활성화)
-    // this.submitScoreToToss(this.score);
+    // 게임 오버 UI 표시 (비동기 처리)
+    this.showGameOverUI(isNewRecord);
   }
 
   private hitStar(
@@ -427,63 +370,8 @@ export default class GameScene extends Phaser.Scene {
     // 최고 점수 업데이트 및 갱신 여부 확인
     const isNewRecord = updateHighScore(this.difficulty, this.score);
 
-    // 게임 오버 화면
-    this.add.text(200, 200, 'GAME OVER', {
-      fontSize: '48px',
-      color: '#ff0000',
-      fontStyle: 'bold',
-      stroke: '#000000',
-      strokeThickness: 6
-    }).setOrigin(0.5);
-
-    // 새 기록 메시지
-    if (isNewRecord) {
-      this.add.text(200, 270, '🎉 NEW RECORD! 🎉', {
-        fontSize: '28px',
-        color: '#FFD700',
-        fontStyle: 'bold',
-        stroke: '#000000',
-        strokeThickness: 4
-      }).setOrigin(0.5);
-    }
-
-    // 최종 점수
-    this.add.text(200, isNewRecord ? 320 : 290, `최종 점수: ${this.score}`, {
-      fontSize: '24px',
-      color: '#ffffff',
-      fontStyle: 'bold',
-      stroke: '#000000',
-      strokeThickness: 4
-    }).setOrigin(0.5);
-
-    // 최고 점수 표시
-    this.add.text(200, isNewRecord ? 355 : 325, `최고 점수: ${this.highScore}`, {
-      fontSize: '20px',
-      color: '#FFD700',
-      fontStyle: 'bold',
-      stroke: '#000000',
-      strokeThickness: 3
-    }).setOrigin(0.5);
-
-    this.add.text(200, isNewRecord ? 410 : 380, '클릭하여 모드 선택으로', {
-      fontSize: '20px',
-      color: '#ffffff',
-      fontStyle: 'bold',
-      stroke: '#000000',
-      strokeThickness: 3
-    }).setOrigin(0.5);
-
-    // 재시작 - 모드 선택 씬으로 돌아가기
-    this.input.once('pointerdown', () => {
-      // 모든 사운드 정리
-      this.sound.stopAll();
-      // 플레이어 효과 정리
-      this.player.cleanupEffects();
-      this.gameOver = false;
-      this.score = 0;
-      this.difficultyLevel = 2;
-      this.scene.start('ModeSelectScene');
-    });
+    // 게임 오버 UI 표시 (비동기 처리)
+    this.showGameOverUI(isNewRecord);
   }
 
   private collectItem(
@@ -544,5 +432,235 @@ export default class GameScene extends Phaser.Scene {
       });
     }
     // light_saber는 나중에 구현
+  }
+
+  /**
+   * 게임 오버 UI 표시 및 랭킹 시스템 연동
+   */
+  private async showGameOverUI(isNewRecord: boolean) {
+    // 게임 오버 타이틀
+    this.add.text(200, 100, 'GAME OVER', {
+      fontSize: '48px',
+      color: '#ff0000',
+      fontStyle: 'bold',
+      stroke: '#000000',
+      strokeThickness: 6
+    }).setOrigin(0.5);
+
+    // 최종 점수
+    this.add.text(200, 170, `점수: ${this.score}`, {
+      fontSize: '32px',
+      color: '#ffffff',
+      fontStyle: 'bold',
+      stroke: '#000000',
+      strokeThickness: 4
+    }).setOrigin(0.5);
+
+    if (isNewRecord) {
+      // 새 기록! 이니셜 입력 후 랭킹 제출
+      this.add.text(200, 220, '🎉 NEW RECORD! 🎉', {
+        fontSize: '28px',
+        color: '#FFD700',
+        fontStyle: 'bold',
+        stroke: '#000000',
+        strokeThickness: 4
+      }).setOrigin(0.5);
+
+      // 이니셜 입력 UI 표시
+      this.showInitialInputUI();
+    } else {
+      // 최고 점수 미달 - 제출하지 않음
+      this.add.text(200, 230, '최고 점수를 갱신하세요!', {
+        fontSize: '20px',
+        color: '#888888',
+        fontStyle: 'bold'
+      }).setOrigin(0.5);
+
+      this.add.text(200, 270, `로컬 최고: ${this.highScore}`, {
+        fontSize: '18px',
+        color: '#FFD700'
+      }).setOrigin(0.5);
+
+      // 재시작 안내
+      this.showRestartButton();
+    }
+  }
+
+  /**
+   * 이니셜 입력 UI 표시
+   */
+  private showInitialInputUI() {
+    // 안내 텍스트
+    this.add.text(200, 270, '이니셜 입력 (영어 대문자 3자)', {
+      fontSize: '18px',
+      color: '#ffffff',
+      fontStyle: 'bold'
+    }).setOrigin(0.5);
+
+    // HTML input 엘리먼트 생성
+    const inputElement = document.createElement('input');
+    inputElement.type = 'text';
+    inputElement.maxLength = 3;
+    inputElement.placeholder = 'ABC';
+    inputElement.style.cssText = `
+      position: absolute;
+      left: 50%;
+      top: 315px;
+      transform: translateX(-50%);
+      width: 120px;
+      height: 40px;
+      font-size: 24px;
+      text-align: center;
+      text-transform: uppercase;
+      border: 3px solid #FFD700;
+      border-radius: 8px;
+      background: #000;
+      color: #fff;
+      font-weight: bold;
+      letter-spacing: 8px;
+    `;
+
+    // 기존 이니셜이 있으면 미리 채우기
+    const existingInitials = getUserInitials();
+    if (existingInitials) {
+      inputElement.value = existingInitials;
+    }
+
+    document.body.appendChild(inputElement);
+    inputElement.focus();
+
+    // 대문자만 입력되도록
+    inputElement.addEventListener('input', (e) => {
+      const target = e.target as HTMLInputElement;
+      target.value = target.value.toUpperCase().replace(/[^A-Z]/g, '');
+    });
+
+    // 제출 버튼 텍스트
+    const submitButtonText = this.add.text(200, 380, '랭킹 등록', {
+      fontSize: '24px',
+      color: '#00ff00',
+      fontStyle: 'bold',
+      stroke: '#000',
+      strokeThickness: 4,
+      backgroundColor: '#333',
+      padding: { x: 20, y: 10 }
+    }).setOrigin(0.5).setInteractive();
+
+    // 에러 메시지 영역
+    let errorText: Phaser.GameObjects.Text | null = null;
+
+    // 제출 버튼 클릭
+    submitButtonText.on('pointerdown', async () => {
+      const initials = inputElement.value.trim().toUpperCase();
+
+      // 검증
+      if (initials.length !== 3) {
+        if (errorText) errorText.destroy();
+        errorText = this.add.text(200, 430, '정확히 3글자를 입력하세요', {
+          fontSize: '16px',
+          color: '#ff0000',
+          fontStyle: 'bold'
+        }).setOrigin(0.5);
+        return;
+      }
+
+      if (!/^[A-Z]{3}$/.test(initials)) {
+        if (errorText) errorText.destroy();
+        errorText = this.add.text(200, 430, '영어 대문자만 입력하세요', {
+          fontSize: '16px',
+          color: '#ff0000',
+          fontStyle: 'bold'
+        }).setOrigin(0.5);
+        return;
+      }
+
+      // 이니셜 저장
+      setUserInitials(initials);
+
+      // input 제거
+      document.body.removeChild(inputElement);
+      submitButtonText.destroy();
+      if (errorText) errorText.destroy();
+
+      // 랭킹 제출
+      const submittingText = this.add.text(200, 320, '랭킹 제출 중...', {
+        fontSize: '18px',
+        color: '#ffff00',
+        fontStyle: 'bold'
+      }).setOrigin(0.5);
+
+      try {
+        const result = await submitScore(this.score, this.difficulty, initials);
+
+        submittingText.destroy();
+
+        // 순위 표시
+        if (result.rank !== null) {
+          this.add.text(200, 320, `🏆 전체 ${result.rank}위! 🏆`, {
+            fontSize: '24px',
+            color: '#FFD700',
+            fontStyle: 'bold',
+            stroke: '#000',
+            strokeThickness: 3
+          }).setOrigin(0.5);
+        }
+
+        // 이니셜 표시
+        this.add.text(200, 360, `${initials}`, {
+          fontSize: '20px',
+          color: '#00ff00',
+          fontStyle: 'bold',
+          letterSpacing: 4
+        }).setOrigin(0.5);
+
+      } catch (error) {
+        console.error('Failed to submit score:', error);
+        submittingText.setText('❌ 랭킹 제출 실패');
+        submittingText.setColor('#ff0000');
+      }
+
+      // 재시작 버튼 표시
+      this.showRestartButton();
+    });
+
+    // Enter 키로도 제출 가능
+    inputElement.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        submitButtonText.emit('pointerdown');
+      }
+    });
+  }
+
+  /**
+   * 재시작 버튼 표시
+   */
+  private showRestartButton() {
+    this.add.text(200, 550, '클릭하여 모드 선택으로', {
+      fontSize: '20px',
+      color: '#ffffff',
+      fontStyle: 'bold',
+      stroke: '#000000',
+      strokeThickness: 3
+    }).setOrigin(0.5);
+
+    // 재시작 - 모드 선택 씬으로 돌아가기
+    this.input.once('pointerdown', () => {
+      // HTML input이 남아있으면 제거
+      const existingInput = document.querySelector('input');
+      if (existingInput) {
+        document.body.removeChild(existingInput);
+      }
+
+      // 모든 사운드 정리
+      this.sound.stopAll();
+      // 플레이어 효과 정리
+      if (this.player) {
+        this.player.cleanupEffects();
+      }
+      this.gameOver = false;
+      this.score = 0;
+      this.difficultyLevel = 2;
+      this.scene.start('ModeSelectScene');
+    });
   }
 }

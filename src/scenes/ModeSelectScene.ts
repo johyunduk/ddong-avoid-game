@@ -40,21 +40,36 @@ export default class ModeSelectScene extends Phaser.Scene {
   }
 
   private createModeButton(modeConfig: GameModeConfig, x: number, y: number) {
-    const button = this.add.rectangle(x, y, 300, 100, 0xffffff, 1);
-    button.setStrokeStyle(4, 0x000000);
+    // 아이템 모드 비활성화 체크
+    const isDisabled = modeConfig.mode === GameMode.ITEM;
+
+    const button = this.add.rectangle(x, y, 300, 100, isDisabled ? 0xcccccc : 0xffffff, 1);
+    button.setStrokeStyle(4, isDisabled ? 0x666666 : 0x000000);
 
     const title = this.add.text(x, y - 20, modeConfig.name, {
       fontSize: '24px',
-      color: '#000',
+      color: isDisabled ? '#666' : '#000',
       fontStyle: 'bold'
     }).setOrigin(0.5);
 
     const description = this.add.text(x, y + 15, modeConfig.description, {
       fontSize: '14px',
-      color: '#333',
+      color: isDisabled ? '#888' : '#333',
       align: 'center'
     }).setOrigin(0.5);
 
+    // 비활성화된 경우 인터랙션 없음
+    if (isDisabled) {
+      // "준비 중" 라벨 추가
+      this.add.text(x, y + 35, '준비 중', {
+        fontSize: '12px',
+        color: '#999',
+        fontStyle: 'italic'
+      }).setOrigin(0.5);
+      return; // 여기서 종료, 클릭 이벤트 없음
+    }
+
+    // 활성화된 버튼만 인터랙션 추가
     button.setInteractive({ useHandCursor: true });
     title.setInteractive({ useHandCursor: true });
     description.setInteractive({ useHandCursor: true });
