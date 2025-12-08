@@ -6,6 +6,7 @@ import Item from '../objects/Item';
 import { GameMode, Difficulty, DIFFICULTIES, type DifficultyConfig } from '../types/GameMode';
 import { getHighScore, updateHighScore } from '../utils/localStorage';
 import { submitScore, getUserInitials, setUserInitials } from '../utils/leaderboard';
+import { isChristmasSeason } from '../utils/seasonChecker';
 
 export default class GameScene extends Phaser.Scene {
   private player!: Player;
@@ -50,11 +51,12 @@ export default class GameScene extends Phaser.Scene {
   }
 
   preload() {
-    // 배경 이미지 로드 (난이도별 + 아이템 모드)
+    // 배경 이미지 로드 (난이도별 + 아이템 모드 + 크리스마스)
     this.load.image('background', 'assets/backgrounds/background.png');
     this.load.image('background2', 'assets/backgrounds/background2.png');
     this.load.image('background3', 'assets/backgrounds/background3.png');
     this.load.image('space_background', 'assets/backgrounds/space_background.png');
+    this.load.image('xmas_background', 'assets/backgrounds/xmas_background.png');
 
     // 플레이어 이미지 로드
     this.load.image('front', 'assets/players/front.png');
@@ -72,6 +74,13 @@ export default class GameScene extends Phaser.Scene {
     this.load.image('poop_sunglass', 'assets/poops/poop_sunglass.png');
     this.load.image('poop_sunglass2', 'assets/poops/poop_sunglass2.png');
     this.load.image('poop_smile', 'assets/poops/poop_smile.png');
+
+    // 크리스마스 똥 이미지 로드
+    this.load.image('xmas_poop_ribbon', 'assets/poops/xmas_present_poop.png');
+    this.load.image('xmas_poop_nose', 'assets/poops/xmas_nose_poop.png');
+    this.load.image('xmas_poop_santa', 'assets/poops/xmas_santa_poop.png');
+    this.load.image('xmas_poop_rudolf', 'assets/poops/xmas_rudolf_poop.png');
+    this.load.image('xmas_poop_beard', 'assets/poops/xmas_beard_poop.png');
 
     // 별 이미지 로드 (아이템 모드용)
     this.load.image('star', 'assets/stars/star.png');
@@ -104,6 +113,15 @@ export default class GameScene extends Phaser.Scene {
         backgroundKey = 'background2';
       } else if (this.difficulty === Difficulty.NORMAL) {
         backgroundKey = 'background3';
+      } else if (this.difficulty === Difficulty.HARD) {
+        backgroundKey = 'background';
+      } else if (this.difficulty === Difficulty.EXTREME) {
+        // EXTREME 난이도: 크리스마스 시즌(12/1 ~ 1/31)이면 특별 배경
+        if (isChristmasSeason()) {
+          backgroundKey = 'xmas_background';
+        } else {
+          backgroundKey = 'background';
+        }
       }
     }
 

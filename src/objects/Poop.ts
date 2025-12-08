@@ -1,15 +1,22 @@
 import Phaser from 'phaser';
 import { type Difficulty, Difficulty as DifficultyEnum } from '../types/GameMode';
+import { isChristmasSeason, CHRISTMAS_POOP_KEYS, REGULAR_POOP_KEYS } from '../utils/seasonChecker';
 
 export default class Poop extends Phaser.Physics.Arcade.Sprite {
   private fallSpeed: number;
-  private static readonly POOP_TEXTURES = [
-    'poop',
-    'poop_glasses',
-    'poop_sunglass',
-    'poop_sunglass2',
-    'poop_smile'
-  ];
+
+  /**
+   * 사용 가능한 똥 텍스처 배열 반환
+   * 크리스마스 시즌(12/1 ~ 1/31)에는 xmas 똥들도 포함
+   */
+  private static getAvailableTextures(): string[] {
+    if (isChristmasSeason()) {
+      // 크리스마스 시즌: 일반 똥 + 크리스마스 똥
+      return [...REGULAR_POOP_KEYS, ...CHRISTMAS_POOP_KEYS];
+    }
+    // 일반 시즌: 일반 똥만
+    return [...REGULAR_POOP_KEYS];
+  }
 
   constructor(
     scene: Phaser.Scene,
@@ -18,9 +25,10 @@ export default class Poop extends Phaser.Physics.Arcade.Sprite {
     difficultyLevel: number = 1,
     difficulty: Difficulty = DifficultyEnum.HARD
   ) {
-    // 랜덤하게 똥 텍스처 선택
-    const randomTexture = Poop.POOP_TEXTURES[
-      Math.floor(Math.random() * Poop.POOP_TEXTURES.length)
+    // 랜덤하게 똥 텍스처 선택 (시즌에 따라)
+    const availableTextures = Poop.getAvailableTextures();
+    const randomTexture = availableTextures[
+      Math.floor(Math.random() * availableTextures.length)
     ];
 
     super(scene, x, y, randomTexture);
@@ -37,8 +45,14 @@ export default class Poop extends Phaser.Physics.Arcade.Sprite {
 
     // EXTREME 모드일 때 똥 크기를 줄임
     const isExtreme = difficulty === DifficultyEnum.EXTREME;
-    const displaySize = isExtreme ? 38 : 40;
+    let displaySize = isExtreme ? 38 : 40;
     const hitboxSize = isExtreme ? 470 : 500;
+
+    // 특정 크리스마스 똥만 크기를 크게 설정 (코 & 리본)
+    const isSpecialChristmasPoop = ['xmas_poop_nose', 'xmas_poop_ribbon', 'xmas_poop_santa', 'xmas_poop_beard'].includes(randomTexture);
+    if (isSpecialChristmasPoop) {
+      displaySize = isExtreme ? 52 : 56;
+    }
 
     // 똥 이미지 크기 설정
     this.setDisplaySize(displaySize, displaySize);
