@@ -96,6 +96,7 @@ export default class GameScene extends Phaser.Scene {
     // 오디오 로드
     this.load.audio('bgMusic', 'assets/bgms/poop.mp3');
     this.load.audio('starBgMusic', 'assets/bgms/star_fall.mp3');
+    this.load.audio('xmasBgMusic', 'assets/bgms/xmas_poop.mp3');
   }
 
   create() {
@@ -135,7 +136,14 @@ export default class GameScene extends Phaser.Scene {
     }
 
     // 배경음악 재생 (무한 반복, 게임 모드별 BGM)
-    const bgMusicKey = this.gameMode === GameMode.ITEM ? 'starBgMusic' : 'bgMusic';
+    let bgMusicKey = 'bgMusic';
+    if (this.gameMode === GameMode.ITEM) {
+      bgMusicKey = 'starBgMusic';
+    } else if (this.difficulty === Difficulty.EXTREME && isChristmasSeason()) {
+      // EXTREME 난이도 + 크리스마스 시즌: 크리스마스 BGM
+      bgMusicKey = 'xmasBgMusic';
+    }
+
     this.bgMusic = this.sound.add(bgMusicKey, { loop: true, volume: 0.5 });
     this.bgMusic.play();
 
