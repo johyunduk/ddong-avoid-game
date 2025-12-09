@@ -8,6 +8,7 @@ export default class LeaderboardScene extends Phaser.Scene {
   private leaderboardTexts: Phaser.GameObjects.Text[] = [];
   private loadingText?: Phaser.GameObjects.Text;
   private errorText?: Phaser.GameObjects.Text;
+  private currentRequestId: number = 0; // 요청 추적용 ID
 
   constructor() {
     super('LeaderboardScene');
@@ -104,6 +105,11 @@ export default class LeaderboardScene extends Phaser.Scene {
   }
 
   private selectDifficulty(difficulty: Difficulty) {
+    // 같은 난이도면 무시
+    if (this.selectedDifficulty === difficulty) {
+      return;
+    }
+
     this.selectedDifficulty = difficulty;
 
     // 모든 버튼 스타일 재설정
@@ -123,6 +129,10 @@ export default class LeaderboardScene extends Phaser.Scene {
   }
 
   private async loadLeaderboard() {
+    // 요청 ID 증가 (새로운 요청 시작)
+    this.currentRequestId++;
+    const requestId = this.currentRequestId;
+
     // 기존 랭킹 텍스트 제거
     this.leaderboardTexts.forEach(text => text.destroy());
     this.leaderboardTexts = [];
@@ -146,6 +156,13 @@ export default class LeaderboardScene extends Phaser.Scene {
 
     try {
       const response = await getLeaderboard(this.selectedDifficulty, 10);
+
+      // 응답이 도착했을 때 최신 요청인지 확인
+      if (requestId !== this.currentRequestId) {
+        // 이미 새로운 요청이 시작됨 - 이 응답은 무시
+        return;
+      }
+
       this.leaderboardData = response.leaderboard;
 
       if (this.loadingText) {
@@ -154,6 +171,12 @@ export default class LeaderboardScene extends Phaser.Scene {
 
       this.displayLeaderboard();
     } catch (error) {
+      // 에러가 발생했을 때도 최신 요청인지 확인
+      if (requestId !== this.currentRequestId) {
+        // 이미 새로운 요청이 시작됨 - 이 에러는 무시
+        return;
+      }
+
       console.error('Failed to load leaderboard:', error);
 
       if (this.loadingText) {
