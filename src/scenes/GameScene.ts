@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import Player from '../objects/Player';
 import Poop from '../objects/Poop';
 import GoldPoop from '../objects/GoldPoop';
+import DiamondPoop from '../objects/DiamondPoop';
 import Star from '../objects/Star';
 import Item from '../objects/Item';
 import { GameMode, Difficulty, DIFFICULTIES, type DifficultyConfig } from '../types/GameMode';
@@ -13,6 +14,7 @@ export default class GameScene extends Phaser.Scene {
   private player!: Player;
   private poops!: Phaser.Physics.Arcade.Group;
   private goldPoops!: Phaser.Physics.Arcade.Group;
+  private diamondPoops!: Phaser.Physics.Arcade.Group;
   private stars!: Phaser.Physics.Arcade.Group;
   private items!: Phaser.Physics.Arcade.Group;
   private score: number = 0;
@@ -27,6 +29,7 @@ export default class GameScene extends Phaser.Scene {
   private difficulty: Difficulty = Difficulty.HARD;
   private difficultyConfig!: DifficultyConfig;
   private lastGoldPoopScore: number = 0; // 마지막으로 금똥이 나온 점수
+  private lastDiamondPoopScore: number = 0; // 마지막으로 다이아똥이 나온 점수
 
   constructor() {
     super('GameScene');
@@ -36,11 +39,11 @@ export default class GameScene extends Phaser.Scene {
     // ModeSelectScene/DifficultySelectScene으로부터 게임 모드와 난이도를 받음
     if (data.gameMode) {
       this.gameMode = data.gameMode;
-      console.log('Game Mode:', this.gameMode);
+      // console.log('Game Mode:', this.gameMode);
     }
     if (data.difficulty) {
       this.difficulty = data.difficulty;
-      console.log('Difficulty:', this.difficulty);
+      // console.log('Difficulty:', this.difficulty);
     }
 
     // 난이도 설정 찾기
@@ -78,6 +81,7 @@ export default class GameScene extends Phaser.Scene {
     this.load.image('poop_sunglass2', 'assets/poops/poop_sunglass2.png');
     this.load.image('poop_smile', 'assets/poops/poop_smile.png');
     this.load.image('gold_poop', 'assets/poops/gold_poop.png');
+    this.load.image('diamond_poop', 'assets/poops/diamond_poop.png');
 
     // 크리스마스 똥 이미지 로드
     this.load.image('xmas_poop_ribbon', 'assets/poops/xmas_present_poop.png');
@@ -171,6 +175,12 @@ export default class GameScene extends Phaser.Scene {
         runChildUpdate: true
       });
 
+      // 다이아똥 그룹 생성
+      this.diamondPoops = this.physics.add.group({
+        classType: DiamondPoop,
+        runChildUpdate: true
+      });
+
       // 충돌 감지
       this.physics.add.overlap(
         this.player,
@@ -185,6 +195,15 @@ export default class GameScene extends Phaser.Scene {
         this.player,
         this.goldPoops,
         this.collectGoldPoop as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback,
+        undefined,
+        this
+      );
+
+      // 다이아똥 충돌 감지 (수집)
+      this.physics.add.overlap(
+        this.player,
+        this.diamondPoops,
+        this.collectDiamondPoop as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback,
         undefined,
         this
       );
@@ -364,7 +383,36 @@ export default class GameScene extends Phaser.Scene {
       goldPoop.body.velocity.y = fallSpeed;
     }
 
-    console.log(`금똥 생성! 점수: ${this.score}, 위치: (${x}, ${y}), depth: ${goldPoop.depth}`);
+    // console.log(`금똥 생성! 점수: ${this.score}, 위치: (${x}, ${y}), depth: ${goldPoop.depth}`);
+  }
+
+  private spawnDiamondPoop() {
+    // console.log('[다이아똥] spawnDiamondPoop 메서드 호출됨');
+    if (this.gameOver) {
+      // console.log('[다이아똥] 게임 오버 상태라 생성 안 함');
+      return;
+    }
+
+    // 다이아똥 1개를 화면 중앙 상단에서 생성 (더 잘 보이도록)
+    const x = Phaser.Math.Between(50, 350);
+    const y = -50; // 화면에 더 가깝게 시작
+    // console.log(`[다이아똥] DiamondPoop 객체 생성 시도: x=${x}, y=${y}`);
+    const diamondPoop = new DiamondPoop(this, x, y);
+    // console.log(`[다이아똥] DiamondPoop 객체 생성 완료: visible=${diamondPoop.visible}, alpha=${diamondPoop.alpha}`);
+
+    this.diamondPoops.add(diamondPoop, true);
+    // console.log(`[다이아똥] diamondPoops 그룹에 추가 완료. 그룹 크기: ${this.diamondPoops.getLength()}`);
+
+    // 일반 똥과 동일한 속도로 설정 (난이도에 따라)
+    if (diamondPoop.body) {
+      const fallSpeed = this.difficultyConfig.baseSpeed + (this.difficultyLevel * 40) - 10;
+      diamondPoop.body.velocity.y = fallSpeed;
+      // console.log(`[다이아똥] 속도 설정 완료: ${fallSpeed}`);
+    } else {
+      // console.log('[다이아똥] 경고: body가 없습니다!');
+    }
+
+    // console.log(`다이아똥 생성! 점수: ${this.score}, 위치: (${x}, ${y}), depth: ${diamondPoop.depth}`);
   }
 
   private updateScore() {
@@ -378,13 +426,21 @@ export default class GameScene extends Phaser.Scene {
         this.highScoreText.setText(`최고: ${this.highScore}`);
       }
 
-      // 클래식 모드에서만 금똥 생성 체크
+      // 클래식 모드에서만 금똥과 다이아똥 생성 체크
       if (this.gameMode === GameMode.CLASSIC) {
-        // 80점마다 금똥 1개 생성 (80, 160, 240, ...)
-        // 정확히 80의 배수일 때만 생성
+        // 40점마다 금똥 1개 생성 (40, 80, 120, 160, ...)
         if (this.score % 40 === 0 && this.score > 0 && this.score !== this.lastGoldPoopScore) {
+          // console.log(`[금똥] 생성 조건 충족: 점수=${this.score}`);
           this.spawnGoldPoop();
           this.lastGoldPoopScore = this.score;
+        }
+
+        // 120점마다 다이아똥 1개 생성 (100, 200, 300, ...)
+        // 40점과 겹치는 경우(100, 200 등)에도 둘 다 생성됨
+        if (this.score % 100 === 0 && this.score > 0 && this.score !== this.lastDiamondPoopScore) {
+          // console.log(`[다이아똥] 생성 조건 충족: 점수=${this.score}, lastDiamondPoopScore=${this.lastDiamondPoopScore}`);
+          this.spawnDiamondPoop();
+          this.lastDiamondPoopScore = this.score;
         }
       }
     }
@@ -539,6 +595,41 @@ export default class GameScene extends Phaser.Scene {
     // 2초 후 텍스트 제거
     this.time.delayedCall(2000, () => {
       goldText.destroy();
+    });
+  }
+
+  private collectDiamondPoop(
+    _player: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile,
+    _diamondPoop: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile
+  ) {
+    if (this.gameOver) return;
+
+    // 다이아똥 제거
+    const diamondPoop = _diamondPoop as DiamondPoop;
+    diamondPoop.destroy();
+
+    // 점수 보너스 (40점 추가)
+    this.score += 40;
+    this.scoreText.setText(`점수: ${this.score}`);
+
+    // 실시간으로 최고 점수 갱신
+    if (this.score > this.highScore) {
+      this.highScore = this.score;
+      this.highScoreText.setText(`최고: ${this.highScore}`);
+    }
+
+    // 다이아똥 획득 안내 텍스트
+    const diamondText = this.add.text(200, 100, '💎 다이아똥 +40점! 💎', {
+      fontSize: '32px',
+      color: '#00FFFF',
+      fontStyle: 'bold',
+      stroke: '#000',
+      strokeThickness: 4
+    }).setOrigin(0.5);
+
+    // 1초 후 텍스트 제거
+    this.time.delayedCall(1000, () => {
+      diamondText.destroy();
     });
   }
 
