@@ -36,6 +36,13 @@ export default class GameScene extends Phaser.Scene {
   }
 
   init(data: { gameMode?: GameMode; difficulty?: Difficulty }) {
+    // 게임 재시작 시 점수 관련 변수 초기화
+    this.score = 0;
+    this.gameOver = false;
+    this.difficultyLevel = 2;
+    this.lastGoldPoopScore = 0;
+    this.lastDiamondPoopScore = 0;
+
     // ModeSelectScene/DifficultySelectScene으로부터 게임 모드와 난이도를 받음
     if (data.gameMode) {
       this.gameMode = data.gameMode;
@@ -415,9 +422,14 @@ export default class GameScene extends Phaser.Scene {
     // console.log(`다이아똥 생성! 점수: ${this.score}, 위치: (${x}, ${y}), depth: ${diamondPoop.depth}`);
   }
 
-  private updateScore() {
+  /**
+   * 점수를 증가시키고 보너스 아이템 생성을 체크합니다.
+   * @param amount 증가할 점수 (기본값: 1)
+   */
+  private updateScore(amount: number = 1) {
     if (!this.gameOver) {
-      this.score += 1;
+      const oldScore = this.score;
+      this.score += amount;
       this.scoreText.setText(`점수: ${this.score}`);
 
       // 실시간으로 최고 점수 갱신
@@ -428,20 +440,30 @@ export default class GameScene extends Phaser.Scene {
 
       // 클래식 모드에서만 금똥과 다이아똥 생성 체크
       if (this.gameMode === GameMode.CLASSIC) {
-        // 40점마다 금똥 1개 생성 (40, 80, 120, 160, ...)
-        if (this.score % 40 === 0 && this.score > 0 && this.score !== this.lastGoldPoopScore) {
-          // console.log(`[금똥] 생성 조건 충족: 점수=${this.score}`);
-          this.spawnGoldPoop();
-          this.lastGoldPoopScore = this.score;
-        }
+        // 점수 증가 범위 내에서 건너뛴 생성 포인트를 확인
+        this.checkMissedSpawnPoints(oldScore, this.score);
+      }
+    }
+  }
 
-        // 120점마다 다이아똥 1개 생성 (100, 200, 300, ...)
-        // 40점과 겹치는 경우(100, 200 등)에도 둘 다 생성됨
-        if (this.score % 100 === 0 && this.score > 0 && this.score !== this.lastDiamondPoopScore) {
-          // console.log(`[다이아똥] 생성 조건 충족: 점수=${this.score}, lastDiamondPoopScore=${this.lastDiamondPoopScore}`);
-          this.spawnDiamondPoop();
-          this.lastDiamondPoopScore = this.score;
-        }
+  /**
+   * 점수가 증가하는 동안 건너뛴 생성 포인트를 확인하고 생성
+   * @param oldScore 이전 점수
+   * @param newScore 새 점수
+   */
+  private checkMissedSpawnPoints(oldScore: number, newScore: number) {
+    // 40점 단위로 금똥 생성 체크
+    for (let score = oldScore + 1; score <= newScore; score++) {
+      // 40점마다 금똥 생성 (40, 80, 120, 160, ...)
+      if (score % 40 === 0 && score > this.lastGoldPoopScore) {
+        this.spawnGoldPoop();
+        this.lastGoldPoopScore = score;
+      }
+
+      // 100점마다 다이아똥 생성 (100, 200, 300, ...)
+      if (score % 100 === 0 && score > this.lastDiamondPoopScore) {
+        this.spawnDiamondPoop();
+        this.lastDiamondPoopScore = score;
       }
     }
   }
@@ -514,15 +536,8 @@ export default class GameScene extends Phaser.Scene {
     const itemTexture = item.texture.key;
     item.destroy();
 
-    // 점수 보너스 (100점 추가)
-    this.score += 100;
-    this.scoreText.setText(`점수: ${this.score}`);
-
-    // 실시간으로 최고 점수 갱신
-    if (this.score > this.highScore) {
-      this.highScore = this.score;
-      this.highScoreText.setText(`최고: ${this.highScore}`);
-    }
+    // 점수 보너스 (100점 추가) - updateScore를 통해 건너뛴 생성 포인트도 체크
+    this.updateScore(100);
 
     // 아이템 종류에 따라 효과 적용
     if (itemTexture === 'hermes_shoes') {
@@ -573,15 +588,8 @@ export default class GameScene extends Phaser.Scene {
     const goldPoop = _goldPoop as GoldPoop;
     goldPoop.destroy();
 
-    // 점수 보너스 (20점 추가)
-    this.score += 20;
-    this.scoreText.setText(`점수: ${this.score}`);
-
-    // 실시간으로 최고 점수 갱신
-    if (this.score > this.highScore) {
-      this.highScore = this.score;
-      this.highScoreText.setText(`최고: ${this.highScore}`);
-    }
+    // 점수 보너스 (20점 추가) - updateScore를 통해 건너뛴 생성 포인트도 체크
+    this.updateScore(20);
 
     // 금똥 획득 안내 텍스트
     const goldText = this.add.text(200, 100, '💰 금똥 +20점! 💰', {
@@ -608,15 +616,8 @@ export default class GameScene extends Phaser.Scene {
     const diamondPoop = _diamondPoop as DiamondPoop;
     diamondPoop.destroy();
 
-    // 점수 보너스 (40점 추가)
-    this.score += 40;
-    this.scoreText.setText(`점수: ${this.score}`);
-
-    // 실시간으로 최고 점수 갱신
-    if (this.score > this.highScore) {
-      this.highScore = this.score;
-      this.highScoreText.setText(`최고: ${this.highScore}`);
-    }
+    // 점수 보너스 (40점 추가) - updateScore를 통해 건너뛴 생성 포인트도 체크
+    this.updateScore(40);
 
     // 다이아똥 획득 안내 텍스트
     const diamondText = this.add.text(200, 100, '💎 다이아똥 +40점! 💎', {
