@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import Player from '../objects/Player';
 import Poop from '../objects/Poop';
+import GoldPoop from '../objects/GoldPoop';
 import Star from '../objects/Star';
 import Item from '../objects/Item';
 import { GameMode, Difficulty, DIFFICULTIES, type DifficultyConfig } from '../types/GameMode';
@@ -11,6 +12,7 @@ import { isChristmasSeason } from '../utils/seasonChecker';
 export default class GameScene extends Phaser.Scene {
   private player!: Player;
   private poops!: Phaser.Physics.Arcade.Group;
+  private goldPoops!: Phaser.Physics.Arcade.Group;
   private stars!: Phaser.Physics.Arcade.Group;
   private items!: Phaser.Physics.Arcade.Group;
   private score: number = 0;
@@ -24,6 +26,7 @@ export default class GameScene extends Phaser.Scene {
   private gameMode: GameMode = GameMode.CLASSIC;
   private difficulty: Difficulty = Difficulty.HARD;
   private difficultyConfig!: DifficultyConfig;
+  private lastGoldPoopScore: number = 0; // 마지막으로 금똥이 나온 점수
 
   constructor() {
     super('GameScene');
@@ -74,6 +77,7 @@ export default class GameScene extends Phaser.Scene {
     this.load.image('poop_sunglass', 'assets/poops/poop_sunglass.png');
     this.load.image('poop_sunglass2', 'assets/poops/poop_sunglass2.png');
     this.load.image('poop_smile', 'assets/poops/poop_smile.png');
+    this.load.image('gold_poop', 'assets/poops/gold_poop.png');
 
     // 크리스마스 똥 이미지 로드
     this.load.image('xmas_poop_ribbon', 'assets/poops/xmas_present_poop.png');
@@ -161,11 +165,26 @@ export default class GameScene extends Phaser.Scene {
         runChildUpdate: true
       });
 
+      // 금똥 그룹 생성
+      this.goldPoops = this.physics.add.group({
+        classType: GoldPoop,
+        runChildUpdate: true
+      });
+
       // 충돌 감지
       this.physics.add.overlap(
         this.player,
         this.poops,
         this.hitPoop as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback,
+        undefined,
+        this
+      );
+
+      // 금똥 충돌 감지 (수집)
+      this.physics.add.overlap(
+        this.player,
+        this.goldPoops,
+        this.collectGoldPoop as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback,
         undefined,
         this
       );
@@ -330,6 +349,24 @@ export default class GameScene extends Phaser.Scene {
     }
   }
 
+  private spawnGoldPoop() {
+    if (this.gameOver) return;
+
+    // 금똥 1개를 화면 중앙 상단에서 생성 (더 잘 보이도록)
+    const x = Phaser.Math.Between(50, 350);
+    const y = -50; // 화면에 더 가깝게 시작
+    const goldPoop = new GoldPoop(this, x, y);
+    this.goldPoops.add(goldPoop, true);
+
+    // 일반 똥과 동일한 속도로 설정 (난이도에 따라)
+    if (goldPoop.body) {
+      const fallSpeed = this.difficultyConfig.baseSpeed + (this.difficultyLevel * 40) - 30;
+      goldPoop.body.velocity.y = fallSpeed;
+    }
+
+    console.log(`금똥 생성! 점수: ${this.score}, 위치: (${x}, ${y}), depth: ${goldPoop.depth}`);
+  }
+
   private updateScore() {
     if (!this.gameOver) {
       this.score += 1;
@@ -339,6 +376,16 @@ export default class GameScene extends Phaser.Scene {
       if (this.score > this.highScore) {
         this.highScore = this.score;
         this.highScoreText.setText(`최고: ${this.highScore}`);
+      }
+
+      // 클래식 모드에서만 금똥 생성 체크
+      if (this.gameMode === GameMode.CLASSIC) {
+        // 80점마다 금똥 1개 생성 (80, 160, 240, ...)
+        // 정확히 80의 배수일 때만 생성
+        if (this.score % 40 === 0 && this.score > 0 && this.score !== this.lastGoldPoopScore) {
+          this.spawnGoldPoop();
+          this.lastGoldPoopScore = this.score;
+        }
       }
     }
   }
@@ -460,12 +507,47 @@ export default class GameScene extends Phaser.Scene {
     // light_saber는 나중에 구현
   }
 
+  private collectGoldPoop(
+    _player: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile,
+    _goldPoop: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile
+  ) {
+    if (this.gameOver) return;
+
+    // 금똥 제거
+    const goldPoop = _goldPoop as GoldPoop;
+    goldPoop.destroy();
+
+    // 점수 보너스 (20점 추가)
+    this.score += 20;
+    this.scoreText.setText(`점수: ${this.score}`);
+
+    // 실시간으로 최고 점수 갱신
+    if (this.score > this.highScore) {
+      this.highScore = this.score;
+      this.highScoreText.setText(`최고: ${this.highScore}`);
+    }
+
+    // 금똥 획득 안내 텍스트
+    const goldText = this.add.text(200, 100, '💰 금똥 +20점! 💰', {
+      fontSize: '28px',
+      color: '#FFD700',
+      fontStyle: 'bold',
+      stroke: '#000',
+      strokeThickness: 4
+    }).setOrigin(0.5);
+
+    // 2초 후 텍스트 제거
+    this.time.delayedCall(2000, () => {
+      goldText.destroy();
+    });
+  }
+
   /**
    * 게임 오버 UI 표시 및 랭킹 시스템 연동
    */
   private async showGameOverUI(isNewRecord: boolean) {
     // 반투명 검정 배경 추가 (가독성 향상)
-    this.add.rectangle(200, 300, 400, 600, 0x000000, 0.7);
+    this.add.rectangle(200, 300, 400, 600, 0x000000, 0.7).setDepth(200);
 
     if (isNewRecord) {
       // === 새 기록 달성 시: 상단에 배치 ===
@@ -476,7 +558,7 @@ export default class GameScene extends Phaser.Scene {
         fontStyle: 'bold',
         stroke: '#000000',
         strokeThickness: 6
-      }).setOrigin(0.5);
+      }).setOrigin(0.5).setDepth(200);
 
       // 최종 점수
       this.add.text(200, 150, `점수: ${this.score}`, {
@@ -485,7 +567,7 @@ export default class GameScene extends Phaser.Scene {
         fontStyle: 'bold',
         stroke: '#000000',
         strokeThickness: 4
-      }).setOrigin(0.5);
+      }).setOrigin(0.5).setDepth(200);
 
       // 새 기록 메시지
       this.add.text(200, 200, '🎉 개인 신기록 🎉', {
@@ -494,7 +576,7 @@ export default class GameScene extends Phaser.Scene {
         fontStyle: 'bold',
         stroke: '#000000',
         strokeThickness: 4
-      }).setOrigin(0.5);
+      }).setOrigin(0.5).setDepth(200);
 
       // 이니셜 입력 UI 표시
       this.showInitialInputUI();
@@ -507,7 +589,7 @@ export default class GameScene extends Phaser.Scene {
         fontStyle: 'bold',
         stroke: '#000000',
         strokeThickness: 6
-      }).setOrigin(0.5);
+      }).setOrigin(0.5).setDepth(200);
 
       // 최종 점수
       this.add.text(200, 260, `점수: ${this.score}`, {
@@ -516,7 +598,7 @@ export default class GameScene extends Phaser.Scene {
         fontStyle: 'bold',
         stroke: '#000000',
         strokeThickness: 4
-      }).setOrigin(0.5);
+      }).setOrigin(0.5).setDepth(200);
 
       // 로컬 최고 점수
       this.add.text(200, 320, `개인 최고: ${this.highScore}`, {
@@ -524,7 +606,7 @@ export default class GameScene extends Phaser.Scene {
         color: '#FFD700',
         stroke: '#000000',
         strokeThickness: 3
-      }).setOrigin(0.5);
+      }).setOrigin(0.5).setDepth(200);
 
       // 재시작 안내
       this.showRestartButton();
@@ -542,7 +624,7 @@ export default class GameScene extends Phaser.Scene {
       fontStyle: 'bold',
       stroke: '#000000',
       strokeThickness: 3
-    }).setOrigin(0.5);
+    }).setOrigin(0.5).setDepth(200);
 
     // HTML input 엘리먼트 생성
     const inputElement = document.createElement('input');
@@ -590,7 +672,7 @@ export default class GameScene extends Phaser.Scene {
       stroke: '#000',
       strokeThickness: 4,
       padding: { x: 20, y: 10 }
-    }).setOrigin(0.5).setInteractive();
+    }).setOrigin(0.5).setInteractive().setDepth(200);
 
     // 에러 메시지 영역
     let errorText: Phaser.GameObjects.Text | null = null;
@@ -608,7 +690,7 @@ export default class GameScene extends Phaser.Scene {
           fontStyle: 'bold',
           stroke: '#000',
           strokeThickness: 3
-        }).setOrigin(0.5);
+        }).setOrigin(0.5).setDepth(200);
         return;
       }
 
@@ -620,7 +702,7 @@ export default class GameScene extends Phaser.Scene {
           fontStyle: 'bold',
           stroke: '#000',
           strokeThickness: 3
-        }).setOrigin(0.5);
+        }).setOrigin(0.5).setDepth(200);
         return;
       }
 
@@ -639,7 +721,7 @@ export default class GameScene extends Phaser.Scene {
         fontStyle: 'bold',
         stroke: '#000',
         strokeThickness: 3
-      }).setOrigin(0.5);
+      }).setOrigin(0.5).setDepth(200);
 
       try {
         const result = await submitScore(this.score, this.difficulty, initials);
@@ -654,7 +736,7 @@ export default class GameScene extends Phaser.Scene {
             fontStyle: 'bold',
             stroke: '#000',
             strokeThickness: 3
-          }).setOrigin(0.5);
+          }).setOrigin(0.5).setDepth(200);
         }
 
         // 이니셜 표시
@@ -665,7 +747,7 @@ export default class GameScene extends Phaser.Scene {
           stroke: '#000',
           strokeThickness: 3,
           letterSpacing: 4
-        }).setOrigin(0.5);
+        }).setOrigin(0.5).setDepth(200);
 
       } catch (error) {
         console.error('Failed to submit score:', error);
@@ -695,7 +777,7 @@ export default class GameScene extends Phaser.Scene {
       fontStyle: 'bold',
       stroke: '#000000',
       strokeThickness: 3
-    }).setOrigin(0.5);
+    }).setOrigin(0.5).setDepth(200);
 
     // 0.5초 지연 후 클릭 이벤트 활성화 (의도치 않은 즉시 클릭 방지)
     this.time.delayedCall(500, () => {
