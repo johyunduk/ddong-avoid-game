@@ -15,7 +15,10 @@ export default class DifficultySelectScene extends Phaser.Scene {
   }
 
   preload() {
-    this.load.image('background', 'assets/backgrounds/background.webp');
+    // 캐시 확인으로 중복 로딩 방지
+    if (!this.textures.exists('background')) {
+      this.load.image('background', 'assets/backgrounds/background.webp');
+    }
   }
 
   create() {

@@ -7,9 +7,13 @@ export default class ModeSelectScene extends Phaser.Scene {
   }
 
   preload() {
-    // 배경 이미지 로드
-    this.load.image('background2', 'assets/backgrounds/background2.webp');
-    this.load.image('title', 'assets/title.webp');
+    // 배경 이미지 로드 (캐시 확인으로 중복 로딩 방지)
+    if (!this.textures.exists('background2')) {
+      this.load.image('background2', 'assets/backgrounds/background2.webp');
+    }
+    if (!this.textures.exists('title')) {
+      this.load.image('title', 'assets/title.webp');
+    }
   }
 
   create() {

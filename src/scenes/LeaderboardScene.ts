@@ -15,8 +15,10 @@ export default class LeaderboardScene extends Phaser.Scene {
   }
 
   preload() {
-    // 배경 이미지 로드
-    this.load.image('background2', 'assets/backgrounds/background2.webp');
+    // 배경 이미지 로드 (캐시 확인으로 중복 로딩 방지)
+    if (!this.textures.exists('background2')) {
+      this.load.image('background2', 'assets/backgrounds/background2.webp');
+    }
   }
 
   create() {

@@ -71,49 +71,71 @@ export default class GameScene extends Phaser.Scene {
   }
 
   preload() {
-    // 배경 이미지 로드 (난이도별 + 아이템 모드 + 크리스마스)
-    this.load.image('background', 'assets/backgrounds/background.webp');
-    this.load.image('background2', 'assets/backgrounds/background2.webp');
-    this.load.image('background3', 'assets/backgrounds/background3.webp');
-    this.load.image('space_background', 'assets/backgrounds/space_background.webp');
-    this.load.image('xmas_background', 'assets/backgrounds/xmas_background.webp');
+    // 게임 모드별 필요한 에셋만 로딩 (로딩 시간 최적화)
 
-    // 플레이어 이미지 로드
-    this.load.image('front', 'assets/players/front.webp');
-    this.load.image('left', 'assets/players/left.webp');
-    this.load.image('right', 'assets/players/right.webp');
+    if (this.gameMode === GameMode.CLASSIC) {
+      // === 클래식 모드 전용 에셋 ===
 
-    // 우주비행사 이미지 로드 (아이템 모드용)
-    this.load.image('astronaut_front', 'assets/players/astronaut_front.webp');
-    this.load.image('astronaut_left', 'assets/players/astronaut_left.webp');
-    this.load.image('astronaut_right', 'assets/players/astronaut_right.webp');
+      // 배경 이미지 (난이도별)
+      if (this.difficulty === Difficulty.EASY) {
+        this.load.image('background2', 'assets/backgrounds/background2.webp');
+      } else if (this.difficulty === Difficulty.NORMAL) {
+        this.load.image('background3', 'assets/backgrounds/background3.webp');
+      } else if (this.difficulty === Difficulty.HARD) {
+        this.load.image('background', 'assets/backgrounds/background.webp');
+      } else if (this.difficulty === Difficulty.EXTREME) {
+        if (isChristmasSeason()) {
+          this.load.image('xmas_background', 'assets/backgrounds/xmas_background.webp');
+        } else {
+          this.load.image('background', 'assets/backgrounds/background.webp');
+        }
+      }
 
-    // 다양한 똥 이미지 로드
-    this.load.image('poop', 'assets/poops/poop.webp');
-    this.load.image('poop_glasses', 'assets/poops/poop_glasses.webp');
-    this.load.image('poop_sunglass', 'assets/poops/poop_sunglass.webp');
-    this.load.image('poop_sunglass2', 'assets/poops/poop_sunglass2.webp');
-    this.load.image('poop_smile', 'assets/poops/poop_smile.webp');
-    this.load.image('gold_poop', 'assets/poops/gold_poop.webp');
-    this.load.image('diamond_poop', 'assets/poops/diamond_poop.webp');
+      // 플레이어 이미지 (일반 캐릭터)
+      this.load.image('front', 'assets/players/front.webp');
+      this.load.image('left', 'assets/players/left.webp');
+      this.load.image('right', 'assets/players/right.webp');
 
-    // 크리스마스 똥 이미지 로드
-    this.load.image('xmas_poop_ribbon', 'assets/poops/xmas_present_poop.webp');
-    this.load.image('xmas_poop_nose', 'assets/poops/xmas_nose_poop.webp');
-    this.load.image('xmas_poop_santa', 'assets/poops/xmas_santa_poop.webp');
-    this.load.image('xmas_poop_rudolf', 'assets/poops/xmas_rudolf_poop.webp');
-    this.load.image('xmas_poop_beard', 'assets/poops/xmas_beard_poop.webp');
+      // 똥 이미지
+      this.load.image('poop', 'assets/poops/poop.webp');
+      this.load.image('poop_glasses', 'assets/poops/poop_glasses.webp');
+      this.load.image('poop_sunglass', 'assets/poops/poop_sunglass.webp');
+      this.load.image('poop_sunglass2', 'assets/poops/poop_sunglass2.webp');
+      this.load.image('poop_smile', 'assets/poops/poop_smile.webp');
+      this.load.image('gold_poop', 'assets/poops/gold_poop.webp');
+      this.load.image('diamond_poop', 'assets/poops/diamond_poop.webp');
 
-    // 별 이미지 로드 (아이템 모드용)
-    this.load.image('star', 'assets/stars/star.webp');
-    this.load.image('star_smile', 'assets/stars/star_smile.webp');
-    this.load.image('star_glasses', 'assets/stars/star_glasses.webp');
-    this.load.image('star_sunglass', 'assets/stars/star_sunglass.webp');
+      // 크리스마스 시즌이면 크리스마스 똥도 로드
+      if (this.difficulty === Difficulty.EXTREME && isChristmasSeason()) {
+        this.load.image('xmas_poop_ribbon', 'assets/poops/xmas_present_poop.webp');
+        this.load.image('xmas_poop_nose', 'assets/poops/xmas_nose_poop.webp');
+        this.load.image('xmas_poop_santa', 'assets/poops/xmas_santa_poop.webp');
+        this.load.image('xmas_poop_rudolf', 'assets/poops/xmas_rudolf_poop.webp');
+        this.load.image('xmas_poop_beard', 'assets/poops/xmas_beard_poop.webp');
+      }
 
-    // 아이템 이미지 로드
-    this.load.image('hermes_shoes', 'assets/items/hermes_shoes.webp');
-    this.load.image('light_saber', 'assets/items/light_saber.webp');
-    this.load.image('rainbow_star', 'assets/items/rainbow_star.webp');
+    } else if (this.gameMode === GameMode.ITEM) {
+      // === 아이템 모드 전용 에셋 ===
+
+      // 우주 배경
+      this.load.image('space_background', 'assets/backgrounds/space_background.webp');
+
+      // 우주비행사 플레이어
+      this.load.image('astronaut_front', 'assets/players/astronaut_front.webp');
+      this.load.image('astronaut_left', 'assets/players/astronaut_left.webp');
+      this.load.image('astronaut_right', 'assets/players/astronaut_right.webp');
+
+      // 별 이미지
+      this.load.image('star', 'assets/stars/star.webp');
+      this.load.image('star_smile', 'assets/stars/star_smile.webp');
+      this.load.image('star_glasses', 'assets/stars/star_glasses.webp');
+      this.load.image('star_sunglass', 'assets/stars/star_sunglass.webp');
+
+      // 아이템 이미지
+      this.load.image('hermes_shoes', 'assets/items/hermes_shoes.webp');
+      this.load.image('light_saber', 'assets/items/light_saber.webp');
+      this.load.image('rainbow_star', 'assets/items/rainbow_star.webp');
+    }
 
     // BGM은 create()에서 필요한 것만 Lazy Loading (초기 로딩 속도 개선)
   }
