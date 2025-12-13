@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "granite dev",
-    "build": "granite build",
+    "build": "node scripts/build.js",
+    "build:granite": "granite build",
     "preview": "vite preview",
     "deploy": "ait deploy"
   },
