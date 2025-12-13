@@ -16,7 +16,7 @@ export default class LeaderboardScene extends Phaser.Scene {
 
   preload() {
     // 배경 이미지 로드
-    this.load.image('background2', 'assets/backgrounds/background2.png');
+    this.load.image('background2', 'assets/backgrounds/background2.webp');
   }
 
   create() {

@@ -72,48 +72,48 @@ export default class GameScene extends Phaser.Scene {
 
   preload() {
     // 배경 이미지 로드 (난이도별 + 아이템 모드 + 크리스마스)
-    this.load.image('background', 'assets/backgrounds/background.png');
-    this.load.image('background2', 'assets/backgrounds/background2.png');
-    this.load.image('background3', 'assets/backgrounds/background3.png');
-    this.load.image('space_background', 'assets/backgrounds/space_background.png');
-    this.load.image('xmas_background', 'assets/backgrounds/xmas_background.png');
+    this.load.image('background', 'assets/backgrounds/background.webp');
+    this.load.image('background2', 'assets/backgrounds/background2.webp');
+    this.load.image('background3', 'assets/backgrounds/background3.webp');
+    this.load.image('space_background', 'assets/backgrounds/space_background.webp');
+    this.load.image('xmas_background', 'assets/backgrounds/xmas_background.webp');
 
     // 플레이어 이미지 로드
-    this.load.image('front', 'assets/players/front.png');
-    this.load.image('left', 'assets/players/left.png');
-    this.load.image('right', 'assets/players/right.png');
+    this.load.image('front', 'assets/players/front.webp');
+    this.load.image('left', 'assets/players/left.webp');
+    this.load.image('right', 'assets/players/right.webp');
 
     // 우주비행사 이미지 로드 (아이템 모드용)
-    this.load.image('astronaut_front', 'assets/players/astronaut_front.png');
-    this.load.image('astronaut_left', 'assets/players/astronaut_left.png');
-    this.load.image('astronaut_right', 'assets/players/astronaut_right.png');
+    this.load.image('astronaut_front', 'assets/players/astronaut_front.webp');
+    this.load.image('astronaut_left', 'assets/players/astronaut_left.webp');
+    this.load.image('astronaut_right', 'assets/players/astronaut_right.webp');
 
     // 다양한 똥 이미지 로드
-    this.load.image('poop', 'assets/poops/poop.png');
-    this.load.image('poop_glasses', 'assets/poops/poop_glasses.png');
-    this.load.image('poop_sunglass', 'assets/poops/poop_sunglass.png');
-    this.load.image('poop_sunglass2', 'assets/poops/poop_sunglass2.png');
-    this.load.image('poop_smile', 'assets/poops/poop_smile.png');
-    this.load.image('gold_poop', 'assets/poops/gold_poop.png');
-    this.load.image('diamond_poop', 'assets/poops/diamond_poop.png');
+    this.load.image('poop', 'assets/poops/poop.webp');
+    this.load.image('poop_glasses', 'assets/poops/poop_glasses.webp');
+    this.load.image('poop_sunglass', 'assets/poops/poop_sunglass.webp');
+    this.load.image('poop_sunglass2', 'assets/poops/poop_sunglass2.webp');
+    this.load.image('poop_smile', 'assets/poops/poop_smile.webp');
+    this.load.image('gold_poop', 'assets/poops/gold_poop.webp');
+    this.load.image('diamond_poop', 'assets/poops/diamond_poop.webp');
 
     // 크리스마스 똥 이미지 로드
-    this.load.image('xmas_poop_ribbon', 'assets/poops/xmas_present_poop.png');
-    this.load.image('xmas_poop_nose', 'assets/poops/xmas_nose_poop.png');
-    this.load.image('xmas_poop_santa', 'assets/poops/xmas_santa_poop.png');
-    this.load.image('xmas_poop_rudolf', 'assets/poops/xmas_rudolf_poop.png');
-    this.load.image('xmas_poop_beard', 'assets/poops/xmas_beard_poop.png');
+    this.load.image('xmas_poop_ribbon', 'assets/poops/xmas_present_poop.webp');
+    this.load.image('xmas_poop_nose', 'assets/poops/xmas_nose_poop.webp');
+    this.load.image('xmas_poop_santa', 'assets/poops/xmas_santa_poop.webp');
+    this.load.image('xmas_poop_rudolf', 'assets/poops/xmas_rudolf_poop.webp');
+    this.load.image('xmas_poop_beard', 'assets/poops/xmas_beard_poop.webp');
 
     // 별 이미지 로드 (아이템 모드용)
-    this.load.image('star', 'assets/stars/star.png');
-    this.load.image('star_smile', 'assets/stars/star_smile.png');
-    this.load.image('star_glasses', 'assets/stars/star_glasses.png');
-    this.load.image('star_sunglass', 'assets/stars/star_sunglass.png');
+    this.load.image('star', 'assets/stars/star.webp');
+    this.load.image('star_smile', 'assets/stars/star_smile.webp');
+    this.load.image('star_glasses', 'assets/stars/star_glasses.webp');
+    this.load.image('star_sunglass', 'assets/stars/star_sunglass.webp');
 
     // 아이템 이미지 로드
-    this.load.image('hermes_shoes', 'assets/items/hermes_shoes.png');
-    this.load.image('light_saber', 'assets/items/light_saber.png');
-    this.load.image('rainbow_star', 'assets/items/rainbow_star.png');
+    this.load.image('hermes_shoes', 'assets/items/hermes_shoes.webp');
+    this.load.image('light_saber', 'assets/items/light_saber.webp');
+    this.load.image('rainbow_star', 'assets/items/rainbow_star.webp');
 
     // 오디오 로드
     this.load.audio('bgMusic', 'assets/bgms/poop.mp3');
