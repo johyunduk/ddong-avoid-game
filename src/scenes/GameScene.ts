@@ -115,10 +115,7 @@ export default class GameScene extends Phaser.Scene {
     this.load.image('light_saber', 'assets/items/light_saber.webp');
     this.load.image('rainbow_star', 'assets/items/rainbow_star.webp');
 
-    // 오디오 로드
-    this.load.audio('bgMusic', 'assets/bgms/poop.mp3');
-    this.load.audio('starBgMusic', 'assets/bgms/star_fall.mp3');
-    this.load.audio('xmasBgMusic', 'assets/bgms/xmas_poop.mp3');
+    // BGM은 create()에서 필요한 것만 Lazy Loading (초기 로딩 속도 개선)
   }
 
   create() {
@@ -157,17 +154,32 @@ export default class GameScene extends Phaser.Scene {
       background.setDisplaySize(400, 600);
     }
 
-    // 배경음악 재생 (무한 반복, 게임 모드별 BGM)
+    // 배경음악 Lazy Loading 및 재생 (게임 시작 후 로딩, 초기 로딩 시간 단축)
     let bgMusicKey = 'bgMusic';
+    let bgMusicPath = 'assets/bgms/poop.mp3';
+
     if (this.gameMode === GameMode.ITEM) {
       bgMusicKey = 'starBgMusic';
+      bgMusicPath = 'assets/bgms/star_fall.mp3';
     } else if (this.difficulty === Difficulty.EXTREME && isChristmasSeason()) {
       // EXTREME 난이도 + 크리스마스 시즌: 크리스마스 BGM
       bgMusicKey = 'xmasBgMusic';
+      bgMusicPath = 'assets/bgms/xmas_poop.mp3';
     }
 
-    this.bgMusic = this.sound.add(bgMusicKey, { loop: true, volume: 0.5 });
-    this.bgMusic.play();
+    // BGM이 아직 로드되지 않았으면 동적 로딩
+    if (!this.cache.audio.exists(bgMusicKey)) {
+      this.load.audio(bgMusicKey, bgMusicPath);
+      this.load.once('complete', () => {
+        this.bgMusic = this.sound.add(bgMusicKey, { loop: true, volume: 0.5 });
+        this.bgMusic.play();
+      });
+      this.load.start(); // 동적 로딩 시작
+    } else {
+      // 이미 로드되어 있으면 바로 재생
+      this.bgMusic = this.sound.add(bgMusicKey, { loop: true, volume: 0.5 });
+      this.bgMusic.play();
+    }
 
     // 월드 바운드 설정 (플레이어가 화면 안쪽에만 머무르도록)
     this.physics.world.setBounds(15, 0, 370, 600);
