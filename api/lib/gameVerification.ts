@@ -89,6 +89,7 @@ export function validateGamePlayData(data: GamePlayData): {
     easy: 10000,
     normal: 15000,
     hard: 20000,
+    extreme: 25000,
   };
 
   const maxScore = maxScorePerDifficulty[data.difficulty] || 20000;
@@ -134,7 +135,7 @@ export function validateGamePlayData(data: GamePlayData): {
   }
 
   // 9. 난이도 검증
-  const validDifficulties = ['easy', 'normal', 'hard'];
+  const validDifficulties = ['easy', 'normal', 'hard', 'extreme'];
   if (!validDifficulties.includes(data.difficulty)) {
     return { valid: false, reason: 'Invalid difficulty' };
   }

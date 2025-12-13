@@ -95,6 +95,7 @@ export function validateGamePlayData(data: GamePlayData): {
     easy: 10000,    // 쉬움: 최대 10,000점
     normal: 15000,  // 보통: 최대 15,000점
     hard: 20000,    // 어려움: 최대 20,000점
+    extreme: 25000, // 극한: 최대 25,000점
   };
 
   const maxScore = maxScorePerDifficulty[data.difficulty] || 20000;
