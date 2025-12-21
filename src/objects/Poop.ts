@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { type Difficulty, Difficulty as DifficultyEnum } from '../types/GameMode';
 import { isChristmasSeason, CHRISTMAS_POOP_KEYS, REGULAR_POOP_KEYS } from '../utils/seasonChecker';
+import { POOP_CONFIG } from '../config/poop';
 
 export default class Poop extends Phaser.Physics.Arcade.Sprite {
   private fallSpeed: number;
@@ -36,8 +37,8 @@ export default class Poop extends Phaser.Physics.Arcade.Sprite {
     // 원점을 중앙으로 설정
     this.setOrigin(0.5);
 
-    // 낙하 속도 (난이도에 따라 증가)
-    this.fallSpeed = 200 + (difficultyLevel * 40);
+    // 낙하 속도 (설정 기반, 난이도에 따라 증가)
+    this.fallSpeed = POOP_CONFIG.normal.baseSpeed + (difficultyLevel * POOP_CONFIG.normal.speedIncrement);
 
     // 씬에 추가
     scene.add.existing(this);
@@ -45,13 +46,13 @@ export default class Poop extends Phaser.Physics.Arcade.Sprite {
 
     // EXTREME 모드일 때 똥 크기를 줄임
     const isExtreme = difficulty === DifficultyEnum.EXTREME;
-    let displaySize = isExtreme ? 38 : 40;
-    const hitboxSize = isExtreme ? 470 : 500;
+    let displaySize = isExtreme ? POOP_CONFIG.normal.size.extreme : POOP_CONFIG.normal.size.normal;
+    const hitboxSize = isExtreme ? POOP_CONFIG.normal.hitbox.extreme : POOP_CONFIG.normal.hitbox.normal;
 
-    // 특정 크리스마스 똥만 크기를 크게 설정 (코 & 리본)
+    // 특정 크리스마스 똥만 크기를 크게 설정 (코, 리본, 산타, 수염)
     const isSpecialChristmasPoop = ['xmas_poop_nose', 'xmas_poop_ribbon', 'xmas_poop_santa', 'xmas_poop_beard'].includes(randomTexture);
     if (isSpecialChristmasPoop) {
-      displaySize = isExtreme ? 52 : 56;
+      displaySize = isExtreme ? POOP_CONFIG.normal.specialSize.extreme : POOP_CONFIG.normal.specialSize.normal;
     }
 
     // 똥 이미지 크기 설정
@@ -69,7 +70,7 @@ export default class Poop extends Phaser.Physics.Arcade.Sprite {
 
   update() {
     // 화면 밖으로 나가면 제거
-    if (this.y > this.scene.cameras.main.height + 50) {
+    if (this.y > this.scene.cameras.main.height + POOP_CONFIG.destroyOffset) {
       this.destroy();
     }
   }

@@ -6,6 +6,8 @@ import DiamondPoop from '../objects/DiamondPoop';
 import Star from '../objects/Star';
 import Item from '../objects/Item';
 import { GameMode, Difficulty, DIFFICULTIES, type DifficultyConfig } from '../types/GameMode';
+import { FEVER_TIME_CONFIG } from '../config/feverTime';
+import { POOP_CONFIG } from '../config/poop';
 import { getHighScore, updateHighScore } from '../utils/localStorage';
 import { submitScore, getUserInitials, setUserInitials, getUserId } from '../utils/leaderboard';
 import { isChristmasSeason } from '../utils/seasonChecker';
@@ -34,6 +36,14 @@ export default class GameScene extends Phaser.Scene {
   private gameStartTime: number = 0; // 게임 시작 시각 (타임스탬프)
   private goldPoopsCollected: number = 0; // 수집한 금똥 개수
   private diamondPoopsCollected: number = 0; // 수집한 다이아똥 개수
+  // 피버 타임 관련
+  private isFeverTime: boolean = false; // 피버 타임 활성화 여부
+  private feverTimeRemaining: number = 0; // 피버 타임 남은 시간 (ms)
+  private feverTimeTimer!: Phaser.Time.TimerEvent; // 피버 타임 카운트다운 타이머
+  private feverTimeUITexts: Phaser.GameObjects.Text[] = []; // 피버 타임 UI 텍스트 (각 글자별)
+  private feverTimeColorOffset: number = 0; // 무지개 색상 회전 오프셋
+  private feverTimeColorTimer!: Phaser.Time.TimerEvent; // 색상 애니메이션 타이머
+  private lastFeverTimeScore: number = 0; // 마지막 피버 타임 발동 점수
 
   constructor() {
     super('GameScene');
@@ -49,6 +59,10 @@ export default class GameScene extends Phaser.Scene {
     this.gameStartTime = Date.now(); // 게임 시작 시각 기록
     this.goldPoopsCollected = 0; // 금똥 수집 카운터 초기화
     this.diamondPoopsCollected = 0; // 다이아똥 수집 카운터 초기화
+    // 피버 타임 초기화
+    this.isFeverTime = false;
+    this.feverTimeRemaining = 0;
+    this.lastFeverTimeScore = 0;
 
     // ModeSelectScene/DifficultySelectScene으로부터 게임 모드와 난이도를 받음
     if (data.gameMode) {
@@ -425,9 +439,9 @@ export default class GameScene extends Phaser.Scene {
     const goldPoop = new GoldPoop(this, x, y);
     this.goldPoops.add(goldPoop, true);
 
-    // 일반 똥과 동일한 속도로 설정 (난이도에 따라)
+    // 일반 똥보다 느린 속도로 설정 (난이도에 따라, 설정 기반)
     if (goldPoop.body) {
-      const fallSpeed = this.difficultyConfig.baseSpeed + (this.difficultyLevel * 40) - 30;
+      const fallSpeed = this.difficultyConfig.baseSpeed + (this.difficultyLevel * POOP_CONFIG.normal.speedIncrement) - POOP_CONFIG.gold.speedReduction;
       goldPoop.body.velocity.y = fallSpeed;
     }
 
@@ -451,9 +465,9 @@ export default class GameScene extends Phaser.Scene {
     this.diamondPoops.add(diamondPoop, true);
     // console.log(`[다이아똥] diamondPoops 그룹에 추가 완료. 그룹 크기: ${this.diamondPoops.getLength()}`);
 
-    // 일반 똥과 동일한 속도로 설정 (난이도에 따라)
+    // 일반 똥보다 느린 속도로 설정 (난이도에 따라, 설정 기반)
     if (diamondPoop.body) {
-      const fallSpeed = this.difficultyConfig.baseSpeed + (this.difficultyLevel * 40) - 10;
+      const fallSpeed = this.difficultyConfig.baseSpeed + (this.difficultyLevel * POOP_CONFIG.normal.speedIncrement) - POOP_CONFIG.diamond.speedReduction;
       diamondPoop.body.velocity.y = fallSpeed;
       // console.log(`[다이아똥] 속도 설정 완료: ${fallSpeed}`);
     } else {
@@ -495,16 +509,22 @@ export default class GameScene extends Phaser.Scene {
   private checkMissedSpawnPoints(oldScore: number, newScore: number) {
     // 40점 단위로 금똥 생성 체크
     for (let score = oldScore + 1; score <= newScore; score++) {
-      // 40점마다 금똥 생성 (40, 80, 120, 160, ...)
-      if (score % 40 === 0 && score > this.lastGoldPoopScore) {
-        this.spawnGoldPoop();
-        this.lastGoldPoopScore = score;
-      }
+      // 피버 타임 체크
+      this.checkFeverTime(score);
 
-      // 100점마다 다이아똥 생성 (100, 200, 300, ...)
-      if (score % 100 === 0 && score > this.lastDiamondPoopScore) {
-        this.spawnDiamondPoop();
-        this.lastDiamondPoopScore = score;
+      // 피버 타임 중이 아닐 때만 일반 금똥/다이아똥 생성
+      if (!this.isFeverTime) {
+        // 40점마다 금똥 생성 (40, 80, 120, 160, ...)
+        if (score % 40 === 0 && score > this.lastGoldPoopScore) {
+          this.spawnGoldPoop();
+          this.lastGoldPoopScore = score;
+        }
+
+        // 100점마다 다이아똥 생성 (100, 200, 300, ...)
+        if (score % 100 === 0 && score > this.lastDiamondPoopScore) {
+          this.spawnDiamondPoop();
+          this.lastDiamondPoopScore = score;
+        }
       }
     }
   }
@@ -519,10 +539,328 @@ export default class GameScene extends Phaser.Scene {
       this.spawnTimer.remove();
       this.spawnTimer = this.time.addEvent({
         delay: newDelay,
-        callback: this.spawnPoop,
+        callback: this.isFeverTime ? this.spawnFeverPoop : this.spawnPoop,
         callbackScope: this,
         loop: true
       });
+    }
+  }
+
+  /**
+   * 피버 타임 발동 조건 체크 (설정 기반)
+   */
+  private checkFeverTime(score: number) {
+    if (score < FEVER_TIME_CONFIG.firstTriggerScore) return;
+
+    // 첫 피버 타임 또는 반복 간격 체크
+    let nextFeverScore: number;
+    const secondTrigger = FEVER_TIME_CONFIG.firstTriggerScore + FEVER_TIME_CONFIG.repeatInterval;
+
+    if (score < secondTrigger) {
+      nextFeverScore = FEVER_TIME_CONFIG.firstTriggerScore;
+    } else {
+      const feverIndex = Math.floor((score - FEVER_TIME_CONFIG.firstTriggerScore) / FEVER_TIME_CONFIG.repeatInterval);
+      nextFeverScore = FEVER_TIME_CONFIG.firstTriggerScore + feverIndex * FEVER_TIME_CONFIG.repeatInterval;
+    }
+
+    if (score >= nextFeverScore && this.lastFeverTimeScore < nextFeverScore) {
+      this.startFeverTime();
+      this.lastFeverTimeScore = nextFeverScore;
+    }
+  }
+
+  /**
+   * 피버 타임 시작 (기존 똥을 보너스 아이템으로 변환)
+   */
+  private startFeverTime() {
+    if (this.gameOver) return;
+
+    this.isFeverTime = true;
+    this.feverTimeRemaining = FEVER_TIME_CONFIG.duration;
+
+    // 기존 일반 똥들을 금똥/다이아똥으로 변환
+    if (this.poops) {
+      const poopPositions: Array<{ x: number; y: number; velocity: number }> = [];
+
+      // 모든 똥의 위치와 속도 저장
+      this.poops.children.entries.forEach((poop) => {
+        const poopSprite = poop as Poop;
+        if (poopSprite.body) {
+          poopPositions.push({
+            x: poopSprite.x,
+            y: poopSprite.y,
+            velocity: poopSprite.body.velocity.y
+          });
+        }
+      });
+
+      // 기존 똥들 제거
+      this.poops.clear(true, true);
+
+      // 같은 위치에 금똥/다이아똥 생성 (50:50 확률)
+      poopPositions.forEach((pos) => {
+        const isGold = Math.random() < 0.5;
+
+        if (isGold) {
+          const goldPoop = new GoldPoop(this, pos.x, pos.y);
+          this.goldPoops.add(goldPoop, true);
+          if (goldPoop.body) {
+            goldPoop.body.velocity.y = pos.velocity * FEVER_TIME_CONFIG.speedMultiplier;
+          }
+        } else {
+          const diamondPoop = new DiamondPoop(this, pos.x, pos.y);
+          this.diamondPoops.add(diamondPoop, true);
+          if (diamondPoop.body) {
+            diamondPoop.body.velocity.y = pos.velocity * FEVER_TIME_CONFIG.speedMultiplier;
+          }
+        }
+      });
+    }
+
+    // 기존 금똥/다이아똥 속도만 증가
+    if (this.goldPoops) {
+      this.goldPoops.children.entries.forEach((goldPoop) => {
+        const goldPoopSprite = goldPoop as GoldPoop;
+        if (goldPoopSprite.body) {
+          goldPoopSprite.body.velocity.y *= FEVER_TIME_CONFIG.speedMultiplier;
+        }
+      });
+    }
+    if (this.diamondPoops) {
+      this.diamondPoops.children.entries.forEach((diamondPoop) => {
+        const diamondPoopSprite = diamondPoop as DiamondPoop;
+        if (diamondPoopSprite.body) {
+          diamondPoopSprite.body.velocity.y *= FEVER_TIME_CONFIG.speedMultiplier;
+        }
+      });
+    }
+
+    // spawnTimer를 피버 타임 생성 패턴으로 교체
+    this.spawnTimer.remove();
+    this.spawnTimer = this.time.addEvent({
+      delay: this.difficultyConfig.spawnDelay,
+      callback: this.spawnFeverPoop,
+      callbackScope: this,
+      loop: true
+    });
+
+    // UI 텍스트 생성 (각 글자별로 개별 Text 객체 생성)
+    // 기존 텍스트 제거
+    this.feverTimeUITexts.forEach((text) => text.destroy());
+    this.feverTimeUITexts = [];
+    this.feverTimeColorOffset = 0;
+
+    const initialSeconds = Math.ceil(FEVER_TIME_CONFIG.duration / 1000);
+    const fullText = `FEVER TIME ${initialSeconds}초`;
+
+    // 무지개 색상 배열 (빨강, 주황, 노랑, 초록, 파랑, 남색, 보라)
+    const rainbowColors = [
+      '#ff0000', // 빨강
+      '#ff7f00', // 주황
+      '#ffff00', // 노랑
+      '#00ff00', // 초록
+      '#0000ff', // 파랑
+      '#4b0082', // 남색
+      '#9400d3'  // 보라
+    ];
+
+    // 글자 크기 측정을 위한 임시 텍스트
+    const tempText = this.add.text(0, 0, fullText, {
+      fontSize: FEVER_TIME_CONFIG.ui.fontSize,
+      fontStyle: 'bold'
+    });
+    const totalWidth = tempText.width;
+    tempText.destroy();
+
+    // 각 글자의 시작 X 위치 계산
+    const startX = FEVER_TIME_CONFIG.ui.position.x - totalWidth / 2;
+    let currentX = startX;
+
+    // 각 글자별로 Text 객체 생성
+    for (let i = 0; i < fullText.length; i++) {
+      const char = fullText[i];
+      const colorIndex = i % rainbowColors.length;
+
+      const charText = this.add.text(
+        currentX,
+        FEVER_TIME_CONFIG.ui.position.y,
+        char,
+        {
+          fontSize: FEVER_TIME_CONFIG.ui.fontSize,
+          color: rainbowColors[colorIndex],
+          fontStyle: 'bold',
+          stroke: FEVER_TIME_CONFIG.ui.stroke,
+          strokeThickness: FEVER_TIME_CONFIG.ui.strokeThickness
+        }
+      ).setOrigin(0, 0.5).setDepth(FEVER_TIME_CONFIG.ui.depth);
+
+      this.feverTimeUITexts.push(charText);
+      currentX += charText.width;
+    }
+
+    // 카운트다운 타이머
+    if (this.feverTimeTimer) {
+      this.feverTimeTimer.remove();
+    }
+    this.feverTimeTimer = this.time.addEvent({
+      delay: 100,
+      callback: this.updateFeverTime,
+      callbackScope: this,
+      loop: true
+    });
+
+    // 색상 애니메이션 타이머 (0.2초마다 색상 한 칸 이동)
+    if (this.feverTimeColorTimer) {
+      this.feverTimeColorTimer.remove();
+    }
+    this.feverTimeColorTimer = this.time.addEvent({
+      delay: 200,
+      callback: this.updateFeverTimeColors,
+      callbackScope: this,
+      loop: true
+    });
+  }
+
+  /**
+   * 피버 타임 카운트다운 업데이트
+   */
+  private updateFeverTime() {
+    this.feverTimeRemaining -= 100; // 0.1초씩 감소
+
+    const secondsRemaining = Math.ceil(this.feverTimeRemaining / 1000);
+    const newText = `FEVER TIME ${secondsRemaining}초`;
+
+    // 각 글자의 텍스트 내용 업데이트
+    for (let i = 0; i < this.feverTimeUITexts.length; i++) {
+      if (i < newText.length) {
+        this.feverTimeUITexts[i].setText(newText[i]);
+      }
+    }
+
+    // 텍스트 길이가 변경된 경우 (초 카운트 변경) 위치 재조정
+    if (this.feverTimeUITexts.length > 0) {
+      const tempText = this.add.text(0, 0, newText, {
+        fontSize: FEVER_TIME_CONFIG.ui.fontSize,
+        fontStyle: 'bold'
+      });
+      const totalWidth = tempText.width;
+      tempText.destroy();
+
+      const startX = FEVER_TIME_CONFIG.ui.position.x - totalWidth / 2;
+      let currentX = startX;
+
+      for (let i = 0; i < this.feverTimeUITexts.length && i < newText.length; i++) {
+        this.feverTimeUITexts[i].setX(currentX);
+        currentX += this.feverTimeUITexts[i].width;
+      }
+    }
+
+    // 시간이 다 떨어지면 피버 타임 종료
+    if (this.feverTimeRemaining <= 0) {
+      this.endFeverTime();
+    }
+  }
+
+  /**
+   * 피버 타임 색상 애니메이션 업데이트
+   */
+  private updateFeverTimeColors() {
+    // 무지개 색상 배열 (빨강, 주황, 노랑, 초록, 파랑, 남색, 보라)
+    const rainbowColors = [
+      '#ff0000', // 빨강
+      '#ff7f00', // 주황
+      '#ffff00', // 노랑
+      '#00ff00', // 초록
+      '#0000ff', // 파랑
+      '#4b0082', // 남색
+      '#9400d3'  // 보라
+    ];
+
+    // 색상 오프셋을 감소시켜 반대 방향으로 이동 (오른쪽에서 왼쪽으로)
+    this.feverTimeColorOffset = (this.feverTimeColorOffset - 1 + rainbowColors.length) % rainbowColors.length;
+
+    // 각 글자의 색상 업데이트
+    for (let i = 0; i < this.feverTimeUITexts.length; i++) {
+      const colorIndex = (i + this.feverTimeColorOffset) % rainbowColors.length;
+      this.feverTimeUITexts[i].setColor(rainbowColors[colorIndex]);
+    }
+  }
+
+  /**
+   * 피버 타임 종료
+   */
+  private endFeverTime() {
+    this.isFeverTime = false;
+
+    // 타이머 제거
+    if (this.feverTimeTimer) {
+      this.feverTimeTimer.remove();
+    }
+
+    // 색상 애니메이션 타이머 제거
+    if (this.feverTimeColorTimer) {
+      this.feverTimeColorTimer.remove();
+    }
+
+    // UI 제거 (모든 글자 Text 객체)
+    this.feverTimeUITexts.forEach((text) => text.destroy());
+    this.feverTimeUITexts = [];
+
+    // 일반 생성 패턴으로 복구
+    this.spawnTimer.remove();
+    this.spawnTimer = this.time.addEvent({
+      delay: this.difficultyConfig.spawnDelay,
+      callback: this.spawnPoop,
+      callbackScope: this,
+      loop: true
+    });
+  }
+
+  /**
+   * 피버 타임 생성 패턴 (설정 기반, 속도 증가)
+   */
+  private spawnFeverPoop() {
+    if (this.gameOver) return;
+
+    // 1. 일반 똥 생성 (피버 타임 속도 배수 적용)
+    for (let i = 0; i < FEVER_TIME_CONFIG.normalPoopCount; i++) {
+      const x = Phaser.Math.Between(15, 385);
+      const y = Phaser.Math.Between(-200, -20);
+      const poop = new Poop(this, x, y, this.difficultyLevel, this.difficulty);
+      this.poops.add(poop, true);
+
+      if (poop.body) {
+        const baseFallSpeed = this.difficultyConfig.baseSpeed + (this.difficultyLevel * POOP_CONFIG.normal.speedIncrement);
+        const fallSpeed = baseFallSpeed * FEVER_TIME_CONFIG.speedMultiplier;
+        poop.body.velocity.y = fallSpeed;
+      }
+    }
+
+    // 2. 금똥/다이아똥 랜덤 생성 (피버 타임 속도 배수 적용)
+    for (let i = 0; i < FEVER_TIME_CONFIG.bonusPoopCount; i++) {
+      const x = Phaser.Math.Between(50, 350);
+      const y = Phaser.Math.Between(-200, -50);
+
+      // 50% 확률로 금똥 또는 다이아똥 결정
+      const isGold = Math.random() < 0.5;
+
+      if (isGold) {
+        const goldPoop = new GoldPoop(this, x, y);
+        this.goldPoops.add(goldPoop, true);
+        if (goldPoop.body) {
+          const baseFallSpeed = this.difficultyConfig.baseSpeed + (this.difficultyLevel * POOP_CONFIG.normal.speedIncrement) - POOP_CONFIG.gold.speedReduction;
+          const fallSpeed = baseFallSpeed * FEVER_TIME_CONFIG.speedMultiplier;
+          goldPoop.body.velocity.y = fallSpeed;
+        }
+      } else {
+        const diamondPoop = new DiamondPoop(this, x, y);
+        this.diamondPoops.add(diamondPoop, true);
+        if (diamondPoop.body) {
+          const baseFallSpeed = this.difficultyConfig.baseSpeed + (this.difficultyLevel * POOP_CONFIG.normal.speedIncrement) - POOP_CONFIG.diamond.speedReduction;
+          const fallSpeed = baseFallSpeed * FEVER_TIME_CONFIG.speedMultiplier;
+          diamondPoop.body.velocity.y = fallSpeed;
+        }
+      }
     }
   }
 
@@ -635,19 +973,21 @@ export default class GameScene extends Phaser.Scene {
     // 점수 보너스 (20점 추가) - updateScore를 통해 건너뛴 생성 포인트도 체크
     this.updateScore(20);
 
-    // 금똥 획득 안내 텍스트
-    const goldText = this.add.text(200, 100, '💰 금똥 +20점! 💰', {
-      fontSize: '28px',
-      color: '#FFD700',
-      fontStyle: 'bold',
-      stroke: '#000',
-      strokeThickness: 4
-    }).setOrigin(0.5);
+    // 금똥 획득 안내 텍스트 (피버 타임 중에는 표시하지 않음)
+    if (!this.isFeverTime) {
+      const goldText = this.add.text(200, 100, '💰 금똥 +20점! 💰', {
+        fontSize: '28px',
+        color: '#FFD700',
+        fontStyle: 'bold',
+        stroke: '#000',
+        strokeThickness: 4
+      }).setOrigin(0.5);
 
-    // 2초 후 텍스트 제거
-    this.time.delayedCall(2000, () => {
-      goldText.destroy();
-    });
+      // 2초 후 텍스트 제거
+      this.time.delayedCall(2000, () => {
+        goldText.destroy();
+      });
+    }
   }
 
   private collectDiamondPoop(
@@ -666,19 +1006,21 @@ export default class GameScene extends Phaser.Scene {
     // 점수 보너스 (40점 추가) - updateScore를 통해 건너뛴 생성 포인트도 체크
     this.updateScore(40);
 
-    // 다이아똥 획득 안내 텍스트
-    const diamondText = this.add.text(200, 100, '💎 다이아똥 +40점! 💎', {
-      fontSize: '32px',
-      color: '#00FFFF',
-      fontStyle: 'bold',
-      stroke: '#000',
-      strokeThickness: 4
-    }).setOrigin(0.5);
+    // 다이아똥 획득 안내 텍스트 (피버 타임 중에는 표시하지 않음)
+    if (!this.isFeverTime) {
+      const diamondText = this.add.text(200, 100, '💎 다이아똥 +40점! 💎', {
+        fontSize: '32px',
+        color: '#00FFFF',
+        fontStyle: 'bold',
+        stroke: '#000',
+        strokeThickness: 4
+      }).setOrigin(0.5);
 
-    // 1초 후 텍스트 제거
-    this.time.delayedCall(1000, () => {
-      diamondText.destroy();
-    });
+      // 1초 후 텍스트 제거
+      this.time.delayedCall(1000, () => {
+        diamondText.destroy();
+      });
+    }
   }
 
   /**
@@ -936,21 +1278,69 @@ export default class GameScene extends Phaser.Scene {
   }
 
   /**
-   * 재시작 버튼 표시
+   * 재시작 버튼 표시 (다시 하기 + 메인 메뉴) - 버튼 스타일
    */
   private showRestartButton() {
-    this.add.text(200, 550, '클릭하여 모드 선택으로', {
-      fontSize: '20px',
+    // 다시 하기 버튼 배경
+    const retryButtonBg = this.add.rectangle(200, 450, 250, 70, 0x00aa00)
+      .setOrigin(0.5)
+      .setDepth(199)
+      .setStrokeStyle(3, 0xffffff);
+
+    // 다시 하기 버튼 텍스트
+    const retryButtonText = this.add.text(200, 450, '다시 하기', {
+      fontSize: '22px',
       color: '#ffffff',
-      fontStyle: 'bold',
-      stroke: '#000000',
-      strokeThickness: 3
+      fontStyle: 'bold'
     }).setOrigin(0.5).setDepth(200);
+
+    // 다시 하기 버튼 인터랙티브 영역 (배경을 클릭 가능하게)
+    retryButtonBg.setInteractive({ useHandCursor: true });
+
+    // 메인 메뉴 버튼 배경
+    const menuButtonBg = this.add.rectangle(200, 555, 250, 70, 0x555555)
+      .setOrigin(0.5)
+      .setDepth(199)
+      .setStrokeStyle(3, 0xffffff);
+
+    // 메인 메뉴 버튼 텍스트
+    const menuButtonText = this.add.text(200, 555, '메인 메뉴', {
+      fontSize: '22px',
+      color: '#ffffff',
+      fontStyle: 'bold'
+    }).setOrigin(0.5).setDepth(200);
+
+    // 메인 메뉴 버튼 인터랙티브 영역
+    menuButtonBg.setInteractive({ useHandCursor: true });
+
+    // 호버 효과 - 다시 하기 버튼
+    retryButtonBg.on('pointerover', () => {
+      retryButtonBg.setFillStyle(0x00ff00);
+      retryButtonBg.setScale(1.05);
+      retryButtonText.setScale(1.05);
+    });
+    retryButtonBg.on('pointerout', () => {
+      retryButtonBg.setFillStyle(0x00aa00);
+      retryButtonBg.setScale(1);
+      retryButtonText.setScale(1);
+    });
+
+    // 호버 효과 - 메인 메뉴 버튼
+    menuButtonBg.on('pointerover', () => {
+      menuButtonBg.setFillStyle(0x777777);
+      menuButtonBg.setScale(1.05);
+      menuButtonText.setScale(1.05);
+    });
+    menuButtonBg.on('pointerout', () => {
+      menuButtonBg.setFillStyle(0x555555);
+      menuButtonBg.setScale(1);
+      menuButtonText.setScale(1);
+    });
 
     // 0.5초 지연 후 클릭 이벤트 활성화 (의도치 않은 즉시 클릭 방지)
     this.time.delayedCall(500, () => {
-      // 재시작 - 모드 선택 씬으로 돌아가기
-      this.input.once('pointerdown', () => {
+      // 다시 하기 버튼 클릭
+      retryButtonBg.on('pointerdown', () => {
         // HTML input이 남아있으면 제거
         const existingInput = document.querySelector('input');
         if (existingInput) {
@@ -963,9 +1353,27 @@ export default class GameScene extends Phaser.Scene {
         if (this.player) {
           this.player.cleanupEffects();
         }
-        this.gameOver = false;
-        this.score = 0;
-        this.difficultyLevel = 2;
+
+        // 같은 게임 모드와 난이도로 재시작
+        this.scene.restart({ gameMode: this.gameMode, difficulty: this.difficulty });
+      });
+
+      // 메인 메뉴 버튼 클릭
+      menuButtonBg.on('pointerdown', () => {
+        // HTML input이 남아있으면 제거
+        const existingInput = document.querySelector('input');
+        if (existingInput) {
+          document.body.removeChild(existingInput);
+        }
+
+        // 모든 사운드 정리
+        this.sound.stopAll();
+        // 플레이어 효과 정리
+        if (this.player) {
+          this.player.cleanupEffects();
+        }
+
+        // 모드 선택 씬으로 돌아가기
         this.scene.start('ModeSelectScene');
       });
     });
