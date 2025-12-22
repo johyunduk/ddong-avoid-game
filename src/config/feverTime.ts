@@ -41,7 +41,7 @@ export interface FeverTimeConfig {
  */
 export const FEVER_TIME_CONFIG: FeverTimeConfig = {
   firstTriggerScore: 300,
-  repeatInterval: 1100,
+  repeatInterval: 1200,
   duration: 5000,
   normalPoopCount: 2,
   bonusPoopCount: 8,
