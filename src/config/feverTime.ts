@@ -40,8 +40,8 @@ export interface FeverTimeConfig {
  * // 낙하 속도 1.3배 빠름
  */
 export const FEVER_TIME_CONFIG: FeverTimeConfig = {
-  firstTriggerScore: 400,
-  repeatInterval: 1200,
+  firstTriggerScore: 300,
+  repeatInterval: 1100,
   duration: 5000,
   normalPoopCount: 2,
   bonusPoopCount: 8,
