@@ -87,15 +87,7 @@ export function hasUserInitials(): boolean {
 export async function submitScore(
   score: number,
   difficulty: Difficulty,
-  initials: string,
-  gameData?: {
-    score: number;
-    difficulty: string;
-    playTime: number;
-    timestamp: number;
-    userId: string;
-  },
-  signature?: string
+  initials: string
 ): Promise<SubmitScoreResponse> {
   const userId = getUserId();
 
@@ -122,25 +114,17 @@ export async function submitScore(
   }
 
   // 🚀 프로덕션: 실제 API 호출
-  const requestBody: any = {
-    userId,
-    userName: initials, // 이니셜을 userName으로 전송
-    score,
-    difficulty,
-  };
-
-  // 게임 데이터와 서명이 있으면 포함
-  if (gameData && signature) {
-    requestBody.gameData = gameData;
-    requestBody.signature = signature;
-  }
-
   const response = await fetch(`${API_BASE_URL}/api/leaderboard/submit`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(requestBody),
+    body: JSON.stringify({
+      userId,
+      userName: initials, // 이니셜을 userName으로 전송
+      score,
+      difficulty,
+    }),
   });
 
   if (!response.ok) {

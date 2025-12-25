@@ -9,9 +9,8 @@ import { GameMode, Difficulty, DIFFICULTIES, type DifficultyConfig } from '../ty
 import { FEVER_TIME_CONFIG } from '../config/feverTime';
 import { POOP_CONFIG } from '../config/poop';
 import { getHighScore, updateHighScore } from '../utils/localStorage';
-import { submitScore, getUserInitials, setUserInitials, getUserId } from '../utils/leaderboard';
+import { submitScore, getUserInitials, setUserInitials } from '../utils/leaderboard';
 import { isChristmasSeason } from '../utils/seasonChecker';
-import { generateGameSignature, validateGamePlayData, getClientSecretKey, type GamePlayData } from '../utils/gameVerification';
 
 export default class GameScene extends Phaser.Scene {
   private player!: Player;
@@ -33,9 +32,6 @@ export default class GameScene extends Phaser.Scene {
   private difficultyConfig!: DifficultyConfig;
   private lastGoldPoopScore: number = 0; // 마지막으로 금똥이 나온 점수
   private lastDiamondPoopScore: number = 0; // 마지막으로 다이아똥이 나온 점수
-  private gameStartTime: number = 0; // 게임 시작 시각 (타임스탬프)
-  private goldPoopsCollected: number = 0; // 수집한 금똥 개수
-  private diamondPoopsCollected: number = 0; // 수집한 다이아똥 개수
   // 피버 타임 관련
   private isFeverTime: boolean = false; // 피버 타임 활성화 여부
   private feverTimeRemaining: number = 0; // 피버 타임 남은 시간 (ms)
@@ -56,9 +52,6 @@ export default class GameScene extends Phaser.Scene {
     this.difficultyLevel = 2;
     this.lastGoldPoopScore = 0;
     this.lastDiamondPoopScore = 0;
-    this.gameStartTime = Date.now(); // 게임 시작 시각 기록
-    this.goldPoopsCollected = 0; // 금똥 수집 카운터 초기화
-    this.diamondPoopsCollected = 0; // 다이아똥 수집 카운터 초기화
     // 피버 타임 초기화
     this.isFeverTime = false;
     this.feverTimeRemaining = 0;
@@ -967,9 +960,6 @@ export default class GameScene extends Phaser.Scene {
     const goldPoop = _goldPoop as GoldPoop;
     goldPoop.destroy();
 
-    // 수집 카운터 증가
-    this.goldPoopsCollected++;
-
     // 점수 보너스 (20점 추가) - updateScore를 통해 건너뛴 생성 포인트도 체크
     this.updateScore(20);
 
@@ -999,9 +989,6 @@ export default class GameScene extends Phaser.Scene {
     // 다이아똥 제거
     const diamondPoop = _diamondPoop as DiamondPoop;
     diamondPoop.destroy();
-
-    // 수집 카운터 증가
-    this.diamondPoopsCollected++;
 
     // 점수 보너스 (40점 추가) - updateScore를 통해 건너뛴 생성 포인트도 체크
     this.updateScore(40);
@@ -1205,35 +1192,11 @@ export default class GameScene extends Phaser.Scene {
       }).setOrigin(0.5).setDepth(200);
 
       try {
-        // 게임 플레이 데이터 구성
-        const playTime = Date.now() - this.gameStartTime;
-        const gameData: GamePlayData = {
-          score: this.score,
-          difficulty: this.difficulty,
-          playTime,
-          timestamp: this.gameStartTime,
-          userId: getUserId(),
-          goldPoopsCollected: this.goldPoopsCollected,
-          diamondPoopsCollected: this.diamondPoopsCollected
-        };
-
-        // 클라이언트 사이드 검증
-        const validation = validateGamePlayData(gameData);
-        if (!validation.valid) {
-          throw new Error(`게임 데이터 검증 실패: ${validation.reason}`);
-        }
-
-        // HMAC 서명 생성
-        const secretKey = getClientSecretKey();
-        const signature = await generateGameSignature(gameData, secretKey);
-
-        // 서명과 함께 점수 제출
+        // 점수 제출 (검증 없이)
         const result = await submitScore(
           this.score,
           this.difficulty,
-          initials,
-          gameData,
-          signature
+          initials
         );
 
         submittingText.destroy();
