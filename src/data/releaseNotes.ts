@@ -19,6 +19,7 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     changes: [
       '피버타임 시스템 추가',
       'EXTREME 난이도 추가',
+      '게임오버 화면 다시하기 / 메인메뉴 버튼 추가',
       '난이도 밸런스 조정',
     ],
   },
