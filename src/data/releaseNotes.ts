@@ -6,6 +6,14 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: 'v1.5.0',
+    date: '2026-02-15',
+    changes: [
+      '릴리즈 노트 화면 추가',
+      '홈화면에서 릴리즈 노트 확인 가능',
+    ],
+  },
+  {
     version: 'v1.4.0',
     date: '2025-12-21',
     changes: [
