@@ -44,6 +44,9 @@ export default class ModeSelectScene extends Phaser.Scene {
 
     // 랭킹보드 버튼 추가
     this.createLeaderboardButton();
+
+    // 릴리즈 노트 링크
+    this.createReleaseNotesLink();
   }
 
   private createModeButton(modeConfig: GameModeConfig, x: number, y: number) {
@@ -106,6 +109,29 @@ export default class ModeSelectScene extends Phaser.Scene {
       // 아이템 모드는 바로 게임 시작 (기본 난이도 HARD)
       this.scene.start('GameScene', { gameMode: mode, difficulty: 'HARD' });
     }
+  }
+
+  private createReleaseNotesLink() {
+    const text = this.add.text(200, 555, '릴리즈 노트', {
+      fontSize: '14px',
+      color: '#ccc',
+      stroke: '#000',
+      strokeThickness: 2,
+    }).setOrigin(0.5);
+
+    text.setInteractive({ useHandCursor: true });
+
+    text.on('pointerover', () => {
+      text.setColor('#fff');
+    });
+
+    text.on('pointerout', () => {
+      text.setColor('#ccc');
+    });
+
+    text.on('pointerdown', () => {
+      this.scene.start('ReleaseNotesScene');
+    });
   }
 
   private createLeaderboardButton() {

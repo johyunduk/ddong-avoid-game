@@ -1,0 +1,55 @@
+export interface ReleaseNote {
+  version: string;
+  date: string;
+  changes: string[];
+}
+
+export const RELEASE_NOTES: ReleaseNote[] = [
+  {
+    version: 'v1.4.0',
+    date: '2025-12-21',
+    changes: [
+      '피버타임 시스템 추가',
+      'EXTREME 난이도 추가',
+      '난이도 밸런스 조정',
+    ],
+  },
+  {
+    version: 'v1.3.0',
+    date: '2025-12-13',
+    changes: [
+      '이미지 에셋 WebP 포맷 전환 (용량 대폭 감소)',
+      'BGM 파일 최적화',
+      '이미지 캐시 및 모드별 에셋 lazy loading',
+    ],
+  },
+  {
+    version: 'v1.2.0',
+    date: '2025-12-12',
+    changes: [
+      '금똥 추가 (40점마다 등장, 수집 시 +20점)',
+      '다이아 똥 추가 (100점마다 등장, 수집 시 +40점)',
+      '보너스 점수 획득 시 생성 포인트 건너뛰기 방지',
+    ],
+  },
+  {
+    version: 'v1.1.0',
+    date: '2025-12-08',
+    changes: [
+      '크리스마스 시즌 이벤트 (12월~1월 자동 활성화)',
+      '크리스마스 테마 똥 5종 추가',
+      '크리스마스 전용 배경 및 BGM',
+    ],
+  },
+  {
+    version: 'v1.0.0',
+    date: '2025-11-07',
+    changes: [
+      '클래식 모드 출시',
+      '3단계 난이도 선택 (EASY / NORMAL / HARD)',
+      '동적 난이도 증가 시스템',
+      '키보드 및 터치/마우스 조작 지원',
+      '랭킹 시스템 (이니셜 등록, 난이도별 TOP 10)',
+    ],
+  },
+];
