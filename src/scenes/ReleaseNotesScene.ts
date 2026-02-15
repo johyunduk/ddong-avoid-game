@@ -51,8 +51,11 @@ export default class ReleaseNotesScene extends Phaser.Scene {
     let currentY = 10;
 
     RELEASE_NOTES.forEach((release, index) => {
+      const isLatest = index === 0;
+
       // 버전 + 날짜 헤더
-      const versionText = this.add.text(20, currentY, `${release.version}`, {
+      const versionLabel = isLatest ? `${release.version}  NEW` : release.version;
+      const versionText = this.add.text(20, currentY, versionLabel, {
         fontSize: '22px',
         color: '#FFD700',
         fontStyle: 'bold',
@@ -60,6 +63,30 @@ export default class ReleaseNotesScene extends Phaser.Scene {
         strokeThickness: 4,
       });
       this.scrollContainer.add(versionText);
+
+      // NEW 뱃지
+      if (isLatest) {
+        const badgeBg = this.add.rectangle(
+          versionText.x + versionText.width - 30,
+          currentY + 4,
+          42, 20,
+          0xff3333, 1,
+        ).setOrigin(0.5, 0);
+        badgeBg.setStrokeStyle(1, 0xcc0000);
+        this.scrollContainer.add(badgeBg);
+
+        const badgeText = this.add.text(
+          badgeBg.x,
+          currentY + 5,
+          'NEW',
+          {
+            fontSize: '12px',
+            color: '#fff',
+            fontStyle: 'bold',
+          },
+        ).setOrigin(0.5, 0);
+        this.scrollContainer.add(badgeText);
+      }
 
       const dateText = this.add.text(380, currentY + 5, release.date, {
         fontSize: '15px',

@@ -112,7 +112,7 @@ export default class ModeSelectScene extends Phaser.Scene {
   }
 
   private createReleaseNotesLink() {
-    const text = this.add.text(200, 560, '📋 릴리즈 노트', {
+    const text = this.add.text(200, 580, '📋 릴리즈 노트', {
       fontSize: '18px',
       color: '#fff',
       fontStyle: 'bold',
