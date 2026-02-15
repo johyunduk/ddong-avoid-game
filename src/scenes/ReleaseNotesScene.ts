@@ -26,8 +26,8 @@ export default class ReleaseNotesScene extends Phaser.Scene {
     const background = this.add.image(200, 300, 'background2');
     background.setDisplaySize(400, 600);
 
-    // 반투명 오버레이
-    this.add.rectangle(200, 300, 400, 600, 0x000000, 0.5);
+    // 반투명 오버레이 (더 어둡게)
+    this.add.rectangle(200, 300, 400, 600, 0x000000, 0.7);
 
     // 타이틀 (고정)
     this.add.text(200, 35, '릴리즈 노트', {
@@ -53,40 +53,41 @@ export default class ReleaseNotesScene extends Phaser.Scene {
     RELEASE_NOTES.forEach((release, index) => {
       // 버전 + 날짜 헤더
       const versionText = this.add.text(20, currentY, `${release.version}`, {
-        fontSize: '20px',
+        fontSize: '22px',
         color: '#FFD700',
         fontStyle: 'bold',
         stroke: '#000',
-        strokeThickness: 3,
+        strokeThickness: 4,
       });
       this.scrollContainer.add(versionText);
 
-      const dateText = this.add.text(380, currentY + 4, release.date, {
-        fontSize: '14px',
-        color: '#aaa',
+      const dateText = this.add.text(380, currentY + 5, release.date, {
+        fontSize: '15px',
+        color: '#ddd',
+        fontStyle: 'bold',
         stroke: '#000',
-        strokeThickness: 2,
+        strokeThickness: 3,
       }).setOrigin(1, 0);
       this.scrollContainer.add(dateText);
 
-      currentY += 32;
+      currentY += 35;
 
       // 구분선
-      const line = this.add.rectangle(200, currentY, 360, 1, 0x555555);
+      const line = this.add.rectangle(200, currentY, 360, 2, 0xFFD700, 0.4);
       this.scrollContainer.add(line);
-      currentY += 12;
+      currentY += 14;
 
       // 변경사항 목록
       release.changes.forEach((change) => {
         const changeText = this.add.text(35, currentY, `• ${change}`, {
-          fontSize: '14px',
-          color: '#eee',
+          fontSize: '15px',
+          color: '#fff',
           stroke: '#000',
-          strokeThickness: 2,
+          strokeThickness: 3,
           wordWrap: { width: 340 },
         });
         this.scrollContainer.add(changeText);
-        currentY += changeText.height + 8;
+        currentY += changeText.height + 10;
       });
 
       // 릴리즈 간 여백

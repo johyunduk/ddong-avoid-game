@@ -112,21 +112,22 @@ export default class ModeSelectScene extends Phaser.Scene {
   }
 
   private createReleaseNotesLink() {
-    const text = this.add.text(200, 555, '릴리즈 노트', {
-      fontSize: '14px',
-      color: '#ccc',
+    const text = this.add.text(200, 560, '📋 릴리즈 노트', {
+      fontSize: '18px',
+      color: '#fff',
+      fontStyle: 'bold',
       stroke: '#000',
-      strokeThickness: 2,
+      strokeThickness: 4,
     }).setOrigin(0.5);
 
     text.setInteractive({ useHandCursor: true });
 
     text.on('pointerover', () => {
-      text.setColor('#fff');
+      text.setColor('#FFD700');
     });
 
     text.on('pointerout', () => {
-      text.setColor('#ccc');
+      text.setColor('#fff');
     });
 
     text.on('pointerdown', () => {
