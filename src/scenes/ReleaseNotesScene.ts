@@ -65,24 +65,25 @@ export default class ReleaseNotesScene extends Phaser.Scene {
 
       // NEW 뱃지 (최신 버전만)
       if (isLatest) {
-        const badgeX = versionText.x + versionText.width + 10;
+        const badgeCenterX = versionText.x + versionText.width + 32;
+        const badgeCenterY = currentY + versionText.height / 2;
         const badgeBg = this.add.rectangle(
-          badgeX, currentY + 4,
+          badgeCenterX, badgeCenterY,
           42, 20,
           0xff3333, 1,
-        ).setOrigin(0, 0);
+        ).setOrigin(0.5, 0.5);
         badgeBg.setStrokeStyle(1, 0xcc0000);
         this.scrollContainer.add(badgeBg);
 
         const badgeText = this.add.text(
-          badgeX + 21, currentY + 5,
+          badgeCenterX, badgeCenterY,
           'NEW',
           {
             fontSize: '12px',
             color: '#fff',
             fontStyle: 'bold',
           },
-        ).setOrigin(0.5, 0);
+        ).setOrigin(0.5, 0.5);
         this.scrollContainer.add(badgeText);
       }
 
