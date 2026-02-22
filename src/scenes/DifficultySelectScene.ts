@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { GameMode, DIFFICULTIES, type Difficulty, type DifficultyConfig } from '../types/GameMode';
+import { isChristmasSeason } from '../utils/seasonChecker';
 
 export default class DifficultySelectScene extends Phaser.Scene {
   private gameMode: GameMode = GameMode.CLASSIC;
@@ -15,9 +16,69 @@ export default class DifficultySelectScene extends Phaser.Scene {
   }
 
   preload() {
-    // 캐시 확인으로 중복 로딩 방지
+    // 난이도 선택 화면 배경
     if (!this.textures.exists('background')) {
       this.load.image('background', 'assets/backgrounds/background.webp');
+    }
+
+    // ── 게임 에셋 미리 로딩 (캐시된 항목은 건너뜀) ──
+    if (this.gameMode === GameMode.CLASSIC) {
+      // 배경 (모든 난이도)
+      if (!this.textures.exists('background2')) this.load.image('background2', 'assets/backgrounds/background2.webp');
+      if (!this.textures.exists('background3')) this.load.image('background3', 'assets/backgrounds/background3.webp');
+      if (isChristmasSeason() && !this.textures.exists('xmas_background')) {
+        this.load.image('xmas_background', 'assets/backgrounds/xmas_background.webp');
+      }
+
+      // 플레이어
+      if (!this.textures.exists('front')) this.load.image('front', 'assets/players/chibi_front.webp');
+      if (!this.textures.exists('left')) this.load.image('left', 'assets/players/chibi_left.webp');
+      if (!this.textures.exists('right')) this.load.image('right', 'assets/players/chibi_right.webp');
+
+      // 똥 이미지
+      if (!this.textures.exists('poop')) this.load.image('poop', 'assets/poops/poop.webp');
+      if (!this.textures.exists('poop_glasses')) this.load.image('poop_glasses', 'assets/poops/poop_glasses.webp');
+      if (!this.textures.exists('poop_sunglass')) this.load.image('poop_sunglass', 'assets/poops/poop_sunglass.webp');
+      if (!this.textures.exists('poop_sunglass2')) this.load.image('poop_sunglass2', 'assets/poops/poop_sunglass2.webp');
+      if (!this.textures.exists('poop_smile')) this.load.image('poop_smile', 'assets/poops/poop_smile.webp');
+      if (!this.textures.exists('gold_poop')) this.load.image('gold_poop', 'assets/poops/gold_poop.webp');
+      if (!this.textures.exists('diamond_poop')) this.load.image('diamond_poop', 'assets/poops/diamond_poop.webp');
+
+      // 크리스마스 시즌 똥
+      if (isChristmasSeason()) {
+        if (!this.textures.exists('xmas_poop_ribbon')) this.load.image('xmas_poop_ribbon', 'assets/poops/xmas_present_poop.webp');
+        if (!this.textures.exists('xmas_poop_nose')) this.load.image('xmas_poop_nose', 'assets/poops/xmas_nose_poop.webp');
+        if (!this.textures.exists('xmas_poop_santa')) this.load.image('xmas_poop_santa', 'assets/poops/xmas_santa_poop.webp');
+        if (!this.textures.exists('xmas_poop_rudolf')) this.load.image('xmas_poop_rudolf', 'assets/poops/xmas_rudolf_poop.webp');
+        if (!this.textures.exists('xmas_poop_beard')) this.load.image('xmas_poop_beard', 'assets/poops/xmas_beard_poop.webp');
+      }
+
+      // BGM
+      if (!this.cache.audio.exists('bgMusic')) this.load.audio('bgMusic', 'assets/bgms/poop.mp3');
+      if (isChristmasSeason() && !this.cache.audio.exists('xmasBgMusic')) this.load.audio('xmasBgMusic', 'assets/bgms/xmas_poop.mp3');
+
+    } else if (this.gameMode === GameMode.ITEM) {
+      // 우주 배경
+      if (!this.textures.exists('space_background')) this.load.image('space_background', 'assets/backgrounds/space_background.webp');
+
+      // 우주비행사 플레이어
+      if (!this.textures.exists('astronaut_front')) this.load.image('astronaut_front', 'assets/players/astronaut_front.webp');
+      if (!this.textures.exists('astronaut_left')) this.load.image('astronaut_left', 'assets/players/astronaut_left.webp');
+      if (!this.textures.exists('astronaut_right')) this.load.image('astronaut_right', 'assets/players/astronaut_right.webp');
+
+      // 별 이미지
+      if (!this.textures.exists('star')) this.load.image('star', 'assets/stars/star.webp');
+      if (!this.textures.exists('star_smile')) this.load.image('star_smile', 'assets/stars/star_smile.webp');
+      if (!this.textures.exists('star_glasses')) this.load.image('star_glasses', 'assets/stars/star_glasses.webp');
+      if (!this.textures.exists('star_sunglass')) this.load.image('star_sunglass', 'assets/stars/star_sunglass.webp');
+
+      // 아이템 이미지
+      if (!this.textures.exists('hermes_shoes')) this.load.image('hermes_shoes', 'assets/items/hermes_shoes.webp');
+      if (!this.textures.exists('light_saber')) this.load.image('light_saber', 'assets/items/light_saber.webp');
+      if (!this.textures.exists('rainbow_star')) this.load.image('rainbow_star', 'assets/items/rainbow_star.webp');
+
+      // BGM
+      if (!this.cache.audio.exists('starBgMusic')) this.load.audio('starBgMusic', 'assets/bgms/star_fall.mp3');
     }
   }
 

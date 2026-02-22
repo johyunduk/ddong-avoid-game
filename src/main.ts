@@ -16,7 +16,8 @@ const config: Phaser.Types.Core.GameConfig = {
     default: 'arcade',
     arcade: {
       gravity: { y: 0, x: 0 },
-      debug: false
+      debug: false,
+      fixedStep: false
     }
   },
   scene: [ModeSelectScene, DifficultySelectScene, GameScene, LeaderboardScene, ReleaseNotesScene],
@@ -27,6 +28,10 @@ const config: Phaser.Types.Core.GameConfig = {
   render: {
     antialias: true,
     roundPixels: false
+  },
+  fps: {
+    // target: 60,
+    smoothStep: false
   }
 };
 
