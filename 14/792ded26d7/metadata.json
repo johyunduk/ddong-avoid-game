@@ -3,7 +3,7 @@
   "checkpoint_id": "14792ded26d7",
   "strategy": "manual-commit",
   "branch": "dev",
-  "checkpoints_count": 1,
+  "checkpoints_count": 5,
   "files_touched": [
     "public/assets/poops/topaz.webp",
     "src/config/poop.ts",
@@ -19,13 +19,20 @@
       "context": "/14/792ded26d7/0/context.md",
       "content_hash": "/14/792ded26d7/0/content_hash.txt",
       "prompt": "/14/792ded26d7/0/prompt.txt"
+    },
+    {
+      "metadata": "/14/792ded26d7/1/metadata.json",
+      "transcript": "/14/792ded26d7/1/full.jsonl",
+      "context": "/14/792ded26d7/1/context.md",
+      "content_hash": "/14/792ded26d7/1/content_hash.txt",
+      "prompt": "/14/792ded26d7/1/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 52,
-    "cache_creation_tokens": 51757,
-    "cache_read_tokens": 1077945,
-    "output_tokens": 4307,
-    "api_call_count": 28
+    "input_tokens": 129,
+    "cache_creation_tokens": 103797,
+    "cache_read_tokens": 7818949,
+    "output_tokens": 13245,
+    "api_call_count": 79
   }
 }

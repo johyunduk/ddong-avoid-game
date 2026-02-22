@@ -1,0 +1,38 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "14792ded26d7",
+  "session_id": "0b422e08-585e-40e1-b289-4a8722233217",
+  "strategy": "manual-commit",
+  "created_at": "2026-02-22T09:45:47.218681Z",
+  "branch": "dev",
+  "checkpoints_count": 4,
+  "files_touched": [
+    "public/assets/poops/topaz.webp",
+    "src/config/poop.ts",
+    "src/objects/TopazPoop.ts",
+    "src/scenes/DifficultySelectScene.ts",
+    "src/scenes/GameScene.ts"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "644d28004164",
+  "transcript_identifier_at_start": "be658bd5-7b60-4475-9b9b-b1a87dccf60c",
+  "checkpoint_transcript_start": 341,
+  "transcript_lines_at_start": 341,
+  "token_usage": {
+    "input_tokens": 77,
+    "cache_creation_tokens": 52040,
+    "cache_read_tokens": 6741004,
+    "output_tokens": 8938,
+    "api_call_count": 51
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-02-22T09:45:46.511042Z",
+    "agent_lines": 131,
+    "human_added": 0,
+    "human_modified": 8,
+    "human_removed": 0,
+    "total_committed": 139,
+    "agent_percentage": 94.24460431654677
+  },
+  "transcript_path": ".claude/projects/-Users-johyunduk-Projects-ddong-avoid-game/0b422e08-585e-40e1-b289-4a8722233217.jsonl"
+}
