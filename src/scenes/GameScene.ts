@@ -3,6 +3,7 @@ import Player from '../objects/Player';
 import Poop from '../objects/Poop';
 import GoldPoop from '../objects/GoldPoop';
 import DiamondPoop from '../objects/DiamondPoop';
+import TopazPoop from '../objects/TopazPoop';
 import Star from '../objects/Star';
 import Item from '../objects/Item';
 import { GameMode, Difficulty, DIFFICULTIES, type DifficultyConfig } from '../types/GameMode';
@@ -17,6 +18,7 @@ export default class GameScene extends Phaser.Scene {
   private poops!: Phaser.Physics.Arcade.Group;
   private goldPoops!: Phaser.Physics.Arcade.Group;
   private diamondPoops!: Phaser.Physics.Arcade.Group;
+  private topazPoops!: Phaser.Physics.Arcade.Group;
   private stars!: Phaser.Physics.Arcade.Group;
   private items!: Phaser.Physics.Arcade.Group;
   private score: number = 0;
@@ -30,8 +32,10 @@ export default class GameScene extends Phaser.Scene {
   private gameMode: GameMode = GameMode.CLASSIC;
   private difficulty: Difficulty = Difficulty.HARD;
   private difficultyConfig!: DifficultyConfig;
-  private lastGoldPoopScore: number = 0; // 마지막으로 금똥이 나온 점수
-  private lastDiamondPoopScore: number = 0; // 마지막으로 다이아똥이 나온 점수
+  private lastGoldPoopScore: number = 0;
+  private lastDiamondPoopScore: number = 0;
+  private lastTopazPoopScore: number = 0;
+  private feverTopazTimer!: Phaser.Time.TimerEvent;
   // 피버 타임 관련
   private isFeverTime: boolean = false; // 피버 타임 활성화 여부
   private feverTimeRemaining: number = 0; // 피버 타임 남은 시간 (ms)
@@ -52,6 +56,7 @@ export default class GameScene extends Phaser.Scene {
     this.difficultyLevel = 2;
     this.lastGoldPoopScore = 0;
     this.lastDiamondPoopScore = 0;
+    this.lastTopazPoopScore = 0;
     // 피버 타임 초기화
     this.isFeverTime = false;
     this.feverTimeRemaining = 0;
@@ -103,6 +108,7 @@ export default class GameScene extends Phaser.Scene {
       if (!this.textures.exists('poop_smile')) this.load.image('poop_smile', 'assets/poops/poop_smile.webp');
       if (!this.textures.exists('gold_poop')) this.load.image('gold_poop', 'assets/poops/gold_poop.webp');
       if (!this.textures.exists('diamond_poop')) this.load.image('diamond_poop', 'assets/poops/diamond_poop.webp');
+      if (!this.textures.exists('topaz_poop')) this.load.image('topaz_poop', 'assets/poops/topaz.webp');
 
       if (this.difficulty === Difficulty.EXTREME && isChristmasSeason()) {
         if (!this.textures.exists('xmas_poop_ribbon')) this.load.image('xmas_poop_ribbon', 'assets/poops/xmas_present_poop.webp');
@@ -215,6 +221,12 @@ export default class GameScene extends Phaser.Scene {
         runChildUpdate: true
       });
 
+      // 토파즈똥 그룹 생성
+      this.topazPoops = this.physics.add.group({
+        classType: TopazPoop,
+        runChildUpdate: true
+      });
+
       // 충돌 감지
       this.physics.add.overlap(
         this.player,
@@ -238,6 +250,15 @@ export default class GameScene extends Phaser.Scene {
         this.player,
         this.diamondPoops,
         this.collectDiamondPoop as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback,
+        undefined,
+        this
+      );
+
+      // 토파즈똥 충돌 감지 (수집)
+      this.physics.add.overlap(
+        this.player,
+        this.topazPoops,
+        this.collectTopazPoop as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback,
         undefined,
         this
       );
@@ -449,6 +470,46 @@ export default class GameScene extends Phaser.Scene {
     // console.log(`다이아똥 생성! 점수: ${this.score}, 위치: (${x}, ${y}), depth: ${diamondPoop.depth}`);
   }
 
+  private spawnTopazPoop() {
+    if (this.gameOver) return;
+
+    const x = Phaser.Math.Between(50, 350);
+    const y = -50;
+    const topazPoop = new TopazPoop(this, x, y);
+    this.topazPoops.add(topazPoop, true);
+
+    if (topazPoop.body) {
+      const fallSpeed = this.difficultyConfig.baseSpeed + (this.difficultyLevel * POOP_CONFIG.normal.speedIncrement) - POOP_CONFIG.topaz.speedReduction;
+      topazPoop.body.velocity.y = fallSpeed;
+    }
+  }
+
+  private collectTopazPoop(
+    _player: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile,
+    _topazPoop: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile
+  ) {
+    if (this.gameOver) return;
+
+    const topazPoop = _topazPoop as TopazPoop;
+    topazPoop.destroy();
+
+    this.updateScore(80);
+
+    if (!this.isFeverTime) {
+      const topazText = this.add.text(200, 100, '⭐ 토파즈 +80점! ⭐', {
+        fontSize: '28px',
+        color: '#FFC300', // Amber color for topaz
+        fontStyle: 'bold',
+        stroke: '#000',
+        strokeThickness: 4
+      }).setOrigin(0.5);
+
+      this.time.delayedCall(1000, () => {
+        topazText.destroy();
+      });
+    }
+  }
+
   /**
    * 점수를 증가시키고 보너스 아이템 생성을 체크합니다.
    * @param amount 증가할 점수 (기본값: 1)
@@ -484,7 +545,7 @@ export default class GameScene extends Phaser.Scene {
       // 피버 타임 체크
       this.checkFeverTime(score);
 
-      // 피버 타임 중이 아닐 때만 일반 금똥/다이아똥 생성
+      // 피버 타임 중이 아닐 때만 일반 금똥/다이아똥/토파즈똥 생성
       if (!this.isFeverTime) {
         // 40점마다 금똥 생성 (40, 80, 120, 160, ...)
         if (score % 40 === 0 && score > this.lastGoldPoopScore) {
@@ -496,6 +557,12 @@ export default class GameScene extends Phaser.Scene {
         if (score % 100 === 0 && score > this.lastDiamondPoopScore) {
           this.spawnDiamondPoop();
           this.lastDiamondPoopScore = score;
+        }
+
+        // 160점마다 토파즈똥 생성 (160, 320, 480, ...)
+        if (score % 160 === 0 && score > this.lastTopazPoopScore) {
+          this.spawnTopazPoop();
+          this.lastTopazPoopScore = score;
         }
       }
     }
@@ -670,6 +737,17 @@ export default class GameScene extends Phaser.Scene {
       currentX += charText.width;
     }
 
+    // 피버 타임 중 토파즈똥 1초마다 1개 생성
+    if (this.feverTopazTimer) {
+      this.feverTopazTimer.remove();
+    }
+    this.feverTopazTimer = this.time.addEvent({
+      delay: 1000,
+      callback: this.spawnTopazPoop,
+      callbackScope: this,
+      loop: true
+    });
+
     // 카운트다운 타이머
     if (this.feverTimeTimer) {
       this.feverTimeTimer.remove();
@@ -772,6 +850,11 @@ export default class GameScene extends Phaser.Scene {
     // 색상 애니메이션 타이머 제거
     if (this.feverTimeColorTimer) {
       this.feverTimeColorTimer.remove();
+    }
+
+    // 토파즈 타이머 제거
+    if (this.feverTopazTimer) {
+      this.feverTopazTimer.remove();
     }
 
     // UI 제거 (모든 글자 Text 객체)
@@ -951,9 +1034,8 @@ export default class GameScene extends Phaser.Scene {
         stroke: '#000',
         strokeThickness: 4
       }).setOrigin(0.5);
-
       // 2초 후 텍스트 제거
-      this.time.delayedCall(2000, () => {
+      this.time.delayedCall(1000, () => {
         goldText.destroy();
       });
     }
@@ -975,7 +1057,7 @@ export default class GameScene extends Phaser.Scene {
     // 다이아똥 획득 안내 텍스트 (피버 타임 중에는 표시하지 않음)
     if (!this.isFeverTime) {
       const diamondText = this.add.text(200, 100, '💎 다이아똥 +40점! 💎', {
-        fontSize: '32px',
+        fontSize: '28px',
         color: '#00FFFF',
         fontStyle: 'bold',
         stroke: '#000',

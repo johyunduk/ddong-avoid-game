@@ -1,7 +1,7 @@
 /**
  * 똥(장애물) 설정
  *
- * 모든 똥 오브젝트(일반, 금똥, 다이아똥)의 크기, 속도, 히트박스 등을 관리합니다.
+ * 모든 똥 오브젝트(일반, 금똥, 다이아똥, 토파즈똥)의 크기, 속도, 히트박스 등을 관리합니다.
  * 게임 밸런싱 조정 시 이 파일만 수정하면 됩니다.
  */
 
@@ -38,7 +38,7 @@ export interface PoopConfig {
   gold: {
     /** 기본 낙하 속도 */
     baseSpeed: number;
-    /** 일반 똥 대비 속도 감속량 (GameScene에서 적용) */
+    /** 일반 똥 대비 속도 조정량 (양수: 느림, 음수: 빠름) */
     speedReduction: number;
     /** 표시 크기 */
     size: number;
@@ -51,7 +51,20 @@ export interface PoopConfig {
   diamond: {
     /** 기본 낙하 속도 */
     baseSpeed: number;
-    /** 일반 똥 대비 속도 감속량 (GameScene에서 적용) */
+    /** 일반 똥 대비 속도 조정량 (양수: 느림, 음수: 빠름) */
+    speedReduction: number;
+    /** 표시 크기 */
+    size: number;
+    /** 히트박스 크기 (수집하기 쉽게 조금 넉넉) */
+    hitbox: number;
+    /** 렌더링 깊이 (다른 오브젝트 위에 표시) */
+    depth: number;
+  };
+  /** 토파즈똥 설정 */
+  topaz: {
+    /** 기본 낙하 속도 */
+    baseSpeed: number;
+    /** 일반 똥 대비 속도 조정량 (양수: 느림, 음수: 빠름) */
     speedReduction: number;
     /** 표시 크기 */
     size: number;
@@ -71,6 +84,7 @@ export interface PoopConfig {
  * // 일반 똥: 40x40px, 히트박스 500x500
  * // 금똥: 40x40px, 히트박스 450x450, 일반보다 30 느림
  * // 다이아똥: 40x40px, 히트박스 450x450, 일반보다 10 느림
+ * // 토파즈똥: 40x40px, 히트박스 450x450, 일반보다 20 빠름 (speedReduction: -20)
  */
 export const POOP_CONFIG: PoopConfig = {
   normal: {
@@ -99,6 +113,13 @@ export const POOP_CONFIG: PoopConfig = {
   diamond: {
     baseSpeed: 200,
     speedReduction: 10,
+    size: 40,
+    hitbox: 450,
+    depth: 100
+  },
+  topaz: {
+    baseSpeed: 200,
+    speedReduction: -140,
     size: 40,
     hitbox: 450,
     depth: 100
