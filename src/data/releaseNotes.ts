@@ -6,6 +6,14 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: 'v1.6.0',
+    date: '2026-02-22',
+    changes: [
+      '플레이어 캐릭터 이미지 변경',
+      '플레이어 히트박스 크기 및 위치 조정',
+    ],
+  },
+  {
     version: 'v1.5.0',
     date: '2026-02-15',
     changes: [

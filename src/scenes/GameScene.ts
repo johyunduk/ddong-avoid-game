@@ -99,9 +99,9 @@ export default class GameScene extends Phaser.Scene {
       }
 
       // 플레이어 이미지 (일반 캐릭터)
-      this.load.image('front', 'assets/players/front.webp');
-      this.load.image('left', 'assets/players/left.webp');
-      this.load.image('right', 'assets/players/right.webp');
+      this.load.image('front', 'assets/players/chibi_front.webp');
+      this.load.image('left', 'assets/players/chibi_left.webp');
+      this.load.image('right', 'assets/players/chibi_right.webp');
 
       // 똥 이미지
       this.load.image('poop', 'assets/poops/poop.webp');
