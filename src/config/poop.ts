@@ -73,6 +73,19 @@ export interface PoopConfig {
     /** 렌더링 깊이 (다른 오브젝트 위에 표시) */
     depth: number;
   };
+  /** 무지개똥 설정 */
+  rainbow: {
+    /** 기본 낙하 속도 */
+    baseSpeed: number;
+    /** 일반 똥 대비 속도 조정량 (양수: 느림, 음수: 빠름) */
+    speedReduction: number;
+    /** 표시 크기 */
+    size: number;
+    /** 히트박스 크기 (수집하기 쉽게 조금 넉넉) */
+    hitbox: number;
+    /** 렌더링 깊이 (다른 오브젝트 위에 표시) */
+    depth: number;
+  };
   /** 화면 밖 제거 기준 (화면 하단 + 이 값) */
   destroyOffset: number;
 }
@@ -119,7 +132,14 @@ export const POOP_CONFIG: PoopConfig = {
   },
   topaz: {
     baseSpeed: 200,
-    speedReduction: -140,
+    speedReduction: -160, // 사용자 요청에 따라 20 더 빠르게 (-140에서 -160으로)
+    size: 40,
+    hitbox: 450,
+    depth: 100
+  },
+  rainbow: {
+    baseSpeed: 200,
+    speedReduction: 0, // 토파즈보다 조금 더 빠르게
     size: 40,
     hitbox: 450,
     depth: 100
