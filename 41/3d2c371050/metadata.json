@@ -1,0 +1,29 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "413d2c371050",
+  "strategy": "manual-commit",
+  "branch": "dev",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src/data/releaseNotes.ts",
+    "src/main.ts",
+    "src/scenes/DifficultySelectScene.ts",
+    "src/scenes/GameScene.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/41/3d2c371050/0/metadata.json",
+      "transcript": "/41/3d2c371050/0/full.jsonl",
+      "context": "/41/3d2c371050/0/context.md",
+      "content_hash": "/41/3d2c371050/0/content_hash.txt",
+      "prompt": "/41/3d2c371050/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 52,
+    "cache_creation_tokens": 51757,
+    "cache_read_tokens": 1077945,
+    "output_tokens": 4307,
+    "api_call_count": 28
+  }
+}
