@@ -3,7 +3,7 @@
   "checkpoint_id": "09a6ca7ec56b",
   "strategy": "manual-commit",
   "branch": "dev",
-  "checkpoints_count": 2,
+  "checkpoints_count": 9,
   "files_touched": [
     "public/assets/players/chibi_front.webp",
     "public/assets/players/chibi_left.webp",
@@ -19,13 +19,20 @@
       "context": "/09/a6ca7ec56b/0/context.md",
       "content_hash": "/09/a6ca7ec56b/0/content_hash.txt",
       "prompt": "/09/a6ca7ec56b/0/prompt.txt"
+    },
+    {
+      "metadata": "/09/a6ca7ec56b/1/metadata.json",
+      "transcript": "/09/a6ca7ec56b/1/full.jsonl",
+      "context": "/09/a6ca7ec56b/1/context.md",
+      "content_hash": "/09/a6ca7ec56b/1/content_hash.txt",
+      "prompt": "/09/a6ca7ec56b/1/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 52,
-    "cache_creation_tokens": 51757,
-    "cache_read_tokens": 1077945,
-    "output_tokens": 4307,
-    "api_call_count": 28
+    "input_tokens": 106,
+    "cache_creation_tokens": 86734,
+    "cache_read_tokens": 2465686,
+    "output_tokens": 11676,
+    "api_call_count": 60
   }
 }

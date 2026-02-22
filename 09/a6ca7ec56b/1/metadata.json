@@ -1,0 +1,36 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "09a6ca7ec56b",
+  "session_id": "0b422e08-585e-40e1-b289-4a8722233217",
+  "strategy": "manual-commit",
+  "created_at": "2026-02-22T05:18:32.484643Z",
+  "branch": "dev",
+  "checkpoints_count": 7,
+  "files_touched": [
+    "public/assets/players/chibi_front.webp",
+    "public/assets/players/chibi_left.webp",
+    "public/assets/players/chibi_right.webp",
+    "src/data/releaseNotes.ts",
+    "src/scenes/GameScene.ts"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "693fd409ec42",
+  "transcript_identifier_at_start": "1a678851-98ce-4c56-9bf1-d7bbd1a684a6",
+  "token_usage": {
+    "input_tokens": 54,
+    "cache_creation_tokens": 34977,
+    "cache_read_tokens": 1387741,
+    "output_tokens": 7369,
+    "api_call_count": 32
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-02-22T05:18:32.434038Z",
+    "agent_lines": 0,
+    "human_added": 8,
+    "human_modified": 3,
+    "human_removed": 0,
+    "total_committed": 11,
+    "agent_percentage": 0
+  },
+  "transcript_path": ".claude/projects/-Users-johyunduk-Projects-ddong-avoid-game/0b422e08-585e-40e1-b289-4a8722233217.jsonl"
+}
