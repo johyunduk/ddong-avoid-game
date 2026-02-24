@@ -6,6 +6,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: 'v1.7.0',
+    date: '2026-02-24',
+    changes: [
+      '플레이어 히트박스 크기 살짝 증가',
+      '매화검수 캐릭터 추가 (낮은 확률로 등장)',
+      '랭킹 시스템 Supabase 기반으로 전환',
+    ],
+  },
+  {
     version: 'v1.6.0',
     date: '2026-02-22',
     changes: [
