@@ -36,14 +36,12 @@ const config: Phaser.Types.Core.GameConfig = {
   }
 };
 
-async function init() {
-  try {
-    await ensureLoggedIn();
-  } catch (error) {
-    // 로그인 실패해도 게임은 실행 (오프라인 환경 대비)
-    console.error('로그인 초기화 실패:', error);
-  }
-  new Phaser.Game(config);
-}
+// 로그인은 백그라운드에서 진행 (Phaser 게임 생성을 지연시키지 않음)
+// ensureLoggedIn()을 await하면 캔버스가 비동기 컨텍스트에서 생성되어
+// 브라우저가 키보드 포커스를 정상적으로 할당하지 않는 문제 발생
+ensureLoggedIn().catch(error => {
+  console.error('로그인 초기화 실패:', error);
+});
 
-init();
+// 게임 인스턴스는 동기적으로 즉시 생성 (키보드 입력 정상 동작 보장)
+new Phaser.Game(config);
