@@ -196,6 +196,25 @@ export default class GameScene extends Phaser.Scene {
     canvas.setAttribute('tabindex', '0');
     canvas.focus();
 
+    // [DEBUG] 키보드 이벤트 도달 여부 확인용 (배포 후 제거)
+    const debugText = this.add.text(10, 10, 'KEY: none', {
+      fontSize: '12px',
+      color: '#ff0000',
+      backgroundColor: '#000000',
+    }).setDepth(9999).setScrollFactor(0);
+
+    document.addEventListener('keydown', (e) => {
+      debugText.setText(`KEY: ${e.key} (doc)`);
+    }, { capture: true });
+
+    window.addEventListener('keydown', (e) => {
+      debugText.setText(`KEY: ${e.key} (win)`);
+    });
+
+    canvas.addEventListener('keydown', (e) => {
+      debugText.setText(`KEY: ${(e as KeyboardEvent).key} (canvas)`);
+    });
+
     // 난이도별 최고 점수 로드
     this.highScore = getHighScore(this.difficulty);
 
