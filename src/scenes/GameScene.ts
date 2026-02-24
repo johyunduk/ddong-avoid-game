@@ -176,6 +176,11 @@ export default class GameScene extends Phaser.Scene {
   }
 
   create() {
+    // 키보드 이벤트 수신을 위해 캔버스 포커스 설정
+    const canvas = this.game.canvas;
+    canvas.setAttribute('tabindex', '0');
+    canvas.focus();
+
     // 난이도별 최고 점수 로드
     this.highScore = getHighScore(this.difficulty);
 
