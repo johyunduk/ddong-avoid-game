@@ -1,0 +1,53 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "35b12e01f4b9",
+  "session_id": "4b9b6c69-d39d-4140-99f8-6a09ca6d2b84",
+  "strategy": "manual-commit",
+  "created_at": "2026-02-24T12:43:41.785155Z",
+  "branch": "feature/supabase",
+  "checkpoints_count": 10,
+  "files_touched": [
+    ".env.example",
+    ".vscode/extensions.json",
+    "api/leaderboard/submit.ts",
+    "api/leaderboard/top.ts",
+    "api/lib/gameVerification.ts",
+    "api/lib/redis.ts",
+    "api/package.json",
+    "api/tsconfig.json",
+    "src/main.ts",
+    "src/scenes/GameScene.ts",
+    "src/scenes/LeaderboardScene.ts",
+    "src/utils/auth.ts",
+    "src/utils/leaderboard.ts",
+    "src/utils/supabase.ts",
+    "supabase/.gitignore",
+    "supabase/config.toml",
+    "supabase/functions/leaderboard-submit/.npmrc",
+    "supabase/functions/leaderboard-submit/deno.json",
+    "supabase/functions/leaderboard-submit/index.ts",
+    "supabase/functions/leaderboard-top/.npmrc",
+    "supabase/functions/leaderboard-top/deno.json",
+    "supabase/functions/leaderboard-top/index.ts"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "ef1ffaee7765",
+  "transcript_identifier_at_start": "3b731442-1f80-4722-a16f-13670e801a4a",
+  "token_usage": {
+    "input_tokens": 3387,
+    "cache_creation_tokens": 419028,
+    "cache_read_tokens": 11287770,
+    "output_tokens": 18735,
+    "api_call_count": 114
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-02-24T12:43:41.390034Z",
+    "agent_lines": 0,
+    "human_added": 0,
+    "human_modified": 282,
+    "human_removed": 6732,
+    "total_committed": 629,
+    "agent_percentage": 0
+  },
+  "transcript_path": ".claude/projects/-Users-johyunduk-Projects-ddong-avoid-game/4b9b6c69-d39d-4140-99f8-6a09ca6d2b84.jsonl"
+}
