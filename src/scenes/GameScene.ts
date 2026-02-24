@@ -81,6 +81,7 @@ export default class GameScene extends Phaser.Scene {
     if (data.difficulty) {
       this.difficulty = data.difficulty;
       // console.log('Difficulty:', this.difficulty);
+      localStorage.setItem('lastPlayedDifficulty', data.difficulty);
     }
 
     // 난이도 설정 찾기

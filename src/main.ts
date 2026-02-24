@@ -4,6 +4,7 @@ import DifficultySelectScene from './scenes/DifficultySelectScene';
 import GameScene from './scenes/GameScene';
 import LeaderboardScene from './scenes/LeaderboardScene';
 import ReleaseNotesScene from './scenes/ReleaseNotesScene';
+import { ensureLoggedIn } from './utils/auth';
 import './style.css';
 
 const config: Phaser.Types.Core.GameConfig = {
@@ -35,5 +36,14 @@ const config: Phaser.Types.Core.GameConfig = {
   }
 };
 
-// 게임 인스턴스 생성
-new Phaser.Game(config);
+async function init() {
+  try {
+    await ensureLoggedIn();
+  } catch (error) {
+    // 로그인 실패해도 게임은 실행 (오프라인 환경 대비)
+    console.error('로그인 초기화 실패:', error);
+  }
+  new Phaser.Game(config);
+}
+
+init();

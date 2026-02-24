@@ -14,6 +14,13 @@ export default class LeaderboardScene extends Phaser.Scene {
     super('LeaderboardScene');
   }
 
+  init() {
+    const last = localStorage.getItem('lastPlayedDifficulty') as Difficulty | null;
+    if (last) {
+      this.selectedDifficulty = last;
+    }
+  }
+
   preload() {
     // 배경 이미지 로드 (캐시 확인으로 중복 로딩 방지)
     if (!this.textures.exists('background2')) {

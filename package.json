@@ -11,13 +11,12 @@
     "deploy": "ait deploy"
   },
   "devDependencies": {
-    "@vercel/node": "^5.5.4",
     "typescript": "~5.9.3",
     "vite": "^7.1.7"
   },
   "dependencies": {
     "@apps-in-toss/web-framework": "^1.5.2",
-    "@upstash/redis": "^1.35.6",
+    "@supabase/supabase-js": "^2.97.0",
     "phaser": "^3.90.0"
   }
 }
