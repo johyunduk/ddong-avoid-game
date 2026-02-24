@@ -48,6 +48,7 @@ export default class GameScene extends Phaser.Scene {
   private feverTimeColorTimer!: Phaser.Time.TimerEvent; // 색상 애니메이션 타이머
   private lastFeverTimeScore: number = 0; // 마지막 피버 타임 발동 점수
   private isMinerPlayer: boolean = false; // 광부 캐릭터 선택 여부
+  private isMaehwaPlayer: boolean = false; // 매화검수 캐릭터 선택 여부
 
   constructor() {
     super('GameScene');
@@ -67,10 +68,17 @@ export default class GameScene extends Phaser.Scene {
     this.feverTimeRemaining = 0;
     this.lastFeverTimeScore = 0;
     this.isMinerPlayer = false; // Initialize to false
+    this.isMaehwaPlayer = false; // Initialize to false
 
-    // Randomly select miner player for Classic mode
+    // Randomly select special player for Classic mode
     if (data.gameMode === GameMode.CLASSIC) {
-      this.isMinerPlayer = Math.random() < 0.2; // 20% chance
+      if (Math.random() < 0.2) { // 20% 확률로 특수 캐릭터
+        if (Math.random() < 0.2) { // 그 중 20% 확률로 매화검수 (전체 4%)
+          this.isMaehwaPlayer = true;
+        } else { // 나머지 80% 확률로 광부 (전체 16%)
+          this.isMinerPlayer = true;
+        }
+      }
     }
 
     // ModeSelectScene/DifficultySelectScene으로부터 게임 모드와 난이도를 받음
@@ -114,6 +122,11 @@ export default class GameScene extends Phaser.Scene {
         if (!this.textures.exists('miner_front')) this.load.image('miner_front', 'assets/players/miner_front.webp');
         if (!this.textures.exists('miner_left')) this.load.image('miner_left', 'assets/players/miner_left.webp');
         if (!this.textures.exists('miner_right')) this.load.image('miner_right', 'assets/players/miner_right.webp');
+      }
+      if (this.isMaehwaPlayer) {
+        if (!this.textures.exists('maehwa_front')) this.load.image('maehwa_front', 'assets/players/maehwa_front.webp');
+        if (!this.textures.exists('maehwa_left')) this.load.image('maehwa_left', 'assets/players/maehwa_left.webp');
+        if (!this.textures.exists('maehwa_right')) this.load.image('maehwa_right', 'assets/players/maehwa_right.webp');
       } else { // Chibi player
         if (!this.textures.exists('front')) this.load.image('front', 'assets/players/chibi_front.webp');
         if (!this.textures.exists('left')) this.load.image('left', 'assets/players/chibi_left.webp');
@@ -224,6 +237,8 @@ export default class GameScene extends Phaser.Scene {
       playerTexturePrefix = 'astronaut_';
     } else if (this.gameMode === GameMode.CLASSIC && this.isMinerPlayer) {
       playerTexturePrefix = 'miner_';
+    } else if (this.gameMode === GameMode.CLASSIC && this.isMaehwaPlayer) {
+      playerTexturePrefix = 'maehwa_';
     }
     this.player = new Player(this, 200, 520, this.difficultyConfig.playerSpeed, playerTexturePrefix);
 
