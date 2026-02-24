@@ -1,0 +1,49 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "35b12e01f4b9",
+  "strategy": "manual-commit",
+  "branch": "feature/supabase",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".env.example",
+    ".vscode/extensions.json",
+    "api/leaderboard/submit.ts",
+    "api/leaderboard/top.ts",
+    "api/lib/gameVerification.ts",
+    "api/lib/redis.ts",
+    "api/package.json",
+    "api/tsconfig.json",
+    "package-lock.json",
+    "package.json",
+    "src/main.ts",
+    "src/scenes/GameScene.ts",
+    "src/scenes/LeaderboardScene.ts",
+    "src/utils/auth.ts",
+    "src/utils/leaderboard.ts",
+    "src/utils/supabase.ts",
+    "supabase/.gitignore",
+    "supabase/config.toml",
+    "supabase/functions/leaderboard-submit/.npmrc",
+    "supabase/functions/leaderboard-submit/deno.json",
+    "supabase/functions/leaderboard-submit/index.ts",
+    "supabase/functions/leaderboard-top/.npmrc",
+    "supabase/functions/leaderboard-top/deno.json",
+    "supabase/functions/leaderboard-top/index.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/35/b12e01f4b9/0/metadata.json",
+      "transcript": "/35/b12e01f4b9/0/full.jsonl",
+      "context": "/35/b12e01f4b9/0/context.md",
+      "content_hash": "/35/b12e01f4b9/0/content_hash.txt",
+      "prompt": "/35/b12e01f4b9/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 52,
+    "cache_creation_tokens": 51757,
+    "cache_read_tokens": 1077945,
+    "output_tokens": 4307,
+    "api_call_count": 28
+  }
+}
