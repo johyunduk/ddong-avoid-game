@@ -41,6 +41,8 @@ export default class GameScene extends Phaser.Scene {
   private lastRainbowPoopScore: number = 0;
   // 점수 검증용 데이터
   private gameStartTime: number = 0;
+  private lastScoreTime: number = 0;   // Date.now() 기반 점수용
+  private lastCheatCheckTime: number = 0; // timeScale 감지용
   private goldCollected: number = 0;
   private diamondCollected: number = 0;
   private topazCollected: number = 0;
@@ -70,6 +72,8 @@ export default class GameScene extends Phaser.Scene {
     this.lastTopazPoopScore = 0;
     this.lastRainbowPoopScore = 0;
     this.gameStartTime = Date.now();
+    this.lastScoreTime = Date.now();
+    this.lastCheatCheckTime = Date.now();
     this.goldCollected = 0;
     this.diamondCollected = 0;
     this.topazCollected = 0;
@@ -420,13 +424,7 @@ export default class GameScene extends Phaser.Scene {
       });
     }
 
-    // 점수 증가 타이머
-    this.time.addEvent({
-      delay: 100,
-      callback: this.updateScore,
-      callbackScope: this,
-      loop: true
-    });
+    // 점수 증가는 update()에서 Date.now() 기반으로 처리 (timeScale 조작 무력화)
 
     // 히트박스 디버그 표시, hit box visibility
     // this.physics.world.createDebugGraphic();
@@ -436,7 +434,52 @@ export default class GameScene extends Phaser.Scene {
   update() {
     if (!this.gameOver) {
       this.player.update();
+
+      const now = Date.now();
+
+      // 레이어 1: Date.now() 기반 점수 계산 (timeScale 조작 무력화)
+      const elapsed = now - this.lastScoreTime;
+      if (elapsed >= 100) {
+        const points = Math.floor(elapsed / 100);
+        this.lastScoreTime = now - (elapsed % 100); // 나머지 시간 이월
+        this.updateScore(points);
+      }
+
+      // 레이어 2: timeScale 이상 감지 (5초마다 체크)
+      if (now - this.lastCheatCheckTime >= 5000) {
+        const realElapsed = now - this.gameStartTime;
+        const gameElapsed = this.time.now; // Phaser 내부 시간 (timeScale 영향 받음)
+        const ratio = gameElapsed / realElapsed;
+
+        // 정상 비율은 ~1.0, 0.5 미만이면 게임 시간이 실제 시간의 절반 이하 → 조작 의심
+        if (ratio < 0.5) {
+          console.warn('[Anti-cheat] timeScale 조작 감지:', ratio.toFixed(2));
+          this.handleCheatDetected();
+          return;
+        }
+        this.lastCheatCheckTime = now;
+      }
     }
+  }
+
+  private handleCheatDetected() {
+    this.gameOver = true;
+    this.physics.pause();
+    this.sound.stopAll();
+
+    this.add.rectangle(200, 300, 400, 600, 0x000000, 0.8).setDepth(500);
+    this.add.text(200, 280, '⚠️ 비정상적인 플레이가\n감지되었습니다', {
+      fontSize: '22px',
+      color: '#ff4444',
+      fontStyle: 'bold',
+      stroke: '#000',
+      strokeThickness: 4,
+      align: 'center',
+    }).setOrigin(0.5).setDepth(501);
+
+    this.time.delayedCall(3000, () => {
+      this.scene.start('ModeSelectScene');
+    });
   }
 
   private spawnPoop() {

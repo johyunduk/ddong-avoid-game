@@ -5,6 +5,10 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
   private speed: number;
   private baseSpeed: number; // 기본 속도 저장
   private texturePrefix: string;
+  private leftKeyDown: boolean = false;
+  private rightKeyDown: boolean = false;
+  private readonly onKeyDown: (e: KeyboardEvent) => void;
+  private readonly onKeyUp: (e: KeyboardEvent) => void;
 
   // 아이템 효과 상태
   private isInvincible: boolean = false;
@@ -37,21 +41,42 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     this.setCollideWorldBounds(true);
     this.setImmovable(true);
 
-    // 키보드 입력
+    // Phaser 키보드 입력
     this.cursors = scene.input.keyboard!.createCursorKeys();
+
+    // window 레벨 키보드 이벤트 (canvas 포커스와 무관하게 동작)
+    this.onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowLeft') this.leftKeyDown = true;
+      if (e.key === 'ArrowRight') this.rightKeyDown = true;
+    };
+    this.onKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowLeft') this.leftKeyDown = false;
+      if (e.key === 'ArrowRight') this.rightKeyDown = false;
+    };
+    window.addEventListener('keydown', this.onKeyDown);
+    window.addEventListener('keyup', this.onKeyUp);
+
+    // 씬 종료 시 이벤트 리스너 정리
+    scene.events.once('shutdown', this.removeKeyListeners, this);
+    scene.events.once('destroy', this.removeKeyListeners, this);
+  }
+
+  private removeKeyListeners() {
+    window.removeEventListener('keydown', this.onKeyDown);
+    window.removeEventListener('keyup', this.onKeyUp);
   }
 
   update() {
     let isMoving = false;
 
-    // 좌우 이동
-    if (this.cursors.left.isDown) {
+    // 좌우 이동 (Phaser 키보드 OR window 레벨 키보드 둘 다 체크)
+    if (this.cursors.left.isDown || this.leftKeyDown) {
       this.setVelocityX(-this.speed);
-      this.setTexture(`${this.texturePrefix}left`); // 왼쪽 이미지
+      this.setTexture(`${this.texturePrefix}left`);
       isMoving = true;
-    } else if (this.cursors.right.isDown) {
+    } else if (this.cursors.right.isDown || this.rightKeyDown) {
       this.setVelocityX(this.speed);
-      this.setTexture(`${this.texturePrefix}right`); // 오른쪽 이미지
+      this.setTexture(`${this.texturePrefix}right`);
       isMoving = true;
     } else {
       this.setVelocityX(0);
