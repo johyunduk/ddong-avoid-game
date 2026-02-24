@@ -1,0 +1,37 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "7c73a0e63688",
+  "session_id": "4b9b6c69-d39d-4140-99f8-6a09ca6d2b84",
+  "strategy": "manual-commit",
+  "created_at": "2026-02-24T13:28:16.813327Z",
+  "branch": "dev",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "public/assets/players/maehwa_front.webp",
+    "public/assets/players/maehwa_left.webp",
+    "public/assets/players/maehwa_right.webp",
+    "src/scenes/GameScene.ts"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "056cd5e1bcf6",
+  "transcript_identifier_at_start": "9cf026fd-9973-4fd6-8fa7-1e147c73ebf0",
+  "checkpoint_transcript_start": 637,
+  "transcript_lines_at_start": 637,
+  "token_usage": {
+    "input_tokens": 53,
+    "cache_creation_tokens": 15367,
+    "cache_read_tokens": 2450753,
+    "output_tokens": 1558,
+    "api_call_count": 29
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-02-24T13:28:16.278592Z",
+    "agent_lines": 17,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 17,
+    "agent_percentage": 100
+  },
+  "transcript_path": ".claude/projects/-Users-johyunduk-Projects-ddong-avoid-game/4b9b6c69-d39d-4140-99f8-6a09ca6d2b84.jsonl"
+}
