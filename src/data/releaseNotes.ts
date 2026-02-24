@@ -10,7 +10,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     date: '2026-02-24',
     changes: [
       '플레이어 히트박스 크기 살짝 증가',
-      '매화검수 캐릭터 추가 (낮은 확률로 등장)',
       '랭킹 시스템 Supabase 기반으로 전환',
     ],
   },
