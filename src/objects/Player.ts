@@ -53,8 +53,10 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
       if (e.key === 'ArrowLeft') this.leftKeyDown = false;
       if (e.key === 'ArrowRight') this.rightKeyDown = false;
     };
-    window.addEventListener('keydown', this.onKeyDown);
-    window.addEventListener('keyup', this.onKeyUp);
+    // capture: true → window capture phase는 이벤트 전파 최우선 단계
+    // Vercel Preview 툴바 등 외부 스크립트가 ArrowLeft/Right를 가로채도 우선 실행됨
+    window.addEventListener('keydown', this.onKeyDown, { capture: true });
+    window.addEventListener('keyup', this.onKeyUp, { capture: true });
 
     // 씬 종료 시 이벤트 리스너 정리
     scene.events.once('shutdown', this.removeKeyListeners, this);
@@ -62,8 +64,8 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   private removeKeyListeners() {
-    window.removeEventListener('keydown', this.onKeyDown);
-    window.removeEventListener('keyup', this.onKeyUp);
+    window.removeEventListener('keydown', this.onKeyDown, { capture: true });
+    window.removeEventListener('keyup', this.onKeyUp, { capture: true });
   }
 
   update() {
