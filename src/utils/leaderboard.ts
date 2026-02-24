@@ -65,13 +65,23 @@ export function hasUserInitials(): boolean {
   return initials !== null && /^[A-Z]{3}$/.test(initials);
 }
 
+export interface ScoreVerificationData {
+  gameStartTime: number;
+  gameEndTime: number;
+  goldCollected: number;
+  diamondCollected: number;
+  topazCollected: number;
+  rainbowCollected: number;
+}
+
 /**
  * 점수 제출
  */
 export async function submitScore(
   score: number,
   difficulty: Difficulty,
-  initials: string
+  initials: string,
+  verificationData: ScoreVerificationData
 ): Promise<SubmitScoreResponse> {
   if (!/^[A-Z]{3}$/.test(initials)) {
     throw new Error('Invalid initials: must be 3 uppercase letters');
@@ -82,6 +92,7 @@ export async function submitScore(
       score,
       difficulty,
       userName: initials,
+      verification: verificationData,
     },
   });
 

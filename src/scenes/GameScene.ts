@@ -39,6 +39,12 @@ export default class GameScene extends Phaser.Scene {
   private lastTopazPoopScore: number = 0;
   private feverTopazTimer!: Phaser.Time.TimerEvent;
   private lastRainbowPoopScore: number = 0;
+  // 점수 검증용 데이터
+  private gameStartTime: number = 0;
+  private goldCollected: number = 0;
+  private diamondCollected: number = 0;
+  private topazCollected: number = 0;
+  private rainbowCollected: number = 0;
   // 피버 타임 관련
   private isFeverTime: boolean = false; // 피버 타임 활성화 여부
   private feverTimeRemaining: number = 0; // 피버 타임 남은 시간 (ms)
@@ -63,6 +69,11 @@ export default class GameScene extends Phaser.Scene {
     this.lastDiamondPoopScore = 0;
     this.lastTopazPoopScore = 0;
     this.lastRainbowPoopScore = 0;
+    this.gameStartTime = Date.now();
+    this.goldCollected = 0;
+    this.diamondCollected = 0;
+    this.topazCollected = 0;
+    this.rainbowCollected = 0;
     // 피버 타임 초기화
     this.isFeverTime = false;
     this.feverTimeRemaining = 0;
@@ -566,6 +577,7 @@ export default class GameScene extends Phaser.Scene {
 
     const topazPoop = _topazPoop as TopazPoop;
     topazPoop.destroy();
+    this.topazCollected++;
 
     this.updateScore(80);
 
@@ -592,6 +604,7 @@ export default class GameScene extends Phaser.Scene {
 
     const rainbowPoop = _rainbowPoop as RainbowPoop;
     rainbowPoop.destroy();
+    this.rainbowCollected++;
 
     this.updateScore(100);
 
@@ -1025,6 +1038,25 @@ export default class GameScene extends Phaser.Scene {
     this.gameOver = true;
     this.physics.pause();
 
+    // 점수 검증 데이터 로그
+    const gameEndTime = Date.now();
+    const playDuration = gameEndTime - this.gameStartTime;
+    const bonusScore = this.goldCollected * 20 + this.diamondCollected * 40 + this.topazCollected * 80 + this.rainbowCollected * 100;
+    const timeScore = Math.floor(playDuration / 100); // 100ms당 1점
+    const expectedScore = timeScore + bonusScore;
+    console.log('[점수 검증 데이터]', {
+      최종점수: this.score,
+      시간점수: timeScore,
+      보너스점수: bonusScore,
+      예상점수: expectedScore,
+      점수차이: this.score - expectedScore,
+      플레이시간: `${(playDuration / 1000).toFixed(1)}초`,
+      금똥: this.goldCollected,
+      다이아똥: this.diamondCollected,
+      토파즈똥: this.topazCollected,
+      무지개똥: this.rainbowCollected,
+    });
+
     // 최고 점수 업데이트 및 갱신 여부 확인
     const isNewRecord = updateHighScore(this.difficulty, this.score);
 
@@ -1118,6 +1150,7 @@ export default class GameScene extends Phaser.Scene {
     // 금똥 제거
     const goldPoop = _goldPoop as GoldPoop;
     goldPoop.destroy();
+    this.goldCollected++;
 
     // 점수 보너스 (20점 추가) - updateScore를 통해 건너뛴 생성 포인트도 체크
     this.updateScore(20);
@@ -1147,6 +1180,7 @@ export default class GameScene extends Phaser.Scene {
     // 다이아똥 제거
     const diamondPoop = _diamondPoop as DiamondPoop;
     diamondPoop.destroy();
+    this.diamondCollected++;
 
     // 점수 보너스 (40점 추가) - updateScore를 통해 건너뛴 생성 포인트도 체크
     this.updateScore(40);
@@ -1350,11 +1384,18 @@ export default class GameScene extends Phaser.Scene {
       }).setOrigin(0.5).setDepth(200);
 
       try {
-        // 점수 제출 (검증 없이)
         const result = await submitScore(
           this.score,
           this.difficulty,
-          initials
+          initials,
+          {
+            gameStartTime: this.gameStartTime,
+            gameEndTime: Date.now(),
+            goldCollected: this.goldCollected,
+            diamondCollected: this.diamondCollected,
+            topazCollected: this.topazCollected,
+            rainbowCollected: this.rainbowCollected,
+          }
         );
 
         submittingText.destroy();

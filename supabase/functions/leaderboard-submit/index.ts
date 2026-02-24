@@ -13,7 +13,7 @@ Deno.serve(async (req: Request) => {
 
   try {
     // 요청 본문 파싱
-    const { score, difficulty, userName } = await req.json();
+    const { score, difficulty, userName, verification } = await req.json();
 
     // 입력 검증
     if (typeof score !== 'number' || score < 0) {
@@ -21,6 +21,38 @@ Deno.serve(async (req: Request) => {
         JSON.stringify({ error: 'Invalid score' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
+    }
+
+    // 점수 검증 (verification 데이터가 있을 때만)
+    if (verification) {
+      const {
+        gameStartTime,
+        gameEndTime,
+        goldCollected = 0,
+        diamondCollected = 0,
+        topazCollected = 0,
+        rainbowCollected = 0,
+      } = verification;
+
+      const playDuration = gameEndTime - gameStartTime;
+      const timeScore = Math.floor(playDuration / 100); // 100ms당 1점
+      const bonusScore =
+        goldCollected * 20 +
+        diamondCollected * 40 +
+        topazCollected * 80 +
+        rainbowCollected * 100;
+      const expectedScore = timeScore + bonusScore;
+
+      // 허용 오차: 예상 점수의 20% 또는 최소 10점 (타이머 오차 등 고려)
+      const tolerance = Math.max(expectedScore * 0.2, 10);
+
+      if (score > expectedScore + tolerance) {
+        console.warn('Score verification failed', { score, expectedScore, timeScore, bonusScore, playDuration });
+        return new Response(
+          JSON.stringify({ error: 'Score verification failed' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
     }
 
     const validDifficulties = ['easy', 'normal', 'hard', 'extreme'];
