@@ -7,6 +7,7 @@ export interface LeaderboardEntry {
   userName: string;
   score: number;
   rank: number;
+  characterType?: string;
 }
 
 export interface SubmitScoreResponse {
@@ -81,7 +82,8 @@ export async function submitScore(
   score: number,
   difficulty: Difficulty,
   initials: string,
-  verificationData: ScoreVerificationData
+  verificationData: ScoreVerificationData,
+  characterType: string = 'chibi'
 ): Promise<SubmitScoreResponse> {
   if (!/^[A-Z]{3}$/.test(initials)) {
     throw new Error('Invalid initials: must be 3 uppercase letters');
@@ -93,6 +95,7 @@ export async function submitScore(
       difficulty,
       userName: initials,
       verification: verificationData,
+      characterType,
     },
   });
 

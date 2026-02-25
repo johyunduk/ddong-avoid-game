@@ -52,6 +52,7 @@ Deno.serve(async (req: Request) => {
       .select(`
         user_id,
         score,
+        character_type,
         profiles!inner(initials)
       `)
       .eq('difficulty', difficulty)
@@ -72,6 +73,7 @@ Deno.serve(async (req: Request) => {
       userName: (entry.profiles as { initials: string | null }).initials ?? '???',
       score: entry.score,
       rank: index + 1,
+      characterType: (entry as Record<string, unknown>).character_type ?? 'chibi',
     }));
 
     const totalEntries = entries.length;

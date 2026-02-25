@@ -13,7 +13,7 @@ Deno.serve(async (req: Request) => {
 
   try {
     // 요청 본문 파싱
-    const { score, difficulty, userName, verification } = await req.json();
+    const { score, difficulty, userName, verification, characterType } = await req.json();
 
     // 입력 검증
     if (typeof score !== 'number' || score < 0) {
@@ -119,6 +119,9 @@ Deno.serve(async (req: Request) => {
 
     // 최고 점수만 저장 (upsert)
     if (isNewRecord) {
+      const validCharacterTypes = ['chibi', 'miner', 'maehwa', 'astronaut'];
+      const safeCharacterType = validCharacterTypes.includes(characterType) ? characterType : 'chibi';
+
       const { error: upsertError } = await supabaseAdmin
         .from('leaderboard')
         .upsert(
@@ -126,6 +129,7 @@ Deno.serve(async (req: Request) => {
             user_id: user.id,
             difficulty,
             score,
+            character_type: safeCharacterType,
             updated_at: new Date().toISOString(),
           },
           { onConflict: 'user_id,difficulty' }

@@ -41,6 +41,7 @@ export default class GameScene extends Phaser.Scene {
   private lastRainbowPoopScore: number = 0;
   // 점수 검증용 데이터
   private gameStartTime: number = 0;
+  private phaserStartTime: number = 0; // 씬 시작 시 Phaser 내부 시간 (재시작 시에도 정확한 delta 계산용)
   private lastScoreTime: number = 0;   // Date.now() 기반 점수용
   private lastCheatCheckTime: number = 0; // timeScale 감지용
   private goldCollected: number = 0;
@@ -72,6 +73,7 @@ export default class GameScene extends Phaser.Scene {
     this.lastTopazPoopScore = 0;
     this.lastRainbowPoopScore = 0;
     this.gameStartTime = Date.now();
+    this.phaserStartTime = 0; // create()에서 설정
     this.lastScoreTime = Date.now();
     this.lastCheatCheckTime = Date.now();
     this.goldCollected = 0;
@@ -196,6 +198,8 @@ export default class GameScene extends Phaser.Scene {
     canvas.setAttribute('tabindex', '0');
     canvas.focus();
 
+    // Phaser 내부 시간 기준점 기록 (씬 재시작 시에도 정확한 delta 계산)
+    this.phaserStartTime = this.time.now;
 
     // 난이도별 최고 점수 로드
     this.highScore = getHighScore(this.difficulty);
@@ -449,11 +453,12 @@ export default class GameScene extends Phaser.Scene {
       // 레이어 2: timeScale 이상 감지 (5초마다 체크)
       if (now - this.lastCheatCheckTime >= 5000) {
         const realElapsed = now - this.gameStartTime;
-        const gameElapsed = this.time.now; // Phaser 내부 시간 (timeScale 영향 받음)
+        const gameElapsed = this.time.now - this.phaserStartTime; // 이번 게임의 Phaser 경과 시간
         const ratio = gameElapsed / realElapsed;
 
-        // 정상 비율은 ~1.0, 0.5 미만이면 게임 시간이 실제 시간의 절반 이하 → 조작 의심
-        if (ratio < 0.5) {
+        // 정상 비율은 ~1.0, 0.8 미만이면 게임 속도가 80% 이하 → 조작 의심
+        // rAF timestamp 조작 (time * 0.5) 등을 감지
+        if (ratio < 0.8) {
           console.warn('[Anti-cheat] timeScale 조작 감지:', ratio.toFixed(2));
           this.handleCheatDetected();
           return;
@@ -1088,13 +1093,17 @@ export default class GameScene extends Phaser.Scene {
     const bonusScore = this.goldCollected * 20 + this.diamondCollected * 40 + this.topazCollected * 80 + this.rainbowCollected * 100;
     const timeScore = Math.floor(playDuration / 100); // 100ms당 1점
     const expectedScore = timeScore + bonusScore;
+    const phaserTime = this.time.now - this.phaserStartTime; // 이번 게임의 Phaser 경과 시간
+    const timeRatio = phaserTime / playDuration;
     console.log('[점수 검증 데이터]', {
       최종점수: this.score,
       시간점수: timeScore,
       보너스점수: bonusScore,
       예상점수: expectedScore,
       점수차이: this.score - expectedScore,
-      플레이시간: `${(playDuration / 1000).toFixed(1)}초`,
+      현실시간: `${(playDuration / 1000).toFixed(1)}초`,
+      Phaser시간: `${(phaserTime / 1000).toFixed(1)}초`,
+      시간비율: timeRatio.toFixed(2),
       금똥: this.goldCollected,
       다이아똥: this.diamondCollected,
       토파즈똥: this.topazCollected,
@@ -1428,6 +1437,12 @@ export default class GameScene extends Phaser.Scene {
       }).setOrigin(0.5).setDepth(200);
 
       try {
+        // 캐릭터 타입 결정
+        let characterType = 'chibi';
+        if (this.gameMode === GameMode.ITEM) characterType = 'astronaut';
+        else if (this.isMaehwaPlayer) characterType = 'maehwa';
+        else if (this.isMinerPlayer) characterType = 'miner';
+
         const result = await submitScore(
           this.score,
           this.difficulty,
@@ -1439,7 +1454,8 @@ export default class GameScene extends Phaser.Scene {
             diamondCollected: this.diamondCollected,
             topazCollected: this.topazCollected,
             rainbowCollected: this.rainbowCollected,
-          }
+          },
+          characterType
         );
 
         submittingText.destroy();

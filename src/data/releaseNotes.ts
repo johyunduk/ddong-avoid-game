@@ -7,10 +7,12 @@ export interface ReleaseNote {
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
     version: 'v1.7.0',
-    date: '2026-02-24',
+    date: '2026-02-25',
     changes: [
       '플레이어 히트박스 크기 살짝 증가',
       '랭킹 시스템 Supabase 기반으로 전환',
+      '점수 조작 방지 시스템 추가 (서버 사이드 검증)',
+      '게임 속도 조작 감지 및 차단',
     ],
   },
   {
