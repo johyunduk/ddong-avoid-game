@@ -112,36 +112,36 @@ export const POOP_CONFIG: PoopConfig = {
       extreme: 52
     },
     hitbox: {
-      normal: 500,
-      extreme: 470
+      normal: 125,
+      extreme: 118
     }
   },
   gold: {
     baseSpeed: 200,
     speedReduction: 30,
     size: 40,
-    hitbox: 450,
+    hitbox: 113,
     depth: 100
   },
   diamond: {
     baseSpeed: 200,
     speedReduction: 10,
     size: 40,
-    hitbox: 450,
+    hitbox: 113,
     depth: 100
   },
   topaz: {
     baseSpeed: 200,
     speedReduction: -160, // 사용자 요청에 따라 20 더 빠르게 (-140에서 -160으로)
     size: 40,
-    hitbox: 450,
+    hitbox: 113,
     depth: 100
   },
   rainbow: {
     baseSpeed: 200,
     speedReduction: 0, // 토파즈보다 조금 더 빠르게
     size: 40,
-    hitbox: 450,
+    hitbox: 113,
     depth: 100
   },
   destroyOffset: 50

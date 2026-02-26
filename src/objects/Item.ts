@@ -33,7 +33,7 @@ export default class Item extends Phaser.Physics.Arcade.Sprite {
     const body = this.body as Phaser.Physics.Arcade.Body;
     if (body) {
       // 히트박스 설정 (아이템은 획득하기 쉽게 작게)
-      body.setSize(300, 300);
+      body.setSize(75, 75);
       body.setCollideWorldBounds(false);
       body.setVelocityY(this.fallSpeed);
     }

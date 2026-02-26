@@ -34,7 +34,7 @@ export default class Star extends Phaser.Physics.Arcade.Sprite {
     const body = this.body as Phaser.Physics.Arcade.Body;
     if (body) {
       // 히트박스 설정
-      body.setSize(500, 500);
+      body.setSize(125, 125);
       body.setCollideWorldBounds(false);
       body.setVelocityY(this.fallSpeed);
     }
