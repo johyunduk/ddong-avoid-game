@@ -456,9 +456,9 @@ export default class GameScene extends Phaser.Scene {
         const gameElapsed = this.time.now - this.phaserStartTime; // 이번 게임의 Phaser 경과 시간
         const ratio = gameElapsed / realElapsed;
 
-        // 정상 비율은 ~1.0, 0.8 미만이면 게임 속도가 80% 이하 → 조작 의심
-        // rAF timestamp 조작 (time * 0.5) 등을 감지
-        if (ratio < 0.8) {
+        // 정상 비율은 ~1.0, 0.95 미만이면 게임 속도가 95% 이하 → 조작 의심
+        // rAF timestamp 조작 (time * 0.5, 0.8, 0.9 등)을 감지
+        if (ratio < 0.95) {
           console.warn('[Anti-cheat] timeScale 조작 감지:', ratio.toFixed(2));
           this.handleCheatDetected();
           return;
