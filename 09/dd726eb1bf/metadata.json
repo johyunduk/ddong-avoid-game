@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "09dd726eb1bf",
+  "strategy": "manual-commit",
+  "branch": "dev",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src/scenes/GameScene.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/09/dd726eb1bf/0/metadata.json",
+      "transcript": "/09/dd726eb1bf/0/full.jsonl",
+      "context": "/09/dd726eb1bf/0/context.md",
+      "content_hash": "/09/dd726eb1bf/0/content_hash.txt",
+      "prompt": "/09/dd726eb1bf/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 15,
+    "cache_creation_tokens": 4944,
+    "cache_read_tokens": 1274001,
+    "output_tokens": 993,
+    "api_call_count": 9
+  }
+}
