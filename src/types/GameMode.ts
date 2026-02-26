@@ -1,7 +1,8 @@
 // erasableSyntaxOnly 설정 때문에 enum 대신 const object 사용
 export const GameMode = {
   CLASSIC: 'classic',
-  ITEM: 'item'
+  ITEM: 'item',
+  GACHA: 'gacha'
 } as const;
 
 export type GameMode = typeof GameMode[keyof typeof GameMode];
@@ -19,9 +20,9 @@ export const GAME_MODES: GameModeConfig[] = [
     description: '떨어지는 똥을 피하세요!'
   },
   {
-    mode: GameMode.ITEM,
-    name: '아이템 모드',
-    description: '아이템을 획득하여 게임을 유리하게!'
+    mode: GameMode.GACHA,
+    name: '캐릭터 뽑기',
+    description: '코인을 모아 캐릭터를 뽑으세요!'
   }
 ];
 

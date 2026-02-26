@@ -51,7 +51,7 @@ export default class ModeSelectScene extends Phaser.Scene {
 
   private createModeButton(modeConfig: GameModeConfig, x: number, y: number) {
     // 아이템 모드 비활성화 체크
-    const isDisabled = modeConfig.mode === GameMode.ITEM;
+    const isDisabled = modeConfig.mode === GameMode.GACHA;
 
     const button = this.add.rectangle(x, y, 300, 80, isDisabled ? 0xcccccc : 0xffffff, 1);
     button.setStrokeStyle(4, isDisabled ? 0x666666 : 0x000000);
