@@ -3,7 +3,7 @@
   "checkpoint_id": "b75750f18335",
   "strategy": "manual-commit",
   "branch": "dev",
-  "checkpoints_count": 1,
+  "checkpoints_count": 4,
   "files_touched": [
     "public/assets/items/hermes_shoes.webp",
     "public/assets/items/light_saber.webp",
@@ -63,13 +63,20 @@
       "context": "/b7/5750f18335/1/context.md",
       "content_hash": "/b7/5750f18335/1/content_hash.txt",
       "prompt": "/b7/5750f18335/1/prompt.txt"
+    },
+    {
+      "metadata": "/b7/5750f18335/2/metadata.json",
+      "transcript": "/b7/5750f18335/2/full.jsonl",
+      "context": "/b7/5750f18335/2/context.md",
+      "content_hash": "/b7/5750f18335/2/content_hash.txt",
+      "prompt": "/b7/5750f18335/2/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 248,
-    "cache_creation_tokens": 223480,
-    "cache_read_tokens": 14043880,
-    "output_tokens": 31889,
-    "api_call_count": 156
+    "input_tokens": 3714,
+    "cache_creation_tokens": 793912,
+    "cache_read_tokens": 22249919,
+    "output_tokens": 49838,
+    "api_call_count": 236
   }
 }
