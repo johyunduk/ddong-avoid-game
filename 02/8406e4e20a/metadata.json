@@ -1,0 +1,55 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "028406e4e20a",
+  "strategy": "manual-commit",
+  "branch": "dev",
+  "checkpoints_count": 29,
+  "files_touched": [
+    "public/assets/players/archieve_front.webp",
+    "public/assets/players/archieve_left.webp",
+    "public/assets/players/archieve_right.webp",
+    "public/assets/players/glitch_front.webp",
+    "public/assets/players/glitch_left.webp",
+    "public/assets/players/glitch_right.webp",
+    "public/assets/players/hacker_front.webp",
+    "public/assets/players/hacker_left.webp",
+    "public/assets/players/hacker_right.webp",
+    "public/assets/players/noise_front.webp",
+    "public/assets/players/noise_left.webp",
+    "public/assets/players/noise_right.webp",
+    "public/assets/vids/chibi.mp4",
+    "src/data/releaseNotes.ts",
+    "src/main.ts",
+    "src/scenes/CharacterSelectScene.ts",
+    "src/scenes/GachaScene.ts",
+    "src/scenes/GameScene.ts",
+    "src/scenes/ModeSelectScene.ts",
+    "src/types/GameMode.ts",
+    "src/utils/character.ts",
+    "src/utils/gacha.ts",
+    "src/utils/skor.ts",
+    "supabase/functions/gacha-pull/.npmrc",
+    "supabase/functions/gacha-pull/deno.json",
+    "supabase/functions/gacha-pull/index.ts",
+    "supabase/functions/skor-submit/.npmrc",
+    "supabase/functions/skor-submit/deno.json",
+    "supabase/functions/skor-submit/index.ts",
+    "supabase/migrations/20260301_skor_system.sql"
+  ],
+  "sessions": [
+    {
+      "metadata": "/02/8406e4e20a/0/metadata.json",
+      "transcript": "/02/8406e4e20a/0/full.jsonl",
+      "context": "/02/8406e4e20a/0/context.md",
+      "content_hash": "/02/8406e4e20a/0/content_hash.txt",
+      "prompt": "/02/8406e4e20a/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 18103,
+    "cache_creation_tokens": 2776466,
+    "cache_read_tokens": 75829573,
+    "output_tokens": 262187,
+    "api_call_count": 731
+  }
+}
