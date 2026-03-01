@@ -1,10 +1,9 @@
 import Phaser from 'phaser';
 import { GameMode, GAME_MODES, type GameModeConfig } from '../types/GameMode';
-import { getSkorBalance } from '../utils/skor';
+import { getSkorBalance, getCachedSkorBalance, cacheSkorBalance } from '../utils/skor';
 
 export default class ModeSelectScene extends Phaser.Scene {
   private skorText!: Phaser.GameObjects.Text;
-  private gachaCostText!: Phaser.GameObjects.Text;
 
   constructor() {
     super('ModeSelectScene');
@@ -58,14 +57,12 @@ export default class ModeSelectScene extends Phaser.Scene {
   private async loadSkorBalance() {
     try {
       const balance = await getSkorBalance();
+      cacheSkorBalance(balance);
       if (this.skorText?.active) {
         this.skorText.setText(`💰 ${Math.floor(balance)} SKOR`);
       }
-      if (this.gachaCostText?.active) {
-        this.gachaCostText.setText(`1회 100 · 10회 900`);
-      }
     } catch {
-      // 잔액 로드 실패 시 기본값 유지
+      // 잔액 로드 실패 시 캐시 값 유지
     }
   }
 
@@ -108,14 +105,16 @@ export default class ModeSelectScene extends Phaser.Scene {
       fontStyle: 'bold',
     }).setOrigin(0.5);
 
-    // SKOR 잔액 (로딩 후 갱신)
-    this.skorText = this.add.text(x, y + 8, '💰 로딩 중...', {
+    // SKOR 잔액 — 캐시 값 즉시 표시
+    const cached = getCachedSkorBalance();
+    const initialSkorLabel = cached !== null ? `💰 ${cached} SKOR` : '💰 -- SKOR';
+    this.skorText = this.add.text(x, y + 8, initialSkorLabel, {
       fontSize: '16px',
       color: '#c0a0ff',
     }).setOrigin(0.5);
 
     // 비용 안내
-    this.gachaCostText = this.add.text(x, y + 28, '1회 100 · 10회 900', {
+    this.add.text(x, y + 28, '1회 100 · 10회 900', {
       fontSize: '12px',
       color: '#888888',
     }).setOrigin(0.5);

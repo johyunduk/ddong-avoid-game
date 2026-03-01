@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { gachaPull, type PulledCharacter } from '../utils/gacha';
 import { CHARACTERS, getCharacterDef, addOwnedCharacter, type CharacterDef } from '../utils/character';
-import { getSkorBalance } from '../utils/skor';
+import { getSkorBalance, getCachedSkorBalance, cacheSkorBalance } from '../utils/skor';
 
 // vids/ 디렉토리에 개인 영상이 존재하는 캐릭터 목록
 const CHARS_WITH_VIDS = new Set([
@@ -16,6 +16,12 @@ const GRADE_COLORS: Record<string, number> = {
   '등급외': 0xcccccc,
 };
 
+// 현재 픽업 배너 설정 — 출시 캐릭터 변경 시 characterId만 수정
+const CURRENT_BANNER = {
+  characterId: 'legacy',
+  label: '신규 출시',
+};
+
 export default class GachaScene extends Phaser.Scene {
   private skorBalance = 0;
   private remainingSkor = 0;
@@ -28,18 +34,20 @@ export default class GachaScene extends Phaser.Scene {
   }
 
   preload() {
-    // 공통 연출 영상 (항상 필요)
-    if (!this.cache.video.exists('gatcha_green')) {
-      this.load.video('gatcha_green', 'assets/vids/gatcha_green.mp4');
-    }
-    if (!this.cache.video.exists('gatcha_red')) {
-      this.load.video('gatcha_red', 'assets/vids/gatcha_red.mp4');
+    // 공통 연출 영상
+    if (!this.cache.video.exists('gacha')) {
+      this.load.video('gacha', 'assets/vids/gacha.mp4');
     }
     // 캐릭터 픽셀 이미지 (작은 webp, 전부 사전 로드)
     for (const c of CHARACTERS) {
       if (!this.textures.exists(c.imageKey)) {
         this.load.image(c.imageKey, c.imagePath);
       }
+    }
+    // 픽업 배너 캐릭터 일러스트
+    const bannerDef = CHARACTERS.find(c => c.id === CURRENT_BANNER.characterId);
+    if (bannerDef && !this.textures.exists(bannerDef.illustKey)) {
+      this.load.image(bannerDef.illustKey, bannerDef.illustPath);
     }
   }
 
@@ -55,59 +63,102 @@ export default class GachaScene extends Phaser.Scene {
 
   private async buildLobby() {
     this.clearUI();
-    this.add.rectangle(200, 300, 400, 600, 0x060612);
-    this.drawTerminalChrome();
 
+    const bannerDef = getCharacterDef(CURRENT_BANNER.characterId);
+    const gradeColorInt = parseInt(bannerDef.gradeColor.replace('#', ''), 16);
+
+    // ── 일러스트 배경 ──
+    const illust = this.add.image(200, 300, bannerDef.illustKey);
+    illust.setDisplaySize(400, 600);
+
+    // ── 하단 버튼 영역 그라데이션 (바닥에서 올라오는 어둠) ──
+    const gradSteps = 14;
+    for (let i = 0; i < gradSteps; i++) {
+      this.add.rectangle(200, 600 - i * 22, 400, 22, 0x000000, (gradSteps - i) * 0.052);
+    }
+
+    // ── 상단: 배너 배지 ──
+    this.add.rectangle(200, 36, 140, 30, 0x000000, 0.75)
+      .setStrokeStyle(1.5, gradeColorInt);
+    this.add.text(200, 36, `✦  ${CURRENT_BANNER.label}  ✦`, {
+      fontSize: '13px', color: bannerDef.gradeColor, fontStyle: 'bold',
+      stroke: '#000000', strokeThickness: 3,
+    }).setOrigin(0.5);
+
+    // ── 캐릭터 등급 + 이름 ──
+    this.add.text(200, 220, bannerDef.grade, {
+      fontSize: '14px', color: bannerDef.gradeColor, fontStyle: 'bold',
+      letterSpacing: 6, stroke: '#000000', strokeThickness: 6,
+    }).setOrigin(0.5);
+
+    this.add.text(200, 258, bannerDef.name, {
+      fontSize: '46px', color: '#ffffff', fontStyle: 'bold',
+      stroke: '#000000', strokeThickness: 10,
+    }).setOrigin(0.5);
+
+    // ── SKOR 잔액 — 캐시는 표시용만, 실제 잔액은 서버 응답 전까지 -1 ──
+    const cached = getCachedSkorBalance();
+    const initialText = cached !== null ? `💰  ${cached} SKOR` : '💰  -- SKOR';
+    const skorText = this.add.text(200, 408, initialText, {
+      fontSize: '15px', color: '#aaaaaa',
+      stroke: '#000000', strokeThickness: 4,
+    }).setOrigin(0.5);
+    this.skorBalance = -1; // 서버 확인 전까지 뽑기 불가
+
+    // ── 뽑기 버튼 ──
+    this.buildPullButtons(true);
+
+    // 서버에서 최신 잔액 가져와 갱신
     this.skorBalance = await getSkorBalance();
     if (!this.scene.isActive()) return;
-
-    await this.typeLines([
-      '> KRYPT-DB  v0.9.1',
-      '> AUTH: OK',
-      `> SKOR: ${Math.floor(this.skorBalance)}`,
-      '> STATUS: READY',
-    ], 35);
-
-    this.buildPullButtons();
+    cacheSkorBalance(this.skorBalance);
+    skorText.setText(`💰  ${Math.floor(this.skorBalance)} SKOR`);
   }
 
-  private drawTerminalChrome() {
-    // 터미널 패널 배경
-    this.add.rectangle(200, 163, 370, 288, 0x000000)
-      .setStrokeStyle(1, 0x00ff41, 0.5);
-    // 타이틀 바
-    this.add.text(26, 18, '● ● ●', { fontSize: '11px', color: '#00ff41' });
-    this.add.text(200, 19, 'root@krypt — entity_summon', {
-      fontSize: '11px', color: '#00cc33', fontFamily: 'monospace',
+  private drawTerminalChrome(isUR = false) {
+    const borderColor = isUR ? 0xff3333 : 0x00ff41;
+    const textColor   = isUR ? '#ff3333' : '#00ff41';
+    const titleColor  = isUR ? '#cc0000' : '#00cc33';
+    const title       = isUR ? 'root@krypt — [EMERGENCY OVERRIDE]' : 'root@krypt — entity_summon';
+
+    this.add.rectangle(200, 342, 370, 172, 0x000000)
+      .setStrokeStyle(1, borderColor, 0.8);
+    this.add.text(26, 260, '● ● ●', { fontSize: '11px', color: textColor });
+    this.add.text(200, 261, title, {
+      fontSize: '11px', color: titleColor, fontFamily: 'monospace',
     }).setOrigin(0.5);
   }
 
-  private buildPullButtons() {
-    this.addPullButton(200, 380, '1회 호출', '100 SKOR', 'single');
-    this.addPullButton(200, 458, '10회 호출', '900 SKOR  ·  10% SAVE', 'multi');
+  private buildPullButtons(_fromLobby = false) {
+    this.addPullButton(200, 448, '1회 소환', '100 SKOR', 'single');
+    this.addPullButton(200, 516, '10회 소환', '900 SKOR  ·  10% 절약', 'multi');
 
-    const back = this.add.text(200, 555, '← 돌아가기', {
-      fontSize: '15px', color: '#444444', fontFamily: 'monospace',
+    const back = this.add.text(200, 572, '← 돌아가기', {
+      fontSize: '14px', color: '#ffffff',
+      stroke: '#000000', strokeThickness: 3,
     }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-    back.on('pointerover', () => back.setColor('#888888'));
-    back.on('pointerout',  () => back.setColor('#444444'));
+    back.on('pointerover', () => back.setColor('#cccccc'));
+    back.on('pointerout',  () => back.setColor('#ffffff'));
     back.on('pointerdown', () => this.scene.start('ModeSelectScene'));
   }
 
   private addPullButton(x: number, y: number, label: string, cost: string, type: 'single' | 'multi') {
-    const btn = this.add.rectangle(x, y, 300, 58, 0x080818)
-      .setStrokeStyle(1, 0x00ff41, 0.7)
+    const accentColor = type === 'single' ? 0xddaa00 : 0x7b2fff;
+    const accentHex   = type === 'single' ? '#ddaa00' : '#aa88ff';
+
+    const btn = this.add.rectangle(x, y, 310, 52, 0x000000, 0.72)
+      .setStrokeStyle(1.5, accentColor)
       .setInteractive({ useHandCursor: true });
 
-    this.add.text(x, y - 10, label, {
-      fontSize: '20px', color: '#00ff41', fontStyle: 'bold', fontFamily: 'monospace',
+    this.add.text(x, y - 9, label, {
+      fontSize: '20px', color: '#ffffff', fontStyle: 'bold',
     }).setOrigin(0.5);
-    this.add.text(x, y + 12, cost, {
-      fontSize: '12px', color: '#337733', fontFamily: 'monospace',
+    this.add.text(x, y + 13, cost, {
+      fontSize: '12px', color: accentHex,
     }).setOrigin(0.5);
 
-    btn.on('pointerover', () => btn.setFillStyle(0x081808));
-    btn.on('pointerout',  () => btn.setFillStyle(0x080818));
+    btn.on('pointerover', () => btn.setStrokeStyle(2.5, accentColor));
+    btn.on('pointerout',  () => btn.setStrokeStyle(1.5, accentColor));
     btn.on('pointerdown', () => this.startPull(type));
   }
 
@@ -117,25 +168,36 @@ export default class GachaScene extends Phaser.Scene {
 
   private async startPull(type: 'single' | 'multi') {
     const cost = type === 'multi' ? 900 : 100;
+    if (this.skorBalance < 0) {
+      const errMsg = this.add.text(200, 370, '잔액 확인 중... 잠시 후 다시 시도하세요', {
+        fontSize: '13px', color: '#ffaa44',
+        stroke: '#000000', strokeThickness: 3,
+        backgroundColor: '#00000099',
+        padding: { x: 10, y: 5 },
+      }).setOrigin(0.5);
+      this.time.delayedCall(2000, () => { if (errMsg.active) errMsg.destroy(); });
+      return;
+    }
     if (this.skorBalance < cost) {
-      await this.typeLines([
-        `> ERR: INSUFFICIENT SKOR`,
-        `> HAVE ${Math.floor(this.skorBalance)} / NEED ${cost}`,
-      ], 30);
+      const errMsg = this.add.text(200, 370, `SKOR 부족  (보유 ${Math.floor(this.skorBalance)} / 필요 ${cost})`, {
+        fontSize: '13px', color: '#ff5555',
+        stroke: '#000000', strokeThickness: 3,
+        backgroundColor: '#00000099',
+        padding: { x: 10, y: 5 },
+      }).setOrigin(0.5);
+      this.time.delayedCall(2200, () => { if (errMsg.active) errMsg.destroy(); });
       return;
     }
 
     this.clearUI();
-    this.add.rectangle(200, 300, 400, 600, 0x000000);
-    this.drawTerminalChrome();
 
     const count = type === 'multi' ? 10 : 1;
 
     try {
-      // 터미널 애니메이션과 서버 호출을 병렬로 실행
+      // ① 영상(6초) + API 호출 병렬 실행 — 영상 보는 동안 응답 대기
       const [result] = await Promise.all([
         gachaPull(type),
-        this.runTerminalAnimation(count),
+        this.playCommonVideo(),
       ]);
 
       if (!this.scene.isActive()) return;
@@ -146,10 +208,15 @@ export default class GachaScene extends Phaser.Scene {
       // 신규 캐릭터 localStorage 동기화
       result.characters.filter(c => c.isNew).forEach(c => addOwnedCharacter(c.id));
 
-      // 캐릭터별 개인 영상 동적 로드
-      await this.loadCharVideos(result.characters.map(c => c.id));
+      // ② 터미널 애니메이션 (UR이면 중반부터 빨간 에러 스타일로 전환)
+      const isUR = result.video === 'red'
+      this.clearUI();
+      this.add.rectangle(200, 300, 400, 600, 0x000000);
+      this.drawTerminalChrome(false); // 항상 초록으로 시작
+      await this.runTerminalAnimation(count, isUR);
 
-      await this.playCommonVideo(result.video);
+      // ③ 캐릭터별 개인 영상 동적 로드 → 리빌
+      await this.loadCharVideos(result.characters.map(c => c.id));
 
       this.revealIndex = 0;
       this.showNextReveal();
@@ -163,27 +230,73 @@ export default class GachaScene extends Phaser.Scene {
     }
   }
 
-  private async runTerminalAnimation(count: number): Promise<void> {
-    await this.typeLines([
-      `> EXECUTE entity_summon(n=${count})`,
-      '> Establishing connection...',
-    ], 42);
-    await this.progressBar(700);
-    await this.typeLines([
-      '> CONN: OK  [sec-layer bypassed]',
-      '> Scanning entity pool...',
-    ], 40);
-    await this.progressBar(600);
-    await this.typeLines([
-      '> Anomaly detected in sector 7',
-      '> Overriding...',
-    ], 42);
-    await this.progressBar(800);
-    await this.typeLines([
-      `> ${count} ENTR${count > 1 ? 'IES' : 'Y'} LOCKED`,
-      '> EXTRACTING . . .',
-    ], 48);
-    await this.sleep(400);
+  private async runTerminalAnimation(count: number, isUR = false): Promise<void> {
+    if (isUR) {
+      const red = '#ff3333';
+      // 초반: 정상처럼 초록으로 시작
+      await this.typeLines([
+        `> EXECUTE entity_summon(n=${count})`,
+        '> Establishing connection...',
+      ], 18);
+      await this.progressBar(400);
+      await this.typeLines([
+        '> CONN: OK  [sec-layer bypassed]',
+        '> Scanning entity pool...',
+      ], 16);
+      await this.progressBar(350);
+      // 이상 감지 시점부터 빨간색으로 전환
+      await this.typeLines([
+        '> [WARN] Anomaly detected',
+        '> [ERR]  Containment failure',
+      ], 18, red);
+      await this.progressBar(450, red);
+      await this.typeLines([
+        '> [CRIT] Unknown entity detected',
+        `> [!!!]  ${count} ENTR${count > 1 ? 'IES' : 'Y'} ESCAPED CONTAINMENT`,
+        '> EMERGENCY EXTRACTION . . .',
+      ], 20, red);
+    } else {
+      await this.typeLines([
+        `> EXECUTE entity_summon(n=${count})`,
+        '> Establishing connection...',
+      ], 18);
+      await this.progressBar(400);
+      await this.typeLines([
+        '> CONN: OK  [sec-layer bypassed]',
+        '> Scanning entity pool...',
+      ], 16);
+      await this.progressBar(350);
+      await this.typeLines([
+        '> Anomaly detected in sector 7',
+        '> Overriding...',
+      ], 18);
+      await this.progressBar(450);
+      await this.typeLines([
+        `> ${count} ENTR${count > 1 ? 'IES' : 'Y'} LOCKED`,
+        '> EXTRACTING . . .',
+      ], 20);
+    }
+    await this.sleep(200);
+  }
+
+  /** 영상 원본 비율을 유지하면서 캔버스 안에 꽉 차게 (contain) */
+  private fitVideoToCanvas(vid: Phaser.GameObjects.Video, canvasW: number, canvasH: number) {
+    vid.setDisplaySize(canvasW, canvasH); // 초기값
+
+    const applyContain = () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const el: HTMLVideoElement | null = (vid as any).video ?? null;
+      const nw = el?.videoWidth  || 0;
+      const nh = el?.videoHeight || 0;
+      if (nw > 0 && nh > 0) {
+        const scale = Math.max(canvasW / nw, canvasH / nh);
+        vid.setDisplaySize(Math.round(nw * scale), Math.round(nh * scale));
+      }
+    };
+
+    vid.once('play', applyContain);
+    this.time.delayedCall(100, applyContain);
+    this.time.delayedCall(500, applyContain);
   }
 
   private loadCharVideos(ids: string[]): Promise<void> {
@@ -200,17 +313,18 @@ export default class GachaScene extends Phaser.Scene {
     });
   }
 
-  private playCommonVideo(videoType: 'green' | 'red'): Promise<void> {
+  private playCommonVideo(_videoType?: string): Promise<void> {
     return new Promise(resolve => {
+      const { width, height } = this.cameras.main;
       this.clearUI();
-      this.add.rectangle(200, 300, 400, 600, 0x000000);
+      this.add.rectangle(width / 2, height / 2, width, height, 0x000000);
 
-      const key = videoType === 'red' ? 'gatcha_red' : 'gatcha_green';
+      const key = 'gacha';
       if (!this.cache.video.exists(key)) { resolve(); return; }
 
-      const vid = this.add.video(200, 300, key);
-      vid.setDisplaySize(400, 600);
+      const vid = this.add.video(width / 2, height / 2, key);
       vid.play(false);
+      this.fitVideoToCanvas(vid, width, height);
       vid.on('complete', () => { vid.destroy(); resolve(); });
       this.time.delayedCall(12000, resolve); // 12초 failsafe
     });
@@ -229,14 +343,15 @@ export default class GachaScene extends Phaser.Scene {
     const pulled = this.pullResults[this.revealIndex];
     const def = getCharacterDef(pulled.id);
 
+    const { width, height } = this.cameras.main;
     this.clearUI();
-    this.add.rectangle(200, 300, 400, 600, 0x000000);
+    this.add.rectangle(width / 2, height / 2, width, height, 0x000000);
 
     const vidKey = `vid_${pulled.id}`;
     if (this.cache.video.exists(vidKey)) {
-      const vid = this.add.video(200, 300, vidKey);
-      vid.setDisplaySize(400, 600);
+      const vid = this.add.video(width / 2, height / 2, vidKey);
       vid.play(false);
+      this.fitVideoToCanvas(vid, width, height);
 
       let proceeded = false;
       const proceed = () => {
@@ -268,7 +383,7 @@ export default class GachaScene extends Phaser.Scene {
 
     // 캐릭터 이미지
     const img = this.add.image(200, 240, def.imageKey).setAlpha(0);
-    img.setDisplaySize(165, 205);
+    img.setDisplaySize(130, 205);
     this.tweens.add({
       targets: img, alpha: 1, y: { from: 268, to: 240 },
       duration: 500, ease: 'Back.easeOut', delay: 150,
@@ -370,7 +485,7 @@ export default class GachaScene extends Phaser.Scene {
       const gColorInt = parseInt(def.gradeColor.replace('#', ''), 16);
 
       const bg  = this.add.rectangle(x, y, cardW, cardH, 0x111122).setStrokeStyle(1, gColorInt).setAlpha(0);
-      const img = this.add.image(x, y - 8, def.imageKey).setDisplaySize(cardW - 8, cardH - 22).setAlpha(0);
+      const img = this.add.image(x, y - 8, def.imageKey).setDisplaySize(cardW - 19, cardH - 22).setAlpha(0);
       const nm  = this.add.text(x, y + cardH / 2 - 10, def.name, { fontSize: '9px', color: '#cccccc' }).setOrigin(0.5).setAlpha(0);
 
       if (pulled.isNew) {
@@ -420,26 +535,26 @@ export default class GachaScene extends Phaser.Scene {
     this.terminalTexts = [];
   }
 
-  private typeLines(lines: string[], delay = 40): Promise<void> {
+  private typeLines(lines: string[], delay = 40, color = '#00ff41'): Promise<void> {
     return lines.reduce(
-      (p, line) => p.then(() => this.typeLine(line, delay)),
+      (p, line) => p.then(() => this.typeLine(line, delay, color)),
       Promise.resolve()
     );
   }
 
-  private typeLine(text: string, charDelay = 40): Promise<void> {
+  private typeLine(text: string, charDelay = 40, color = '#00ff41'): Promise<void> {
     return new Promise(resolve => {
       if (!this.scene.isActive()) { resolve(); return; }
 
-      // 최대 9줄 유지 (스크롤 효과)
-      if (this.terminalTexts.length >= 9) {
+      // 최대 6줄 유지 (스크롤 효과)
+      if (this.terminalTexts.length >= 6) {
         this.terminalTexts.shift()?.destroy();
-        this.terminalTexts.forEach((t, i) => t.setY(42 + i * 26));
+        this.terminalTexts.forEach((t, i) => t.setY(276 + i * 22));
       }
 
-      const y = 42 + this.terminalTexts.length * 26;
+      const y = 276 + this.terminalTexts.length * 22;
       const t = this.add.text(24, y, '', {
-        fontSize: '13px', color: '#00ff41', fontFamily: 'monospace',
+        fontSize: '13px', color, fontFamily: 'monospace',
       });
       this.terminalTexts.push(t);
 
@@ -457,18 +572,18 @@ export default class GachaScene extends Phaser.Scene {
     });
   }
 
-  private progressBar(duration: number): Promise<void> {
+  private progressBar(duration: number, color = '#00ff41'): Promise<void> {
     return new Promise(resolve => {
       if (!this.scene.isActive()) { resolve(); return; }
 
-      if (this.terminalTexts.length >= 9) {
+      if (this.terminalTexts.length >= 6) {
         this.terminalTexts.shift()?.destroy();
-        this.terminalTexts.forEach((t, i) => t.setY(42 + i * 26));
+        this.terminalTexts.forEach((t, i) => t.setY(276 + i * 22));
       }
 
-      const y = 42 + this.terminalTexts.length * 26;
+      const y = 276 + this.terminalTexts.length * 22;
       const bar = this.add.text(24, y, '> [          ]  0%', {
-        fontSize: '13px', color: '#00ff41', fontFamily: 'monospace',
+        fontSize: '13px', color, fontFamily: 'monospace',
       });
       this.terminalTexts.push(bar);
 

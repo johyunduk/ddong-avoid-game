@@ -46,8 +46,21 @@ export async function submitSkor(data: SkorSubmitData): Promise<SkorSubmitRespon
   return result as SkorSubmitResponse;
 }
 
+const SKOR_BALANCE_CACHE_KEY = 'skorBalanceCache';
+
+/** 마지막으로 알고 있는 SKOR 잔액을 로컬에서 즉시 반환 (없으면 null) */
+export function getCachedSkorBalance(): number | null {
+  const raw = localStorage.getItem(SKOR_BALANCE_CACHE_KEY);
+  return raw !== null ? Number(raw) : null;
+}
+
+/** SKOR 잔액을 로컬에 캐싱 */
+export function cacheSkorBalance(balance: number): void {
+  localStorage.setItem(SKOR_BALANCE_CACHE_KEY, String(Math.floor(balance)));
+}
+
 /**
- * 현재 SKOR 잔액 조회
+ * 현재 SKOR 잔액 조회 (DB) 후 캐시 갱신
  */
 export async function getSkorBalance(): Promise<number> {
   const { data } = await supabase
@@ -55,5 +68,7 @@ export async function getSkorBalance(): Promise<number> {
     .select('balance')
     .maybeSingle(); // 행이 없으면 null 반환 (신규 유저 처리)
 
-  return (data?.balance as number) ?? 0;
+  const balance = (data?.balance as number) ?? 0;
+  cacheSkorBalance(balance);
+  return balance;
 }
