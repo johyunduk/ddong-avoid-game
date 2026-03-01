@@ -100,7 +100,7 @@ export default class CharacterSelectScene extends Phaser.Scene {
 
     // 캐릭터 이미지
     const img = this.add.image(x, y - 12, char.imageKey);
-    img.setDisplaySize(70, 85);
+    img.setDisplaySize(58, 85);
 
     if (!isOwned) {
       // 미보유: 실루엣 처리

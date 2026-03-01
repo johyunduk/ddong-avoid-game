@@ -28,6 +28,7 @@ export default class GachaScene extends Phaser.Scene {
   private pullResults: PulledCharacter[] = [];
   private revealIndex = 0;
   private terminalTexts: Phaser.GameObjects.Text[] = [];
+  private skipTerminal = false;
 
   constructor() {
     super('GachaScene');
@@ -48,6 +49,10 @@ export default class GachaScene extends Phaser.Scene {
     const bannerDef = CHARACTERS.find(c => c.id === CURRENT_BANNER.characterId);
     if (bannerDef && !this.textures.exists(bannerDef.illustKey)) {
       this.load.image(bannerDef.illustKey, bannerDef.illustPath);
+    }
+    // 리빌 화면 공통 배경
+    if (!this.textures.exists('gacha_background')) {
+      this.load.image('gacha_background', 'assets/backgrounds/gacha_background.webp');
     }
   }
 
@@ -210,10 +215,13 @@ export default class GachaScene extends Phaser.Scene {
 
       // ② 터미널 애니메이션 (UR이면 중반부터 빨간 에러 스타일로 전환)
       const isUR = result.video === 'red'
+      this.skipTerminal = false;
       this.clearUI();
       this.add.rectangle(200, 300, 400, 600, 0x000000);
       this.drawTerminalChrome(false); // 항상 초록으로 시작
+      this.addSkipButton(() => { this.skipTerminal = true; });
       await this.runTerminalAnimation(count, isUR);
+      this.skipTerminal = false;
 
       // ③ 캐릭터별 개인 영상 동적 로드 → 리빌
       await this.loadCharVideos(result.characters.map(c => c.id));
@@ -345,7 +353,6 @@ export default class GachaScene extends Phaser.Scene {
 
     const { width, height } = this.cameras.main;
     this.clearUI();
-    this.add.rectangle(width / 2, height / 2, width, height, 0x000000);
 
     const vidKey = `vid_${pulled.id}`;
     if (this.cache.video.exists(vidKey)) {
@@ -362,6 +369,18 @@ export default class GachaScene extends Phaser.Scene {
         this.showRevealCard(pulled, def);
       };
 
+      this.addSkipButton(() => {
+        if (proceeded) return;
+        proceeded = true;
+        this.input.off('pointerdown', proceed);
+        if (vid.active) vid.destroy();
+        // 10연차: 영상 스킵 시 남은 리빌 전체 건너뛰고 결과 화면으로
+        if (this.pullResults.length > 1) {
+          this.showSummary();
+        } else {
+          this.showRevealCard(pulled, def);
+        }
+      });
       vid.on('complete', proceed);
       this.time.delayedCall(10000, proceed); // failsafe
       this.input.once('pointerdown', proceed); // 탭으로 스킵
@@ -373,11 +392,24 @@ export default class GachaScene extends Phaser.Scene {
   private showRevealCard(pulled: PulledCharacter, def: CharacterDef) {
     const gColor = GRADE_COLORS[pulled.grade] ?? 0xffffff;
 
-    // 배경 글로우
-    const glow = this.add.circle(200, 255, 150, gColor, 0.07).setAlpha(0);
+    // ── 배경: 사이버 우주 이미지 + 등급 컬러 헤이즈 ──
+    if (this.textures.exists('gacha_background')) {
+      const bg = this.add.image(200, 300, 'gacha_background');
+      bg.setDisplaySize(400, 600);
+    } else {
+      this.add.rectangle(200, 300, 400, 600, 0x050510);
+    }
+    // 어두운 오버레이 (가독성 확보)
+    this.add.rectangle(200, 300, 400, 600, 0x000000, 0.5);
+    // 등급 컬러 헤이즈 (중앙 중심 방사)
+    this.add.circle(200, 260, 200, gColor, 0.08);
+    this.add.circle(200, 260, 120, gColor, 0.06);
+
+    // 배경 글로우 (캐릭터 뒤 빛)
+    const glow = this.add.circle(200, 255, 150, gColor, 0.0).setAlpha(0);
     this.tweens.add({
-      targets: glow, alpha: 0.12,
-      scaleX: { from: 0.3, to: 1.15 }, scaleY: { from: 0.3, to: 1.15 },
+      targets: glow, alpha: 1,
+      scaleX: { from: 0.3, to: 1.3 }, scaleY: { from: 0.3, to: 1.3 },
       duration: 600, ease: 'Back.easeOut',
     });
 
@@ -462,7 +494,12 @@ export default class GachaScene extends Phaser.Scene {
 
   private showSummary() {
     this.clearUI();
-    this.add.rectangle(200, 300, 400, 600, 0x060612);
+    if (this.textures.exists('gacha_background')) {
+      this.add.image(200, 300, 'gacha_background').setDisplaySize(400, 600);
+    } else {
+      this.add.rectangle(200, 300, 400, 600, 0x060612);
+    }
+    this.add.rectangle(200, 300, 400, 600, 0x000000, 0.55);
 
     this.add.text(200, 38, '[ EXTRACTION COMPLETE ]', {
       fontSize: '17px', color: '#00ff41', fontStyle: 'bold', fontFamily: 'monospace',
@@ -499,14 +536,14 @@ export default class GachaScene extends Phaser.Scene {
 
     // 잔여 SKOR
     const skorY = total > 5 ? 350 : 340;
-    this.add.text(200, skorY, `> 잔여 SKOR: ${Math.floor(this.remainingSkor)}`, {
-      fontSize: '14px', color: '#337733', fontFamily: 'monospace',
+    this.add.text(200, skorY, `잔여 SKOR: ${Math.floor(this.remainingSkor)}`, {
+      fontSize: '14px', color: '#00ff41', fontFamily: 'monospace',
     }).setOrigin(0.5);
 
     // 한 번 더 / 메인으로 버튼
     const againBtn = this.add.rectangle(200, 445, 260, 52, 0x080818)
       .setStrokeStyle(1, 0x00ff41).setInteractive({ useHandCursor: true });
-    this.add.text(200, 445, '> 한 번 더', {
+    this.add.text(200, 445, '한 번 더', {
       fontSize: '19px', color: '#00ff41', fontStyle: 'bold', fontFamily: 'monospace',
     }).setOrigin(0.5);
     againBtn.on('pointerover', () => againBtn.setFillStyle(0x081808));
@@ -515,7 +552,7 @@ export default class GachaScene extends Phaser.Scene {
 
     const mainBtn = this.add.rectangle(200, 525, 260, 52, 0x1a1a1a)
       .setStrokeStyle(1, 0x444444).setInteractive({ useHandCursor: true });
-    this.add.text(200, 525, '← 메인으로', {
+    this.add.text(200, 525, '메인으로', {
       fontSize: '19px', color: '#888888', fontStyle: 'bold', fontFamily: 'monospace',
     }).setOrigin(0.5);
     mainBtn.on('pointerover', () => mainBtn.setFillStyle(0x282828));
@@ -526,6 +563,18 @@ export default class GachaScene extends Phaser.Scene {
   // ═══════════════════════════════════════════════════
   // 터미널 헬퍼
   // ═══════════════════════════════════════════════════
+
+  private addSkipButton(onClick: () => void) {
+    this.add.rectangle(363, 28, 88, 30, 0x000000, 0.6)
+      .setInteractive()
+      .on('pointerdown', onClick);
+    const txt = this.add.text(363, 28, 'SKIP  ▶▶', {
+      fontSize: '12px', color: '#777777', fontFamily: 'monospace',
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+    txt.on('pointerover', () => txt.setColor('#cccccc'));
+    txt.on('pointerout',  () => txt.setColor('#777777'));
+    txt.on('pointerdown', onClick);
+  }
 
   private clearUI() {
     this.tweens.killAll();
@@ -544,7 +593,7 @@ export default class GachaScene extends Phaser.Scene {
 
   private typeLine(text: string, charDelay = 40, color = '#00ff41'): Promise<void> {
     return new Promise(resolve => {
-      if (!this.scene.isActive()) { resolve(); return; }
+      if (!this.scene.isActive() || this.skipTerminal) { resolve(); return; }
 
       // 최대 6줄 유지 (스크롤 효과)
       if (this.terminalTexts.length >= 6) {
@@ -563,7 +612,7 @@ export default class GachaScene extends Phaser.Scene {
         delay: charDelay,
         repeat: text.length,
         callback: () => {
-          if (!this.scene.isActive()) { ev.destroy(); resolve(); return; }
+          if (!this.scene.isActive() || this.skipTerminal) { ev.destroy(); resolve(); return; }
           t.setText(text.substring(0, i + 1));
           i++;
           if (i > text.length) { ev.destroy(); resolve(); }
@@ -574,7 +623,7 @@ export default class GachaScene extends Phaser.Scene {
 
   private progressBar(duration: number, color = '#00ff41'): Promise<void> {
     return new Promise(resolve => {
-      if (!this.scene.isActive()) { resolve(); return; }
+      if (!this.scene.isActive() || this.skipTerminal) { resolve(); return; }
 
       if (this.terminalTexts.length >= 6) {
         this.terminalTexts.shift()?.destroy();
@@ -595,7 +644,7 @@ export default class GachaScene extends Phaser.Scene {
         callback: () => {
           step++;
           bar.setText(`> [${'█'.repeat(step)}${' '.repeat(steps - step)}] ${step * 10}%`);
-          if (step >= steps) { ev.destroy(); resolve(); }
+          if (this.skipTerminal || step >= steps) { ev.destroy(); resolve(); }
         },
       });
     });
@@ -603,7 +652,7 @@ export default class GachaScene extends Phaser.Scene {
 
   private sleep(ms: number): Promise<void> {
     return new Promise(resolve => {
-      if (!this.scene.isActive()) { resolve(); return; }
+      if (!this.scene.isActive() || this.skipTerminal) { resolve(); return; }
       this.time.delayedCall(ms, resolve);
     });
   }

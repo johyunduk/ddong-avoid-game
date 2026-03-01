@@ -58,8 +58,7 @@ export default class GameScene extends Phaser.Scene {
   private feverTimeColorOffset: number = 0; // 무지개 색상 회전 오프셋
   private feverTimeColorTimer!: Phaser.Time.TimerEvent; // 색상 애니메이션 타이머
   private lastFeverTimeScore: number = 0; // 마지막 피버 타임 발동 점수
-  private isMinerPlayer: boolean = false; // 광부 캐릭터 선택 여부
-  private isMaehwaPlayer: boolean = false; // 매화검수 캐릭터 선택 여부
+  private selectedCharId: string = 'chibi'; // 선택된 캐릭터 ID
 
   constructor() {
     super('GameScene');
@@ -86,13 +85,8 @@ export default class GameScene extends Phaser.Scene {
     this.isFeverTime = false;
     this.feverTimeRemaining = 0;
     this.lastFeverTimeScore = 0;
-    this.isMinerPlayer = false; // Initialize to false
-    this.isMaehwaPlayer = false;
-
     // 캐릭터 선택 화면에서 저장한 캐릭터를 사용
-    const selectedChar = getSelectedCharacter();
-    if (selectedChar === 'miner') this.isMinerPlayer = true;
-    if (selectedChar === 'maehwa') this.isMaehwaPlayer = true;
+    this.selectedCharId = getSelectedCharacter();
 
     // ModeSelectScene/DifficultySelectScene으로부터 게임 모드와 난이도를 받음
     if (data.gameMode) {
@@ -131,16 +125,14 @@ export default class GameScene extends Phaser.Scene {
       }
 
       // Player assets for Classic mode
-      if (this.isMinerPlayer) {
-        if (!this.textures.exists('miner_front')) this.load.image('miner_front', 'assets/players/miner_front.webp');
-        if (!this.textures.exists('miner_left')) this.load.image('miner_left', 'assets/players/miner_left.webp');
-        if (!this.textures.exists('miner_right')) this.load.image('miner_right', 'assets/players/miner_right.webp');
-      }
-      if (this.isMaehwaPlayer) {
-        if (!this.textures.exists('maehwa_front')) this.load.image('maehwa_front', 'assets/players/maehwa_front.webp');
-        if (!this.textures.exists('maehwa_left')) this.load.image('maehwa_left', 'assets/players/maehwa_left.webp');
-        if (!this.textures.exists('maehwa_right')) this.load.image('maehwa_right', 'assets/players/maehwa_right.webp');
-      } else { // Chibi player
+      const CHARS_WITH_SPRITES = ['miner', 'maehwa', 'hacker', 'archieve', 'glitch', 'noise', 'sentinel'];
+      if (CHARS_WITH_SPRITES.includes(this.selectedCharId)) {
+        const p = `${this.selectedCharId}_`;
+        if (!this.textures.exists(`${p}front`)) this.load.image(`${p}front`, `assets/players/${p}front.webp`);
+        if (!this.textures.exists(`${p}left`)) this.load.image(`${p}left`, `assets/players/${p}left.webp`);
+        if (!this.textures.exists(`${p}right`)) this.load.image(`${p}right`, `assets/players/${p}right.webp`);
+      } else {
+        // chibi (기본) 또는 플레이어 스프라이트가 없는 UR 캐릭터 → 치비로 fallback
         if (!this.textures.exists('front')) this.load.image('front', 'assets/players/chibi_front.webp');
         if (!this.textures.exists('left')) this.load.image('left', 'assets/players/chibi_left.webp');
         if (!this.textures.exists('right')) this.load.image('right', 'assets/players/chibi_right.webp');
@@ -253,13 +245,12 @@ export default class GameScene extends Phaser.Scene {
     this.physics.world.setBounds(15, 0, 370, 600);
 
     // 플레이어 생성 (난이도별 속도 적용, 게임 모드별 스프라이트)
+    const CHARS_WITH_SPRITES = ['miner', 'maehwa', 'hacker', 'archieve', 'glitch', 'noise', 'sentinel'];
     let playerTexturePrefix = '';
     if (this.gameMode === GameMode.ITEM) {
       playerTexturePrefix = 'astronaut_';
-    } else if (this.gameMode === GameMode.CLASSIC && this.isMinerPlayer) {
-      playerTexturePrefix = 'miner_';
-    } else if (this.gameMode === GameMode.CLASSIC && this.isMaehwaPlayer) {
-      playerTexturePrefix = 'maehwa_';
+    } else if (this.gameMode === GameMode.CLASSIC && CHARS_WITH_SPRITES.includes(this.selectedCharId)) {
+      playerTexturePrefix = `${this.selectedCharId}_`;
     }
     this.player = new Player(this, 200, 520, this.difficultyConfig.playerSpeed, playerTexturePrefix);
 
@@ -724,7 +715,7 @@ export default class GameScene extends Phaser.Scene {
         }
 
         // 광부 캐릭터 선택 시 100점마다 무지개똥 생성 (100, 200, 300, ...)
-        if (this.isMinerPlayer && score % 200 === 0 && score > this.lastRainbowPoopScore) {
+        if (this.selectedCharId === 'miner' && score % 200 === 0 && score > this.lastRainbowPoopScore) {
           this.spawnRainbowPoop();
           this.lastRainbowPoopScore = score;
         }
