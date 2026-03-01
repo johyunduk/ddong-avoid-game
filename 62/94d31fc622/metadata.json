@@ -1,0 +1,33 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "6294d31fc622",
+  "strategy": "manual-commit",
+  "branch": "dev",
+  "checkpoints_count": 12,
+  "files_touched": [
+    "public/assets/backgrounds/gacha_background.webp",
+    "public/assets/players/sentinel_front.webp",
+    "public/assets/players/sentinel_left.webp",
+    "public/assets/players/sentinel_right.webp",
+    "src/scenes/CharacterSelectScene.ts",
+    "src/scenes/GachaScene.ts",
+    "src/scenes/GameScene.ts",
+    "src/utils/character.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/62/94d31fc622/0/metadata.json",
+      "transcript": "/62/94d31fc622/0/full.jsonl",
+      "context": "/62/94d31fc622/0/context.md",
+      "content_hash": "/62/94d31fc622/0/content_hash.txt",
+      "prompt": "/62/94d31fc622/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 18480,
+    "cache_creation_tokens": 3285978,
+    "cache_read_tokens": 102408089,
+    "output_tokens": 389234,
+    "api_call_count": 995
+  }
+}
