@@ -18,11 +18,6 @@ export const GAME_MODES: GameModeConfig[] = [
     mode: GameMode.CLASSIC,
     name: '클래식 모드',
     description: '떨어지는 똥을 피하세요!'
-  },
-  {
-    mode: GameMode.GACHA,
-    name: '캐릭터 뽑기',
-    description: '코인을 모아 캐릭터를 뽑으세요!'
   }
 ];
 

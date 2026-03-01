@@ -12,6 +12,8 @@ import { FEVER_TIME_CONFIG } from '../config/feverTime';
 import { POOP_CONFIG } from '../config/poop';
 import { getHighScore, updateHighScore } from '../utils/localStorage';
 import { submitScore, getUserInitials, setUserInitials } from '../utils/leaderboard';
+import { submitSkor, type SkorSubmitResponse } from '../utils/skor';
+import { getSelectedCharacter } from '../utils/character';
 import { isChristmasSeason } from '../utils/seasonChecker';
 
 export default class GameScene extends Phaser.Scene {
@@ -85,18 +87,12 @@ export default class GameScene extends Phaser.Scene {
     this.feverTimeRemaining = 0;
     this.lastFeverTimeScore = 0;
     this.isMinerPlayer = false; // Initialize to false
-    this.isMaehwaPlayer = false; // Initialize to false
+    this.isMaehwaPlayer = false;
 
-    // Randomly select special player for Classic mode
-    if (data.gameMode === GameMode.CLASSIC) {
-      if (Math.random() < 0.2) { // 20% 확률로 특수 캐릭터
-        if (Math.random() < 0.2) { // 그 중 20% 확률로 매화검수 (전체 4%)
-          this.isMaehwaPlayer = true;
-        } else { // 나머지 80% 확률로 광부 (전체 16%)
-          this.isMinerPlayer = true;
-        }
-      }
-    }
+    // 캐릭터 선택 화면에서 저장한 캐릭터를 사용
+    const selectedChar = getSelectedCharacter();
+    if (selectedChar === 'miner') this.isMinerPlayer = true;
+    if (selectedChar === 'maehwa') this.isMaehwaPlayer = true;
 
     // ModeSelectScene/DifficultySelectScene으로부터 게임 모드와 난이도를 받음
     if (data.gameMode) {
@@ -1262,6 +1258,18 @@ export default class GameScene extends Phaser.Scene {
     // 반투명 검정 배경 추가 (가독성 향상)
     this.add.rectangle(200, 300, 400, 600, 0x000000, 0.7).setDepth(200);
 
+    // SKOR 제출 (백그라운드, 모든 모드에서 실행)
+    // 새 기록 시: 이니셜 입력 영역(y≈380) 아래에 배치 / 일반 시: 개인최고(y≈320) 아래에 배치
+    const skorStatusY = isNewRecord ? 418 : 380;
+    const skorStatusText = this.add.text(200, skorStatusY, '💰 SKOR 정제 중...', {
+      fontSize: '16px',
+      color: '#aaaaaa',
+      stroke: '#000',
+      strokeThickness: 2,
+    }).setOrigin(0.5).setDepth(200);
+
+    this.submitSkorOnGameOver(skorStatusText);
+
     if (isNewRecord) {
       // === 새 기록 달성 시: 상단에 배치 ===
       // 게임 오버 타이틀
@@ -1322,7 +1330,7 @@ export default class GameScene extends Phaser.Scene {
       }).setOrigin(0.5).setDepth(200);
 
       // 재시작 안내
-      this.showRestartButton();
+      this.showRestartButton(false);
     }
   }
 
@@ -1438,10 +1446,7 @@ export default class GameScene extends Phaser.Scene {
 
       try {
         // 캐릭터 타입 결정
-        let characterType = 'chibi';
-        if (this.gameMode === GameMode.ITEM) characterType = 'astronaut';
-        else if (this.isMaehwaPlayer) characterType = 'maehwa';
-        else if (this.isMinerPlayer) characterType = 'miner';
+        const characterType = getSelectedCharacter();
 
         const result = await submitScore(
           this.score,
@@ -1488,7 +1493,7 @@ export default class GameScene extends Phaser.Scene {
       }
 
       // 재시작 버튼 표시
-      this.showRestartButton();
+      this.showRestartButton(true);
     });
 
     // Enter 키로도 제출 가능
@@ -1500,17 +1505,93 @@ export default class GameScene extends Phaser.Scene {
   }
 
   /**
-   * 재시작 버튼 표시 (다시 하기 + 메인 메뉴) - 버튼 스타일
+   * 게임오버 시 SKOR 정제 수익 제출 및 화면 표시
    */
-  private showRestartButton() {
+  /** 점수 브래킷별 게임당 SKOR 상한 (서버와 동일) */
+  private getSkorBracketCap(score: number): number {
+    if (score < 1000) return 8;
+    if (score < 2000) return 14;
+    if (score < 3000) return 18;
+    return 22;
+  }
+
+  private async submitSkorOnGameOver(statusText: Phaser.GameObjects.Text) {
+    // ── 낙관적 UI: 서버 응답 전에 예상 SKOR 즉시 계산 ──
+    const rawSkor =
+      this.goldCollected * 0.1 +
+      this.diamondCollected * 0.3 +
+      this.topazCollected * 0.7 +
+      this.rainbowCollected * 2.0;
+    const estimatedSkor = Math.floor(Math.min(rawSkor, this.getSkorBracketCap(this.score)));
+
+    // floor 후 0이면 API 호출 없이 즉시 종료 (퀘스트 진행도도 없음)
+    if (estimatedSkor <= 0) {
+      statusText.setText('💰 +0 SKOR (아이템 없음)');
+      statusText.setColor('#888888');
+      return;
+    }
+
+    statusText.setText(`💰 +${estimatedSkor} SKOR 획득!`);
+    statusText.setColor('#FFD700');
+
+    // ── 백그라운드 API 호출: 실제 결과로 보정 ──
+    try {
+      const result: SkorSubmitResponse = await submitSkor({
+        score: this.score,
+        goldCollected: this.goldCollected,
+        diamondCollected: this.diamondCollected,
+        topazCollected: this.topazCollected,
+        rainbowCollected: this.rainbowCollected,
+      });
+
+      if (!this.scene.isActive()) return;
+
+      // 주간 캡 소진 또는 실제값이 예상과 다른 경우만 갱신
+      if (result.weeklyCapRemaining <= 0 && result.totalSkorAdded === 0) {
+        statusText.setText(`💰 주간 한도 도달 (SKOR 없음)`);
+        statusText.setColor('#888888');
+      } else if (result.totalSkorAdded !== estimatedSkor) {
+        statusText.setText(`💰 +${result.totalSkorAdded} SKOR 획득!`);
+      }
+
+      // 퀘스트 달성 시 추가 알림 (항상 표시)
+      if (result.questRewards.length > 0) {
+        const questLabels: Record<string, string> = {
+          gold: '금똥', diamond: '다이아', topaz: '토파즈', rainbow: '무지개',
+        };
+        const questText = result.questRewards
+          .map(r => `${questLabels[r.quest] ?? r.quest} 퀘스트 +${r.reward}`)
+          .join(' / ');
+        this.add.text(200, statusText.y + 23, `🎯 ${questText}`, {
+          fontSize: '13px',
+          color: '#88ff88',
+          stroke: '#000',
+          strokeThickness: 2,
+        }).setOrigin(0.5).setDepth(200);
+      }
+    } catch {
+      // 실패해도 낙관적으로 보여준 숫자 유지 (정제 결과는 서버에서 처리됨)
+    }
+  }
+
+  /**
+   * 재시작 버튼 표시 (다시 하기 + 메인 메뉴) - 버튼 스타일
+   * @param isNewRecord 새 기록 달성 여부 (SKOR 텍스트 위치에 따라 버튼 y 조정)
+   */
+  private showRestartButton(isNewRecord = false) {
+    // 새 기록 시: SKOR 텍스트(y≈418) + 퀘스트(y≈441) 아래 배치
+    // 일반 시: SKOR 텍스트(y≈380) + 퀘스트(y≈403) 아래 배치
+    const retryY = isNewRecord ? 470 : 455;
+    const menuY  = isNewRecord ? 548 : 535;
+
     // 다시 하기 버튼 배경
-    const retryButtonBg = this.add.rectangle(200, 450, 250, 70, 0x00aa00)
+    const retryButtonBg = this.add.rectangle(200, retryY, 250, 70, 0x00aa00)
       .setOrigin(0.5)
       .setDepth(199)
       .setStrokeStyle(3, 0xffffff);
 
     // 다시 하기 버튼 텍스트
-    const retryButtonText = this.add.text(200, 450, '다시 하기', {
+    const retryButtonText = this.add.text(200, retryY, '다시 하기', {
       fontSize: '22px',
       color: '#ffffff',
       fontStyle: 'bold'
@@ -1520,13 +1601,13 @@ export default class GameScene extends Phaser.Scene {
     retryButtonBg.setInteractive({ useHandCursor: true });
 
     // 메인 메뉴 버튼 배경
-    const menuButtonBg = this.add.rectangle(200, 555, 250, 70, 0x555555)
+    const menuButtonBg = this.add.rectangle(200, menuY, 250, 70, 0x555555)
       .setOrigin(0.5)
       .setDepth(199)
       .setStrokeStyle(3, 0xffffff);
 
     // 메인 메뉴 버튼 텍스트
-    const menuButtonText = this.add.text(200, 555, '메인 메뉴', {
+    const menuButtonText = this.add.text(200, menuY, '메인 메뉴', {
       fontSize: '22px',
       color: '#ffffff',
       fontStyle: 'bold'

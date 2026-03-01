@@ -4,6 +4,8 @@ import DifficultySelectScene from './scenes/DifficultySelectScene';
 import GameScene from './scenes/GameScene';
 import LeaderboardScene from './scenes/LeaderboardScene';
 import ReleaseNotesScene from './scenes/ReleaseNotesScene';
+import CharacterSelectScene from './scenes/CharacterSelectScene';
+import GachaScene from './scenes/GachaScene';
 import { ensureLoggedIn } from './utils/auth';
 import './style.css';
 
@@ -21,7 +23,7 @@ const config: Phaser.Types.Core.GameConfig = {
       fixedStep: false
     }
   },
-  scene: [ModeSelectScene, DifficultySelectScene, GameScene, LeaderboardScene, ReleaseNotesScene],
+  scene: [ModeSelectScene, DifficultySelectScene, GameScene, LeaderboardScene, ReleaseNotesScene, CharacterSelectScene, GachaScene],
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH
