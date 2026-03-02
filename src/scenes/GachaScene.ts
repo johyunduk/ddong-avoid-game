@@ -22,6 +22,9 @@ const CURRENT_BANNER = {
   label: '신규 출시',
 };
 
+// 로비 슬라이드쇼 순서: UR 우선(sentinel → legacy), 이후 SR 순
+const SLIDESHOW_IDS = ['sentinel', 'legacy', 'hacker', 'miner', 'maehwa', 'archieve', 'glitch', 'noise'];
+
 export default class GachaScene extends Phaser.Scene {
   private skorBalance = 0;
   private remainingSkor = 0;
@@ -29,6 +32,17 @@ export default class GachaScene extends Phaser.Scene {
   private revealIndex = 0;
   private terminalTexts: Phaser.GameObjects.Text[] = [];
   private skipTerminal = false;
+
+  // ── 로비 슬라이드쇼 상태 ──
+  private slideshowIndex = 0;
+  private slideshowIsA = true; // true → bgA가 현재 레이어
+  private slideshowBgA: Phaser.GameObjects.Image | null = null;
+  private slideshowBgB: Phaser.GameObjects.Image | null = null;
+  private slideshowGradeText: Phaser.GameObjects.Text | null = null;
+  private slideshowNameText: Phaser.GameObjects.Text | null = null;
+  private slideshowBadgeBox: Phaser.GameObjects.Rectangle | null = null;
+  private slideshowBadgeTxt: Phaser.GameObjects.Text | null = null;
+  private slideshowActive = false;
 
   constructor() {
     super('GachaScene');
@@ -45,10 +59,12 @@ export default class GachaScene extends Phaser.Scene {
         this.load.image(c.imageKey, c.imagePath);
       }
     }
-    // 픽업 배너 캐릭터 일러스트
-    const bannerDef = CHARACTERS.find(c => c.id === CURRENT_BANNER.characterId);
-    if (bannerDef && !this.textures.exists(bannerDef.illustKey)) {
-      this.load.image(bannerDef.illustKey, bannerDef.illustPath);
+    // 슬라이드쇼 캐릭터 일러스트 전체 사전 로드
+    for (const id of SLIDESHOW_IDS) {
+      const def = CHARACTERS.find(c => c.id === id);
+      if (def && !this.textures.exists(def.illustKey)) {
+        this.load.image(def.illustKey, def.illustPath);
+      }
     }
     // 리빌 화면 공통 배경
     if (!this.textures.exists('gacha_background')) {
@@ -67,57 +83,116 @@ export default class GachaScene extends Phaser.Scene {
   // ═══════════════════════════════════════════════════
 
   private async buildLobby() {
+    this.slideshowActive = false;
     this.clearUI();
 
-    const bannerDef = getCharacterDef(CURRENT_BANNER.characterId);
-    const gradeColorInt = parseInt(bannerDef.gradeColor.replace('#', ''), 16);
+    this.slideshowIndex = 0;
+    this.slideshowIsA = true;
 
-    // ── 일러스트 배경 ──
-    const illust = this.add.image(200, 300, bannerDef.illustKey);
-    illust.setDisplaySize(400, 600);
+    const currentDef = getCharacterDef(SLIDESHOW_IDS[0]);
+    const gradeColorInt = parseInt(currentDef.gradeColor.replace('#', ''), 16);
 
-    // ── 하단 버튼 영역 그라데이션 (바닥에서 올라오는 어둠) ──
+    // ── 일러스트 배경 2레이어 (crossfade용) ──
+    // bgA: 처음엔 현재 일러스트 (alpha=1), bgB: 다음 일러스트 대기 (alpha=0)
+    this.slideshowBgA = this.add.image(200, 300, currentDef.illustKey).setDisplaySize(400, 600);
+    this.slideshowBgB = this.add.image(200, 300, currentDef.illustKey).setDisplaySize(400, 600).setAlpha(0);
+
+    // ── 하단 버튼 영역 그라데이션 ──
     const gradSteps = 14;
     for (let i = 0; i < gradSteps; i++) {
       this.add.rectangle(200, 600 - i * 22, 400, 22, 0x000000, (gradSteps - i) * 0.052);
     }
 
-    // ── 상단: 배너 배지 ──
-    this.add.rectangle(200, 36, 140, 30, 0x000000, 0.75)
+    // ── 상단: 배너 배지 (슬라이드마다 등급 색상 업데이트) ──
+    this.slideshowBadgeBox = this.add.rectangle(200, 36, 140, 30, 0x000000, 0.75)
       .setStrokeStyle(1.5, gradeColorInt);
-    this.add.text(200, 36, `✦  ${CURRENT_BANNER.label}  ✦`, {
-      fontSize: '13px', color: bannerDef.gradeColor, fontStyle: 'bold',
+    this.slideshowBadgeTxt = this.add.text(200, 36, `✦  ${CURRENT_BANNER.label}  ✦`, {
+      fontSize: '13px', color: currentDef.gradeColor, fontStyle: 'bold',
       stroke: '#000000', strokeThickness: 3,
     }).setOrigin(0.5);
 
-    // ── 캐릭터 등급 + 이름 ──
-    this.add.text(200, 220, bannerDef.grade, {
-      fontSize: '14px', color: bannerDef.gradeColor, fontStyle: 'bold',
-      letterSpacing: 6, stroke: '#000000', strokeThickness: 6,
+    // ── 캐릭터 등급 + 이름 — SKOR 잔액(y=408) 바로 위, 겹침 없도록 배치 ──
+    // grade(13px ≈ 16px high) y=344 → 336~352
+    // name (28px ≈ 34px high) y=374 → 357~391
+    // SKOR(15px)              y=408 → 399~417  (gap ≈ 8px)
+    this.slideshowGradeText = this.add.text(200, 344, currentDef.grade, {
+      fontSize: '13px', color: currentDef.gradeColor, fontStyle: 'bold',
+      letterSpacing: 6, stroke: '#000000', strokeThickness: 5,
     }).setOrigin(0.5);
 
-    this.add.text(200, 258, bannerDef.name, {
-      fontSize: '46px', color: '#ffffff', fontStyle: 'bold',
-      stroke: '#000000', strokeThickness: 10,
+    this.slideshowNameText = this.add.text(200, 374, currentDef.name, {
+      fontSize: '28px', color: '#ffffff', fontStyle: 'bold',
+      stroke: '#000000', strokeThickness: 8,
     }).setOrigin(0.5);
 
-    // ── SKOR 잔액 — 캐시는 표시용만, 실제 잔액은 서버 응답 전까지 -1 ──
+    // ── SKOR 잔액 ──
     const cached = getCachedSkorBalance();
     const initialText = cached !== null ? `💰  ${cached} SKOR` : '💰  -- SKOR';
     const skorText = this.add.text(200, 408, initialText, {
       fontSize: '15px', color: '#aaaaaa',
       stroke: '#000000', strokeThickness: 4,
     }).setOrigin(0.5);
-    this.skorBalance = -1; // 서버 확인 전까지 뽑기 불가
+    this.skorBalance = -1;
 
     // ── 뽑기 버튼 ──
     this.buildPullButtons(true);
+
+    // ── 슬라이드쇼 타이머 (2초마다 자동 전환) ──
+    this.slideshowActive = true;
+    this.time.addEvent({
+      delay: 2000,
+      loop: true,
+      callback: this.advanceSlide,
+      callbackScope: this,
+    });
 
     // 서버에서 최신 잔액 가져와 갱신
     this.skorBalance = await getSkorBalance();
     if (!this.scene.isActive()) return;
     cacheSkorBalance(this.skorBalance);
     skorText.setText(`💰  ${Math.floor(this.skorBalance)} SKOR`);
+  }
+
+  private advanceSlide() {
+    if (!this.slideshowActive || !this.scene.isActive()) return;
+
+    const nextIndex = (this.slideshowIndex + 1) % SLIDESHOW_IDS.length;
+    const nextDef = getCharacterDef(SLIDESHOW_IDS[nextIndex]);
+
+    // 현재/다음 레이어 결정
+    const current  = this.slideshowIsA ? this.slideshowBgA : this.slideshowBgB;
+    const incoming = this.slideshowIsA ? this.slideshowBgB : this.slideshowBgA;
+    if (!current || !incoming) return;
+
+    // 다음 일러스트를 incoming 레이어에 세팅
+    incoming.setTexture(nextDef.illustKey).setAlpha(0);
+
+    // 상태 + 텍스트를 일러스트 전환 시작과 동시에 즉시 교체
+    this.slideshowIsA = !this.slideshowIsA;
+    this.slideshowIndex = nextIndex;
+    this.updateSlideshowText(nextDef);
+
+    // crossfade: 현재 fade-out, 다음 fade-in
+    this.tweens.add({ targets: current,  alpha: 0, duration: 600, ease: 'Sine.easeInOut' });
+    this.tweens.add({ targets: incoming, alpha: 1, duration: 600, ease: 'Sine.easeInOut' });
+  }
+
+  private updateSlideshowText(def: ReturnType<typeof getCharacterDef>) {
+    const gradeColorInt = parseInt(def.gradeColor.replace('#', ''), 16);
+
+    // 배지 색상 즉시 교체
+    this.slideshowBadgeBox?.setStrokeStyle(1.5, gradeColorInt);
+    this.slideshowBadgeTxt?.setColor(def.gradeColor);
+
+    // 등급·이름: 즉시 텍스트 교체 후 짧게 fade-in (150ms)
+    if (this.slideshowGradeText?.active) {
+      this.slideshowGradeText.setText(def.grade).setColor(def.gradeColor).setAlpha(0);
+      this.tweens.add({ targets: this.slideshowGradeText, alpha: 1, duration: 150 });
+    }
+    if (this.slideshowNameText?.active) {
+      this.slideshowNameText.setText(def.name).setAlpha(0);
+      this.tweens.add({ targets: this.slideshowNameText, alpha: 1, duration: 150 });
+    }
   }
 
   private drawTerminalChrome(isUR = false) {
@@ -587,6 +662,13 @@ export default class GachaScene extends Phaser.Scene {
   }
 
   private clearUI() {
+    this.slideshowActive = false;
+    this.slideshowBgA = null;
+    this.slideshowBgB = null;
+    this.slideshowGradeText = null;
+    this.slideshowNameText = null;
+    this.slideshowBadgeBox = null;
+    this.slideshowBadgeTxt = null;
     this.tweens.killAll();
     this.time.removeAllEvents();
     this.input.off('pointerdown');
