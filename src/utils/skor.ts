@@ -61,14 +61,35 @@ export function cacheSkorBalance(balance: number): void {
 
 /**
  * 현재 SKOR 잔액 조회 (DB) 후 캐시 갱신
+ * 신규 유저(행 없음)는 5000 SKOR 웰컴 보너스로 초기화
  */
 export async function getSkorBalance(): Promise<number> {
+  // 세션 확보 (없으면 익명 로그인) — submitSkor와 동일한 패턴
+  let { data: { session } } = await supabase.auth.getSession();
+  if (!session) {
+    const { data: authData } = await supabase.auth.signInAnonymously();
+    session = authData.session;
+  }
+  const userId = session?.user?.id;
+
   const { data } = await supabase
     .from('user_skor')
     .select('balance')
     .maybeSingle(); // 행이 없으면 null 반환 (신규 유저 처리)
 
-  const balance = (data?.balance as number) ?? 0;
+  if (!data) {
+    // 신규 유저: 5000 SKOR 웰컴 보너스로 초기화
+    const WELCOME_BONUS = 5000;
+    await supabase.from('user_skor').insert({
+      user_id: userId,
+      balance: WELCOME_BONUS,
+      weekly_earned: 0,
+    });
+    cacheSkorBalance(WELCOME_BONUS);
+    return WELCOME_BONUS;
+  }
+
+  const balance = data.balance as number;
   cacheSkorBalance(balance);
   return balance;
 }
