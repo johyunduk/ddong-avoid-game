@@ -1,0 +1,38 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "855cb85c7a30",
+  "strategy": "manual-commit",
+  "branch": "dev",
+  "checkpoints_count": 20,
+  "files_touched": [
+    "src/abilities/ArchieveAbility.ts",
+    "src/abilities/BaseAbility.ts",
+    "src/abilities/GlitchAbility.ts",
+    "src/abilities/HackerAbility.ts",
+    "src/abilities/LegacyAbility.ts",
+    "src/abilities/MaehwaAbility.ts",
+    "src/abilities/MinerAbility.ts",
+    "src/abilities/NoiseAbility.ts",
+    "src/abilities/RGradeAbility.ts",
+    "src/abilities/SentinelAbility.ts",
+    "src/abilities/index.ts",
+    "src/abilities/types.ts",
+    "src/scenes/GameScene.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/85/5cb85c7a30/0/metadata.json",
+      "transcript": "/85/5cb85c7a30/0/full.jsonl",
+      "context": "/85/5cb85c7a30/0/context.md",
+      "content_hash": "/85/5cb85c7a30/0/content_hash.txt",
+      "prompt": "/85/5cb85c7a30/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 19969,
+    "cache_creation_tokens": 4063859,
+    "cache_read_tokens": 130369898,
+    "output_tokens": 540330,
+    "api_call_count": 1248
+  }
+}
