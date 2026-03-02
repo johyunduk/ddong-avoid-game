@@ -462,6 +462,16 @@ export default class GachaScene extends Phaser.Scene {
       targets: tapHint, alpha: { from: 0.3, to: 1 }, duration: 600, yoyo: true, repeat: -1,
     });
 
+    // 10연차: 결과 화면으로 바로 건너뛰기 (영상 유무와 무관하게 항상 표시)
+    if (this.pullResults.length > 1) {
+      this.addSkipButton(() => {
+        this.tweens.killAll();
+        this.time.removeAllEvents();
+        this.input.off('pointerdown');
+        this.showSummary();
+      });
+    }
+
     // 탭 진행 (700ms 디바운스)
     this.time.delayedCall(700, () => {
       if (!this.scene.isActive()) return;

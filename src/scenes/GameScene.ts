@@ -46,7 +46,8 @@ export default class GameScene extends Phaser.Scene {
   private gameStartTime: number = 0;
   private phaserStartTime: number = 0; // 씬 시작 시 Phaser 내부 시간 (재시작 시에도 정확한 delta 계산용)
   private lastScoreTime: number = 0;   // Date.now() 기반 점수용
-  private lastCheatCheckTime: number = 0; // timeScale 감지용
+  private lastCheatCheckTime: number = 0;   // timeScale 감지용
+  private lastPhaserCheckTime: number = 0;  // 구간 비율 감지용 Phaser 기준점
   private goldCollected: number = 0;
   private diamondCollected: number = 0;
   private topazCollected: number = 0;
@@ -192,6 +193,7 @@ export default class GameScene extends Phaser.Scene {
 
     // Phaser 내부 시간 기준점 기록 (씬 재시작 시에도 정확한 delta 계산)
     this.phaserStartTime = this.time.now;
+    this.lastPhaserCheckTime = this.time.now;
 
     // 난이도별 최고 점수 로드
     this.highScore = getHighScore(this.difficulty);
@@ -448,20 +450,22 @@ export default class GameScene extends Phaser.Scene {
       // 캐릭터 능력 프레임 업데이트 (글리치 분신 추적 등)
       this.ability.onUpdate(this.abilityAPI);
 
-      // 레이어 2: timeScale 이상 감지 (5초마다 체크)
+      // 레이어 2: timeScale 이상 감지 (5초마다 구간 비율 체크)
       if (now - this.lastCheatCheckTime >= 5000) {
-        const realElapsed = now - this.gameStartTime;
-        const gameElapsed = this.time.now - this.phaserStartTime; // 이번 게임의 Phaser 경과 시간
-        const ratio = gameElapsed / realElapsed;
+        // 누적 비율 대신 구간 비율 사용 — 탭 전환·브라우저 부하 순간의 오탐 방지
+        const realInterval = now - this.lastCheatCheckTime;
+        const phaserInterval = this.time.now - this.lastPhaserCheckTime;
+        const ratio = phaserInterval / realInterval;
 
-        // 정상 비율은 ~1.0, 0.95 미만이면 게임 속도가 95% 이하 → 조작 의심
-        // rAF timestamp 조작 (time * 0.5, 0.8, 0.9 등)을 감지
-        if (ratio < 0.95) {
+        // 정상 범위: 0.85 ~ 1.1 (브라우저 rAF 지연 허용)
+        // 임계값 0.85: rAF를 0.5~0.8배로 조작하는 치트만 감지, 정상 부하는 통과
+        if (ratio < 0.85) {
           console.warn('[Anti-cheat] timeScale 조작 감지:', ratio.toFixed(2));
           this.handleCheatDetected();
           return;
         }
         this.lastCheatCheckTime = now;
+        this.lastPhaserCheckTime = this.time.now;
       }
     }
   }
