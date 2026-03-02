@@ -1,0 +1,28 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "ca86930badf6",
+  "strategy": "manual-commit",
+  "branch": "dev",
+  "checkpoints_count": 19,
+  "files_touched": [
+    "src/abilities/HackerAbility.ts",
+    "src/scenes/CharacterSelectScene.ts",
+    "src/utils/character.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/ca/86930badf6/0/metadata.json",
+      "transcript": "/ca/86930badf6/0/full.jsonl",
+      "context": "/ca/86930badf6/0/context.md",
+      "content_hash": "/ca/86930badf6/0/content_hash.txt",
+      "prompt": "/ca/86930badf6/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 20125,
+    "cache_creation_tokens": 4283445,
+    "cache_read_tokens": 142667144,
+    "output_tokens": 625342,
+    "api_call_count": 1359
+  }
+}
