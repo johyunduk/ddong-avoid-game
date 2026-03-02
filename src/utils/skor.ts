@@ -79,7 +79,7 @@ export async function getSkorBalance(): Promise<number> {
 
   if (!data) {
     // 신규 유저: 5000 SKOR 웰컴 보너스로 초기화
-    const WELCOME_BONUS = 5000;
+    const WELCOME_BONUS = 10000;
     await supabase.from('user_skor').insert({
       user_id: userId,
       balance: WELCOME_BONUS,
