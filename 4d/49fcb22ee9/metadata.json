@@ -3,7 +3,7 @@
   "checkpoint_id": "4d49fcb22ee9",
   "strategy": "manual-commit",
   "branch": "dev",
-  "checkpoints_count": 1,
+  "checkpoints_count": 2,
   "files_touched": [
     "src/utils/skor.ts"
   ],
@@ -14,13 +14,20 @@
       "context": "/4d/49fcb22ee9/0/context.md",
       "content_hash": "/4d/49fcb22ee9/0/content_hash.txt",
       "prompt": "/4d/49fcb22ee9/0/prompt.txt"
+    },
+    {
+      "metadata": "/4d/49fcb22ee9/1/metadata.json",
+      "transcript": "/4d/49fcb22ee9/1/full.jsonl",
+      "context": "/4d/49fcb22ee9/1/context.md",
+      "content_hash": "/4d/49fcb22ee9/1/content_hash.txt",
+      "prompt": "/4d/49fcb22ee9/1/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 20149,
-    "cache_creation_tokens": 4309829,
-    "cache_read_tokens": 143843944,
-    "output_tokens": 632113,
-    "api_call_count": 1373
+    "input_tokens": 20250,
+    "cache_creation_tokens": 4408135,
+    "cache_read_tokens": 149108910,
+    "output_tokens": 657546,
+    "api_call_count": 1442
   }
 }
