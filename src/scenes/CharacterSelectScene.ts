@@ -16,10 +16,26 @@ const GAP_Y = 10;
 const GRID_LEFT = (400 - (COLS * CARD_W + (COLS - 1) * GAP_X)) / 2; // 35px
 const GRID_TOP = 145;
 
+// 스크롤 영역 (헤더 아래 ~ 하단 버튼 위)
+const SCROLL_TOP = 128;
+const SCROLL_BOTTOM = 548;
+
 export default class CharacterSelectScene extends Phaser.Scene {
   private selectedId: string = 'chibi';
   private ownedIds: string[] = [];
   private cardHighlights: Map<string, Phaser.GameObjects.Rectangle> = new Map();
+
+  // 스크롤
+  private cardsContainer!: Phaser.GameObjects.Container;
+  private scrollOffset = 0;
+  private maxScrollOffset = 0;
+  private pointerDownY = 0;
+  private pointerDownScrollY = 0;
+  private hasDragged = false;
+
+  // 동적 갱신용 ref
+  private headerNameText!: Phaser.GameObjects.Text;
+  private bgImage!: Phaser.GameObjects.Image;
 
   constructor() {
     super('CharacterSelectScene');
@@ -39,15 +55,17 @@ export default class CharacterSelectScene extends Phaser.Scene {
   create() {
     this.selectedId = getSelectedCharacter();
     this.ownedIds = getOwnedCharacters();
+    this.scrollOffset = 0;
+    this.hasDragged = false;
     this.cardHighlights.clear();
 
     const selectedDef = CHARACTERS.find(c => c.id === this.selectedId) ?? CHARACTERS[0];
 
-    // 배경: 선택된 캐릭터 일러스트를 화면 가득 채우고 어둡게 처리
-    const bgImg = this.add.image(200, 300, selectedDef.illustKey);
-    bgImg.setDisplaySize(400, 600);
+    // ── 배경: 선택된 캐릭터 일러스트 ───────────────────────────────────
+    this.bgImage = this.add.image(200, 300, selectedDef.illustKey);
+    this.bgImage.setDisplaySize(400, 600);
 
-    // 헤더
+    // ── 헤더 (고정) ─────────────────────────────────────────────────────
     this.add.text(200, 40, '캐릭터 선택', {
       fontSize: '26px',
       color: '#ffffff',
@@ -56,8 +74,7 @@ export default class CharacterSelectScene extends Phaser.Scene {
       strokeThickness: 4,
     }).setOrigin(0.5);
 
-    // 선택 중인 캐릭터 표시
-    this.add.text(200, 80, `현재: ${selectedDef.name}`, {
+    this.headerNameText = this.add.text(200, 80, `현재: ${selectedDef.name}`, {
       fontSize: '16px',
       color: selectedDef.gradeColor,
       stroke: '#000',
@@ -69,7 +86,9 @@ export default class CharacterSelectScene extends Phaser.Scene {
       color: '#888888',
     }).setOrigin(0.5);
 
-    // 캐릭터 카드 그리드
+    // ── 스크롤 가능한 카드 컨테이너 ─────────────────────────────────────
+    this.cardsContainer = this.add.container(0, 0);
+
     CHARACTERS.forEach((char, index) => {
       const col = index % COLS;
       const row = Math.floor(index / COLS);
@@ -78,72 +97,121 @@ export default class CharacterSelectScene extends Phaser.Scene {
       this.createCharacterCard(char, x, y);
     });
 
-    // 뒤로 가기
+    // 스크롤 최대 범위 계산
+    const totalRows = Math.ceil(CHARACTERS.length / COLS);
+    const contentBottom = GRID_TOP + (totalRows - 1) * (CARD_H + GAP_Y) + CARD_H + 10;
+    this.maxScrollOffset = Math.max(0, contentBottom - SCROLL_BOTTOM);
+
+    // 카드 영역 마스크 (스크롤 영역 밖 숨김)
+    const maskGfx = this.make.graphics({ x: 0, y: 0 });
+    maskGfx.fillStyle(0xffffff);
+    maskGfx.fillRect(0, SCROLL_TOP, 400, SCROLL_BOTTOM - SCROLL_TOP);
+    this.cardsContainer.setMask(maskGfx.createGeometryMask());
+
+    // ── 드래그 스크롤 입력 ───────────────────────────────────────────────
+    this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
+      if (p.y < SCROLL_TOP || p.y > SCROLL_BOTTOM) return;
+      this.pointerDownY = p.y;
+      this.pointerDownScrollY = this.scrollOffset;
+      this.hasDragged = false;
+    });
+
+    this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
+      if (!p.isDown) return;
+      const dy = this.pointerDownY - p.y;
+      if (Math.abs(dy) > 5) {
+        this.hasDragged = true;
+        this.scrollOffset = Phaser.Math.Clamp(
+          this.pointerDownScrollY + dy,
+          0,
+          this.maxScrollOffset,
+        );
+        this.cardsContainer.setY(-this.scrollOffset);
+      }
+    });
+
+    this.input.on('pointerup', () => {
+      // card pointerup 이벤트가 먼저 발생하므로 다음 프레임에 초기화
+      this.time.delayedCall(0, () => { this.hasDragged = false; });
+    });
+
+    // 마우스 휠
+    this.input.on(
+      'wheel',
+      (_p: Phaser.Input.Pointer, _go: unknown[], _dx: number, deltaY: number) => {
+        this.scrollOffset = Phaser.Math.Clamp(
+          this.scrollOffset + deltaY * 0.5,
+          0,
+          this.maxScrollOffset,
+        );
+        this.cardsContainer.setY(-this.scrollOffset);
+      },
+    );
+
+    // ── 고정 UI ─────────────────────────────────────────────────────────
     this.createBackButton();
   }
 
   private createCharacterCard(char: CharacterDef, x: number, y: number) {
     const isOwned = this.ownedIds.includes(char.id);
     const isSelected = this.selectedId === char.id;
-
     const gradeColorInt = parseInt(char.gradeColor.replace('#', ''), 16);
 
     // 카드 배경
     const cardBg = this.add.rectangle(x, y, CARD_W, CARD_H, 0x222222);
     cardBg.setStrokeStyle(2, isOwned ? gradeColorInt : 0x444444);
+    this.cardsContainer.add(cardBg);
 
-    // 선택 하이라이트 (선택됐으면 밝은 테두리)
+    // 선택 하이라이트
     const highlight = this.add.rectangle(x, y, CARD_W, CARD_H, 0, 0);
     highlight.setStrokeStyle(3, 0xffffff);
     highlight.setVisible(isSelected);
     this.cardHighlights.set(char.id, highlight);
+    this.cardsContainer.add(highlight);
 
     // 캐릭터 이미지
     const img = this.add.image(x, y - 12, char.imageKey);
     img.setDisplaySize(58, 85);
+    this.cardsContainer.add(img);
 
     if (!isOwned) {
-      // 미보유: 실루엣 처리
       img.setTint(0x000000);
       img.setAlpha(0.6);
-      // 자물쇠 아이콘
-      this.add.text(x, y - 12, '🔒', {
-        fontSize: '22px',
-      }).setOrigin(0.5);
+      const lock = this.add.text(x, y - 12, '🔒', { fontSize: '22px' }).setOrigin(0.5);
+      this.cardsContainer.add(lock);
     }
 
     // 등급 배지
-    this.add.text(x + CARD_W / 2 - 2, y - CARD_H / 2 + 2, char.grade, {
+    const badge = this.add.text(x + CARD_W / 2 - 2, y - CARD_H / 2 + 2, char.grade, {
       fontSize: '9px',
       color: char.gradeColor,
       fontStyle: 'bold',
       backgroundColor: '#000000cc',
       padding: { x: 3, y: 1 },
     }).setOrigin(1, 0);
+    this.cardsContainer.add(badge);
 
     // 캐릭터 이름
-    this.add.text(x, y + CARD_H / 2 - 16, char.name, {
+    const nameText = this.add.text(x, y + CARD_H / 2 - 16, char.name, {
       fontSize: '12px',
       color: isOwned ? '#ffffff' : '#555555',
       fontStyle: 'bold',
     }).setOrigin(0.5);
+    this.cardsContainer.add(nameText);
 
     // 보유 캐릭터만 클릭 가능
     if (isOwned) {
       cardBg.setInteractive({ useHandCursor: true });
 
       cardBg.on('pointerover', () => {
-        if (this.selectedId !== char.id) {
-          cardBg.setFillStyle(0x333333);
-        }
+        if (this.selectedId !== char.id) cardBg.setFillStyle(0x333333);
       });
       cardBg.on('pointerout', () => {
-        if (this.selectedId !== char.id) {
-          cardBg.setFillStyle(0x222222);
-        }
+        if (this.selectedId !== char.id) cardBg.setFillStyle(0x222222);
       });
-      cardBg.on('pointerdown', () => {
-        this.selectCharacter(char.id);
+      // pointerup으로 선택 (드래그 스크롤과 구분)
+      cardBg.on('pointerup', () => {
+        if (!this.hasDragged) this.selectCharacter(char.id);
       });
     }
   }
@@ -153,16 +221,17 @@ export default class CharacterSelectScene extends Phaser.Scene {
     const prev = this.cardHighlights.get(this.selectedId);
     if (prev) prev.setVisible(false);
 
-    // 새 선택 적용
     this.selectedId = id;
     setSelectedCharacter(id);
 
     const next = this.cardHighlights.get(id);
     if (next) next.setVisible(true);
 
-    // 헤더 "현재:" 텍스트 갱신을 위해 씬 재시작
-    // (Phaser text 오브젝트를 직접 업데이트하려면 ref가 필요하므로 간단히 재시작)
-    this.scene.restart();
+    // 헤더 직접 갱신 (씬 재시작 없이)
+    const def = CHARACTERS.find(c => c.id === id) ?? CHARACTERS[0];
+    this.headerNameText.setText(`현재: ${def.name}`);
+    this.headerNameText.setColor(def.gradeColor);
+    this.bgImage.setTexture(def.illustKey);
   }
 
   private createBackButton() {

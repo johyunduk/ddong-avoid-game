@@ -6,15 +6,28 @@ const corsHeaders = {
 };
 
 // ── 뽑기 풀 정의 ────────────────────────────────────────────────────────
-// SR 99.3% (6종 균등 배분), UR 0.7% (2종 균등 배분)
-// 드래곤볼 레전즈 ULTRA 0.35% 의 2배 기준
+// R 80% (10종 균등 배분), SR 19.3% (6종 균등 배분), UR 0.7% (2종 균등 배분)
+const SR_W  = 19.3 / 6;   // ≈ 3.217%
 const POOL = [
-  { id: 'hacker',   grade: 'SR', weight: 99.3 / 6 },
-  { id: 'miner',    grade: 'SR', weight: 99.3 / 6 },
-  { id: 'maehwa',   grade: 'SR', weight: 99.3 / 6 },
-  { id: 'archieve', grade: 'SR', weight: 99.3 / 6 },
-  { id: 'glitch',   grade: 'SR', weight: 99.3 / 6 },
-  { id: 'noise',    grade: 'SR', weight: 99.3 / 6 },
+  // ── R등급 ──
+  { id: 'log',     grade: 'R',  weight: 8 },
+  { id: 'swap',    grade: 'R',  weight: 8 },
+  { id: 'sum',     grade: 'R',  weight: 8 },
+  { id: 'fork',    grade: 'R',  weight: 8 },
+  { id: 'seed',    grade: 'R',  weight: 8 },
+  { id: 'session', grade: 'R',  weight: 8 },
+  { id: 'branch',  grade: 'R',  weight: 8 },
+  { id: 'hook',    grade: 'R',  weight: 8 },
+  { id: 'socket',  grade: 'R',  weight: 8 },
+  { id: 'index',   grade: 'R',  weight: 8 },
+  // ── SR등급 ──
+  { id: 'hacker',   grade: 'SR', weight: SR_W },
+  { id: 'miner',    grade: 'SR', weight: SR_W },
+  { id: 'maehwa',   grade: 'SR', weight: SR_W },
+  { id: 'archieve', grade: 'SR', weight: SR_W },
+  { id: 'glitch',   grade: 'SR', weight: SR_W },
+  { id: 'noise',    grade: 'SR', weight: SR_W },
+  // ── UR등급 ──
   { id: 'sentinel', grade: 'UR', weight: 0.35 },
   { id: 'legacy',   grade: 'UR', weight: 0.35 },
 ];

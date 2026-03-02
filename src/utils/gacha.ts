@@ -17,17 +17,15 @@ export interface GachaPullResult {
  * 뽑기 실행 — 서버에서 SKOR 차감 및 캐릭터 결정
  */
 export async function gachaPull(pullType: 'single' | 'multi'): Promise<GachaPullResult> {
-  let { data: { session } } = await supabase.auth.getSession();
-  if (!session) {
-    const { data: authData } = await supabase.auth.signInAnonymously();
-    session = authData.session;
+  // getUser()는 토큰을 서버 검증 후 만료 시 자동 갱신
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    await supabase.auth.signInAnonymously();
   }
 
+  // SDK가 현재 세션의 Authorization 헤더를 자동으로 포함
   const { data, error } = await supabase.functions.invoke('gacha-pull', {
     body: { pullType },
-    headers: session?.access_token
-      ? { Authorization: `Bearer ${session.access_token}` }
-      : undefined,
   });
 
   if (error) {

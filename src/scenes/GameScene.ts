@@ -125,7 +125,7 @@ export default class GameScene extends Phaser.Scene {
       }
 
       // Player assets for Classic mode
-      const CHARS_WITH_SPRITES = ['miner', 'maehwa', 'hacker', 'archieve', 'glitch', 'noise', 'sentinel'];
+      const CHARS_WITH_SPRITES = ['miner', 'maehwa', 'hacker', 'archieve', 'glitch', 'noise', 'sentinel', 'log', 'swap', 'sum', 'fork', 'seed', 'session', 'branch', 'hook', 'socket', 'index'];
       if (CHARS_WITH_SPRITES.includes(this.selectedCharId)) {
         const p = `${this.selectedCharId}_`;
         if (!this.textures.exists(`${p}front`)) this.load.image(`${p}front`, `assets/players/${p}front.webp`);
@@ -245,7 +245,7 @@ export default class GameScene extends Phaser.Scene {
     this.physics.world.setBounds(15, 0, 370, 600);
 
     // 플레이어 생성 (난이도별 속도 적용, 게임 모드별 스프라이트)
-    const CHARS_WITH_SPRITES = ['miner', 'maehwa', 'hacker', 'archieve', 'glitch', 'noise', 'sentinel'];
+    const CHARS_WITH_SPRITES = ['miner', 'maehwa', 'hacker', 'archieve', 'glitch', 'noise', 'sentinel', 'log', 'swap', 'sum', 'fork', 'seed', 'session', 'branch', 'hook', 'socket', 'index'];
     let playerTexturePrefix = '';
     if (this.gameMode === GameMode.ITEM) {
       playerTexturePrefix = 'astronaut_';
