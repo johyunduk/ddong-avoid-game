@@ -15,6 +15,8 @@ import { submitScore, getUserInitials, setUserInitials } from '../utils/leaderbo
 import { submitSkor, type SkorSubmitResponse } from '../utils/skor';
 import { getSelectedCharacter } from '../utils/character';
 import { isChristmasSeason } from '../utils/seasonChecker';
+import type { CharacterAbility, GameSceneAPI } from '../abilities/types';
+import { getCharacterAbility } from '../abilities/index';
 
 export default class GameScene extends Phaser.Scene {
   private player!: Player;
@@ -40,7 +42,6 @@ export default class GameScene extends Phaser.Scene {
   private lastDiamondPoopScore: number = 0;
   private lastTopazPoopScore: number = 0;
   private feverTopazTimer!: Phaser.Time.TimerEvent;
-  private lastRainbowPoopScore: number = 0;
   // 점수 검증용 데이터
   private gameStartTime: number = 0;
   private phaserStartTime: number = 0; // 씬 시작 시 Phaser 내부 시간 (재시작 시에도 정확한 delta 계산용)
@@ -59,6 +60,9 @@ export default class GameScene extends Phaser.Scene {
   private feverTimeColorTimer!: Phaser.Time.TimerEvent; // 색상 애니메이션 타이머
   private lastFeverTimeScore: number = 0; // 마지막 피버 타임 발동 점수
   private selectedCharId: string = 'chibi'; // 선택된 캐릭터 ID
+  // ── 캐릭터 능력 시스템 ────────────────────────────────────────────────
+  private ability!: CharacterAbility;
+  private abilityAPI!: GameSceneAPI;
 
   constructor() {
     super('GameScene');
@@ -72,7 +76,6 @@ export default class GameScene extends Phaser.Scene {
     this.lastGoldPoopScore = 0;
     this.lastDiamondPoopScore = 0;
     this.lastTopazPoopScore = 0;
-    this.lastRainbowPoopScore = 0;
     this.gameStartTime = Date.now();
     this.phaserStartTime = 0; // create()에서 설정
     this.lastScoreTime = Date.now();
@@ -87,6 +90,7 @@ export default class GameScene extends Phaser.Scene {
     this.lastFeverTimeScore = 0;
     // 캐릭터 선택 화면에서 저장한 캐릭터를 사용
     this.selectedCharId = getSelectedCharacter();
+    this.ability = getCharacterAbility(this.selectedCharId);
 
     // ModeSelectScene/DifficultySelectScene으로부터 게임 모드와 난이도를 받음
     if (data.gameMode) {
@@ -252,7 +256,7 @@ export default class GameScene extends Phaser.Scene {
     } else if (this.gameMode === GameMode.CLASSIC && CHARS_WITH_SPRITES.includes(this.selectedCharId)) {
       playerTexturePrefix = `${this.selectedCharId}_`;
     }
-    this.player = new Player(this, 200, 520, this.difficultyConfig.playerSpeed, playerTexturePrefix);
+    this.player = new Player(this, 200, 520, this.difficultyConfig.playerSpeed + this.ability.getPlayerSpeedBonus(), playerTexturePrefix);
 
     if (this.gameMode === GameMode.CLASSIC) {
       // 클래식 모드: 💩 그룹 생성
@@ -418,6 +422,10 @@ export default class GameScene extends Phaser.Scene {
 
     // 점수 증가는 update()에서 Date.now() 기반으로 처리 (timeScale 조작 무력화)
 
+    // ── 캐릭터 능력 초기화 (모든 그룹 생성 완료 후) ─────────────────────
+    this.abilityAPI = this.buildAPI();
+    this.ability.onCreate(this.abilityAPI);
+
     // 히트박스 디버그 표시, hit box visibility
     // this.physics.world.createDebugGraphic();
     // this.physics.world.drawDebug = true;
@@ -434,8 +442,11 @@ export default class GameScene extends Phaser.Scene {
       if (elapsed >= 100) {
         const points = Math.floor(elapsed / 100);
         this.lastScoreTime = now - (elapsed % 100); // 나머지 시간 이월
-        this.updateScore(points);
+        this.updateScore(this.ability.getTickScore(points));
       }
+
+      // 캐릭터 능력 프레임 업데이트 (글리치 분신 추적 등)
+      this.ability.onUpdate(this.abilityAPI);
 
       // 레이어 2: timeScale 이상 감지 (5초마다 체크)
       if (now - this.lastCheatCheckTime >= 5000) {
@@ -453,6 +464,33 @@ export default class GameScene extends Phaser.Scene {
         this.lastCheatCheckTime = now;
       }
     }
+  }
+
+  /** Ability 시스템에 게임 상태를 노출하는 API 객체 생성 */
+  private buildAPI(): GameSceneAPI {
+    const self = this;
+    return {
+      get score()           { return self.score; },
+      get player()          { return self.player; },
+      get difficultyLevel() { return self.difficultyLevel; },
+      get baseSpeed()       { return self.difficultyConfig.baseSpeed; },
+      get isClassicMode()   { return self.gameMode === GameMode.CLASSIC; },
+      get poops()           { return self.poops; },
+      get goldPoops()       { return self.goldPoops; },
+      get diamondPoops()    { return self.diamondPoops; },
+      get topazPoops()      { return self.topazPoops; },
+      get rainbowPoops()    { return self.rainbowPoops; },
+      get scene()           { return self as unknown as Phaser.Scene; },
+      updateScore:    (n) => self.updateScore(n),
+      spawnGoldPoop:    () => self.spawnGoldPoop(),
+      spawnDiamondPoop: () => self.spawnDiamondPoop(),
+      spawnTopazPoop:   () => self.spawnTopazPoop(),
+      spawnRainbowPoop: () => self.spawnRainbowPoop(),
+      collectGoldPoop:    (p) => self.handleGoldCollected(p),
+      collectDiamondPoop: (p) => self.handleDiamondCollected(p),
+      collectTopazPoop:   (p) => self.handleTopazCollected(p),
+      collectRainbowPoop: (p) => self.handleRainbowCollected(p),
+    };
   }
 
   private handleCheatDetected() {
@@ -477,9 +515,12 @@ export default class GameScene extends Phaser.Scene {
 
   private spawnPoop() {
     if (this.gameOver) return;
+    if (this.ability.isSpawnBlocked()) return;                    // 노이즈 차단
+    if (this.ability.overrideSpawnPoop(this.abilityAPI)) return;  // 레거시 금똥 피버
 
-    // 난이도에 따른 개수만큼 생성 (각각 다른 높이에서)
-    const poopCount = this.difficultyConfig.poopCount;
+    // 난이도에 따른 개수만큼 생성 (노이즈 특수 능력으로 일회성 감소 가능)
+    const reduction = this.ability.getSpawnCountReduction();
+    const poopCount = Math.max(1, this.difficultyConfig.poopCount - reduction);
     for (let i = 0; i < poopCount; i++) {
       // 💩이 화면 전체에서 생성되도록 (💩 크기 15를 고려해서 양쪽 여유)
       const x = Phaser.Math.Between(15, 385);
@@ -541,7 +582,7 @@ export default class GameScene extends Phaser.Scene {
 
     // 일반 똥보다 느린 속도로 설정 (난이도에 따라, 설정 기반)
     if (goldPoop.body) {
-      const fallSpeed = this.difficultyConfig.baseSpeed + (this.difficultyLevel * POOP_CONFIG.normal.speedIncrement) - POOP_CONFIG.gold.speedReduction;
+      const fallSpeed = this.difficultyConfig.baseSpeed + (this.difficultyLevel * POOP_CONFIG.normal.speedIncrement) - POOP_CONFIG.gold.speedReduction - this.ability.specialPoopSpeedReduction('gold');
       goldPoop.body.velocity.y = fallSpeed;
     }
 
@@ -567,7 +608,7 @@ export default class GameScene extends Phaser.Scene {
 
     // 일반 똥보다 느린 속도로 설정 (난이도에 따라, 설정 기반)
     if (diamondPoop.body) {
-      const fallSpeed = this.difficultyConfig.baseSpeed + (this.difficultyLevel * POOP_CONFIG.normal.speedIncrement) - POOP_CONFIG.diamond.speedReduction;
+      const fallSpeed = this.difficultyConfig.baseSpeed + (this.difficultyLevel * POOP_CONFIG.normal.speedIncrement) - POOP_CONFIG.diamond.speedReduction - this.ability.specialPoopSpeedReduction('diamond');
       diamondPoop.body.velocity.y = fallSpeed;
       // console.log(`[다이아똥] 속도 설정 완료: ${fallSpeed}`);
     } else {
@@ -605,30 +646,38 @@ export default class GameScene extends Phaser.Scene {
     }
   }
 
+  private handleTopazCollected(poop: Phaser.Physics.Arcade.Sprite) {
+    if (this.gameOver) return;
+    poop.destroy();
+    this.topazCollected++;
+    this.updateScore(80 + this.ability.onCollectSpecial('topaz'));
+    if (!this.isFeverTime) {
+      const topazText = this.add.text(200, 100, '⭐ 토파즈 +80점! ⭐', {
+        fontSize: '28px', color: '#FFC300', fontStyle: 'bold',
+        stroke: '#000', strokeThickness: 4
+      }).setOrigin(0.5);
+      this.time.delayedCall(1000, () => topazText.destroy());
+    }
+  }
+
   private collectTopazPoop(
     _player: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile,
     _topazPoop: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile
   ) {
+    this.handleTopazCollected(_topazPoop as TopazPoop);
+  }
+
+  private handleRainbowCollected(poop: Phaser.Physics.Arcade.Sprite) {
     if (this.gameOver) return;
-
-    const topazPoop = _topazPoop as TopazPoop;
-    topazPoop.destroy();
-    this.topazCollected++;
-
-    this.updateScore(80);
-
+    poop.destroy();
+    this.rainbowCollected++;
+    this.updateScore(100 + this.ability.onCollectSpecial('rainbow'));
     if (!this.isFeverTime) {
-      const topazText = this.add.text(200, 100, '⭐ 토파즈 +80점! ⭐', {
-        fontSize: '28px',
-        color: '#FFC300', // Amber color for topaz
-        fontStyle: 'bold',
-        stroke: '#000',
-        strokeThickness: 4
+      const rainbowText = this.add.text(200, 100, '🌈 무지개똥 +100점! 🌈', {
+        fontSize: '28px', color: '#FF00FF', fontStyle: 'bold',
+        stroke: '#000', strokeThickness: 4
       }).setOrigin(0.5);
-
-      this.time.delayedCall(1000, () => {
-        topazText.destroy();
-      });
+      this.time.delayedCall(1000, () => rainbowText.destroy());
     }
   }
 
@@ -636,27 +685,7 @@ export default class GameScene extends Phaser.Scene {
     _player: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile,
     _rainbowPoop: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile
   ) {
-    if (this.gameOver) return;
-
-    const rainbowPoop = _rainbowPoop as RainbowPoop;
-    rainbowPoop.destroy();
-    this.rainbowCollected++;
-
-    this.updateScore(100);
-
-    if (!this.isFeverTime) {
-      const rainbowText = this.add.text(200, 100, '🌈 무지개똥 +100점! 🌈', {
-        fontSize: '28px',
-        color: '#FF00FF', // A vibrant color for rainbow poop
-        fontStyle: 'bold',
-        stroke: '#000',
-        strokeThickness: 4
-      }).setOrigin(0.5);
-
-      this.time.delayedCall(1000, () => {
-        rainbowText.destroy();
-      });
-    }
+    this.handleRainbowCollected(_rainbowPoop as RainbowPoop);
   }
 
   /**
@@ -689,37 +718,33 @@ export default class GameScene extends Phaser.Scene {
    * @param newScore 새 점수
    */
   private checkMissedSpawnPoints(oldScore: number, newScore: number) {
-    // 40점 단위로 금똥 생성 체크
+    // 캐릭터별 스폰 간격 (노이즈는 단축)
+    const intervals = this.ability.getSpawnIntervals();
+
     for (let score = oldScore + 1; score <= newScore; score++) {
       // 피버 타임 체크
       this.checkFeverTime(score);
 
       // 피버 타임 중이 아닐 때만 일반 금똥/다이아똥/토파즈똥 생성
       if (!this.isFeverTime) {
-        // 40점마다 금똥 생성 (40, 80, 120, 160, ...)
-        if (score % 40 === 0 && score > this.lastGoldPoopScore) {
+        if (score % intervals.gold === 0 && score > this.lastGoldPoopScore) {
           this.spawnGoldPoop();
           this.lastGoldPoopScore = score;
         }
 
-        // 100점마다 다이아똥 생성 (100, 200, 300, ...)
-        if (score % 100 === 0 && score > this.lastDiamondPoopScore) {
+        if (score % intervals.diamond === 0 && score > this.lastDiamondPoopScore) {
           this.spawnDiamondPoop();
           this.lastDiamondPoopScore = score;
         }
 
-        // 160점마다 토파즈똥 생성 (160, 320, 480, ...)
-        if (score % 180 === 0 && score > this.lastTopazPoopScore) {
+        if (score % intervals.topaz === 0 && score > this.lastTopazPoopScore) {
           this.spawnTopazPoop();
           this.lastTopazPoopScore = score;
         }
-
-        // 광부 캐릭터 선택 시 100점마다 무지개똥 생성 (100, 200, 300, ...)
-        if (this.selectedCharId === 'miner' && score % 200 === 0 && score > this.lastRainbowPoopScore) {
-          this.spawnRainbowPoop();
-          this.lastRainbowPoopScore = score;
-        }
       }
+
+      // 캐릭터 능력 마일스톤 (광부 무지개똥, 루트 똥 제거, 매화 슬래시 등)
+      this.ability.onScoreMilestone(score, this.abilityAPI);
     }
   }
 
@@ -1071,6 +1096,9 @@ export default class GameScene extends Phaser.Scene {
   ) {
     if (this.gameOver) return;
 
+    // 센티넬: 보호막이 있으면 게임오버 대신 보호막 소모
+    if (this.ability.onHitPoop(this.abilityAPI)) return;
+
     this.gameOver = true;
     this.physics.pause();
 
@@ -1181,33 +1209,38 @@ export default class GameScene extends Phaser.Scene {
     // light_saber는 나중에 구현
   }
 
+  private handleGoldCollected(poop: Phaser.Physics.Arcade.Sprite) {
+    if (this.gameOver) return;
+    poop.destroy();
+    this.goldCollected++;
+    this.updateScore(20 + this.ability.onCollectSpecial('gold'));
+    if (!this.isFeverTime) {
+      const goldText = this.add.text(200, 100, '💰 금똥 +20점! 💰', {
+        fontSize: '28px', color: '#FFD700', fontStyle: 'bold',
+        stroke: '#000', strokeThickness: 4
+      }).setOrigin(0.5);
+      this.time.delayedCall(1000, () => goldText.destroy());
+    }
+  }
+
   private collectGoldPoop(
     _player: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile,
     _goldPoop: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile
   ) {
+    this.handleGoldCollected(_goldPoop as GoldPoop);
+  }
+
+  private handleDiamondCollected(poop: Phaser.Physics.Arcade.Sprite) {
     if (this.gameOver) return;
-
-    // 금똥 제거
-    const goldPoop = _goldPoop as GoldPoop;
-    goldPoop.destroy();
-    this.goldCollected++;
-
-    // 점수 보너스 (20점 추가) - updateScore를 통해 건너뛴 생성 포인트도 체크
-    this.updateScore(20);
-
-    // 금똥 획득 안내 텍스트 (피버 타임 중에는 표시하지 않음)
+    poop.destroy();
+    this.diamondCollected++;
+    this.updateScore(40 + this.ability.onCollectSpecial('diamond'));
     if (!this.isFeverTime) {
-      const goldText = this.add.text(200, 100, '💰 금똥 +20점! 💰', {
-        fontSize: '28px',
-        color: '#FFD700',
-        fontStyle: 'bold',
-        stroke: '#000',
-        strokeThickness: 4
+      const diamondText = this.add.text(200, 100, '💎 다이아똥 +40점! 💎', {
+        fontSize: '28px', color: '#00FFFF', fontStyle: 'bold',
+        stroke: '#000', strokeThickness: 4
       }).setOrigin(0.5);
-      // 2초 후 텍스트 제거
-      this.time.delayedCall(1000, () => {
-        goldText.destroy();
-      });
+      this.time.delayedCall(1000, () => diamondText.destroy());
     }
   }
 
@@ -1215,31 +1248,7 @@ export default class GameScene extends Phaser.Scene {
     _player: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile,
     _diamondPoop: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile
   ) {
-    if (this.gameOver) return;
-
-    // 다이아똥 제거
-    const diamondPoop = _diamondPoop as DiamondPoop;
-    diamondPoop.destroy();
-    this.diamondCollected++;
-
-    // 점수 보너스 (40점 추가) - updateScore를 통해 건너뛴 생성 포인트도 체크
-    this.updateScore(40);
-
-    // 다이아똥 획득 안내 텍스트 (피버 타임 중에는 표시하지 않음)
-    if (!this.isFeverTime) {
-      const diamondText = this.add.text(200, 100, '💎 다이아똥 +40점! 💎', {
-        fontSize: '28px',
-        color: '#00FFFF',
-        fontStyle: 'bold',
-        stroke: '#000',
-        strokeThickness: 4
-      }).setOrigin(0.5);
-
-      // 1초 후 텍스트 제거
-      this.time.delayedCall(1000, () => {
-        diamondText.destroy();
-      });
-    }
+    this.handleDiamondCollected(_diamondPoop as DiamondPoop);
   }
 
   /**
