@@ -16,9 +16,9 @@ export class HackerAbility extends BaseAbility {
 
   override onScoreMilestone(score: number, api: GameSceneAPI): void {
     if (!api.isClassicMode) return;
-    if (score % 150 === 0 && score > this.lastHackerScore) {
+    if (score % 100 === 0 && score > this.lastHackerScore) {
       this.lastHackerScore = score;
-      this.removeRandomPoops(4, api);
+      this.removeRandomPoops(7, api);
     }
   }
 
@@ -26,20 +26,62 @@ export class HackerAbility extends BaseAbility {
     const active = api.poops
       .getChildren()
       .filter(p => (p as Phaser.GameObjects.GameObject).active) as Phaser.Physics.Arcade.Sprite[];
-    // 랜덤 셔플 후 앞 N개 터미널 붕괴 연출로 제거
+
     active.sort(() => Math.random() - 0.5);
     active.slice(0, count).forEach(p => {
-      // 물리 정지 (애니메이션 중 계속 떨어지지 않도록)
       (p.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
-      p.setTint(0x00ff41); // 터미널 초록색
-      api.scene.tweens.add({
-        targets: p,
-        alpha: 0,
-        scaleY: 0.05, // 세로로 납작해지며 사라짐
-        duration: 250,
-        ease: 'Power2',
-        onComplete: () => { if (p.active) p.destroy(); },
-      });
+      this.playTerminalEffect(p.x, p.y, api);
+      p.destroy();
     });
+  }
+
+  /** 초록 테두리 검정 박스 flash → 픽셀 비산 */
+  private playTerminalEffect(cx: number, cy: number, api: GameSceneAPI): void {
+    const scene = api.scene;
+    const BOX_W = 36, BOX_H = 36;
+
+    // ── 1. 검정 박스 + 초록 테두리 ──────────────────────────────────
+    const box = scene.add.graphics().setDepth(110);
+    box.fillStyle(0x000000, 1);
+    box.fillRect(-BOX_W / 2, -BOX_H / 2, BOX_W, BOX_H);
+    box.lineStyle(2, 0x00ff41, 1);
+    box.strokeRect(-BOX_W / 2, -BOX_H / 2, BOX_W, BOX_H);
+    box.setPosition(cx, cy);
+
+    // 짧게 flash 후 사라짐
+    scene.tweens.add({
+      targets: box,
+      alpha: 0,
+      duration: 180,
+      delay: 60,
+      onComplete: () => box.destroy(),
+    });
+
+    // ── 2. 초록 픽셀 파편 비산 ───────────────────────────────────────
+    const PIXEL_COUNT = 10;
+    const GREEN = 0x00ff41;
+
+    for (let i = 0; i < PIXEL_COUNT; i++) {
+      const size   = Phaser.Math.Between(4, 9);
+      const angle  = Phaser.Math.FloatBetween(0, Math.PI * 2);
+      const speed  = Phaser.Math.FloatBetween(40, 110);
+      const tx     = cx + Math.cos(angle) * speed;
+      const ty     = cy + Math.sin(angle) * speed;
+
+      const px = scene.add.graphics().setDepth(111);
+      px.fillStyle(GREEN, 1);
+      px.fillRect(0, 0, size, size);
+      px.setPosition(cx, cy);
+
+      scene.tweens.add({
+        targets: px,
+        x: tx,
+        y: ty + Phaser.Math.Between(10, 30), // 중력감
+        alpha: 0,
+        duration: Phaser.Math.Between(250, 420),
+        ease: 'Quad.easeOut',
+        onComplete: () => px.destroy(),
+      });
+    }
   }
 }

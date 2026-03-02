@@ -7,6 +7,10 @@ export interface CharacterDef {
   imagePath: string;    // public/ 기준 경로
   illustKey: string;    // Phaser 텍스처 키 (일러스트 배경용)
   illustPath: string;   // public/ 기준 경로
+  videoKey?: string;    // Phaser 비디오 키 (선택, 있으면 일러스트 클릭 시 재생)
+  videoPath?: string;   // public/ 기준 경로 (선택)
+  basicEffect: string;  // 기본 효과 설명 (상세 팝업용)
+  specialAbility: string; // 특수 능력 설명 (없으면 '없음')
 }
 
 export const CHARACTERS: CharacterDef[] = [
@@ -19,6 +23,10 @@ export const CHARACTERS: CharacterDef[] = [
     imagePath: 'assets/players/chibi_front.webp',
     illustKey: 'illust_chibi',
     illustPath: 'assets/illustrations/chibi.png',
+    videoKey: 'vid_chibi',
+    videoPath: 'assets/vids/chibi.mp4',
+    basicEffect: '없음',
+    specialAbility: '없음',
   },
   {
     id: 'hacker',
@@ -29,6 +37,10 @@ export const CHARACTERS: CharacterDef[] = [
     imagePath: 'assets/players/hacker_front.webp',
     illustKey: 'illust_hacker',
     illustPath: 'assets/illustrations/hacker.png',
+    videoKey: 'vid_hacker',
+    videoPath: 'assets/vids/hacker.mp4',
+    basicEffect: '금똥·다이아똥 낙하 속도 감소',
+    specialAbility: '100점마다 일반 똥 7개\n터미널 삭제',
   },
   {
     id: 'miner',
@@ -39,6 +51,10 @@ export const CHARACTERS: CharacterDef[] = [
     imagePath: 'assets/players/miner_front.webp',
     illustKey: 'illust_miner',
     illustPath: 'assets/illustrations/miner.png',
+    videoKey: 'vid_miner',
+    videoPath: 'assets/vids/miner.mp4',
+    basicEffect: '특수 똥 수집 시 +10점 추가',
+    specialAbility: '200점마다 무지개똥 생성',
   },
   {
     id: 'maehwa',
@@ -49,6 +65,10 @@ export const CHARACTERS: CharacterDef[] = [
     imagePath: 'assets/players/maehwa_front.webp',
     illustKey: 'illust_maehwa',
     illustPath: 'assets/illustrations/maehwa.png',
+    videoKey: 'vid_maehwa',
+    videoPath: 'assets/vids/maehwa.mp4',
+    basicEffect: '이동 속도 +50px/s',
+    specialAbility: '100점마다 위쪽 똥 3개\n칼로 제거',
   },
   {
     id: 'archieve',
@@ -59,6 +79,10 @@ export const CHARACTERS: CharacterDef[] = [
     imagePath: 'assets/players/archieve_front.webp',
     illustKey: 'illust_archieve',
     illustPath: 'assets/illustrations/archieve.png',
+    videoKey: 'vid_archieve',
+    videoPath: 'assets/vids/archieve.mp4',
+    basicEffect: '점수 획득 속도 1.1배',
+    specialAbility: '200점마다 +20점 보너스',
   },
   {
     id: 'glitch',
@@ -69,6 +93,10 @@ export const CHARACTERS: CharacterDef[] = [
     imagePath: 'assets/players/glitch_front.webp',
     illustKey: 'illust_glitch',
     illustPath: 'assets/illustrations/glitch.png',
+    videoKey: 'vid_glitch',
+    videoPath: 'assets/vids/glitch.mp4',
+    basicEffect: '잔상 분신이 특수 똥 수집',
+    specialAbility: '200점마다 특수 똥 위치에\n분신 소환',
   },
   {
     id: 'noise',
@@ -79,6 +107,10 @@ export const CHARACTERS: CharacterDef[] = [
     imagePath: 'assets/players/noise_front.webp',
     illustKey: 'illust_noise',
     illustPath: 'assets/illustrations/noise.png',
+    videoKey: 'vid_noise',
+    videoPath: 'assets/vids/noise.mp4',
+    basicEffect: '특수 똥 생성 주기 25% 단축',
+    specialAbility: '200점마다 다음 소환\n2개 감소',
   },
   // ── R등급 ──────────────────────────────────────────────────────────────
   {
@@ -90,6 +122,8 @@ export const CHARACTERS: CharacterDef[] = [
     imagePath: 'assets/players/log_front.webp',
     illustKey: 'illust_log',
     illustPath: 'assets/illustrations/log.png',
+    basicEffect: '특수 똥 수집 시 +1점 추가',
+    specialAbility: '없음',
   },
   {
     id: 'swap',
@@ -100,6 +134,8 @@ export const CHARACTERS: CharacterDef[] = [
     imagePath: 'assets/players/swap_front.webp',
     illustKey: 'illust_swap',
     illustPath: 'assets/illustrations/swap.png',
+    basicEffect: '특수 똥 수집 시 +1점 추가',
+    specialAbility: '없음',
   },
   {
     id: 'sum',
@@ -110,6 +146,8 @@ export const CHARACTERS: CharacterDef[] = [
     imagePath: 'assets/players/sum_front.webp',
     illustKey: 'illust_sum',
     illustPath: 'assets/illustrations/sum.png',
+    basicEffect: '특수 똥 수집 시 +1점 추가',
+    specialAbility: '없음',
   },
   {
     id: 'fork',
@@ -120,6 +158,8 @@ export const CHARACTERS: CharacterDef[] = [
     imagePath: 'assets/players/fork_front.webp',
     illustKey: 'illust_fork',
     illustPath: 'assets/illustrations/fork.png',
+    basicEffect: '특수 똥 수집 시 +1점 추가',
+    specialAbility: '없음',
   },
   {
     id: 'seed',
@@ -130,6 +170,8 @@ export const CHARACTERS: CharacterDef[] = [
     imagePath: 'assets/players/seed_front.webp',
     illustKey: 'illust_seed',
     illustPath: 'assets/illustrations/seed.png',
+    basicEffect: '특수 똥 수집 시 +1점 추가',
+    specialAbility: '없음',
   },
   {
     id: 'session',
@@ -140,6 +182,8 @@ export const CHARACTERS: CharacterDef[] = [
     imagePath: 'assets/players/session_front.webp',
     illustKey: 'illust_session',
     illustPath: 'assets/illustrations/session.png',
+    basicEffect: '특수 똥 수집 시 +1점 추가',
+    specialAbility: '없음',
   },
   {
     id: 'branch',
@@ -150,6 +194,8 @@ export const CHARACTERS: CharacterDef[] = [
     imagePath: 'assets/players/branch_front.webp',
     illustKey: 'illust_branch',
     illustPath: 'assets/illustrations/branch.png',
+    basicEffect: '특수 똥 수집 시 +1점 추가',
+    specialAbility: '없음',
   },
   {
     id: 'hook',
@@ -160,6 +206,8 @@ export const CHARACTERS: CharacterDef[] = [
     imagePath: 'assets/players/hook_front.webp',
     illustKey: 'illust_hook',
     illustPath: 'assets/illustrations/hook.png',
+    basicEffect: '특수 똥 수집 시 +1점 추가',
+    specialAbility: '없음',
   },
   {
     id: 'socket',
@@ -170,6 +218,8 @@ export const CHARACTERS: CharacterDef[] = [
     imagePath: 'assets/players/socket_front.webp',
     illustKey: 'illust_socket',
     illustPath: 'assets/illustrations/socket.png',
+    basicEffect: '특수 똥 수집 시 +1점 추가',
+    specialAbility: '없음',
   },
   {
     id: 'index',
@@ -180,8 +230,10 @@ export const CHARACTERS: CharacterDef[] = [
     imagePath: 'assets/players/index_front.webp',
     illustKey: 'illust_index',
     illustPath: 'assets/illustrations/index.png',
+    basicEffect: '특수 똥 수집 시 +1점 추가',
+    specialAbility: '없음',
   },
-  // ── SR등급 ─────────────────────────────────────────────────────────────
+  // ── UR등급 ─────────────────────────────────────────────────────────────
   {
     id: 'sentinel',
     name: '센티넬',
@@ -191,6 +243,10 @@ export const CHARACTERS: CharacterDef[] = [
     imagePath: 'assets/players/sentinel_front.webp',
     illustKey: 'illust_sentinel',
     illustPath: 'assets/illustrations/sentinel.png',
+    videoKey: 'vid_sentinel',
+    videoPath: 'assets/vids/sentinel.mp4',
+    basicEffect: '시작 시 보호막 1개 보유',
+    specialAbility: '300점마다 보호막 충전\n(최대 3개)',
   },
   {
     id: 'legacy',
@@ -201,6 +257,10 @@ export const CHARACTERS: CharacterDef[] = [
     imagePath: 'assets/illustrations/legacy.png',
     illustKey: 'illust_legacy',
     illustPath: 'assets/illustrations/legacy.png',
+    videoKey: 'vid_legacy',
+    videoPath: 'assets/vids/legacy.mp4',
+    basicEffect: '시작 6초간 금똥 피버 타임',
+    specialAbility: '500점마다 점수 1.2배\n모드 10초 발동',
   },
 ];
 
