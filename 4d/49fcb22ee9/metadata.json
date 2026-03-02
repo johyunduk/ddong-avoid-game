@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "4d49fcb22ee9",
+  "strategy": "manual-commit",
+  "branch": "dev",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src/utils/skor.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/4d/49fcb22ee9/0/metadata.json",
+      "transcript": "/4d/49fcb22ee9/0/full.jsonl",
+      "context": "/4d/49fcb22ee9/0/context.md",
+      "content_hash": "/4d/49fcb22ee9/0/content_hash.txt",
+      "prompt": "/4d/49fcb22ee9/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 20149,
+    "cache_creation_tokens": 4309829,
+    "cache_read_tokens": 143843944,
+    "output_tokens": 632113,
+    "api_call_count": 1373
+  }
+}
