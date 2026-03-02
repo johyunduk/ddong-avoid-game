@@ -1,0 +1,114 @@
+Implement the following plan:
+
+# 신규 유저 5000 SKOR 웰컴 보너스
+
+## Context
+처음 게임에 접속하는 유저에게 SKOR 5000개를 무료 지급.
+신규 유저는 `user_skor` 테이블에 행이 없으므로, 첫 잔액 조회(`getSkorBalance`) 시 이를 감지하여 5000으로 초기화.
+
+---
+
+## 수정 파일
+- `src/utils/skor.ts` — `getSkorBalance()` 내 신규 유저 분기 수정
+
+---
+
+## 구현
+
+### 현재 코드
+```typescript
+// data가 null이면 신규 유저 → balance = 0 반환
+const balance = (data?.balance as number) ?? 0;
+cacheSkorBalance(balance);
+return balance;
+```
+
+### 변경 후
+```typescript
+if (!data) {
+  // 신규 유저: 5000 SKOR 웰컴 보너스로 초기화
+  const WELCOME_BONUS = 5000;
+  await supabase.from('user_skor').insert({
+    user_id: userId,
+    balance: WELCOME_BONUS,
+    weekly_earned: 0,
+  });
+  cacheSkorBalance(WELCOME_BONUS);
+  return WELCOME_BONUS;
+}
+const balance = data.balance as number;
+cacheSkorBalance(balance);
+return balance;
+```
+
+### 중복 지급 방지
+- 두 번째 접속부터는 `data`가 null이 아니므로 분기에 진입하지 않음
+- Supabase RLS로 자신의 row만 INSERT 가능
+- `weekly_earned: 0` 명시로 주간 한도에 영향 없음
+
+---
+
+## 검증
+- 첫 접속 시 ModeSelectScene에서 `💰 5000 SKOR` 표시 확인
+- 재접속 시 기존 잔액 유지 확인 (5000 중복 지급 없음)
+- Supabase Dashboard → `user_skor` 테이블에서 신규 행 `balance=5000` 확인
+
+
+If you need specific details from before exiting plan mode (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/johyunduk/.REDACTED.jsonl
+
+---
+
+user_skor 에서 {code: "42501", details: null, hint: null,…}
+code
+: 
+"42501"
+details
+: 
+null
+hint
+: 
+null
+message
+: 
+"new row violates row-level security policy for table \"user_skor\"" 이 에러는 왜 뜨는거지?
+
+---
+
+{code: "42501", details: null, hint: null,…}
+code
+: 
+"42501"
+details
+: 
+null
+hint
+: 
+null
+message
+: 
+"new row violates row-level security policy for table \"user_skor\"" 이거 계속 뜨는데?
+
+---
+
+메뉴에 안보이는데 최신화 해서 알려줄래?
+
+---
+
+저거 쿼리 success 떴는데도 403 에러 그대로 나는데?
+
+---
+
+[SKOR] 신규 유저 감지, userId: 7dffa262-57a6-4f8d-83dc-d9c5f1918702 session: 
+[SKOR] INSERT 결과 error: null
+
+---
+
+그래서 내가 뭘 해줘야 하는데?
+
+---
+
+됐네 이거 깃 푸시 해줘
+
+---
+
+다 같이 올려.
