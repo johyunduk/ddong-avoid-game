@@ -7,22 +7,19 @@ const corsHeaders = {
 
 // SKOR 가중치
 const WEIGHTS = {
-  gold: 0.1,
-  diamond: 0.3,
-  topaz: 0.7,
-  rainbow: 2.0,
+  gold: 0.5,
+  diamond: 1.5,
+  topaz: 3.5,
+  rainbow: 10.0,
 };
 
 // 점수 브래킷별 게임당 SKOR 상한
 function getBracketCap(score: number): number {
-  if (score < 1000) return 8;
-  if (score < 2000) return 14;
-  if (score < 3000) return 18;
-  return 22;
+  if (score < 1000) return 40;
+  if (score < 2000) return 70;
+  if (score < 3000) return 90;
+  return 110;
 }
-
-// 주간 SKOR 상한
-const WEEKLY_CAP = 200;
 
 // 반복 퀘스트 정의
 const QUESTS = [
@@ -127,7 +124,7 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // ── 3. 주간 캡 적용 ────────────────────────────────────────────
+    // ── 3. 잔액 조회 및 합산 ────────────────────────────────────────
     const { data: existingSkor } = await supabaseAdmin
       .from('user_skor')
       .select('*')
@@ -135,19 +132,8 @@ Deno.serve(async (req: Request) => {
       .single();
 
     const now = new Date();
-    const currentWeekStart = getWeekStart(now);
 
-    let weeklyEarned = existingSkor?.weekly_earned ?? 0;
-    const storedWeekStart = existingSkor?.week_start;
-
-    // 주간 리셋 체크
-    if (!storedWeekStart || storedWeekStart < currentWeekStart) {
-      weeklyEarned = 0;
-    }
-
-    const weeklyRemaining = Math.max(0, WEEKLY_CAP - weeklyEarned);
-    const totalRaw = gameSkor + questSkor;
-    const totalSkorAdded = Math.min(totalRaw, weeklyRemaining);
+    const totalSkorAdded = gameSkor + questSkor;
 
     const currentBalance = existingSkor?.balance ?? 0;
     const newBalance = currentBalance + totalSkorAdded;
@@ -158,8 +144,8 @@ Deno.serve(async (req: Request) => {
       .upsert({
         user_id: user.id,
         balance: Math.floor(newBalance),
-        weekly_earned: Math.floor(weeklyEarned + totalSkorAdded),
-        week_start: currentWeekStart,
+        weekly_earned: Math.floor((existingSkor?.weekly_earned ?? 0) + totalSkorAdded),
+        week_start: existingSkor?.week_start ?? getWeekStart(now),
         updated_at: now.toISOString(),
       }, { onConflict: 'user_id' });
 
@@ -175,7 +161,7 @@ Deno.serve(async (req: Request) => {
         questRewards: newQuestRewards,
         totalSkorAdded: Math.floor(totalSkorAdded),
         remainingBalance: Math.floor(newBalance),
-        weeklyCapRemaining: Math.floor(weeklyRemaining - totalSkorAdded),
+        weeklyCapRemaining: -1, // 주간 한도 없음
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

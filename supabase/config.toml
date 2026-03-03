@@ -401,11 +401,11 @@ entrypoint = "./functions/leaderboard-submit/index.ts"
 
 [functions.leaderboard-top]
 enabled = true
-verify_jwt = true
+verify_jwt = false  # 비인증 요청도 허용 (랭킹 공개 조회)
 import_map = "./functions/leaderboard-top/deno.json"
-# Uncomment to specify a custom file path to the entrypoint.
-# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
 entrypoint = "./functions/leaderboard-top/index.ts"
-# Specifies static files to be bundled with the function. Supports glob patterns.
-# For example, if you want to serve static HTML pages in your function:
-# static_files = [ "./functions/leaderboard-top/*.html" ]
+
+[functions.skor-submit]
+enabled = true
+verify_jwt = false  # 자체 auth.getUser() 처리, 익명 토큰 갱신 로직 포함
+entrypoint = "./functions/skor-submit/index.ts"
