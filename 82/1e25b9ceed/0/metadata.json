@@ -1,0 +1,33 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "821e25b9ceed",
+  "session_id": "15a38560-4b8f-4beb-81ef-8afa2be19e5c",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-03T12:24:42.06977Z",
+  "branch": "dev",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "public/assets/players/sum_front.webp",
+    "public/assets/players/sum_left.webp",
+    "public/assets/players/sum_right.webp"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "69b72de5ccdd",
+  "token_usage": {
+    "input_tokens": 29,
+    "cache_creation_tokens": 21980,
+    "cache_read_tokens": 730933,
+    "output_tokens": 4543,
+    "api_call_count": 21
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-03T12:24:42.028747Z",
+    "agent_lines": 0,
+    "human_added": 20,
+    "human_modified": 1,
+    "human_removed": 0,
+    "total_committed": 20,
+    "agent_percentage": 0
+  },
+  "transcript_path": ".claude/projects/-Users-johyunduk-Projects-ddong-avoid-game/15a38560-4b8f-4beb-81ef-8afa2be19e5c.jsonl"
+}
