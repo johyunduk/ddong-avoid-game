@@ -6,6 +6,7 @@ import {
   setSelectedCharacter,
   type CharacterDef,
 } from '../utils/character';
+import { syncOwnedCharacters } from '../utils/gacha';
 
 // 그리드 설정
 const COLS = 3;
@@ -65,6 +66,14 @@ export default class CharacterSelectScene extends Phaser.Scene {
     this.scrollOffset = 0;
     this.hasDragged = false;
     this.cardHighlights.clear();
+
+    // 서버 DB와 동기화 — 소유 목록이 바뀐 경우에만 씬 재시작해서 카드 갱신
+    syncOwnedCharacters().then(synced => {
+      if (!this.scene.isActive()) return;
+      const changed = synced.length !== this.ownedIds.length ||
+        synced.some(id => !this.ownedIds.includes(id));
+      if (changed) this.scene.restart();
+    }).catch(() => { /* 네트워크 오류 시 로컬 상태 유지 */ });
 
     const selectedDef = CHARACTERS.find(c => c.id === this.selectedId) ?? CHARACTERS[0];
 

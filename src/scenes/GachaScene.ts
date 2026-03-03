@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { gachaPull, type PulledCharacter } from '../utils/gacha';
+import { gachaPull, syncOwnedCharacters, type PulledCharacter } from '../utils/gacha';
 import { CHARACTERS, getCharacterDef, addOwnedCharacter, type CharacterDef } from '../utils/character';
 import { getSkorBalance, getCachedSkorBalance, cacheSkorBalance } from '../utils/skor';
 
@@ -285,8 +285,10 @@ export default class GachaScene extends Phaser.Scene {
       this.pullResults = result.characters;
       this.remainingSkor = result.remainingSkor;
 
-      // 신규 캐릭터 localStorage 동기화
+      // ① 결과의 신규 캐릭터 즉시 저장 (sync 실패 대비 fallback)
       result.characters.filter(c => c.isNew).forEach(c => addOwnedCharacter(c.id));
+      // ② 서버 DB 전체 동기화 (비동기, 에러 로그만)
+      syncOwnedCharacters().catch(e => console.error('[GachaScene] syncOwnedCharacters 실패:', e));
 
       // ② 터미널 애니메이션 (UR이면 중반부터 빨간 에러 스타일로 전환)
       const isUR = result.video === 'red'

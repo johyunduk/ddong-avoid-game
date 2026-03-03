@@ -265,18 +265,54 @@ export const CHARACTERS: CharacterDef[] = [
 ];
 
 const OWNED_KEY = 'ownedCharacters';
+const OWNED_SIG_KEY = 'ownedCharactersSig';
 const SELECTED_KEY = 'selectedCharacter';
+const _SIG_SALT = 'ddong-v2-\u0073\u006b\u006f\u0072';
 
-/** 보유 캐릭터 목록 반환. 항상 chibi 포함. */
+/** djb2 해시 → base36 문자열 (무결성 서명용) */
+function _sign(list: string[]): string {
+  const str = [...list].sort().join(',') + _SIG_SALT;
+  let h = 5381;
+  for (let i = 0; i < str.length; i++) h = (((h << 5) + h) ^ str.charCodeAt(i)) >>> 0;
+  return h.toString(36);
+}
+
+/** 보유 목록과 서명을 함께 저장 (내부 전용) */
+function _saveOwned(list: string[]): void {
+  localStorage.setItem(OWNED_KEY, JSON.stringify(list));
+  localStorage.setItem(OWNED_SIG_KEY, _sign(list));
+}
+
+/** 보유 캐릭터 목록 반환. 서명 불일치 시 변조로 판단하여 초기화. */
 export function getOwnedCharacters(): string[] {
   try {
     const raw = localStorage.getItem(OWNED_KEY);
+    const sig = localStorage.getItem(OWNED_SIG_KEY);
     const list: string[] = raw ? JSON.parse(raw) : [];
     if (!list.includes('chibi')) list.unshift('chibi');
+
+    if (sig === null) {
+      // 서명 미존재 → 기존 데이터 마이그레이션: 목록을 신뢰하고 서명 최초 발급
+      _saveOwned(list);
+      return list;
+    }
+
+    // 서명 존재하지만 불일치 → 변조로 판단, chibi만 남김
+    if (sig !== _sign(list)) {
+      _saveOwned(['chibi']);
+      return ['chibi'];
+    }
+
     return list;
   } catch {
     return ['chibi'];
   }
+}
+
+/** 서버 동기화 등 외부에서 목록 전체를 덮어쓸 때 사용 (서명 함께 갱신) */
+export function setOwnedCharacters(list: string[]): void {
+  if (!list.includes('chibi')) list.unshift('chibi');
+  _saveOwned(list);
 }
 
 /** 캐릭터를 보유 목록에 추가 (뽑기 완료 후 호출) */
@@ -284,7 +320,7 @@ export function addOwnedCharacter(id: string): void {
   const owned = getOwnedCharacters();
   if (!owned.includes(id)) {
     owned.push(id);
-    localStorage.setItem(OWNED_KEY, JSON.stringify(owned));
+    _saveOwned(owned);
   }
 }
 

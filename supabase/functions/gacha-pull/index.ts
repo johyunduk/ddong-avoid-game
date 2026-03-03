@@ -115,20 +115,34 @@ Deno.serve(async (req: Request) => {
     }));
 
     // ── 4. 신규 캐릭터 등록 + SKOR 차감 병렬 처리 ───────────────────
-    const newChars = characters
-      .filter(c => c.isNew)
-      .map(c => ({ user_id: user.id, character_id: c.id }));
+    // 같은 캐릭터가 10연차에서 중복 등장할 수 있으므로 dedup (중복 upsert → DB 에러 방지)
+    const newChars = [...new Map(
+      characters
+        .filter(c => c.isNew)
+        .map(c => [c.id, { user_id: user.id, character_id: c.id }])
+    ).values()];
 
     const newBalance = balance - cost;
-    await Promise.all([
+    const [charResult, skorResult] = await Promise.all([
       newChars.length > 0
         ? supabaseAdmin.from('user_characters').upsert(newChars, { onConflict: 'user_id,character_id' })
-        : Promise.resolve(),
+        : Promise.resolve({ error: null }),
       supabaseAdmin.from('user_skor').upsert(
         { user_id: user.id, balance: newBalance, updated_at: new Date().toISOString() },
         { onConflict: 'user_id' }
       ),
     ]);
+
+    if (charResult && 'error' in charResult && charResult.error) {
+      console.error('user_characters upsert 실패:', charResult.error);
+      return new Response(
+        JSON.stringify({ error: 'Failed to save characters', detail: charResult.error }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    if (skorResult && 'error' in skorResult && skorResult.error) {
+      console.error('user_skor upsert 실패:', skorResult.error);
+    }
 
     // ── 6. 응답 ───────────────────────────────────────────────────────
     const hasUR = characters.some(c => c.grade === 'UR');

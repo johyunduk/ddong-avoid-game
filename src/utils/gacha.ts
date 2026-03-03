@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { setOwnedCharacters, getOwnedCharacters } from './character';
 
 export interface PulledCharacter {
   id: string;
@@ -43,11 +44,19 @@ export async function syncOwnedCharacters(): Promise<string[]> {
     .from('user_characters')
     .select('character_id');
 
-  if (error || !data) return ['chibi'];
+  if (error || !data) {
+    console.error('[syncOwnedCharacters] 조회 실패:', error);
+    return ['chibi'];
+  }
 
-  const ids = (data as { character_id: string }[]).map(r => r.character_id);
-  if (!ids.includes('chibi')) ids.unshift('chibi');
+  const serverIds = (data as { character_id: string }[]).map(r => r.character_id);
 
-  localStorage.setItem('ownedCharacters', JSON.stringify(ids));
-  return ids;
+  // 로컬에 있는 캐릭터(addOwnedCharacter로 즉시 저장된 것)와 merge
+  const localIds = getOwnedCharacters();
+  const merged = [...new Set([...serverIds, ...localIds])];
+  if (!merged.includes('chibi')) merged.unshift('chibi');
+
+  console.log('[syncOwnedCharacters] 동기화 완료:', merged);
+  setOwnedCharacters(merged);
+  return merged;
 }
