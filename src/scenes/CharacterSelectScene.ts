@@ -264,6 +264,10 @@ export default class CharacterSelectScene extends Phaser.Scene {
     const panel = this.add.container(0, 0).setDepth(300);
     this.detailPanel = panel;
 
+    // ── 클릭 투과 차단 레이어 (카드 목록으로 이벤트 전달 방지) ───────
+    const blocker = this.add.rectangle(200, 300, 400, 600, 0x000000, 0).setInteractive();
+    panel.add(blocker);
+
     // ── 일러스트 전체 화면 ───────────────────────────────────────────
     const illust = this.add.image(200, 300, def.illustKey).setDisplaySize(400, 600);
     panel.add(illust);
@@ -283,13 +287,14 @@ export default class CharacterSelectScene extends Phaser.Scene {
     panel.add(grad);
 
     // ── ✕ 닫기 버튼 (우상단 플로팅) ────────────────────────────────
-    const closeBg = this.add.circle(372, 38, 18, 0x000000, 0.55);
+    const closeBg = this.add.circle(372, 38, 22, 0x000000, 0.55)
+      .setInteractive({ useHandCursor: true });
     const closeBtn = this.add.text(372, 38, '✕', {
       fontSize: '18px', color: '#cccccc',
-    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-    closeBtn.on('pointerover', () => closeBtn.setColor('#ffffff'));
-    closeBtn.on('pointerout',  () => closeBtn.setColor('#cccccc'));
-    closeBtn.on('pointerup',   () => this.hideCharacterDetail());
+    }).setOrigin(0.5);
+    closeBg.on('pointerover', () => { closeBg.setFillStyle(0x333333, 0.8); closeBtn.setColor('#ffffff'); });
+    closeBg.on('pointerout',  () => { closeBg.setFillStyle(0x000000, 0.55); closeBtn.setColor('#cccccc'); });
+    closeBg.on('pointerup',   () => this.hideCharacterDetail());
     panel.add(closeBg);
     panel.add(closeBtn);
 
@@ -462,12 +467,17 @@ export default class CharacterSelectScene extends Phaser.Scene {
     panel.add(name);
 
     // ✕ 닫기 (헤더 우측)
-    const closeTxt = this.add.text(200 + CARD_W / 2 - 14, cardTop + 16, '✕', {
+    const closeX = 200 + CARD_W / 2 - 14;
+    const closeY = cardTop + 16;
+    const infoBtnBg = this.add.circle(closeX, closeY, 18, 0x000000, 0)
+      .setInteractive({ useHandCursor: true });
+    const closeTxt = this.add.text(closeX, closeY, '✕', {
       fontSize: '16px', color: '#999999',
-    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-    closeTxt.on('pointerover', () => closeTxt.setColor('#ffffff'));
-    closeTxt.on('pointerout',  () => closeTxt.setColor('#999999'));
-    closeTxt.on('pointerup',   () => this.hideInfoPanel());
+    }).setOrigin(0.5);
+    infoBtnBg.on('pointerover', () => closeTxt.setColor('#ffffff'));
+    infoBtnBg.on('pointerout',  () => closeTxt.setColor('#999999'));
+    infoBtnBg.on('pointerup',   () => this.hideInfoPanel());
+    panel.add(infoBtnBg);
     panel.add(closeTxt);
 
     // 구분선
