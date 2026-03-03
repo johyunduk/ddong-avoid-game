@@ -1096,12 +1096,15 @@ export default class GameScene extends Phaser.Scene {
 
   private hitPoop(
     _player: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile,
-    _poop: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile
+    poop: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile
   ) {
     if (this.gameOver) return;
 
-    // 센티넬: 보호막이 있으면 게임오버 대신 보호막 소모
-    if (this.ability.onHitPoop(this.abilityAPI)) return;
+    // 센티넬: 보호막이 있으면 게임오버 대신 보호막 소모 + 똥 제거
+    if (this.ability.onHitPoop(this.abilityAPI)) {
+      (poop as Phaser.Physics.Arcade.Sprite).destroy();
+      return;
+    }
 
     this.gameOver = true;
     this.physics.pause();
