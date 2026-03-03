@@ -40,7 +40,7 @@ export const CHARACTERS: CharacterDef[] = [
     videoKey: 'vid_hacker',
     videoPath: 'assets/vids/hacker.mp4',
     basicEffect: '금똥·다이아똥 낙하 속도 감소',
-    specialAbility: '100점마다 일반 똥 7개\n터미널 삭제',
+    specialAbility: '100점마다 일반 똥 7개 터미널 삭제',
   },
   {
     id: 'miner',
@@ -68,7 +68,7 @@ export const CHARACTERS: CharacterDef[] = [
     videoKey: 'vid_maehwa',
     videoPath: 'assets/vids/maehwa.mp4',
     basicEffect: '이동 속도 +50px/s',
-    specialAbility: '100점마다 위쪽 똥 3개\n칼로 제거',
+    specialAbility: '100점마다 위쪽 똥 3개 칼로 제거',
   },
   {
     id: 'archieve',
@@ -96,7 +96,7 @@ export const CHARACTERS: CharacterDef[] = [
     videoKey: 'vid_glitch',
     videoPath: 'assets/vids/glitch.mp4',
     basicEffect: '잔상 분신이 특수 똥 수집',
-    specialAbility: '200점마다 특수 똥 위치에\n분신 소환',
+    specialAbility: '200점마다 특수 똥 위치에 분신 소환',
   },
   {
     id: 'noise',
@@ -110,7 +110,7 @@ export const CHARACTERS: CharacterDef[] = [
     videoKey: 'vid_noise',
     videoPath: 'assets/vids/noise.mp4',
     basicEffect: '특수 똥 생성 주기 25% 단축',
-    specialAbility: '200점마다 다음 소환\n2개 감소',
+    specialAbility: '200점마다 다음 소환 2개 감소',
   },
   // ── R등급 ──────────────────────────────────────────────────────────────
   {
@@ -245,8 +245,8 @@ export const CHARACTERS: CharacterDef[] = [
     illustPath: 'assets/illustrations/sentinel.png',
     videoKey: 'vid_sentinel',
     videoPath: 'assets/vids/sentinel.mp4',
-    basicEffect: '시작 시 보호막 1개 보유',
-    specialAbility: '300점마다 보호막 충전\n(최대 3개)',
+    basicEffect: '시작 시 보호막 2개 보유 (피격 흡수 시 주변 똥 전기로 제거)',
+    specialAbility: '300점마다 보호막 1개 충전 (최대 3개)',
   },
   {
     id: 'legacy',
@@ -260,7 +260,7 @@ export const CHARACTERS: CharacterDef[] = [
     videoKey: 'vid_legacy',
     videoPath: 'assets/vids/legacy.mp4',
     basicEffect: '시작 6초간 금똥 피버 타임',
-    specialAbility: '500점마다 점수 1.2배\n모드 10초 발동',
+    specialAbility: '500점마다 점수 1.2배 모드 10초 발동',
   },
 ];
 

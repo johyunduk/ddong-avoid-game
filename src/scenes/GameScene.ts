@@ -1099,6 +1099,7 @@ export default class GameScene extends Phaser.Scene {
     poop: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile
   ) {
     if (this.gameOver) return;
+    if (this.player.getIsInvincible()) return;
 
     // 센티넬: 보호막이 있으면 게임오버 대신 보호막 소모 + 똥 제거
     if (this.ability.onHitPoop(this.abilityAPI)) {

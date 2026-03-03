@@ -206,6 +206,19 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     return this.isInvincible;
   }
 
+  // 시각 효과 없는 단순 무적 (센티넬 보호막 흡수용)
+  setInvincibleBriefly(duration: number): void {
+    if (this.invincibleTimer) {
+      this.invincibleTimer.remove();
+    }
+    this.isInvincible = true;
+    this.invincibleTimer = this.scene.time.addEvent({
+      delay: duration,
+      callback: () => { this.isInvincible = false; },
+      callbackScope: this,
+    });
+  }
+
   // 효과 정리 (씬 종료 시)
   cleanupEffects() {
     if (this.speedBoostTimer) {

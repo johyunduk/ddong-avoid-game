@@ -420,7 +420,7 @@ export default class CharacterSelectScene extends Phaser.Scene {
     // ── 카드 크기 계산 (텍스트 높이 선측정) ─────────────────────────
     const B_LEFT = 30;
     const CARD_W = 370;
-    const WRAP_W = CARD_W - 24;
+    const WRAP_W = CARD_W - 40; // 좌(15px)·우(25px) 여백 제외한 실제 텍스트 폭
     const HEADER_H = 60;  // 스프라이트+이름+구분선 영역
     const PAD_BOT  = 20;
 
