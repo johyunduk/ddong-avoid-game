@@ -298,6 +298,16 @@ export function setSelectedCharacter(id: string): void {
   localStorage.setItem(SELECTED_KEY, id);
 }
 
+/** 소유 목록과 교차 검증하여 안전한 캐릭터 ID 반환. 미보유면 'chibi'로 강제 초기화. */
+export function getSafeSelectedCharacter(): string {
+  const selected = getSelectedCharacter();
+  const owned = getOwnedCharacters();
+  if (owned.includes(selected)) return selected;
+  // 변조 감지 → chibi로 강제 초기화
+  setSelectedCharacter('chibi');
+  return 'chibi';
+}
+
 /** 캐릭터 정의 조회 */
 export function getCharacterDef(id: string): CharacterDef {
   return CHARACTERS.find(c => c.id === id) ?? CHARACTERS[0];

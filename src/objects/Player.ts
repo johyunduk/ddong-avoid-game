@@ -33,10 +33,13 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     // 캐릭터 크기 설정
     this.setDisplaySize(50, 80);
 
-    // 히트박스를 몸통 중심부만 (더 작게)
-    // 원본 1024px → 256px (25%) 리사이즈에 맞춰 body 값도 25%
-    this.setSize(75, 163);
-    this.setOffset(69, 63);
+    // 히트박스: 텍스처 해상도와 무관하게 world pixel 크기 고정
+    // setSize/setOffset 은 frame pixel 단위이므로 scaleX/Y 로 역산
+    // 목표 world 크기: 20×40 px (display 50×80 의 40%/50%), 중앙 정렬
+    const sx = this.scaleX;  // = 50 / textureWidth
+    const sy = this.scaleY;  // = 80 / textureHeight
+    this.setSize(20 / sx, 40 / sy);
+    this.setOffset((50 - 20) / 2 / sx, (80 - 40) / 2 / sy);
 
     // 물리 설정
     this.setCollideWorldBounds(true);

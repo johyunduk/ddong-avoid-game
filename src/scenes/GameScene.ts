@@ -13,7 +13,7 @@ import { POOP_CONFIG } from '../config/poop';
 import { getHighScore, updateHighScore } from '../utils/localStorage';
 import { submitScore, getUserInitials, setUserInitials } from '../utils/leaderboard';
 import { submitSkor, type SkorSubmitResponse } from '../utils/skor';
-import { getSelectedCharacter } from '../utils/character';
+import { getSafeSelectedCharacter } from '../utils/character';
 import { isChristmasSeason } from '../utils/seasonChecker';
 import type { CharacterAbility, GameSceneAPI } from '../abilities/types';
 import { getCharacterAbility } from '../abilities/index';
@@ -90,7 +90,7 @@ export default class GameScene extends Phaser.Scene {
     this.feverTimeRemaining = 0;
     this.lastFeverTimeScore = 0;
     // 캐릭터 선택 화면에서 저장한 캐릭터를 사용
-    this.selectedCharId = getSelectedCharacter();
+    this.selectedCharId = getSafeSelectedCharacter();
     this.ability = getCharacterAbility(this.selectedCharId);
 
     // ModeSelectScene/DifficultySelectScene으로부터 게임 모드와 난이도를 받음
@@ -1449,8 +1449,8 @@ export default class GameScene extends Phaser.Scene {
       }).setOrigin(0.5).setDepth(200);
 
       try {
-        // 캐릭터 타입 결정
-        const characterType = getSelectedCharacter();
+        // 캐릭터 타입 결정 (이미 init()에서 검증된 값 사용)
+        const characterType = this.selectedCharId;
 
         const result = await submitScore(
           this.score,
