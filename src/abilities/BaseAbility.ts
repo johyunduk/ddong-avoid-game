@@ -12,6 +12,7 @@ export class BaseAbility implements CharacterAbility {
   isSpawnBlocked(): boolean { return false; }
   getSpawnCountReduction(): number { return 0; }
   overrideSpawnPoop(_api: GameSceneAPI): boolean { return false; }
+  onAfterSpawnPoop(_api: GameSceneAPI): void {}
   onHitPoop(_api: GameSceneAPI): boolean { return false; }
   onUpdate(_api: GameSceneAPI): void {}
 }

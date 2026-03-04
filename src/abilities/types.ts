@@ -63,6 +63,9 @@ export interface CharacterAbility {
   /** true → 능력이 직접 스폰 처리 (레거시 시작 피버: 금똥만 생성) */
   overrideSpawnPoop(api: GameSceneAPI): boolean;
 
+  /** 일반 똥 스폰 완료 후 호출 (레거시 불태우기 등 사후 처리) */
+  onAfterSpawnPoop(api: GameSceneAPI): void;
+
   /** 피격 시 호출. true → 보호막 소모, 게임오버 방지 (센티넬) */
   onHitPoop(api: GameSceneAPI): boolean;
 
