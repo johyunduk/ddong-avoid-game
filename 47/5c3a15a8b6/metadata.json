@@ -3,7 +3,7 @@
   "checkpoint_id": "475c3a15a8b6",
   "strategy": "manual-commit",
   "branch": "dev",
-  "checkpoints_count": 1,
+  "checkpoints_count": 2,
   "files_touched": [
     "supabase/functions/leaderboard-submit/index.ts"
   ],
@@ -28,13 +28,20 @@
       "context": "/47/5c3a15a8b6/2/context.md",
       "content_hash": "/47/5c3a15a8b6/2/content_hash.txt",
       "prompt": "/47/5c3a15a8b6/2/prompt.txt"
+    },
+    {
+      "metadata": "/47/5c3a15a8b6/3/metadata.json",
+      "transcript": "/47/5c3a15a8b6/3/full.jsonl",
+      "context": "/47/5c3a15a8b6/3/context.md",
+      "content_hash": "/47/5c3a15a8b6/3/content_hash.txt",
+      "prompt": "/47/5c3a15a8b6/3/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 20563,
-    "cache_creation_tokens": 4805620,
-    "cache_read_tokens": 170872396,
-    "output_tokens": 807320,
-    "api_call_count": 1680
+    "input_tokens": 20592,
+    "cache_creation_tokens": 4816195,
+    "cache_read_tokens": 173588545,
+    "output_tokens": 809526,
+    "api_call_count": 1697
   }
 }
