@@ -3,16 +3,19 @@ import { BaseAbility } from './BaseAbility';
 import type { GameSceneAPI } from './types';
 
 /**
- * 매화 (SR)
- * - 기본 효과: 이동 속도 +50px/s
- * - 특수 능력: 100점마다 플레이어 위의 일반 똥 3개를 칼날 슬래시로 삭제
- *   이펙트: 가운데가 넓은 대각선 칼날 + 붉은 매화 잎 낙화
+ * 매화 (SR) — 이동속도 +50px/s / 100점마다 칼 베기 3개
+ * ★2: 특수 똥 수집 시 +5점
  */
 export class MaehwaAbility extends BaseAbility {
   private lastMaehwaScore = 0;
 
   override getPlayerSpeedBonus(): number {
     return 50;
+  }
+
+  // ★2+: 특수 똥 수집 시 +5점
+  override onCollectSpecial(_type: import('./types').SpecialPoopType): number {
+    return this.awakeningLevel >= 2 ? 5 : 0;
   }
 
   override onScoreMilestone(score: number, api: GameSceneAPI): void {

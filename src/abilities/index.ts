@@ -12,18 +12,18 @@ import { LegacyAbility } from './LegacyAbility';
 
 const R_IDS = ['log', 'swap', 'sum', 'fork', 'seed', 'session', 'branch', 'hook', 'socket', 'index'];
 
-/** 캐릭터 ID에 맞는 Ability 인스턴스 반환 */
-export function getCharacterAbility(id: string): CharacterAbility {
-  if (R_IDS.includes(id)) return new RGradeAbility();
+/** 캐릭터 ID에 맞는 Ability 인스턴스 반환 (awakeningLevel: 0~3) */
+export function getCharacterAbility(id: string, awakeningLevel = 0): CharacterAbility {
+  if (R_IDS.includes(id)) return new RGradeAbility(awakeningLevel);
   switch (id) {
-    case 'miner':    return new MinerAbility();
-    case 'hacker':   return new HackerAbility();
-    case 'maehwa':   return new MaehwaAbility();
-    case 'archieve': return new ArchieveAbility();
-    case 'glitch':   return new GlitchAbility();
-    case 'noise':    return new NoiseAbility();
-    case 'sentinel': return new SentinelAbility();
-    case 'legacy':   return new LegacyAbility();
+    case 'miner':    return new MinerAbility(awakeningLevel);
+    case 'hacker':   return new HackerAbility(awakeningLevel);
+    case 'maehwa':   return new MaehwaAbility(awakeningLevel);
+    case 'archieve': return new ArchieveAbility(awakeningLevel);
+    case 'glitch':   return new GlitchAbility(awakeningLevel);
+    case 'noise':    return new NoiseAbility(awakeningLevel);
+    case 'sentinel': return new SentinelAbility(awakeningLevel);
+    case 'legacy':   return new LegacyAbility(awakeningLevel);
     default:         return new BaseAbility(); // chibi 및 미등록 캐릭터
   }
 }

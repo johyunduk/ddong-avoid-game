@@ -2,9 +2,8 @@ import { BaseAbility } from './BaseAbility';
 import type { GameSceneAPI, SpecialPoopType } from './types';
 
 /**
- * 광부 (SR)
- * - 기본 효과: 특수 똥 수집 시 +10점
- * - 특수 능력: 200점마다 무지개똥 생성
+ * 광부 (SR) — 무지개똥 + 수집 보너스
+ * 특수 똥 수집 시 +10점 / 200점마다 무지개똥 스폰
  */
 export class MinerAbility extends BaseAbility {
   private lastRainbowScore = 0;

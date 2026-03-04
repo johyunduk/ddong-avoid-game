@@ -13,7 +13,7 @@ import { POOP_CONFIG } from '../config/poop';
 import { getHighScore, updateHighScore } from '../utils/localStorage';
 import { submitScore, getUserInitials, setUserInitials } from '../utils/leaderboard';
 import { submitSkor, type SkorSubmitResponse } from '../utils/skor';
-import { getSafeSelectedCharacter } from '../utils/character';
+import { getSafeSelectedCharacter, getCharacterDef, getDuplicateCount, getAwakeningLevel } from '../utils/character';
 import { isChristmasSeason } from '../utils/seasonChecker';
 import type { CharacterAbility, GameSceneAPI } from '../abilities/types';
 import { getCharacterAbility } from '../abilities/index';
@@ -61,6 +61,8 @@ export default class GameScene extends Phaser.Scene {
   private feverTimeColorTimer!: Phaser.Time.TimerEvent; // 색상 애니메이션 타이머
   private lastFeverTimeScore: number = 0; // 마지막 피버 타임 발동 점수
   private selectedCharId: string = 'chibi'; // 선택된 캐릭터 ID
+  private selectedCharGrade: string = '등급외'; // 선택된 캐릭터 등급
+  private charAwakeLevel: number = 0; // 각성 단계 (init에서 계산, create에서 사용)
   // ── 캐릭터 능력 시스템 ────────────────────────────────────────────────
   private ability!: CharacterAbility;
   private abilityAPI!: GameSceneAPI;
@@ -91,7 +93,12 @@ export default class GameScene extends Phaser.Scene {
     this.lastFeverTimeScore = 0;
     // 캐릭터 선택 화면에서 저장한 캐릭터를 사용
     this.selectedCharId = getSafeSelectedCharacter();
-    this.ability = getCharacterAbility(this.selectedCharId);
+    const charDef        = getCharacterDef(this.selectedCharId);
+    const dupCount       = getDuplicateCount(this.selectedCharId);
+    const awakeLevel     = getAwakeningLevel(charDef.grade, dupCount);
+    this.selectedCharGrade = charDef.grade;
+    this.charAwakeLevel    = awakeLevel;
+    this.ability = getCharacterAbility(this.selectedCharId, awakeLevel);
 
     // ModeSelectScene/DifficultySelectScene으로부터 게임 모드와 난이도를 받음
     if (data.gameMode) {
@@ -258,7 +265,19 @@ export default class GameScene extends Phaser.Scene {
     } else if (this.gameMode === GameMode.CLASSIC && CHARS_WITH_SPRITES.includes(this.selectedCharId)) {
       playerTexturePrefix = `${this.selectedCharId}_`;
     }
-    this.player = new Player(this, 200, 520, this.difficultyConfig.playerSpeed + this.ability.getPlayerSpeedBonus(), playerTexturePrefix);
+    // 등급 각성 패시브: ★1 R+5/SR+10/UR+15, ★2 R+10/SR+15/UR+20
+    // 매화 예외: ★1 +5, ★2+ 속도 패시브 없음 (대신 특수똥 수집 +5pt)
+    const _gs = (r: number, sr: number, ur: number) =>
+      this.selectedCharGrade === 'UR' ? ur
+      : this.selectedCharGrade === 'SR' ? sr
+      : this.selectedCharGrade === 'R'  ? r
+      : 0;
+    const gradeAwakeSpeed = this.selectedCharId === 'maehwa'
+      ? (this.charAwakeLevel >= 1 ? 5 : 0)
+      : this.charAwakeLevel >= 2 ? _gs(10, 15, 20)
+      : this.charAwakeLevel >= 1 ? _gs(5, 10, 15)
+      : 0;
+    this.player = new Player(this, 200, 520, this.difficultyConfig.playerSpeed + this.ability.getPlayerSpeedBonus() + gradeAwakeSpeed, playerTexturePrefix);
 
     if (this.gameMode === GameMode.CLASSIC) {
       // 클래식 모드: 💩 그룹 생성

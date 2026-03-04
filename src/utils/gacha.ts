@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { setOwnedCharacters, getOwnedCharacters } from './character';
+import { setOwnedCharacters, getOwnedCharacters, setDuplicateCount } from './character';
 
 export interface PulledCharacter {
   id: string;
@@ -42,16 +42,24 @@ export async function gachaPull(pullType: 'single' | 'multi'): Promise<GachaPull
 export async function syncOwnedCharacters(): Promise<string[]> {
   const { data, error } = await supabase
     .from('user_characters')
-    .select('character_id');
+    .select('character_id, duplicate_count');
 
   if (error || !data) {
     console.error('[syncOwnedCharacters] 조회 실패:', error);
     return ['chibi'];
   }
 
-  const serverIds = (data as { character_id: string }[]).map(r => r.character_id);
+  const rows = data as { character_id: string; duplicate_count: number }[];
+
+  // 중복 카운트를 서버 기준으로 덮어씀 (서버가 source of truth)
+  rows.forEach(r => {
+    if (r.duplicate_count > 0) {
+      setDuplicateCount(r.character_id, r.duplicate_count);
+    }
+  });
 
   // 로컬에 있는 캐릭터(addOwnedCharacter로 즉시 저장된 것)와 merge
+  const serverIds = rows.map(r => r.character_id);
   const localIds = getOwnedCharacters();
   const merged = [...new Set([...serverIds, ...localIds])];
   if (!merged.includes('chibi')) merged.unshift('chibi');

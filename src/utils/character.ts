@@ -264,6 +264,93 @@ export const CHARACTERS: CharacterDef[] = [
   },
 ];
 
+/** duplicate_count → 각성 단계 계산 (모든 등급 최대 ★5) */
+export function getAwakeningLevel(grade: string, duplicateCount: number): number {
+  if (grade === 'R') {
+    if (duplicateCount >= 100) return 5;
+    if (duplicateCount >= 75)  return 4;
+    if (duplicateCount >= 50)  return 3;
+    if (duplicateCount >= 25)  return 2;
+    if (duplicateCount >= 10)  return 1;
+  } else if (grade === 'SR') {
+    if (duplicateCount >= 40) return 5;
+    if (duplicateCount >= 25) return 4;
+    if (duplicateCount >= 15) return 3;
+    if (duplicateCount >= 7)  return 2;
+    if (duplicateCount >= 3)  return 1;
+  } else if (grade === 'UR') {
+    if (duplicateCount >= 10) return 5;
+    if (duplicateCount >= 6)  return 4;
+    if (duplicateCount >= 4)  return 3;
+    if (duplicateCount >= 2)  return 2;
+    if (duplicateCount >= 1)  return 1;
+  }
+  return 0;
+}
+
+const DUPES_KEY     = 'duplicateCounts';
+const DUPES_SIG_KEY = 'duplicateCountsSig';
+const _DUPES_SALT   = 'ddong-dupes-\u0076\u0032';
+
+/** djb2 해시 — key:value 쌍을 정렬 후 직렬화해 서명 */
+function _signDupes(map: Record<string, number>): string {
+  const str = Object.entries(map)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([k, v]) => `${k}:${v}`)
+    .join(',') + _DUPES_SALT;
+  let h = 5381;
+  for (let i = 0; i < str.length; i++) h = (((h << 5) + h) ^ str.charCodeAt(i)) >>> 0;
+  return h.toString(36);
+}
+
+function _saveDupes(map: Record<string, number>): void {
+  localStorage.setItem(DUPES_KEY, JSON.stringify(map));
+  localStorage.setItem(DUPES_SIG_KEY, _signDupes(map));
+}
+
+/** 캐릭터별 중복 획득 횟수 반환. 서명 불일치 시 변조로 판단해 전체 초기화. */
+export function getDuplicateCount(id: string): number {
+  try {
+    const raw = localStorage.getItem(DUPES_KEY);
+    const sig = localStorage.getItem(DUPES_SIG_KEY);
+    const map: Record<string, number> = raw ? JSON.parse(raw) : {};
+
+    if (sig === null) {
+      // 서명 미존재 → 기존 데이터 마이그레이션: 신뢰하고 서명 최초 발급
+      _saveDupes(map);
+      return map[id] ?? 0;
+    }
+
+    // 서명 불일치 → 변조로 판단, 전체 초기화
+    if (sig !== _signDupes(map)) {
+      _saveDupes({});
+      return 0;
+    }
+
+    return map[id] ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** 캐릭터별 중복 획득 횟수 저장 (뽑기 완료 후 호출) */
+export function setDuplicateCount(id: string, count: number): void {
+  try {
+    const raw = localStorage.getItem(DUPES_KEY);
+    const sig = localStorage.getItem(DUPES_SIG_KEY);
+    const map: Record<string, number> = raw ? JSON.parse(raw) : {};
+
+    // 변조된 상태에서 쓰기 시도 → 기존 맵 무시하고 새로 시작
+    if (sig !== null && sig !== _signDupes(map)) {
+      _saveDupes({ [id]: count });
+      return;
+    }
+
+    map[id] = count;
+    _saveDupes(map);
+  } catch { /* ignore */ }
+}
+
 const OWNED_KEY = 'ownedCharacters';
 const OWNED_SIG_KEY = 'ownedCharactersSig';
 const SELECTED_KEY = 'selectedCharacter';

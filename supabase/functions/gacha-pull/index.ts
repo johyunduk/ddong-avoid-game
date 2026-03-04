@@ -114,19 +114,35 @@ Deno.serve(async (req: Request) => {
       isNew: !ownedSet.has(p.id),
     }));
 
-    // ── 4. 신규 캐릭터 등록 + SKOR 차감 병렬 처리 ───────────────────
-    // 같은 캐릭터가 10연차에서 중복 등장할 수 있으므로 dedup (중복 upsert → DB 에러 방지)
+    // ── 4. 신규 캐릭터 등록 + 중복 카운트 증가 + SKOR 차감 병렬 처리 ─────
+    // 같은 캐릭터가 10연차에서 중복 등장할 수 있으므로 횟수 집계 후 처리
     const newChars = [...new Map(
       characters
         .filter(c => c.isNew)
         .map(c => [c.id, { user_id: user.id, character_id: c.id }])
     ).values()];
 
+    // 중복 캐릭터별 횟수 집계 (같은 캐릭터가 10연차에서 2번 나오면 +2)
+    const dupCountMap = new Map<string, number>();
+    characters.filter(c => !c.isNew).forEach(c => {
+      dupCountMap.set(c.id, (dupCountMap.get(c.id) ?? 0) + 1);
+    });
+
     const newBalance = balance - cost;
-    const [charResult, skorResult] = await Promise.all([
+    const [charResult, , skorResult] = await Promise.all([
       newChars.length > 0
         ? supabaseAdmin.from('user_characters').upsert(newChars, { onConflict: 'user_id,character_id' })
         : Promise.resolve({ error: null }),
+      // 중복 카운트 증가: RPC로 atomic increment
+      dupCountMap.size > 0
+        ? Promise.all([...dupCountMap.entries()].map(([charId, inc]) =>
+            supabaseAdmin.rpc('increment_duplicate_count', {
+              p_user_id: user.id,
+              p_character_id: charId,
+              p_amount: inc,
+            })
+          ))
+        : Promise.resolve(null),
       supabaseAdmin.from('user_skor').upsert(
         { user_id: user.id, balance: newBalance, updated_at: new Date().toISOString() },
         { onConflict: 'user_id' }

@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { gachaPull, syncOwnedCharacters, type PulledCharacter } from '../utils/gacha';
-import { CHARACTERS, getCharacterDef, addOwnedCharacter, type CharacterDef } from '../utils/character';
+import { CHARACTERS, getCharacterDef, addOwnedCharacter, getDuplicateCount, setDuplicateCount, type CharacterDef } from '../utils/character';
 import { getSkorBalance, getCachedSkorBalance, cacheSkorBalance } from '../utils/skor';
 
 // vids/ 디렉토리에 개인 영상이 존재하는 캐릭터 목록
@@ -287,6 +287,10 @@ export default class GachaScene extends Phaser.Scene {
 
       // ① 결과의 신규 캐릭터 즉시 저장 (sync 실패 대비 fallback)
       result.characters.filter(c => c.isNew).forEach(c => addOwnedCharacter(c.id));
+      // ① 중복 캐릭터 각성 카운트 업데이트
+      result.characters.filter(c => !c.isNew).forEach(c => {
+        setDuplicateCount(c.id, getDuplicateCount(c.id) + 1);
+      });
       // ② 서버 DB 전체 동기화 (비동기, 에러 로그만)
       syncOwnedCharacters().catch(e => console.error('[GachaScene] syncOwnedCharacters 실패:', e));
 

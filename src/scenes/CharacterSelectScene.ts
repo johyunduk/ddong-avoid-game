@@ -4,6 +4,8 @@ import {
   getOwnedCharacters,
   getSelectedCharacter,
   setSelectedCharacter,
+  getDuplicateCount,
+  getAwakeningLevel,
   type CharacterDef,
 } from '../utils/character';
 import { syncOwnedCharacters } from '../utils/gacha';
@@ -24,6 +26,7 @@ const SCROLL_BOTTOM = 548;
 export default class CharacterSelectScene extends Phaser.Scene {
   private selectedId: string = 'chibi';
   private ownedIds: string[] = [];
+  private _preSyncDupCounts: Map<string, number> = new Map();
   private cardHighlights: Map<string, Phaser.GameObjects.Rectangle> = new Map();
 
   // 스크롤
@@ -67,12 +70,24 @@ export default class CharacterSelectScene extends Phaser.Scene {
     this.hasDragged = false;
     this.cardHighlights.clear();
 
-    // 서버 DB와 동기화 — 소유 목록이 바뀐 경우에만 씬 재시작해서 카드 갱신
+    // 동기화 전 각성 수치 스냅샷 (동기화 후 변화 감지용)
+    this._preSyncDupCounts = new Map(
+      CHARACTERS
+        .filter(c => this.ownedIds.includes(c.id) && c.grade !== '등급외')
+        .map(c => [c.id, getDuplicateCount(c.id)])
+    );
+
+    // 서버 DB와 동기화 — 소유 목록 or 각성 수치가 바뀐 경우 씬 재시작해서 카드 갱신
     syncOwnedCharacters().then(synced => {
       if (!this.scene.isActive()) return;
-      const changed = synced.length !== this.ownedIds.length ||
+      const ownedChanged = synced.length !== this.ownedIds.length ||
         synced.some(id => !this.ownedIds.includes(id));
-      if (changed) this.scene.restart();
+      // 각성 수치 변화 여부: 동기화 후 localStorage의 duplicate_count가 달라졌으면 재시작
+      const awakeChanged = CHARACTERS.some(c =>
+        synced.includes(c.id) && c.grade !== '등급외' &&
+        getDuplicateCount(c.id) !== this._preSyncDupCounts.get(c.id)
+      );
+      if (ownedChanged || awakeChanged) this.scene.restart();
     }).catch(() => { /* 네트워크 오류 시 로컬 상태 유지 */ });
 
     const selectedDef = CHARACTERS.find(c => c.id === this.selectedId) ?? CHARACTERS[0];
@@ -210,6 +225,36 @@ export default class CharacterSelectScene extends Phaser.Scene {
       padding: { x: 3, y: 1 },
     }).setOrigin(1, 0);
     this.cardsContainer.add(badge);
+
+    // 각성 코어 (등급외 제외, 보유 캐릭터만)
+    if (isOwned && char.grade !== '등급외') {
+      const dupCount     = getDuplicateCount(char.id);
+      const awakeLevel   = getAwakeningLevel(char.grade, dupCount);
+      const gradeColor   = parseInt(char.gradeColor.replace('#', ''), 16);
+      const coreY        = y + CARD_H / 2 - 28;
+      const coreGap      = 10;
+      const gfx          = this.add.graphics();
+
+      for (let i = 0; i < 5; i++) {
+        const cx = x + (i - 2) * coreGap;
+        if (i < awakeLevel) {
+          // 충전된 코어: 외곽 글로우 + 내부 밝은 원
+          gfx.fillStyle(gradeColor, 0.25);
+          gfx.fillCircle(cx, coreY, 5.5);
+          gfx.fillStyle(gradeColor, 1);
+          gfx.fillCircle(cx, coreY, 3.5);
+          gfx.fillStyle(0xffffff, 0.55);
+          gfx.fillCircle(cx - 1, coreY - 1, 1.2);
+        } else {
+          // 빈 코어: 어두운 원 + 얇은 테두리
+          gfx.fillStyle(0x111111, 1);
+          gfx.fillCircle(cx, coreY, 3.5);
+          gfx.lineStyle(1, gradeColor, 0.35);
+          gfx.strokeCircle(cx, coreY, 3.5);
+        }
+      }
+      this.cardsContainer.add(gfx);
+    }
 
     // 캐릭터 이름
     const nameText = this.add.text(x, y + CARD_H / 2 - 16, char.name, {
@@ -425,6 +470,26 @@ export default class CharacterSelectScene extends Phaser.Scene {
     const panel = this.add.container(0, 0).setDepth(400);
     this.infoPanel = panel;
 
+    // ── 각성 보너스 계산 ──────────────────────────────────────────────
+    const dupCount   = getDuplicateCount(def.id);
+    const awakeLevel = getAwakeningLevel(def.grade, dupCount);
+    const awakeBonusLines: string[] = [];
+    if (def.grade !== '등급외') {
+      if (awakeLevel >= 1) {
+        const spd = def.id === 'maehwa' ? 5 : def.grade === 'UR' ? 15 : def.grade === 'SR' ? 10 : 5;
+        awakeBonusLines.push(`★1 각성: 이동속도 +${spd} px/s`);
+      }
+      if (awakeLevel >= 2) {
+        if (def.id === 'maehwa') {
+          awakeBonusLines.push('★2 각성: 특수 똥 수집 시 +5점');
+        } else {
+          const spd = def.grade === 'UR' ? 20 : def.grade === 'SR' ? 15 : 10;
+          awakeBonusLines.push(`★2 각성: 이동속도 +${spd} px/s (누적)`);
+        }
+      }
+    }
+    const awakeBonusText = awakeBonusLines.join('\n');
+
     // 반투명 배경 (클릭 시 닫기)
     const overlay = this.add.rectangle(200, 300, 400, 600, 0x000000, 0.80)
       .setInteractive();
@@ -440,9 +505,14 @@ export default class CharacterSelectScene extends Phaser.Scene {
 
     const btMeasure = this.add.text(0, -999, def.basicEffect,    { fontSize: '13px', wordWrap: { width: WRAP_W } });
     const stMeasure = this.add.text(0, -999, def.specialAbility, { fontSize: '13px', wordWrap: { width: WRAP_W } });
-    const cardH = HEADER_H + 18 + btMeasure.height + 14 + 18 + stMeasure.height + PAD_BOT;
+    const abMeasure = awakeBonusText
+      ? this.add.text(0, -999, awakeBonusText, { fontSize: '12px', wordWrap: { width: WRAP_W } })
+      : null;
+    const abHeight  = abMeasure ? abMeasure.height + 8 : 0;
+    const cardH = HEADER_H + 18 + btMeasure.height + abHeight + 14 + 18 + stMeasure.height + PAD_BOT;
     btMeasure.destroy();
     stMeasure.destroy();
+    abMeasure?.destroy();
 
     // 화면 중앙 배치 (상하 여백 각 70px 보장)
     const cardTop = Math.max(70, Math.round((600 - cardH) / 2));
@@ -495,7 +565,17 @@ export default class CharacterSelectScene extends Phaser.Scene {
       fontSize: '13px', color: '#eeeeee', wordWrap: { width: WRAP_W },
     });
     panel.add(basicText);
-    curY += basicText.height + 14;
+    curY += basicText.height;
+
+    if (awakeBonusText) {
+      curY += 8;
+      panel.add(this.add.text(B_LEFT, curY, awakeBonusText, {
+        fontSize: '12px', color: '#ffd700', wordWrap: { width: WRAP_W },
+      }));
+      curY += (abHeight - 8);
+    }
+
+    curY += 14;
 
     // ── 특수 능력 ─────────────────────────────────────────────────────
     panel.add(this.add.text(B_LEFT, curY, '⚡ 특수 능력', {

@@ -3,13 +3,17 @@ import { BaseAbility } from './BaseAbility';
 import type { GameSceneAPI } from './types';
 
 /**
- * 센티넬 (UR)
- * - 기본 효과: 게임 시작 시 보호막 2개 보유 (피격 흡수 시 주변 범위 똥 전기로 제거)
- * - 특수 능력: 300점마다 보호막 1개 충전 (최대 3개)
+ * 센티넬 (UR) — 보호막
+ * ★0: 2개 시작 / 300점마다 충전 / 최대 3  / ★1: 2개 / 250점마다 / 최대 4
+ * ★2: 3개 시작 / 200점마다 충전 / 최대 4  / ★3: 3개 / 150점마다 / 최대 5 + 흡수 시 연쇄 전기 3개 추가 제거
  * - UI: 붉은 공이 허리 주변 수평 궤도 공전 + 전기 파지직 (재사용 Graphics)
  */
 export class SentinelAbility extends BaseAbility {
   private shieldCount = 0;
+
+  private static readonly START_SHIELDS   = 2;
+  private static readonly CHARGE_INTERVAL = 300;
+  private static readonly MAX_SHIELDS     = 3;
   private orbitDroplets: Phaser.GameObjects.Graphics[] = [];
   private orbitAngle = 0;
 
@@ -26,13 +30,13 @@ export class SentinelAbility extends BaseAbility {
   private static readonly RED_LIGHT     = 0xff6666;
 
   override onCreate(api: GameSceneAPI): void {
-    this.shieldCount = 2;
-    this.spawnDroplets(api, 2);
+    this.shieldCount = SentinelAbility.START_SHIELDS;
+    this.spawnDroplets(api, SentinelAbility.START_SHIELDS);
     this.sparkGfx = api.scene.add.graphics().setDepth(96).setAlpha(0);
   }
 
   override onScoreMilestone(score: number, api: GameSceneAPI): void {
-    if (score % 300 === 0 && this.shieldCount < 3) {
+    if (score % SentinelAbility.CHARGE_INTERVAL === 0 && this.shieldCount < SentinelAbility.MAX_SHIELDS) {
       this.shieldCount++;
       this.playShieldChargeEffect(api);
       this.spawnDroplets(api, 1);

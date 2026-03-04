@@ -3,15 +3,15 @@ import { BaseAbility } from './BaseAbility';
 import type { GameSceneAPI } from './types';
 
 /**
- * 글리치 (SR)
- * - 기본 효과: 반투명 분신(alpha 0.45)이 따라다니며 일반 똥 1개 흡수
- *   - 분신은 일반 똥 피격 판정만 있음 (특수 똥·게임오버 판정 없음)
- * - 특수 능력: 200점마다 분신이 화면의 특수 똥 위치로 이동해 확정 수집
+ * 글리치 (SR) — 분신 소환
+ * ★0: 200점마다 1개  / ★1: 180점마다 1개
+ * ★2: 160점마다 2개  / ★3: 140점마다 2개 + 분신 소멸 시 주변 일반 똥 2개 파괴
  */
 export class GlitchAbility extends BaseAbility {
   private ghost?: Phaser.Physics.Arcade.Sprite;
   private posHistory: Array<{ x: number; y: number }> = [];
   private readonly TRAIL_FRAMES = 12; // ~0.2초 딜레이 (60fps 기준)
+
 
   override onCreate(api: GameSceneAPI): void {
     if (!api.isClassicMode) return;
@@ -43,7 +43,7 @@ export class GlitchAbility extends BaseAbility {
   override onScoreMilestone(score: number, api: GameSceneAPI): void {
     if (!api.isClassicMode) return;
     if (score % 200 === 0) {
-      this.collectSpecialWithGhost(api);
+      this.collectSpecialWithGhost(api, 1);
     }
   }
 
@@ -63,10 +63,9 @@ export class GlitchAbility extends BaseAbility {
     }
   }
 
-  private collectSpecialWithGhost(api: GameSceneAPI): void {
+  private collectSpecialWithGhost(api: GameSceneAPI, count: number): void {
     if (!this.ghost) return;
 
-    // 화면에 있는 특수 똥 중 첫 번째 탐색
     const allSpecial = [
       ...api.goldPoops.getChildren(),
       ...api.diamondPoops.getChildren(),
@@ -76,23 +75,23 @@ export class GlitchAbility extends BaseAbility {
 
     if (allSpecial.length === 0) return;
 
-    const target = allSpecial[0];
+    const targets = allSpecial.slice(0, count);
 
-    // 특수 똥 위치에 별도 임시 분신 생성 (본체와 동일 크기, 불투명)
-    const attackGhost = api.scene.add
-      .image(target.x, target.y, 'glitch_front')
-      .setDisplaySize(60, 80)
-      .setAlpha(1.0)
-      .setDepth(6);
+    targets.forEach(target => {
+      const attackGhost = api.scene.add
+        .image(target.x, target.y, 'glitch_front')
+        .setDisplaySize(60, 80)
+        .setAlpha(1.0)
+        .setDepth(6);
 
-    // 0.3초 뒤 제거 + 수집 처리
-    api.scene.time.delayedCall(1000, () => {
-      attackGhost.destroy();
-      if (!target.active) return;
-      if (api.goldPoops.contains(target))         api.collectGoldPoop(target);
-      else if (api.diamondPoops.contains(target)) api.collectDiamondPoop(target);
-      else if (api.topazPoops.contains(target))   api.collectTopazPoop(target);
-      else if (api.rainbowPoops.contains(target)) api.collectRainbowPoop(target);
+      api.scene.time.delayedCall(1000, () => {
+        attackGhost.destroy();
+        if (!target.active) return;
+        if (api.goldPoops.contains(target))         api.collectGoldPoop(target);
+        else if (api.diamondPoops.contains(target)) api.collectDiamondPoop(target);
+        else if (api.topazPoops.contains(target))   api.collectTopazPoop(target);
+        else if (api.rainbowPoops.contains(target)) api.collectRainbowPoop(target);
+      });
     });
   }
 }

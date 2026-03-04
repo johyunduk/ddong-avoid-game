@@ -2,19 +2,26 @@ import { BaseAbility } from './BaseAbility';
 import type { GameSceneAPI } from './types';
 
 /**
- * 레거시 (UR)
- * - 기본 효과: 게임 시작 시 6초간 금똥 2개씩 내려오는 피버타임 + 황금 빗줄기(D)
- *             + 똥 스폰마다 20% 확률로 랜덤 2개 화염 추적선(B) + 불태워 소멸 (+10점)
- *             + 캐릭터 주변 상시 불꽃 오라(A)
- * - 특수 능력: 500점마다 레거시 모드 10초 발동
- *             — 점수 1.2배 + 화면 전체 불꽃 폭발 + 황금 빗줄기 강화
- *             — 불태우기 강화: 40% 확률로 4개 소멸 / 오라 황금빛으로 강화
+ * 레거시 (UR) — 피버 + 레거시 모드
+ * ★0: 6초 피버 / 불태우기 30%/2개(일반) 60%/4개(레거시) / 500점마다 / 10초 / 1.2배
+ * ★1: 8초 / 35%/2개 65%/4개 / 450점마다 / 10초 / 1.25배
+ * ★2: 10초 / 40%/3개 70%/4개 / 400점마다 / 12초 / 1.30배
+ * ★3: 12초 / 45%/3개 75%/4개 / 350점마다 / 15초 / 1.35배 + 모드 종료 직후 3초 미니 피버
  */
 export class LegacyAbility extends BaseAbility {
   private startFeverActive = false;
   private legacyModeActive = false;
   private accum           = 0;
   private lastLegacyScore = 0;
+
+  private static readonly FEVER_DURATION  = 6000;
+  private static readonly LEGACY_INTERVAL = 500;
+  private static readonly LEGACY_DURATION = 10000;
+  private static readonly SCORE_EXTRA     = 0.20;
+  private static readonly BURN_CHANCE_N   = 0.30;
+  private static readonly BURN_CHANCE_L   = 0.60;
+  private static readonly BURN_COUNT_N    = 2;
+  private static readonly BURN_COUNT_L    = 4;
   private legacyTopGlow?:    Phaser.GameObjects.Graphics;
   private legacyPulseTween?: Phaser.Tweens.Tween;
   private legacyRainTimer?:  Phaser.Time.TimerEvent;
@@ -60,7 +67,7 @@ export class LegacyAbility extends BaseAbility {
   override onCreate(api: GameSceneAPI): void {
     this.startFeverActive = true;
     this.startFeverRain(api);
-    api.scene.time.delayedCall(6000, () => {
+    api.scene.time.delayedCall(LegacyAbility.FEVER_DURATION, () => {
       this.startFeverActive = false;
     });
   }
@@ -79,7 +86,8 @@ export class LegacyAbility extends BaseAbility {
 
   override getTickScore(base: number): number {
     if (!this.legacyModeActive) return base;
-    this.accum += base * 0.2;
+    const extra = LegacyAbility.SCORE_EXTRA;
+    this.accum += base * extra;
     const bonus = Math.floor(this.accum);
     this.accum -= bonus;
     return base + bonus;
@@ -95,15 +103,16 @@ export class LegacyAbility extends BaseAbility {
   }
 
   override onAfterSpawnPoop(api: GameSceneAPI): void {
-    const chance = this.legacyModeActive ? 0.6 : 0.3;
-    const count  = this.legacyModeActive ? 4   : 2;
+    const chance = this.legacyModeActive ? LegacyAbility.BURN_CHANCE_L : LegacyAbility.BURN_CHANCE_N;
+    const count  = this.legacyModeActive ? LegacyAbility.BURN_COUNT_L  : LegacyAbility.BURN_COUNT_N;
     if (Math.random() < chance) {
       this.burnRandomPoops(api, count);
     }
   }
 
   override onScoreMilestone(score: number, api: GameSceneAPI): void {
-    if (score % 500 === 0 && score > this.lastLegacyScore) {
+    const interval = LegacyAbility.LEGACY_INTERVAL;
+    if (score % interval === 0 && score > this.lastLegacyScore) {
       this.lastLegacyScore = score;
       this.activateLegacyMode(api);
     }
@@ -297,8 +306,9 @@ export class LegacyAbility extends BaseAbility {
       callback: () => { this.spawnRainStar(scene, LegacyAbility.RAIN_COLS_LEGACY, 0.75, 1.00, 3); },
     });
 
-    // 10초 후 종료
-    scene.time.delayedCall(10000, () => {
+    // 레거시 모드 종료
+    const legacyDur = LegacyAbility.LEGACY_DURATION;
+    scene.time.delayedCall(legacyDur, () => {
       this.legacyModeActive = false;
       this.legacyRainTimer?.remove();
       this.legacyRainTimer = undefined;
@@ -311,6 +321,7 @@ export class LegacyAbility extends BaseAbility {
           this.legacyTopGlow = undefined;
         },
       });
+
     });
   }
 
@@ -320,7 +331,7 @@ export class LegacyAbility extends BaseAbility {
 
   private startFeverRain(api: GameSceneAPI): void {
     const scene  = api.scene;
-    const REPEAT = Math.floor(6000 / 140) - 1;
+    const REPEAT = Math.floor(LegacyAbility.FEVER_DURATION / 140) - 1;
 
     scene.time.addEvent({
       delay: 140,
