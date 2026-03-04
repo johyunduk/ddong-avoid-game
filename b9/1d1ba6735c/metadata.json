@@ -1,0 +1,43 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "b91d1ba6735c",
+  "strategy": "manual-commit",
+  "branch": "dev",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src/abilities/ArchieveAbility.ts",
+    "src/abilities/BaseAbility.ts",
+    "src/abilities/GlitchAbility.ts",
+    "src/abilities/HackerAbility.ts",
+    "src/abilities/LegacyAbility.ts",
+    "src/abilities/MaehwaAbility.ts",
+    "src/abilities/MinerAbility.ts",
+    "src/abilities/NoiseAbility.ts",
+    "src/abilities/RGradeAbility.ts",
+    "src/abilities/SentinelAbility.ts",
+    "src/abilities/index.ts",
+    "src/scenes/CharacterSelectScene.ts",
+    "src/scenes/GachaScene.ts",
+    "src/scenes/GameScene.ts",
+    "src/utils/character.ts",
+    "src/utils/gacha.ts",
+    "supabase/functions/gacha-pull/index.ts",
+    "supabase/migrations/20260305_duplicate_count.sql"
+  ],
+  "sessions": [
+    {
+      "metadata": "/b9/1d1ba6735c/0/metadata.json",
+      "transcript": "/b9/1d1ba6735c/0/full.jsonl",
+      "context": "/b9/1d1ba6735c/0/context.md",
+      "content_hash": "/b9/1d1ba6735c/0/content_hash.txt",
+      "prompt": "/b9/1d1ba6735c/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 326,
+    "cache_creation_tokens": 323485,
+    "cache_read_tokens": 22007015,
+    "output_tokens": 133892,
+    "api_call_count": 243
+  }
+}
