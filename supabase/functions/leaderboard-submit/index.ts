@@ -119,7 +119,15 @@ Deno.serve(async (req: Request) => {
 
     // 최고 점수만 저장 (upsert)
     if (isNewRecord) {
-      const validCharacterTypes = ['chibi', 'miner', 'maehwa', 'astronaut'];
+      const validCharacterTypes = [
+        'chibi',
+        // R등급
+        'log', 'swap', 'sum', 'fork', 'seed', 'session', 'branch', 'hook', 'socket', 'index',
+        // SR등급
+        'hacker', 'miner', 'maehwa', 'archieve', 'glitch', 'noise',
+        // UR등급
+        'sentinel', 'legacy',
+      ];
       const safeCharacterType = validCharacterTypes.includes(characterType) ? characterType : 'chibi';
 
       const { error: upsertError } = await supabaseAdmin
