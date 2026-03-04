@@ -95,7 +95,7 @@ export class LegacyAbility extends BaseAbility {
   }
 
   override onAfterSpawnPoop(api: GameSceneAPI): void {
-    const chance = this.legacyModeActive ? 0.4 : 0.2;
+    const chance = this.legacyModeActive ? 0.6 : 0.3;
     const count  = this.legacyModeActive ? 4   : 2;
     if (Math.random() < chance) {
       this.burnRandomPoops(api, count);

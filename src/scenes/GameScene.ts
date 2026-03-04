@@ -651,18 +651,32 @@ export default class GameScene extends Phaser.Scene {
     }
   }
 
-  private handleTopazCollected(poop: Phaser.Physics.Arcade.Sprite) {
+  private handleSpecialCollected(
+    poop: Phaser.Physics.Arcade.Sprite,
+    type: import('../abilities/types').SpecialPoopType,
+    baseScore: number,
+    emoji: string,
+    color: string,
+    counterIncrement: () => void,
+  ) {
     if (this.gameOver) return;
     poop.destroy();
-    this.topazCollected++;
-    this.updateScore(80 + this.ability.onCollectSpecial('topaz'));
+    counterIncrement();
+    const bonus = this.ability.onCollectSpecial(type);
+    const total = baseScore + bonus;
+    this.updateScore(total);
     if (!this.isFeverTime) {
-      const topazText = this.add.text(200, 100, '⭐ 토파즈 +80점! ⭐', {
-        fontSize: '28px', color: '#FFC300', fontStyle: 'bold',
-        stroke: '#000', strokeThickness: 4
+      const suffix = bonus > 0 ? ` (+${bonus})` : '';
+      const t = this.add.text(200, 100, `${emoji} +${total}점!${suffix} ${emoji}`, {
+        fontSize: '28px', color, fontStyle: 'bold',
+        stroke: '#000', strokeThickness: 4,
       }).setOrigin(0.5);
-      this.time.delayedCall(1000, () => topazText.destroy());
+      this.time.delayedCall(1000, () => t.destroy());
     }
+  }
+
+  private handleTopazCollected(poop: Phaser.Physics.Arcade.Sprite) {
+    this.handleSpecialCollected(poop, 'topaz', 80, '⭐', '#FFC300', () => { this.topazCollected++; });
   }
 
   private collectTopazPoop(
@@ -673,17 +687,7 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private handleRainbowCollected(poop: Phaser.Physics.Arcade.Sprite) {
-    if (this.gameOver) return;
-    poop.destroy();
-    this.rainbowCollected++;
-    this.updateScore(100 + this.ability.onCollectSpecial('rainbow'));
-    if (!this.isFeverTime) {
-      const rainbowText = this.add.text(200, 100, '🌈 무지개똥 +100점! 🌈', {
-        fontSize: '28px', color: '#FF00FF', fontStyle: 'bold',
-        stroke: '#000', strokeThickness: 4
-      }).setOrigin(0.5);
-      this.time.delayedCall(1000, () => rainbowText.destroy());
-    }
+    this.handleSpecialCollected(poop, 'rainbow', 100, '🌈', '#FF00FF', () => { this.rainbowCollected++; });
   }
 
   private collectRainbowPoop(
@@ -1219,17 +1223,7 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private handleGoldCollected(poop: Phaser.Physics.Arcade.Sprite) {
-    if (this.gameOver) return;
-    poop.destroy();
-    this.goldCollected++;
-    this.updateScore(20 + this.ability.onCollectSpecial('gold'));
-    if (!this.isFeverTime) {
-      const goldText = this.add.text(200, 100, '💰 금똥 +20점! 💰', {
-        fontSize: '28px', color: '#FFD700', fontStyle: 'bold',
-        stroke: '#000', strokeThickness: 4
-      }).setOrigin(0.5);
-      this.time.delayedCall(1000, () => goldText.destroy());
-    }
+    this.handleSpecialCollected(poop, 'gold', 20, '💰', '#FFD700', () => { this.goldCollected++; });
   }
 
   private collectGoldPoop(
@@ -1240,17 +1234,7 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private handleDiamondCollected(poop: Phaser.Physics.Arcade.Sprite) {
-    if (this.gameOver) return;
-    poop.destroy();
-    this.diamondCollected++;
-    this.updateScore(40 + this.ability.onCollectSpecial('diamond'));
-    if (!this.isFeverTime) {
-      const diamondText = this.add.text(200, 100, '💎 다이아똥 +40점! 💎', {
-        fontSize: '28px', color: '#00FFFF', fontStyle: 'bold',
-        stroke: '#000', strokeThickness: 4
-      }).setOrigin(0.5);
-      this.time.delayedCall(1000, () => diamondText.destroy());
-    }
+    this.handleSpecialCollected(poop, 'diamond', 40, '💎', '#00FFFF', () => { this.diamondCollected++; });
   }
 
   private collectDiamondPoop(

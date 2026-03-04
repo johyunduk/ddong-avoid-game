@@ -259,8 +259,8 @@ export const CHARACTERS: CharacterDef[] = [
     illustPath: 'assets/illustrations/legacy.png',
     videoKey: 'vid_legacy',
     videoPath: 'assets/vids/legacy.mp4',
-    basicEffect: '시작 6초간 금똥 피버 타임',
-    specialAbility: '500점마다 점수 1.2배 모드 10초 발동',
+    basicEffect: '시작 6초 금똥 피버 + 황금 빗줄기 / 스폰마다 30% 확률로 똥 2개 불태워 소멸 (+10점)',
+    specialAbility: '500점마다 10초간 레거시 모드: 점수 1.2배 · 황금 빗줄기 강화 · 불태우기 60% 확률 4개 소멸',
   },
 ];
 
