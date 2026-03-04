@@ -1502,19 +1502,19 @@ export default class GameScene extends Phaser.Scene {
    */
   /** 점수 브래킷별 게임당 SKOR 상한 (서버와 동일) */
   private getSkorBracketCap(score: number): number {
-    if (score < 1000) return 8;
-    if (score < 2000) return 14;
-    if (score < 3000) return 18;
-    return 22;
+    if (score < 1000) return 40;
+    if (score < 2000) return 70;
+    if (score < 3000) return 90;
+    return 110;
   }
 
   private async submitSkorOnGameOver(statusText: Phaser.GameObjects.Text) {
     // ── 낙관적 UI: 서버 응답 전에 예상 SKOR 즉시 계산 ──
     const rawSkor =
-      this.goldCollected * 0.1 +
-      this.diamondCollected * 0.3 +
-      this.topazCollected * 0.7 +
-      this.rainbowCollected * 2.0;
+      this.goldCollected * 0.5 +
+      this.diamondCollected * 1.5 +
+      this.topazCollected * 3.5 +
+      this.rainbowCollected * 10.0;
     const estimatedSkor = Math.floor(Math.min(rawSkor, this.getSkorBracketCap(this.score)));
 
     // floor 후 0이면 API 호출 없이 즉시 종료 (퀘스트 진행도도 없음)
