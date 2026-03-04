@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "475c3a15a8b6",
+  "strategy": "manual-commit",
+  "branch": "dev",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "supabase/functions/leaderboard-submit/index.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/47/5c3a15a8b6/0/metadata.json",
+      "transcript": "/47/5c3a15a8b6/0/full.jsonl",
+      "context": "/47/5c3a15a8b6/0/context.md",
+      "content_hash": "/47/5c3a15a8b6/0/content_hash.txt",
+      "prompt": "/47/5c3a15a8b6/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 326,
+    "cache_creation_tokens": 323485,
+    "cache_read_tokens": 22007015,
+    "output_tokens": 133892,
+    "api_call_count": 243
+  }
+}
