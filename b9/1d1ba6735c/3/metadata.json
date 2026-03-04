@@ -1,0 +1,51 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "b91d1ba6735c",
+  "session_id": "91587142-e430-4912-b847-867ef0e45ee0",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-04T13:35:18.453366Z",
+  "branch": "dev",
+  "checkpoints_count": 15,
+  "files_touched": [
+    "src/abilities/ArchieveAbility.ts",
+    "src/abilities/BaseAbility.ts",
+    "src/abilities/GlitchAbility.ts",
+    "src/abilities/HackerAbility.ts",
+    "src/abilities/LegacyAbility.ts",
+    "src/abilities/MaehwaAbility.ts",
+    "src/abilities/MinerAbility.ts",
+    "src/abilities/NoiseAbility.ts",
+    "src/abilities/RGradeAbility.ts",
+    "src/abilities/SentinelAbility.ts",
+    "src/abilities/index.ts",
+    "src/scenes/CharacterSelectScene.ts",
+    "src/scenes/GachaScene.ts",
+    "src/scenes/GameScene.ts",
+    "src/utils/character.ts",
+    "src/utils/gacha.ts",
+    "supabase/functions/gacha-pull/index.ts",
+    "supabase/migrations/20260305_duplicate_count.sql"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "4f524c866e93",
+  "transcript_identifier_at_start": "5f53fb43-130e-446c-ad08-71b6bc24c18f",
+  "checkpoint_transcript_start": 572,
+  "transcript_lines_at_start": 572,
+  "token_usage": {
+    "input_tokens": 760,
+    "cache_creation_tokens": 590402,
+    "cache_read_tokens": 26659231,
+    "output_tokens": 155189,
+    "api_call_count": 249
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-04T13:35:14.746114Z",
+    "agent_lines": 351,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 351,
+    "agent_percentage": 100
+  },
+  "transcript_path": ".claude/projects/-Users-johyunduk-Projects-ddong-avoid-game/91587142-e430-4912-b847-867ef0e45ee0.jsonl"
+}
