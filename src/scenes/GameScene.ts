@@ -90,6 +90,7 @@ export default class GameScene extends Phaser.Scene {
     this.diamondCollected = 0;
     this.topazCollected = 0;
     this.rainbowCollected = 0;
+    this.sessionPromise = null; // 재시작 시 이전 세션 프로미스 해제
     // 피버 타임 초기화
     this.isFeverTime = false;
     this.feverTimeRemaining = 0;

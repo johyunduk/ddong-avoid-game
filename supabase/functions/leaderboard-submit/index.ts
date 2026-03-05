@@ -82,46 +82,28 @@ Deno.serve(async (req: Request) => {
     );
 
     // ── 세션 검증: 서버가 기록한 start_time 기준으로 경과 시간 확인 ──────────
+    // UPDATE WHERE used=false RETURNING ... 패턴으로 원자적 검증 + 소비 처리
+    // SELECT 후 UPDATE 방식은 동시 요청 시 race condition 가능 → 이 방식으로 방지
     if (sessionId) {
       const { data: session } = await supabaseAdmin
         .from('game_sessions')
-        .select('start_time, used, difficulty, user_id')
+        .update({ used: true })
         .eq('id', sessionId)
+        .eq('used', false)
+        .eq('user_id', user.id)
+        .eq('difficulty', difficulty)
+        .select('start_time')
         .single();
 
+      // null → 세션 없음 / 이미 사용됨 / 소유자 불일치 / 난이도 불일치 중 하나
       if (!session) {
         return new Response(
-          JSON.stringify({ error: 'Invalid session' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
-      // 세션 소유자 확인
-      if (session.user_id !== user.id) {
-        return new Response(
-          JSON.stringify({ error: 'Session user mismatch' }),
-          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
-      // 세션 재사용 방지
-      if (session.used) {
-        return new Response(
-          JSON.stringify({ error: 'Session already used' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
-      // 난이도 일치 확인
-      if (session.difficulty !== difficulty) {
-        return new Response(
-          JSON.stringify({ error: 'Session difficulty mismatch' }),
+          JSON.stringify({ error: 'Invalid or already used session' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
       // 서버 시각 기준 경과 시간으로 점수 타당성 검증
-      // 콘솔에서 score를 직접 조작해도 세션 시작 후 충분한 시간이 지나지 않으면 거부
       const elapsedMs = Date.now() - new Date(session.start_time).getTime();
       const elapsedSec = elapsedMs / 1000;
 
@@ -134,8 +116,8 @@ Deno.serve(async (req: Request) => {
       }
 
       // 핵심 검증: 이 점수가 나오려면 최소 N초는 걸렸어야 함
-      // 1점 = 100ms, 피버타임·보너스 고려해서 50% 여유 허용
-      const minRequiredSec = score * 0.1 * 0.5; // score * 100ms * 50%
+      // 1점 = 100ms → score점 = score * 0.1초, 50% 여유 적용
+      const minRequiredSec = score * 0.1 * 0.5;
       if (elapsedSec < minRequiredSec) {
         console.warn('Session time gate failed', { score, elapsedSec, minRequiredSec });
         return new Response(
@@ -143,12 +125,6 @@ Deno.serve(async (req: Request) => {
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
-
-      // 세션 사용 완료 처리
-      await supabaseAdmin
-        .from('game_sessions')
-        .update({ used: true })
-        .eq('id', sessionId);
     } else if (verification) {
       // 세션 없이 구 방식 verification만 있는 경우 (하위 호환)
       const {

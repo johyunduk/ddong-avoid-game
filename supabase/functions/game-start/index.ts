@@ -53,7 +53,7 @@ Deno.serve(async (req: Request) => {
     const { data: session, error: insertError } = await supabaseAdmin
       .from('game_sessions')
       .insert({ user_id: user.id, difficulty })
-      .select('id, start_time')
+      .select('id')
       .single();
 
     if (insertError || !session) {
