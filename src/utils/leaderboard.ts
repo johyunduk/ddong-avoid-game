@@ -76,6 +76,21 @@ export interface ScoreVerificationData {
 }
 
 /**
+ * 게임 세션 시작 — 서버가 start_time을 기록하여 점수 조작 방지
+ */
+export async function startGameSession(difficulty: Difficulty): Promise<string | null> {
+  try {
+    const { data, error } = await supabase.functions.invoke('game-start', {
+      body: { difficulty },
+    });
+    if (error || !data?.sessionId) return null;
+    return data.sessionId as string;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * 점수 제출
  */
 export async function submitScore(
@@ -83,7 +98,8 @@ export async function submitScore(
   difficulty: Difficulty,
   initials: string,
   verificationData: ScoreVerificationData,
-  characterType: string = 'chibi'
+  characterType: string = 'chibi',
+  sessionId: string | null = null
 ): Promise<SubmitScoreResponse> {
   if (!/^[A-Z]{3}$/.test(initials)) {
     throw new Error('Invalid initials: must be 3 uppercase letters');
@@ -94,6 +110,7 @@ export async function submitScore(
       score,
       difficulty,
       userName: initials,
+      sessionId,
       verification: verificationData,
       characterType,
     },

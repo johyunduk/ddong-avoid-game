@@ -11,7 +11,7 @@ import { GameMode, Difficulty, DIFFICULTIES, type DifficultyConfig } from '../ty
 import { FEVER_TIME_CONFIG } from '../config/feverTime';
 import { POOP_CONFIG } from '../config/poop';
 import { getHighScore, updateHighScore } from '../utils/localStorage';
-import { submitScore, getUserInitials, setUserInitials } from '../utils/leaderboard';
+import { submitScore, getUserInitials, setUserInitials, startGameSession } from '../utils/leaderboard';
 import { submitSkor, type SkorSubmitResponse } from '../utils/skor';
 import { getSafeSelectedCharacter, getCharacterDef, getDuplicateCount, getAwakeningLevel } from '../utils/character';
 import { isChristmasSeason } from '../utils/seasonChecker';
@@ -64,6 +64,8 @@ export default class GameScene extends Phaser.Scene {
   private selectedCharId: string = 'chibi'; // 선택된 캐릭터 ID
   private selectedCharGrade: string = '등급외'; // 선택된 캐릭터 등급
   private charAwakeLevel: number = 0; // 각성 단계 (init에서 계산, create에서 사용)
+  // 서버 세션 (게임 시작 시 비동기 생성, 점수 제출 시 await)
+  private sessionPromise: Promise<string | null> | null = null;
   // ── 캐릭터 능력 시스템 ────────────────────────────────────────────────
   private ability!: CharacterAbility;
   private abilityAPI!: GameSceneAPI;
@@ -447,6 +449,9 @@ export default class GameScene extends Phaser.Scene {
     // ── 캐릭터 능력 초기화 (모든 그룹 생성 완료 후) ─────────────────────
     this.abilityAPI = this.buildAPI();
     this.ability.onCreate(this.abilityAPI);
+
+    // 서버 세션 비동기 시작 — 게임과 병렬 실행, 점수 제출 시 await
+    this.sessionPromise = startGameSession(this.difficulty);
 
     // 히트박스 디버그 표시, hit box visibility
     // this.physics.world.createDebugGraphic();
@@ -1463,6 +1468,9 @@ export default class GameScene extends Phaser.Scene {
         // 캐릭터 타입 결정 (이미 init()에서 검증된 값 사용)
         const characterType = this.selectedCharId;
 
+        // 세션이 완료될 때까지 대기 (대부분 이미 완료되어 있음)
+        const sessionId = await this.sessionPromise;
+
         const result = await submitScore(
           this.score,
           this.difficulty,
@@ -1475,7 +1483,8 @@ export default class GameScene extends Phaser.Scene {
             topazCollected: this.topazCollected,
             rainbowCollected: this.rainbowCollected,
           },
-          characterType
+          characterType,
+          sessionId
         );
 
         submittingText.destroy();
