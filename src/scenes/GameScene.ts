@@ -17,6 +17,7 @@ import { getSafeSelectedCharacter, getCharacterDef, getDuplicateCount, getAwaken
 import { isChristmasSeason } from '../utils/seasonChecker';
 import type { CharacterAbility, GameSceneAPI } from '../abilities/types';
 import { getCharacterAbility } from '../abilities/index';
+import { realNow } from '../utils/realTime';
 
 export default class GameScene extends Phaser.Scene {
   private player!: Player;
@@ -45,8 +46,8 @@ export default class GameScene extends Phaser.Scene {
   // 점수 검증용 데이터
   private gameStartTime: number = 0;
   private phaserStartTime: number = 0; // 씬 시작 시 Phaser 내부 시간 (재시작 시에도 정확한 delta 계산용)
-  private lastScoreTime: number = 0;   // Date.now() 기반 점수용
-  private lastCheatCheckTime: number = 0;   // timeScale 감지용
+  private lastScoreTime: number = 0;        // realNow() 기반 점수용
+  private lastCheatCheckTime: number = 0;   // timeScale 감지용 (realNow 기준)
   private lastPhaserCheckTime: number = 0;  // 구간 비율 감지용 Phaser 기준점
   private goldCollected: number = 0;
   private diamondCollected: number = 0;
@@ -79,10 +80,10 @@ export default class GameScene extends Phaser.Scene {
     this.lastGoldPoopScore = 0;
     this.lastDiamondPoopScore = 0;
     this.lastTopazPoopScore = 0;
-    this.gameStartTime = Date.now();
+    this.gameStartTime = realNow();
     this.phaserStartTime = 0; // create()에서 설정
-    this.lastScoreTime = Date.now();
-    this.lastCheatCheckTime = Date.now();
+    this.lastScoreTime = realNow();
+    this.lastCheatCheckTime = realNow();
     this.goldCollected = 0;
     this.diamondCollected = 0;
     this.topazCollected = 0;
@@ -456,9 +457,10 @@ export default class GameScene extends Phaser.Scene {
     if (!this.gameOver) {
       this.player.update();
 
-      const now = Date.now();
+      // realNow(): 모듈 로드 시점에 캡처한 원본 Date.now — 콘솔 조작 무효
+      const now = realNow();
 
-      // 레이어 1: Date.now() 기반 점수 계산 (timeScale 조작 무력화)
+      // 레이어 1: realNow() 기반 점수 계산 (Date.now 조작 무력화)
       const elapsed = now - this.lastScoreTime;
       if (elapsed >= 100) {
         const points = Math.floor(elapsed / 100);
@@ -469,17 +471,18 @@ export default class GameScene extends Phaser.Scene {
       // 캐릭터 능력 프레임 업데이트 (글리치 분신 추적 등)
       this.ability.onUpdate(this.abilityAPI);
 
-      // 레이어 2: timeScale 이상 감지 (5초마다 구간 비율 체크)
+      // 레이어 2: rAF 조작 감지 (5초마다 구간 비율 체크)
+      // realNow vs Phaser time 비교 — Date.now·performance.now 동시 조작도 감지
       if (now - this.lastCheatCheckTime >= 5000) {
-        // 누적 비율 대신 구간 비율 사용 — 탭 전환·브라우저 부하 순간의 오탐 방지
         const realInterval = now - this.lastCheatCheckTime;
         const phaserInterval = this.time.now - this.lastPhaserCheckTime;
         const ratio = phaserInterval / realInterval;
 
-        // 정상 범위: 0.85 ~ 1.1 (브라우저 rAF 지연 허용)
-        // 임계값 0.85: rAF를 0.5~0.8배로 조작하는 치트만 감지, 정상 부하는 통과
-        if (ratio < 0.85) {
-          console.warn('[Anti-cheat] timeScale 조작 감지:', ratio.toFixed(2));
+        // 정상 범위: 0.85 ~ 1.15 (브라우저 rAF 지연·탭 전환 허용)
+        // ratio < 0.85: rAF 슬로우 조작 (slow-motion 치트)
+        // ratio > 1.15: rAF 패스트 조작 (fast-forward 치트)
+        if (ratio < 0.85 || ratio > 1.15) {
+          console.warn('[Anti-cheat] rAF 조작 감지:', ratio.toFixed(2));
           this.handleCheatDetected();
           return;
         }
@@ -1135,7 +1138,7 @@ export default class GameScene extends Phaser.Scene {
     this.physics.pause();
 
     // 점수 검증 데이터 로그
-    const gameEndTime = Date.now();
+    const gameEndTime = realNow();
     const playDuration = gameEndTime - this.gameStartTime;
     const bonusScore = this.goldCollected * 20 + this.diamondCollected * 40 + this.topazCollected * 80 + this.rainbowCollected * 100;
     const timeScore = Math.floor(playDuration / 100); // 100ms당 1점
@@ -1466,7 +1469,7 @@ export default class GameScene extends Phaser.Scene {
           initials,
           {
             gameStartTime: this.gameStartTime,
-            gameEndTime: Date.now(),
+            gameEndTime: realNow(),
             goldCollected: this.goldCollected,
             diamondCollected: this.diamondCollected,
             topazCollected: this.topazCollected,
