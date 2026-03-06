@@ -85,7 +85,6 @@ export default class GameScene extends Phaser.Scene {
     this.gameStartTime = realNow();
     this.phaserStartTime = 0; // create()에서 설정
     this.lastScoreTime = realNow();
-    this.lastCheatCheckTime = realNow();
     this.goldCollected = 0;
     this.diamondCollected = 0;
     this.topazCollected = 0;
@@ -204,7 +203,8 @@ export default class GameScene extends Phaser.Scene {
 
     // Phaser 내부 시간 기준점 기록 (씬 재시작 시에도 정확한 delta 계산)
     this.phaserStartTime = this.time.now;
-    this.lastPhaserCheckTime = this.time.now;
+    // rAF 체크 두 기준점을 동시에 설정 — preload 시간 불일치 방지
+    this.resetCheatCheckpoints();
 
     // 난이도별 최고 점수 로드
     this.highScore = getHighScore(this.difficulty);
@@ -454,6 +454,18 @@ export default class GameScene extends Phaser.Scene {
     // 서버 세션 비동기 시작 — 게임과 병렬 실행, 점수 제출 시 await
     this.sessionPromise = startGameSession(this.difficulty);
 
+    // 탭 전환 시 기준점 리셋 — 숨겨진 탭에서 돌아올 때 rAF false positive 및 점수 폭발 방지
+    const onVisibilityChange = () => {
+      if (!document.hidden && !this.gameOver) {
+        this.lastScoreTime = realNow(); // 탭 숨김 동안 누적된 시간을 점수로 환산하지 않음
+        this.resetCheatCheckpoints();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    this.events.once('shutdown', () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    });
+
     // 히트박스 디버그 표시, hit box visibility
     // this.physics.world.createDebugGraphic();
     // this.physics.world.drawDebug = true;
@@ -492,8 +504,7 @@ export default class GameScene extends Phaser.Scene {
           this.handleCheatDetected();
           return;
         }
-        this.lastCheatCheckTime = now;
-        this.lastPhaserCheckTime = this.time.now;
+        this.resetCheatCheckpoints();
       }
     }
   }
@@ -523,6 +534,12 @@ export default class GameScene extends Phaser.Scene {
       collectTopazPoop:   (p) => self.handleTopazCollected(p),
       collectRainbowPoop: (p) => self.handleRainbowCollected(p),
     };
+  }
+
+  /** rAF 조작 감지용 두 기준점을 현재 시각으로 동시 갱신 */
+  private resetCheatCheckpoints() {
+    this.lastCheatCheckTime = realNow();
+    this.lastPhaserCheckTime = this.time.now;
   }
 
   private handleCheatDetected() {
