@@ -1,0 +1,234 @@
+전체적으로 안티치트나 부정행위 방지 코드쪽 살펴봐줘. 매번 그런건 아니지만 가끔씩 정상적인 플레이인데도 점수 제출에서 실패가 되거나 raf 조작 됐다는 문구들이 뜨고 있어
+
+---
+
+Tool loaded.
+
+---
+
+Tool loaded.
+
+---
+
+# Simplify: Code Review and Cleanup
+
+Review all changed files for reuse, quality, and efficiency. Fix any issues found.
+
+## Phase 1: Identify Changes
+
+Run `git diff` (or `git diff HEAD` if there are staged changes) to see what changed. If there are no git changes, review the most recently modified files that the user mentioned or that you edited earlier in this conversation.
+
+## Phase 2: Launch Three Review Agents in Parallel
+
+Use the Agent tool to launch all three agents concurrently in a single message. Pass each agent the full diff so it has the complete context.
+
+### Agent 1: Code Reuse Review
+
+For each change:
+
+1. **Search for existing utilities and helpers** that could replace newly written code. Use Grep to find similar patterns elsewhere in the codebase — common locations are utility directories, shared modules, and files adjacent to the changed ones.
+2. **Flag any new function that duplicates existing functionality.** Suggest the existing function to use instead.
+3. **Flag any inline logic that could use an existing utility** — hand-rolled string manipulation, manual path handling, custom environment checks, ad-hoc type guards, and similar patterns are common candidates.
+
+### Agent 2: Code Quality Review
+
+Review the same changes for hacky patterns:
+
+1. **Redundant state**: state that duplicates existing state, cached values that could be derived, observers/effects that could be direct calls
+2. **Parameter sprawl**: adding new parameters to a function instead of generalizing or restructuring existing ones
+3. **Copy-paste with slight variation**: near-duplicate code blocks that should be unified with a shared abstraction
+4. **Leaky abstractions**: exposing internal details that should be encapsulated, or breaking existing abstraction boundaries
+5. **Stringly-typed code**: using raw strings where constants, enums (string unions), or branded types already exist in the codebase
+
+### Agent 3: Efficiency Review
+
+Review the same changes for efficiency:
+
+1. **Unnecessary work**: redundant computations, repeated file reads, duplicate network/API calls, N+1 patterns
+2. **Missed concurrency**: independent operations run sequentially when they could run in parallel
+3. **Hot-path bloat**: new blocking work added to startup or per-request/per-render hot paths
+4. **Unnecessary existence checks**: pre-checking file/resource existence before operating (TOCTOU anti-pattern) — operate directly and handle the error
+5. **Memory**: unbounded data structures, missing cleanup, event listener leaks
+6. **Overly broad operations**: reading entire files when only a portion is needed, loading all items when filtering for one
+
+## Phase 3: Fix Issues
+
+Wait for all three agents to complete. Aggregate their findings and fix each issue directly. If a finding is a false positive or not worth addressing, note it and move on — do not argue with the finding, just skip it.
+
+When done, briefly summarize what was fixed (or confirm the code was already clean).
+
+---
+
+Tool loaded.
+
+---
+
+<task-notification>
+<task-id>a5449ca7324239113</task-id>
+<tool-use-id>toolu_01Uisxji7HYVw1qqjLJbrxar</tool-use-id>
+<status>completed</status>
+<summary>Agent "코드 품질 리뷰" completed</summary>
+<result>충분한 정보를 확보했습니다. 코드 리뷰 결과를 보고합니다.
+
+---
+
+## 코드 리뷰 결과
+
+### 1. `init()`에서 `lastCheatCheckTime = 0` — 코드 명확성 문제
+
+**현황**: `init()`에서 `0`으로 설정하고 `create()`에서 `realNow()`로 덮어씁니다. 주석(`// create()에서 두 기준점과 동시 설정`)으로 의도를 설명하고 있어 런타임 문제는 없습니다.
+
+**문제**: `init()`의 `0`은 의미없는 임시값입니다. `update()`가 `create()` 이후에만 호출되므로 실제 위험은 없지만, `lastPhaserCheckTime`은 `init()`에서 초기화하지 않고 `phaserStartTime`과 함께 `create()`에서만 설정하는데, `lastCheatCheckTime`만 `init()`에 있는 것은 **일관성이 없습니다.** 두 변수는 항상 쌍으로 움직이므로(`create()`, `update()`, `onVisibilityChange` 모두 동시에 갱신) 초기화도 같은 위치에 있어야 합니다.
+
+---
+
+### 2. `document.hidden` 체크와 `!this.gameOver` 조건의 충분성
+
+**`!this.gameOver` 조건**: 적절합니다. 게임 오버 상태에서 탭 복귀 시 기준점을 리셋하면 점수 제출 직전 anti-cheat 검사를 우회할 수 있으므로 올바르게 막고 있습니다.
+
+**`document.hidden` 체크**: 한 가지 엣지케이스가 있습니다. `visibilitychange` 이벤트는 `hidden → visible` 전환과 `visible → hidden` 전환 모두에 발생합니다. `!document.hidden` 조건으로 복귀 시에만 실행하는 것은 올바르지만, **탭을 숨기는 순간(hidden = true)**에도 기준점을 리셋하면 더 안전합니다. 현재 구현은 탭이 숨겨진 동안 누군가 `Date.now`를 패치하고 돌아올 때, 기준점 리셋이 복귀 후에 일어나므로 리셋 이전 `now - lastCheatCheckTime` 검사에서 숨겨진 동안의 시간이 포함될 수 있습니다. 단, 브라우저가 숨겨진 탭에서 `rAF`를 중단하므로 `phaserInterval`도 거의 0에 가깝게 되어 `ratio`가 0에 수렴 → `< 0.85` 판정이 나올 수 있습니다. 이 경우 **false positive**(오탐)가 `onVisibilityChange` 리셋으로 방지되는 구조입니다. 다만 복귀 직후 `now - lastCheatCheckTime >= 5000`가 바로 참이 될 수 있어, **리셋 직전에 검사가 한 프레임 먼저 실행되는 레이스**가 이론상 존재합니다.
+
+---
+
+### 3. `this.events.once('shutdown', ...)` — 씬 재시작 시 리스너 누수 문제 (실질적 버그)
+
+이것이 가장 중요한 문제입니다.
+
+**`scene.restart()` 시 Phaser 생명주기**:
+```
+shutdown → init → preload → create
+```
+
+`shutdown` 이벤트가 발생하면 `once` 콜백이 실행되어 `onVisibilityChange`가 제거됩니다. 이후 `create()`가 다시 호출되면 **새로운 `onVisibilityChange` 클로저**가 만들어지고 새 `shutdown` once 리스너가 등록됩니다. 이것 자체는 정상입니다.
+
+**그러나 문제가 있습니다**: `create()`에서 `this.events.once('shutdown', ...)` 패턴을 쓸 때, **`shutdown`이 발생하지 않고 씬이 pause되었다가 resume되는 경우**(다른 씬을 launch하거나 sleep/wake하는 경우)에는 `shutdown` 이벤트가 발생하지 않으므로 `onVisibilityChange`가 남아있습니다. 현재 코드에서는 GameScene이 `scene.start()` 또는 `scene.restart()`로만 전환되고 pause/sleep은 사용하지 않으므로 **현재 흐름에서는 안전합니다.** 하지만 향후 씬 구조 변경 시 자동으로 깨질 수 있는 취약한 패턴입니다.
+
+더 견고한 패턴은 `this.events.on('shutdown', ...)` 대신 Phaser가 씬 자체 이벤트를 자동 정리하는 `this.events.on('destroy', ...)`를 함께 쓰거나, DOM 리스너를 `this.events.on('pause', ...)` 시에도 정리하는 것입니다.
+
+---
+
+### 요약
+
+| 항목 | 심각도 | 내용 |
+|------|--------|------|
+| `init()` vs `create()` 초기화 불일치 | 낮음 | `lastCheatCheckTime`만 `init()`에 있고 `lastPhaserCheckTime`은 없음 — 쌍으로 움직이는 변수의 일관성 위반 |
+| 복귀 시 한 프레임 레이스 | 낮음 | `onVisibilityChange` 리셋 전 `update()`에서 5000ms 조건이 참이 되어 false positive 가능 |
+| `shutdown` once 패턴의 구조적 취약성 | 중간 | 현재는 안전하나 씬이 pause/sleep되면 DOM 리스너 누수 발생. `destroy` 이벤트 병용 권장 |</result>
+<usage><total_tokens>16824</total_tokens><tool_uses>4</tool_uses><duration_ms>47214</duration_ms></usage>
+</task-notification>
+Full transcript available at: REDACTED.output
+
+---
+
+<task-notification>
+<task-id>af94d1bc787590c39</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<status>completed</status>
+<summary>Agent "코드 재사용 리뷰" completed</summary>
+<result>충분히 파악했습니다. 결과를 정리합니다.
+
+---
+
+## 코드 재사용 관점 리뷰 결과
+
+### 1. `resetCheatCheckpoints` 헬퍼 부재로 인한 중복 (가장 중요)
+
+두 기준점을 동시에 갱신하는 패턴이 파일 내에서 **3곳** 반복됩니다:
+
+| 위치 | 코드 |
+|------|------|
+| `create()` (line 208–209) | `this.lastCheatCheckTime = realNow(); this.lastPhaserCheckTime = this.time.now;` |
+| `onVisibilityChange` (line 462–463) | 동일 |
+| `update()` 정상 갱신 (line 509–510) | `this.lastCheatCheckTime = now; this.lastPhaserCheckTime = this.time.now;` |
+
+세 곳 모두 항상 두 필드를 짝으로 묶어 대입합니다. `resetCheatCheckpoints()` 같은 인라인 헬퍼 메서드로 추출하면 "두 필드 중 하나만 빠뜨리는 실수"를 원천 차단할 수 있습니다.
+
+### 2. `onVisibilityChange`에서 `lastScoreTime` 미갱신 가능성
+
+`lastScoreTime`도 `realNow()` 기반의 타임스탬프입니다. 탭에서 돌아올 때 `lastCheatCheckTime`·`lastPhaserCheckTime`은 리셋하지만 `lastScoreTime`은 리셋하지 않습니다. `update()`의 레이어 1 점수 계산(`elapsed = now - this.lastScoreTime`)은 탭이 숨겨진 시간을 누적해서 돌아오는 순간 과도한 점수가 한 번에 부여될 수 있습니다. rAF 체크 기준점만 리셋하는 것과 일관성이 맞지 않습니다.
+
+### 3. `visibilitychange` 처리 패턴 — Phaser 네이티브 이벤트 미사용
+
+Phaser는 탭 전환을 자체적으로 감지하여 `this.events` 또는 `this.game.events`에서 `'hidden'` / `'visible'` 이벤트를 발행합니다. 현재는 `document.addEventListener` + `this.events.once('shutdown', ...)` 클린업을 직접 작성했는데, `this.game.events.on('visible', ...)` 패턴을 쓰면 Phaser가 씬 수명 주기와 함께 관리하므로 수동 클린업 코드 자체가 필요 없어집니다. 코드베이스 다른 씬들이 `document` 이벤트를 직접 붙이는 패턴이 없다면 일관성 문제도 됩니다.
+
+### 요약
+
+| 문제 | 종류 | 위치 |
+|------|------|------|
+| 두 기준점 동시 갱신 패턴 3중 중복 | 코드 중복 | line 208–209, 462–463, 509–510 |
+| `lastScoreTime` 탭 복귀 시 미갱신 | 일관성 버그 가능성 | line 460–464 |
+| `document.addEventListener` 직접 사용 (Phaser `'visible'` 이벤트 미활용) | 기존 패턴과 불일치 | line 466–469 |</result>
+<usage><total_tokens>17461</total_tokens><tool_uses>7</tool_uses><duration_ms>58541</duration_ms></usage>
+</task-notification>
+Full transcript available at: REDACTED.output
+
+---
+
+<task-notification>
+<task-id>a4baf2e2263f2adf4</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<status>completed</status>
+<summary>Agent "효율성 리뷰" completed</summary>
+<result>필요한 정보를 모두 확인했습니다. 리뷰 결과를 보고합니다.
+
+---
+
+## 효율성 리뷰 결과
+
+### 핵심 질문 1: 리스너 중복 등록 가능성
+
+**결론: 중복 등록 없음. 안전하게 처리되고 있습니다.**
+
+Phaser의 씬 재시작 생명주기는 다음 순서로 진행됩니다.
+
+```
+씬 재시작 트리거
+  → shutdown 이벤트 발생  ← ✓ 여기서 visibilitychange 리스너 제거됨
+  → init()
+  → preload()
+  → create()              ← ✓ 새 리스너 등록
+```
+
+`this.events.once('shutdown', ...)` 핸들러가 `create()` 재진입보다 반드시 먼저 실행되므로, 정상적인 재시작 경로에서는 이전 리스너가 제거된 후 새 리스너가 등록됩니다. 중복 누적 문제는 없습니다.
+
+---
+
+### 핵심 질문 2: document 레벨 리스너가 다른 씬에 영향을 주는지
+
+**결론: 실질적 부작용 없으나, 설계상 주의가 필요한 지점이 있습니다.**
+
+이 게임은 `LeaderboardScene`, `ModeSelectScene` 등으로 씬이 전환될 때 GameScene의 `shutdown`이 발생하므로 리스너가 정리됩니다. 따라서 다른 씬이 활성화된 상태에서 `visibilitychange`가 발생해도 GameScene의 핸들러가 살아있는 일은 없습니다.
+
+단, 한 가지 설계상 주의사항이 있습니다.
+
+- 핸들러 내부에서 `this.gameOver` 와 `this.time.now`를 참조합니다.
+- `shutdown` 이후 Phaser 씬 내부 상태(`this.time`)는 정리되기 시작하는데, 만약 `shutdown`과 `visibilitychange`가 극히 짧은 시간 안에 연달아 발생하는 경쟁 조건(race condition)이 생긴다면 이미 정리 중인 `this.time`에 접근할 수 있습니다. 실제로 발생할 가능성은 낮지만 이론적인 취약점입니다.
+
+---
+
+### 추가로 발견된 문제: `shutdown` 전용 — `destroy` 이벤트 미처리
+
+**이것이 실질적인 잠재 누수입니다.**
+
+파일 전체에서 `this.events.on/once`를 사용하는 곳이 딱 한 곳 — 이 `shutdown` 핸들러뿐입니다. 문제는 Phaser에서 씬이 `destroy`될 때(`this.scene.remove()` 또는 게임 자체 종료 시)는 **`shutdown`이 먼저 발생한 후 `destroy`가 발생**하므로 이 경우는 괜찮습니다.
+
+그러나 만약 미래에 누군가 `this.scene.remove('GameScene')`을 호출하거나, Phaser 게임 인스턴스 자체를 `game.destroy()`하는 경우, Phaser 내부 구현에 따라 `shutdown` 이벤트 발생 시점과 `document.removeEventListener` 실행 순서가 보장되지 않을 수 있습니다. 현재 코드는 `destroy` 이벤트에 대한 별도 방어가 없습니다.
+
+---
+
+### 요약표
+
+| 항목 | 판정 | 설명 |
+|------|------|------|
+| 재시작 시 리스너 중복 등록 | 안전 | shutdown → create 순서가 보장되므로 중복 없음 |
+| 다른 씬 활성 중 부작용 | 실질적 없음 | 씬 전환 시 shutdown으로 정리됨 |
+| shutdown/visibilitychange 경쟁 조건 | 이론적 위험 | `this.time.now` 접근 시점 문제 |
+| destroy 이벤트 미처리 | 잠재적 누수 | scene.remove() 시나리오에서 리스너가 잔류할 수 있음 |
+| 불필요한 연산 | 없음 | 핸들러 로직 자체는 최소한 |</result>
+<usage><total_tokens>19642</total_tokens><tool_uses>5</tool_uses><duration_ms>53480</duration_ms></usage>
+</task-notification>
+Full transcript available at: REDACTED.output
+
+---
+
+깃 푸시해줘
