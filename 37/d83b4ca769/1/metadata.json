@@ -1,0 +1,44 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "37d83b4ca769",
+  "session_id": "4b9b6c69-d39d-4140-99f8-6a09ca6d2b84",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-07T13:30:51.97877Z",
+  "branch": "dev",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "src/abilities/GlitchAbility.ts",
+    "src/abilities/HackerAbility.ts",
+    "src/abilities/MaehwaAbility.ts",
+    "src/abilities/SentinelAbility.ts",
+    "src/config/abilityParams.ts",
+    "src/scenes/GameScene.ts",
+    "src/utils/character.ts",
+    "src/abilities/ArchieveAbility.ts",
+    "src/abilities/LegacyAbility.ts",
+    "src/abilities/MinerAbility.ts",
+    "src/abilities/NoiseAbility.ts"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "422abd84e750",
+  "transcript_identifier_at_start": "8f481fcd-9790-441d-96d8-a0ad16d3b32b",
+  "checkpoint_transcript_start": 6564,
+  "transcript_lines_at_start": 6564,
+  "token_usage": {
+    "input_tokens": 20149,
+    "cache_creation_tokens": 4309829,
+    "cache_read_tokens": 143843944,
+    "output_tokens": 632113,
+    "api_call_count": 1373
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-07T13:30:45.551474Z",
+    "agent_lines": 216,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 216,
+    "agent_percentage": 100
+  },
+  "transcript_path": ".claude/projects/-Users-johyunduk-Projects-ddong-avoid-game/4b9b6c69-d39d-4140-99f8-6a09ca6d2b84.jsonl"
+}
