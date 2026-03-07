@@ -36,6 +36,7 @@ export default class CharacterSelectScene extends Phaser.Scene {
   private pointerDownY = 0;
   private pointerDownScrollY = 0;
   private hasDragged = false;
+  private hasPointerDownInScene = false; // 이 씬에서 pointerdown이 발생했는지 추적 (bleed-through 방지)
 
   // 동적 갱신용 ref
   private headerNameText!: Phaser.GameObjects.Text;
@@ -68,6 +69,7 @@ export default class CharacterSelectScene extends Phaser.Scene {
     this.ownedIds = getOwnedCharacters();
     this.scrollOffset = 0;
     this.hasDragged = false;
+    this.hasPointerDownInScene = false;
     this.cardHighlights.clear();
 
     // 동기화 전 각성 수치 스냅샷 (동기화 후 변화 감지용)
@@ -141,6 +143,7 @@ export default class CharacterSelectScene extends Phaser.Scene {
 
     // ── 드래그 스크롤 입력 ───────────────────────────────────────────────
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
+      this.hasPointerDownInScene = true;
       if (this.detailPanel) return; // 상세 패널 열려있으면 스크롤 무시
       if (p.y < SCROLL_TOP || p.y > SCROLL_BOTTOM) return;
       this.pointerDownY = p.y;
@@ -166,7 +169,10 @@ export default class CharacterSelectScene extends Phaser.Scene {
     this.input.on('pointerup', () => {
       if (this.detailPanel) return; // 상세 패널 열려있으면 hasDragged 초기화 무시
       // card pointerup 이벤트가 먼저 발생하므로 다음 프레임에 초기화
-      this.time.delayedCall(0, () => { this.hasDragged = false; });
+      this.time.delayedCall(0, () => {
+        this.hasDragged = false;
+        this.hasPointerDownInScene = false;
+      });
     });
 
     // 마우스 휠
@@ -275,9 +281,9 @@ export default class CharacterSelectScene extends Phaser.Scene {
         if (this.selectedId !== char.id) cardBg.setFillStyle(0x222222);
       });
     }
-    // pointerup으로 상세 패널 열기 (드래그 스크롤과 구분)
+    // pointerup으로 상세 패널 열기 (드래그 스크롤과 구분, 이전 씬 bleed-through 방지)
     cardBg.on('pointerup', () => {
-      if (!this.hasDragged) this.showCharacterDetail(char.id);
+      if (!this.hasDragged && this.hasPointerDownInScene) this.showCharacterDetail(char.id);
     });
   }
 
@@ -309,7 +315,7 @@ export default class CharacterSelectScene extends Phaser.Scene {
     const panel = this.add.container(0, 0).setDepth(300);
     this.detailPanel = panel;
 
-    // ── 클릭 투과 차단 레이어 (카드 목록으로 이벤트 전달 방지) ───────
+    // ── 클릭 투과 차단 레이어 (카드 목록으로 이벤트 전달 방지)
     const blocker = this.add.rectangle(200, 300, 400, 600, 0x000000, 0).setInteractive();
     panel.add(blocker);
 
@@ -411,10 +417,14 @@ export default class CharacterSelectScene extends Phaser.Scene {
       // active 체크: ✕ 탭 시 패널 파괴 직후 이 핸들러가 동시에 발화하는 경우 방지
       const startVideo = () => {
         if (!illust.active || !videoObj?.active) return;
-        illust.setVisible(false);
         videoObj!.setVisible(true);
         videoObj!.play(false);
         this.fitVideoToPanel(videoObj!);
+        // 비디오 'play' 이벤트 = 실제 재생 시작 시점 → 그때 일러스트 숨김
+        // (즉시 숨기면 첫 프레임 렌더 전 갭에 카드 목록이 비침)
+        videoObj!.once('play', () => {
+          if (illust.active) illust.setVisible(false);
+        });
       };
       illust.setInteractive({ useHandCursor: true });
       illust.on('pointerup', startVideo);
