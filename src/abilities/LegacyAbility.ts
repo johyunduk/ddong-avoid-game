@@ -1,5 +1,6 @@
 import { BaseAbility } from './BaseAbility';
 import type { GameSceneAPI } from './types';
+import { LEGACY_PARAMS } from '../config/abilityParams';
 
 /**
  * 레거시 (UR) — 피버 + 레거시 모드
@@ -14,14 +15,6 @@ export class LegacyAbility extends BaseAbility {
   private accum           = 0;
   private lastLegacyScore = 0;
 
-  private static readonly FEVER_DURATION  = 6000;
-  private static readonly LEGACY_INTERVAL = 500;
-  private static readonly LEGACY_DURATION = 10000;
-  private static readonly SCORE_EXTRA     = 0.20;
-  private static readonly BURN_CHANCE_N   = 0.30;
-  private static readonly BURN_CHANCE_L   = 0.60;
-  private static readonly BURN_COUNT_N    = 2;
-  private static readonly BURN_COUNT_L    = 4;
   private legacyTopGlow?:    Phaser.GameObjects.Graphics;
   private legacyPulseTween?: Phaser.Tweens.Tween;
   private legacyRainTimer?:  Phaser.Time.TimerEvent;
@@ -67,7 +60,7 @@ export class LegacyAbility extends BaseAbility {
   override onCreate(api: GameSceneAPI): void {
     this.startFeverActive = true;
     this.startFeverRain(api);
-    api.scene.time.delayedCall(LegacyAbility.FEVER_DURATION, () => {
+    api.scene.time.delayedCall(LEGACY_PARAMS.feverDuration, () => {
       this.startFeverActive = false;
     });
   }
@@ -86,8 +79,7 @@ export class LegacyAbility extends BaseAbility {
 
   override getTickScore(base: number): number {
     if (!this.legacyModeActive) return base;
-    const extra = LegacyAbility.SCORE_EXTRA;
-    this.accum += base * extra;
+    this.accum += base * LEGACY_PARAMS.scoreExtra;
     const bonus = Math.floor(this.accum);
     this.accum -= bonus;
     return base + bonus;
@@ -103,16 +95,15 @@ export class LegacyAbility extends BaseAbility {
   }
 
   override onAfterSpawnPoop(api: GameSceneAPI): void {
-    const chance = this.legacyModeActive ? LegacyAbility.BURN_CHANCE_L : LegacyAbility.BURN_CHANCE_N;
-    const count  = this.legacyModeActive ? LegacyAbility.BURN_COUNT_L  : LegacyAbility.BURN_COUNT_N;
+    const chance = this.legacyModeActive ? LEGACY_PARAMS.burnChanceLegacy : LEGACY_PARAMS.burnChanceNormal;
+    const count  = this.legacyModeActive ? LEGACY_PARAMS.burnCountLegacy  : LEGACY_PARAMS.burnCountNormal;
     if (Math.random() < chance) {
       this.burnRandomPoops(api, count);
     }
   }
 
   override onScoreMilestone(score: number, api: GameSceneAPI): void {
-    const interval = LegacyAbility.LEGACY_INTERVAL;
-    if (score % interval === 0 && score > this.lastLegacyScore) {
+    if (score % LEGACY_PARAMS.legacyInterval === 0 && score > this.lastLegacyScore) {
       this.lastLegacyScore = score;
       this.activateLegacyMode(api);
     }
@@ -307,8 +298,7 @@ export class LegacyAbility extends BaseAbility {
     });
 
     // 레거시 모드 종료
-    const legacyDur = LegacyAbility.LEGACY_DURATION;
-    scene.time.delayedCall(legacyDur, () => {
+    scene.time.delayedCall(LEGACY_PARAMS.legacyDuration, () => {
       this.legacyModeActive = false;
       this.legacyRainTimer?.remove();
       this.legacyRainTimer = undefined;
@@ -331,7 +321,7 @@ export class LegacyAbility extends BaseAbility {
 
   private startFeverRain(api: GameSceneAPI): void {
     const scene  = api.scene;
-    const REPEAT = Math.floor(LegacyAbility.FEVER_DURATION / 140) - 1;
+    const REPEAT = Math.floor(LEGACY_PARAMS.feverDuration / 140) - 1;
 
     scene.time.addEvent({
       delay: 140,

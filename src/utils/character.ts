@@ -1,3 +1,9 @@
+import {
+  HACKER_DESC, MINER_DESC, MAEHWA_DESC,
+  ARCHIEVE_DESC, GLITCH_DESC, NOISE_DESC,
+  SENTINEL_DESC, LEGACY_DESC,
+} from '../config/abilityParams';
+
 export interface CharacterDef {
   id: string;
   name: string;
@@ -39,8 +45,8 @@ export const CHARACTERS: CharacterDef[] = [
     illustPath: 'assets/illustrations/hacker.webp',
     videoKey: 'vid_hacker',
     videoPath: 'assets/vids/hacker.mp4',
-    basicEffect: '금똥·다이아똥 낙하 속도 감소',
-    specialAbility: '100점마다 일반 똥 7개 터미널 삭제',
+    basicEffect: HACKER_DESC.basicEffect,
+    specialAbility: HACKER_DESC.specialAbility,
   },
   {
     id: 'miner',
@@ -53,8 +59,8 @@ export const CHARACTERS: CharacterDef[] = [
     illustPath: 'assets/illustrations/miner.webp',
     videoKey: 'vid_miner',
     videoPath: 'assets/vids/miner.mp4',
-    basicEffect: '특수 똥 수집 시 +10점 추가',
-    specialAbility: '300점마다 무지개똥 생성',
+    basicEffect: MINER_DESC.basicEffect,
+    specialAbility: MINER_DESC.specialAbility,
   },
   {
     id: 'maehwa',
@@ -67,8 +73,8 @@ export const CHARACTERS: CharacterDef[] = [
     illustPath: 'assets/illustrations/maehwa.webp',
     videoKey: 'vid_maehwa',
     videoPath: 'assets/vids/maehwa.mp4',
-    basicEffect: '이동 속도 +50px/s',
-    specialAbility: '100점마다 위쪽 똥 3개 칼로 제거',
+    basicEffect: MAEHWA_DESC.basicEffect,
+    specialAbility: MAEHWA_DESC.specialAbility,
   },
   {
     id: 'archieve',
@@ -81,8 +87,8 @@ export const CHARACTERS: CharacterDef[] = [
     illustPath: 'assets/illustrations/archieve.webp',
     videoKey: 'vid_archieve',
     videoPath: 'assets/vids/archieve.mp4',
-    basicEffect: '점수 획득 속도 1.1배',
-    specialAbility: '200점마다 +20점 보너스',
+    basicEffect: ARCHIEVE_DESC.basicEffect,
+    specialAbility: ARCHIEVE_DESC.specialAbility,
   },
   {
     id: 'glitch',
@@ -95,8 +101,8 @@ export const CHARACTERS: CharacterDef[] = [
     illustPath: 'assets/illustrations/glitch.webp',
     videoKey: 'vid_glitch',
     videoPath: 'assets/vids/glitch.mp4',
-    basicEffect: '잔상 분신이 특수 똥 수집',
-    specialAbility: '200점마다 특수 똥 위치에 분신 소환',
+    basicEffect: GLITCH_DESC.basicEffect,
+    specialAbility: GLITCH_DESC.specialAbility,
   },
   {
     id: 'noise',
@@ -109,8 +115,8 @@ export const CHARACTERS: CharacterDef[] = [
     illustPath: 'assets/illustrations/noise.webp',
     videoKey: 'vid_noise',
     videoPath: 'assets/vids/noise.mp4',
-    basicEffect: '특수 똥 생성 주기 25% 단축',
-    specialAbility: '200점마다 다음 소환 2개 감소',
+    basicEffect: NOISE_DESC.basicEffect,
+    specialAbility: NOISE_DESC.specialAbility,
   },
   // ── R등급 ──────────────────────────────────────────────────────────────
   {
@@ -245,8 +251,8 @@ export const CHARACTERS: CharacterDef[] = [
     illustPath: 'assets/illustrations/sentinel.webp',
     videoKey: 'vid_sentinel',
     videoPath: 'assets/vids/sentinel.mp4',
-    basicEffect: '시작 시 보호막 2개 보유 (피격 흡수 시 주변 똥 전기로 제거)',
-    specialAbility: '300점마다 보호막 1개 충전 (최대 3개)',
+    basicEffect: SENTINEL_DESC.basicEffect,
+    specialAbility: SENTINEL_DESC.specialAbility,
   },
   {
     id: 'legacy',
@@ -259,8 +265,8 @@ export const CHARACTERS: CharacterDef[] = [
     illustPath: 'assets/illustrations/legacy.webp',
     videoKey: 'vid_legacy',
     videoPath: 'assets/vids/legacy.mp4',
-    basicEffect: '시작 6초 금똥 피버 + 황금 빗줄기 / 스폰마다 30% 확률로 똥 2개 불태워 소멸 (+10점)',
-    specialAbility: '500점마다 10초간 레거시 모드: 점수 1.2배 · 황금 빗줄기 강화 · 불태우기 60% 확률 4개 소멸',
+    basicEffect: LEGACY_DESC.basicEffect,
+    specialAbility: LEGACY_DESC.specialAbility,
   },
 ];
 

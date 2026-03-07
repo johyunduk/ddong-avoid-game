@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { BaseAbility } from './BaseAbility';
 import type { GameSceneAPI } from './types';
+import { GLITCH_PARAMS } from '../config/abilityParams';
 
 /**
  * 글리치 (SR) — 분신 소환
@@ -42,8 +43,8 @@ export class GlitchAbility extends BaseAbility {
 
   override onScoreMilestone(score: number, api: GameSceneAPI): void {
     if (!api.isClassicMode) return;
-    if (score % 200 === 0) {
-      this.collectSpecialWithGhost(api, 1);
+    if (score % GLITCH_PARAMS.collectInterval === 0) {
+      this.collectSpecialWithGhost(api, GLITCH_PARAMS.collectCount);
     }
   }
 

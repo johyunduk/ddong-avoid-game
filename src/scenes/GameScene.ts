@@ -132,8 +132,10 @@ export default class GameScene extends Phaser.Scene {
         this.load.image('background2', 'assets/backgrounds/background2.webp');
       } else if (this.difficulty === Difficulty.NORMAL && !this.textures.exists('background3')) {
         this.load.image('background3', 'assets/backgrounds/background3.webp');
-      } else if ((this.difficulty === Difficulty.HARD || this.difficulty === Difficulty.EXTREME) && !this.textures.exists('background')) {
+      } else if (this.difficulty === Difficulty.HARD && !this.textures.exists('background')) {
         this.load.image('background', 'assets/backgrounds/background.webp');
+      } else if (this.difficulty === Difficulty.EXTREME && !this.textures.exists('background2')) {
+        this.load.image('background2', 'assets/backgrounds/background2.webp');
       }
       if (this.difficulty === Difficulty.EXTREME && isChristmasSeason() && !this.textures.exists('xmas_background')) {
         this.load.image('xmas_background', 'assets/backgrounds/xmas_background.webp');
@@ -227,7 +229,7 @@ export default class GameScene extends Phaser.Scene {
         if (isChristmasSeason()) {
           backgroundKey = 'xmas_background';
         } else {
-          backgroundKey = 'background';
+          backgroundKey = 'background2';
         }
       }
     }
@@ -389,27 +391,43 @@ export default class GameScene extends Phaser.Scene {
       );
     }
 
+    // HUD 배경 패널 (반투명 다크 바)
+    const HUD_H = 36;
+    const hudBg = this.add.graphics();
+    hudBg.fillStyle(0x000000, 0.28);
+    hudBg.fillRect(0, 0, 400, HUD_H);
+    hudBg.setDepth(9);
+
+    const hudTextY = Math.round(HUD_H / 2) - 11; // 18px 폰트 수직 중앙
+
     // 점수 텍스트 (왼쪽 위)
-    this.scoreText = this.add.text(16, 16, '점수: 0', {
-      fontSize: '24px',
-      color: '#000',
-      fontStyle: 'bold'
-    });
+    this.scoreText = this.add.text(16, hudTextY, '점수: 0', {
+      fontSize: '18px',
+      color: '#ffffff',
+      fontStyle: 'bold',
+      stroke: '#000000',
+      strokeThickness: 3
+    }).setDepth(10);
 
     // 최고 점수 텍스트 (오른쪽 위)
-    this.highScoreText = this.add.text(384, 16, `최고: ${this.highScore}`, {
-      fontSize: '20px',
+    this.highScoreText = this.add.text(384, hudTextY, `최고: ${this.highScore}`, {
+      fontSize: '18px',
       color: '#FFD700',
       fontStyle: 'bold',
-      stroke: '#000',
-      strokeThickness: 2
-    }).setOrigin(1, 0);
+      stroke: '#000000',
+      strokeThickness: 3
+    }).setOrigin(1, 0).setDepth(10);
 
-    // 조작 안내
-    this.add.text(200, 50, '← → 키로 이동', {
-      fontSize: '16px',
-      color: this.gameMode === GameMode.ITEM ? '#fff' : '#000'
-    }).setOrigin(0.5);
+    // 조작 안내 (3초 후 자동으로 페이드아웃)
+    const hintText = this.add.text(200, 58, '← → 키로 이동', {
+      fontSize: '15px',
+      color: '#ffffff',
+      stroke: '#000000',
+      strokeThickness: 3
+    }).setOrigin(0.5).setAlpha(0.85).setDepth(10);
+    this.time.delayedCall(2500, () => {
+      this.tweens.add({ targets: hintText, alpha: 0, duration: 700, ease: 'Linear' });
+    });
 
     if (this.gameMode === GameMode.CLASSIC) {
       // 클래식 모드: 💩 생성 타이머 (난이도별 초기 주기 사용)

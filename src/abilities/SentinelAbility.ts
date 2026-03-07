@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { BaseAbility } from './BaseAbility';
 import type { GameSceneAPI } from './types';
+import { SENTINEL_PARAMS } from '../config/abilityParams';
 
 /**
  * 센티넬 (UR) — 보호막
@@ -10,10 +11,6 @@ import type { GameSceneAPI } from './types';
  */
 export class SentinelAbility extends BaseAbility {
   private shieldCount = 0;
-
-  private static readonly START_SHIELDS   = 2;
-  private static readonly CHARGE_INTERVAL = 300;
-  private static readonly MAX_SHIELDS     = 3;
   private orbitDroplets: Phaser.GameObjects.Graphics[] = [];
   private orbitAngle = 0;
 
@@ -30,13 +27,13 @@ export class SentinelAbility extends BaseAbility {
   private static readonly RED_LIGHT     = 0xff6666;
 
   override onCreate(api: GameSceneAPI): void {
-    this.shieldCount = SentinelAbility.START_SHIELDS;
-    this.spawnDroplets(api, SentinelAbility.START_SHIELDS);
+    this.shieldCount = SENTINEL_PARAMS.startShields;
+    this.spawnDroplets(api, SENTINEL_PARAMS.startShields);
     this.sparkGfx = api.scene.add.graphics().setDepth(96).setAlpha(0);
   }
 
   override onScoreMilestone(score: number, api: GameSceneAPI): void {
-    if (score % SentinelAbility.CHARGE_INTERVAL === 0 && this.shieldCount < SentinelAbility.MAX_SHIELDS) {
+    if (score % SENTINEL_PARAMS.chargeInterval === 0 && this.shieldCount < SENTINEL_PARAMS.maxShields) {
       this.shieldCount++;
       this.playShieldChargeEffect(api);
       this.spawnDroplets(api, 1);

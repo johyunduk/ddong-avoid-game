@@ -1,28 +1,29 @@
 import Phaser from 'phaser';
 import { BaseAbility } from './BaseAbility';
 import type { GameSceneAPI } from './types';
+import { MAEHWA_PARAMS } from '../config/abilityParams';
 
 /**
- * 매화 (SR) — 이동속도 +50px/s / 100점마다 칼 베기 3개
- * ★2: 특수 똥 수집 시 +5점
+ * 매화 (SR) — 이동속도 버프 / 점수마다 칼 베기
+ * 수치: MAEHWA_PARAMS 참조
  */
 export class MaehwaAbility extends BaseAbility {
   private lastMaehwaScore = 0;
 
   override getPlayerSpeedBonus(): number {
-    return 50;
+    return MAEHWA_PARAMS.speedBonus;
   }
 
-  // ★2+: 특수 똥 수집 시 +5점
+  // ★2+: 특수 똥 수집 시 추가 점수 (MAEHWA_PARAMS.awake2SpecialBonus)
   override onCollectSpecial(_type: import('./types').SpecialPoopType): number {
-    return this.awakeningLevel >= 2 ? 5 : 0;
+    return this.awakeningLevel >= 2 ? MAEHWA_PARAMS.awake2SpecialBonus : 0;
   }
 
   override onScoreMilestone(score: number, api: GameSceneAPI): void {
     if (!api.isClassicMode) return;
-    if (score % 100 === 0 && score > this.lastMaehwaScore) {
+    if (score % MAEHWA_PARAMS.slashInterval === 0 && score > this.lastMaehwaScore) {
       this.lastMaehwaScore = score;
-      this.slashClosestPoops(3, api);
+      this.slashClosestPoops(MAEHWA_PARAMS.slashCount, api);
     }
   }
 

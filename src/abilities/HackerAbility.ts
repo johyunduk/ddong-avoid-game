@@ -1,23 +1,24 @@
 import Phaser from 'phaser';
 import { BaseAbility } from './BaseAbility';
 import type { GameSceneAPI } from './types';
+import { HACKER_PARAMS } from '../config/abilityParams';
 
 /**
  * 루트 (SR) — 터미널 삭제
- * 100점마다 랜덤 일반 똥 7개 제거
+ * 수치: HACKER_PARAMS 참조
  */
 export class HackerAbility extends BaseAbility {
   private lastHackerScore = 0;
 
   override specialPoopSpeedReduction(_type: 'gold' | 'diamond'): number {
-    return 40;
+    return HACKER_PARAMS.specialPoopSlowdown;
   }
 
   override onScoreMilestone(score: number, api: GameSceneAPI): void {
     if (!api.isClassicMode) return;
-    if (score % 100 === 0 && score > this.lastHackerScore) {
+    if (score % HACKER_PARAMS.deleteInterval === 0 && score > this.lastHackerScore) {
       this.lastHackerScore = score;
-      this.removeRandomPoops(7, api);
+      this.removeRandomPoops(HACKER_PARAMS.deleteCount, api);
     }
   }
 
