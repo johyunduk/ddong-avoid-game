@@ -142,7 +142,7 @@ Deno.serve(async (req: Request) => {
         goldCollected * 20 +
         diamondCollected * 40 +
         topazCollected * 80 +
-        rainbowCollected * 100;
+        rainbowCollected * 90;
       const expectedScore = timeScore + bonusScore;
       const tolerance = Math.max(expectedScore * 0.2, 10);
 

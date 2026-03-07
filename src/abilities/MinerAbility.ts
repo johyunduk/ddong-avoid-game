@@ -13,7 +13,7 @@ export class MinerAbility extends BaseAbility {
   }
 
   override onScoreMilestone(score: number, api: GameSceneAPI): void {
-    if (score % 200 === 0 && score > this.lastRainbowScore) {
+    if (score % 300 === 0 && score > this.lastRainbowScore) {
       this.lastRainbowScore = score;
       api.spawnRainbowPoop();
     }

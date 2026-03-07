@@ -54,7 +54,7 @@ export const CHARACTERS: CharacterDef[] = [
     videoKey: 'vid_miner',
     videoPath: 'assets/vids/miner.mp4',
     basicEffect: '특수 똥 수집 시 +10점 추가',
-    specialAbility: '200점마다 무지개똥 생성',
+    specialAbility: '300점마다 무지개똥 생성',
   },
   {
     id: 'maehwa',

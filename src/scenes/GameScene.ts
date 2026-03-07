@@ -454,10 +454,14 @@ export default class GameScene extends Phaser.Scene {
     // 서버 세션 비동기 시작 — 게임과 병렬 실행, 점수 제출 시 await
     this.sessionPromise = startGameSession(this.difficulty);
 
-    // 탭 전환 시 기준점 리셋 — 숨겨진 탭에서 돌아올 때 rAF false positive 및 점수 폭발 방지
+    // 탭 전환 시 기준점 리셋 — 숨김/복귀 양방향으로 처리
+    // 숨김 시: 기준점만 리셋 (lastScoreTime 보존 → 숨기기 직전 이월분 유지)
+    // 복귀 시: lastScoreTime도 리셋 (숨김 동안 누적 시간을 점수에 반영하지 않음)
     const onVisibilityChange = () => {
-      if (!document.hidden && !this.gameOver) {
-        this.lastScoreTime = realNow(); // 탭 숨김 동안 누적된 시간을 점수로 환산하지 않음
+      if (!this.gameOver) {
+        if (!document.hidden) {
+          this.lastScoreTime = realNow();
+        }
         this.resetCheatCheckpoints();
       }
     };
@@ -474,6 +478,9 @@ export default class GameScene extends Phaser.Scene {
   update() {
     if (!this.gameOver) {
       this.player.update();
+
+      // 탭 숨김 중엔 모든 게임 로직 차단 (rAF throttle로 인한 오탐 및 타이밍 레이스 방지)
+      if (document.hidden) return;
 
       // realNow(): 모듈 로드 시점에 캡처한 원본 Date.now — 콘솔 조작 무효
       const now = realNow();
@@ -496,7 +503,7 @@ export default class GameScene extends Phaser.Scene {
         const phaserInterval = this.time.now - this.lastPhaserCheckTime;
         const ratio = phaserInterval / realInterval;
 
-        // 정상 범위: 0.85 ~ 1.15 (브라우저 rAF 지연·탭 전환 허용)
+        // 정상 범위: 0.85 ~ 1.15 (브라우저 rAF 지연 허용)
         // ratio < 0.85: rAF 슬로우 조작 (slow-motion 치트)
         // ratio > 1.15: rAF 패스트 조작 (fast-forward 치트)
         if (ratio < 0.85 || ratio > 1.15) {
@@ -732,7 +739,7 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private handleRainbowCollected(poop: Phaser.Physics.Arcade.Sprite) {
-    this.handleSpecialCollected(poop, 'rainbow', 100, '🌈', '#FF00FF', () => { this.rainbowCollected++; });
+    this.handleSpecialCollected(poop, 'rainbow', 90, '🌈', '#FF00FF', () => { this.rainbowCollected++; });
   }
 
   private collectRainbowPoop(
@@ -1163,7 +1170,7 @@ export default class GameScene extends Phaser.Scene {
     // 점수 검증 데이터 로그
     const gameEndTime = realNow();
     const playDuration = gameEndTime - this.gameStartTime;
-    const bonusScore = this.goldCollected * 20 + this.diamondCollected * 40 + this.topazCollected * 80 + this.rainbowCollected * 100;
+    const bonusScore = this.goldCollected * 20 + this.diamondCollected * 40 + this.topazCollected * 80 + this.rainbowCollected * 90;
     const timeScore = Math.floor(playDuration / 100); // 100ms당 1점
     const expectedScore = timeScore + bonusScore;
     const phaserTime = this.time.now - this.phaserStartTime; // 이번 게임의 Phaser 경과 시간
