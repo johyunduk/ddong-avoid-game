@@ -1,0 +1,1017 @@
+extreme mode 배경 @public/assets/backgrounds/background.webp 에서 @public/assets/backgrounds/background2.webp 로 바꿔줘
+
+---
+
+Tool loaded.
+
+---
+
+Tool loaded.
+
+---
+
+Tool loaded.
+
+---
+
+스크린샷 2026-03-07 오후 8.51.23 이게 현재 게임 화면인데 뭔가 눈이 아픈데 좀 안아파지게 할 수 있나?
+
+---
+
+Tool loaded.
+
+---
+
+현재 점수 최고 점수 크기 통일 시켜줘 최고 점수를 기준으로
+
+---
+
+HUD 사이즈를 조금 줄여줘. 안에 점숨, 최고 점수는 세로 기준 가운데 정렬은 유지하고
+
+---
+
+그 캐릭터별로 특정 조건에 따라 특정 점수 같은게 버프가 될 수 있고 너프가 될 수 있는데 한 부분만 바꿔도 적용되는 부분과 캐릭터 정보에 같이 적용이 되도록 코드를 수정해 줄 수 있나? 예를 들어 광부의 경우 300 점 마다 무지개똥이 나오는데 여기서는 300점이 버프 및 너프 대상이기 떄문에 이게 한곳에서 관리되어야 하고 매화의 경우 100점 마다 가장 가까운 세개의 똥 제거에서는 100점과 3개 이게 한곳에서 관리되게 해줘. 모든 캐릭터를 저런게 적용되게 수정해줘.
+
+---
+
+Tool loaded.
+
+---
+
+Tool loaded.
+
+---
+
+# Simplify: Code Review and Cleanup
+
+Review all changed files for reuse, quality, and efficiency. Fix any issues found.
+
+## Phase 1: Identify Changes
+
+Run `git diff` (or `git diff HEAD` if there are staged changes) to see what changed. If there are no git changes, review the most recently modified files that the user mentioned or that you edited earlier in this conversation.
+
+## Phase 2: Launch Three Review Agents in Parallel
+
+Use the Agent tool to launch all three agents concurrently in a single message. Pass each agent the full diff so it has the complete context.
+
+### Agent 1: Code Reuse Review
+
+For each change:
+
+1. **Search for existing utilities and helpers** that could replace newly written code. Use Grep to find similar patterns elsewhere in the codebase — common locations are utility directories, shared modules, and files adjacent to the changed ones.
+2. **Flag any new function that duplicates existing functionality.** Suggest the existing function to use instead.
+3. **Flag any inline logic that could use an existing utility** — hand-rolled string manipulation, manual path handling, custom environment checks, ad-hoc type guards, and similar patterns are common candidates.
+
+### Agent 2: Code Quality Review
+
+Review the same changes for hacky patterns:
+
+1. **Redundant state**: state that duplicates existing state, cached values that could be derived, observers/effects that could be direct calls
+2. **Parameter sprawl**: adding new parameters to a function instead of generalizing or restructuring existing ones
+3. **Copy-paste with slight variation**: near-duplicate code blocks that should be unified with a shared abstraction
+4. **Leaky abstractions**: exposing internal details that should be encapsulated, or breaking existing abstraction boundaries
+5. **Stringly-typed code**: using raw strings where constants, enums (string unions), or branded types already exist in the codebase
+
+### Agent 3: Efficiency Review
+
+Review the same changes for efficiency:
+
+1. **Unnecessary work**: redundant computations, repeated file reads, duplicate network/API calls, N+1 patterns
+2. **Missed concurrency**: independent operations run sequentially when they could run in parallel
+3. **Hot-path bloat**: new blocking work added to startup or per-request/per-render hot paths
+4. **Unnecessary existence checks**: pre-checking file/resource existence before operating (TOCTOU anti-pattern) — operate directly and handle the error
+5. **Memory**: unbounded data structures, missing cleanup, event listener leaks
+6. **Overly broad operations**: reading entire files when only a portion is needed, loading all items when filtering for one
+
+## Phase 3: Fix Issues
+
+Wait for all three agents to complete. Aggregate their findings and fix each issue directly. If a finding is a false positive or not worth addressing, note it and move on — do not argue with the finding, just skip it.
+
+When done, briefly summarize what was fixed (or confirm the code was already clean).
+
+---
+
+Tool loaded.
+
+---
+
+<task-notification>
+<task-id>ab83c7c1e4122839e</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<status>completed</status>
+<summary>Agent "Code reuse review" completed</summary>
+<result>Perfect! Now let me compile my final report based on all the information gathered:
+
+## Code Reuse Issues Analysis
+
+I've completed a thorough review of the git diff for the ddong-avoid-game project. Here are the findings:
+
+### 1. **abilityParams.ts Structure - No Duplication, Good Pattern Consistency**
+
+The new `src/config/abilityParams.ts` follows the established pattern from existing config files:
+- **`poop.ts`**: Uses interface + const object with JSDoc comments ✓
+- **`feverTime.ts`**: Uses interface + const object with examples ✓
+- **`abilityParams.ts`**: Uses const objects with `as const` (no interface) ✓
+
+**Status**: Pattern is consistent. The lack of an interface for abilityParams is acceptable since it exports many independent objects (PARAMS and DESC pairs) rather than a single unified config. An interface would be unnecessarily complex here.
+
+---
+
+### 2. **DESC Strings - Template Literal Generation Pattern is Good**
+
+The DESC objects properly use template literals with PARAMS values:
+```typescript
+export const HACKER_DESC = {
+  basicEffect: '금똥·다이아똥 낙하 속도 감소',
+  specialAbility: `${HACKER_PARAMS.deleteInterval}점마다 일반 똥 ${HACKER_PARAMS.deleteCount}개 터미널 삭제`,
+}
+```
+
+This ensures single source of truth — changing HACKER_PARAMS automatically updates the description in CharacterSelectScene.
+
+**Status**: Good practice, no issues found.
+
+---
+
+### 3. **HUD Text Creation - Multiple Instances of Inline Styling**
+
+**CRITICAL REUSE OPPORTUNITY FOUND**: 
+
+The GameScene.ts HUD section (lines 394-430) creates multiple text elements with repetitive stroke styling:
+
+```typescript
+// Line 408-409 (scoreText)
+stroke: '#000000',
+strokeThickness: 3
+
+// Line 417-418 (highScoreText)
+stroke: '#000',
+strokeThickness: 2
+
+// Line 425-426 (hintText)
+stroke: '#000000',
+strokeThickness: 3
+```
+
+Additionally, the codebase contains **22 instances of `stroke: '#000'` or `stroke: '#000000'`** across GameScene.ts (verified via grep). This pattern is repeated throughout the file:
+- Lines 408, 417, 425 (HUD area)
+- Lines 580, 742, 1266, 1283, 1330, 1343, 1352, 1361, 1374, 1383, 1391, 1409, 1456, 1475, 1487, 1506, 1541, 1551, 1635 (game over, bonus text, error messages, etc.)
+
+**Issue**: No helper function exists for creating text with stroke styling. A utility could encapsulate this:
+
+```typescript
+// Example of what could exist
+private createStrokedText(x: number, y: number, text: string, options: CustomTextOptions)
+```
+
+**Status**: **This is a code reuse gap that should be flagged.** The new HUD code doesn't introduce this problem, but it doesn't solve it either.
+
+---
+
+### 4. **HUD_H Constant - Localized Constant, Acceptable**
+
+The `HUD_H = 36` in GameScene.ts (line 395) is scene-specific and doesn't conflict with config files. It's appropriately scoped.
+
+**Status**: No issue.
+
+---
+
+### 5. **EXTREME Background Logic Change**
+
+Line 137-138 and 227-232 show EXTREME difficulty now uses `background2` (same as EASY) instead of a dedicated background.
+
+**Status**: This is a design decision, not a code reuse issue. No duplication problem.
+
+---
+
+### Summary of Findings
+
+| Category | Finding | Severity |
+|----------|---------|----------|
+| abilityParams.ts structure | Follows existing config patterns correctly | ✓ None |
+| DESC generation | Proper template literal pattern, single source of truth | ✓ None |
+| HUD text styling | Inline stroke/color/thickness repeated 22+ times in codebase; no helper exists | ⚠ Medium |
+| Character description usage | Correctly imports DESC and uses in CharacterSelectScene | ✓ None |
+| EXTREME background logic | Intentional design change, not a reuse issue | ✓ None |
+
+---
+
+### Recommendation
+
+While the diff itself is well-structured and introduces no new duplication, consider creating a **text helper utility** for future use:
+
+```typescript
+// src/utils/textStyle.ts (suggested, not in current diff)
+export function createStrokedText(scene: Phaser.Scene, x: number, y: number, text: string, color: string, strokeColor: string = '#000000', strokeThickness: number = 3) {
+  return scene.add.text(x, y, text, {
+    color,
+    stroke: strokeColor,
+    strokeThickness
+  });
+}
+```
+
+This would reduce the 190+ occurrences of manual stroke styling across the codebase.</result>
+<usage><total_tokens>37220</total_tokens><tool_uses>20</tool_uses><duration_ms>47126</duration_ms></usage>
+</task-notification>
+Full transcript available at: REDACTED.output
+
+---
+
+<task-notification>
+<task-id>afe5eb887e3266d09</task-id>
+<tool-use-id>toolu_01BtD8GXE6BDjU4647ftqTfx</tool-use-id>
+<status>completed</status>
+<summary>Agent "Code quality review" completed</summary>
+<result>Now let me generate my complete quality review report:
+
+---
+
+## Code Quality Review Report: Git Diff Analysis
+
+### 1. CRITICAL: Floating-Point Precision Errors in Template Literals
+
+**Severity: HIGH**
+
+The diff introduces floating-point arithmetic directly in template literal expressions that will be rendered to users. JavaScript's IEEE 754 float representation can produce unexpected results:
+
+#### Issues Found:
+
+**File: `src/config/abilityParams.ts` (Lines 54, 80, 110)**
+
+```typescript
+// Line 54: ARCHIEVE_DESC
+basicEffect: `점수 획득 속도 ${1 + ARCHIEVE_PARAMS.scoreMultiplierExtra}배`
+// 1 + 0.10 = 1.1000000000000001 (PRECISION ERROR)
+
+// Line 80: NOISE_DESC  
+basicEffect: `특수 똥 생성 주기 ${NOISE_PARAMS.spawnShortening * 100}% 단축`
+// 0.25 * 100 = 25.000000000000004 (PRECISION ERROR, though less visible)
+
+// Line 109: LEGACY_DESC (multiple calculations)
+basicEffect: `...${LEGACY_PARAMS.feverDuration / 1000}초...${LEGACY_PARAMS.burnChanceNormal * 100}%...`
+// 6000 / 1000 = 6 ✓ (safe: integer division)
+// 0.30 * 100 = 29.999999999999998 (PRECISION ERROR)
+// 0.60 * 100 = 59.99999999999999 (PRECISION ERROR)
+
+// Line 110: LEGACY_DESC specialAbility
+specialAbility: `...점수 ${1 + LEGACY_PARAMS.scoreExtra}배...불태우기 ${LEGACY_PARAMS.burnChanceLegacy * 100}%...`
+// 1 + 0.20 = 1.2000000000000002 (PRECISION ERROR)
+// 0.60 * 100 = 59.99999999999999 (PRECISION ERROR, duplicated from line 109)
+```
+
+**Risk**: Users will see "1.1000000000000001배" or "29.999999999999998%" instead of clean values like "1.1배" or "30%". This severely damages UI credibility for a game where precision matters (character abilities).
+
+**Recommendation**: Pre-compute and store rounded values:
+```typescript
+export const ARCHIEVE_PARAMS = {
+  scoreMultiplierExtra: 0.10,
+  scoreMultiplierTotal: 1.1,  // Pre-computed
+  // ...
+}
+```
+Or use `.toFixed()` / `Math.round()` in the template literal.
+
+---
+
+### 2. MEDIUM: JSDoc Placeholder Curly Braces in Comments
+
+**Severity: MEDIUM**
+
+**File: `src/abilities/HackerAbility.ts` (Line 8)**
+```typescript
+/**
+ * 루트 (SR) — 터미널 삭제
+ * {deleteInterval}점마다 랜덤 일반 똥 {deleteCount}개 제거
+ */
+```
+
+**Issue**: The JSDoc comment contains literal `{deleteInterval}` and `{deleteCount}` as placeholders, but these are not replaced by any documentation processor. They appear to be intended as template variables but are not functional.
+
+**Context**: The actual values are now in `HACKER_PARAMS`, so the comment should either:
+- Be removed (parameters are self-documenting in the code)
+- Reference the actual `HACKER_PARAMS` object
+- Use concrete values like "100점마다 랜덤 일반 똥 7개 제거"
+
+This is misleading because readers might expect these braces to be substituted, but they're not.
+
+---
+
+### 3. MEDIUM: Inconsistent `strokeThickness` Values
+
+**Severity: MEDIUM**
+
+**File: `src/scenes/GameScene.ts` (Lines 404-419)**
+
+```typescript
+// Line 409: scoreText
+stroke: '#000000',
+strokeThickness: 3
+
+// Line 418: highScoreText
+stroke: '#000',
+strokeThickness: 2
+```
+
+**Issues**:
+1. **Inconsistency**: Same HUD level, same visual context, but different stroke weights (3 vs 2)
+2. **Color Format Mismatch**: `#000000` (scoreText) vs `#000` (highScoreText) — though functionally identical, inconsistent
+3. **No Comment**: If this is intentional (e.g., gold text looks better with thinner stroke), it should be documented
+
+**Impact**: Visual inconsistency in HUD. The right-aligned score text will appear bolder than the left-aligned score, which may be unintended.
+
+---
+
+### 4. MEDIUM: Magic Number - Hardcoded Canvas Width
+
+**Severity: MEDIUM**
+
+**File: `src/scenes/GameScene.ts` (Line 398)**
+
+```typescript
+const HUD_H = 36;
+const hudBg = this.add.graphics();
+hudBg.fillStyle(0x000000, 0.28);
+hudBg.fillRect(0, 0, 400, HUD_H);  // ← Canvas width hardcoded
+```
+
+**Issue**: The canvas width `400` is hardcoded instead of using a constant. Phaser game config has `width: 400`, but that's not referenced here.
+
+**Context from CLAUDE.md**: "캔버스: 400×600px" is stated, and `this.physics.world.setBounds(15, 0, 370, 600)` appears elsewhere. If canvas width needs to change globally, this magic number won't be updated.
+
+**Recommendation**:
+```typescript
+const CANVAS_WIDTH = 400;  // or import from config
+hudBg.fillRect(0, 0, CANVAS_WIDTH, HUD_H);
+```
+
+---
+
+### 5. LOW: Local Const Not Used Across Scene Restarts
+
+**Severity: LOW** (Not a bug, but worth noting)
+
+**File: `src/scenes/GameScene.ts` (Line 395)**
+
+```typescript
+const HUD_H = 36;
+```
+
+**Context**: `HUD_H` is created as a local const in `create()`. When the scene restarts (via `init()` → `preload()` → `create()`), a new `HUD_H` constant is created. 
+
+**Why Not a Problem**: 
+- The value is constant and correct each time
+- The HUD is recreated fresh each scene start
+- No caching issues
+
+**Observation**: Unlike class properties (which persist across scene start/stop), local consts are fine for scene-lifecycle objects like HUD elements.
+
+---
+
+### 6. LOW: Floating-Point Math in Tween Calculations (Legacy Ability)
+
+**Severity: LOW** (Contained, not user-facing)
+
+**File: `src/abilities/LegacyAbility.ts` (Line 324)**
+
+```typescript
+const REPEAT = Math.floor(LEGACY_PARAMS.feverDuration / 140) - 1;
+```
+
+**Calculation**: `6000 / 140 = 42.857... → Math.floor = 42 → 42 - 1 = 41`
+
+**Why It's OK**: 
+- `Math.floor()` prevents precision errors
+- Animation timing is not user-critical (milliseconds off won't be visible)
+- This is NOT user-facing text
+
+---
+
+### 7. Code Quality Notes: Parameter Extraction (✓ Good)
+
+The extraction of magic numbers into `src/config/abilityParams.ts` is **well-structured**:
+- Single source of truth for ability parameters
+- Centralized configuration
+- Easy to tune/balance
+
+However, the floating-point rendering issue (finding #1) undermines this benefit.
+
+---
+
+## Summary Table
+
+| Finding | Severity | File(s) | Line(s) | Type | Recommendation |
+|---------|----------|---------|---------|------|-----------------|
+| Floating-point in template literals | HIGH | abilityParams.ts | 54, 80, 109-110 | Bug | Use `.toFixed()` or pre-compute rounded values |
+| JSDoc placeholder braces | MEDIUM | HackerAbility.ts | 8 | Clarity | Remove or document why braces exist |
+| Inconsistent strokeThickness | MEDIUM | GameScene.ts | 409, 418 | Style | Make both 3 or both 2; document if intentional |
+| Hardcoded canvas width | MEDIUM | GameScene.ts | 398 | Magic Number | Define CANVAS_WIDTH constant |
+| Local const per scene restart | LOW | GameScene.ts | 395 | Observation | Not a problem; documented pattern is fine |
+| Floating-point in tween math | LOW | LegacyAbility.ts | 324 | Implementation | Not user-facing; Math.floor() handles it |
+
+---
+
+## Critical Action Required
+
+**Fix the floating-point display issue before merging.** Users will see malformed ability descriptions like "1.1000000000000001배" or "29.999999999999998%", which:
+- Breaks immersion
+- Appears as a bug
+- Undermines confidence in game balance
+
+All other findings are lower priority but should be addressed in code review.</result>
+<usage><total_tokens>46012</total_tokens><tool_uses>13</tool_uses><duration_ms>40082</duration_ms></usage>
+</task-notification>
+Full transcript available at: REDACTED.output
+
+---
+
+<task-notification>
+<task-id>abd49d3a4d041fd21</task-id>
+<tool-use-id>toolu_01WupNjLZFkQ2Jrr3NovJuS4</tool-use-id>
+<status>completed</status>
+<summary>Agent "Efficiency review" completed</summary>
+<result>Excellent. Now I have enough information to provide a comprehensive efficiency review. Let me compile my findings:
+
+## EFFICIENCY REVIEW REPORT: git diff Analysis
+
+Based on my thorough examination of the GameScene.ts code and the new abilityParams.ts file, here are my findings:
+
+### 1. **hintText Tween (Lines 422-430 in GameScene.ts)** ✅ SAFE
+- **Finding**: The hintText object remains in the scene graph after the tween completes (alpha = 0 but object is not destroyed).
+- **Assessment**: This is not a memory leak in Phaser's context. When a scene restarts or shuts down, Phaser automatically calls `destroy()` on all GameObjects. The scene lifecycle confirms this:
+  - `this.events.once('shutdown', ...)` at line 487 shows proper event handling
+  - `this.scene.restart()` at line 1728 triggers automatic cleanup
+  - The transparent object is negligible (1 Text object per game session)
+- **Recommendation**: Not critical, but could be optimized by explicitly destroying hintText after the tween completes if memory is a concern. Currently acceptable.
+
+### 2. **hudBg Graphics Object (Lines 395-399 in GameScene.ts)** ✅ SAFE
+- **Finding**: The hudBg Graphics object is created fresh each time `create()` runs (i.e., on scene restart).
+- **Assessment**: This is correct behavior. Phaser automatically destroys all GameObjects during scene lifecycle transitions (shutdown → init → create). The old Graphics object is not persisting.
+- **Confirmed**: No dangling Graphics object issue.
+
+### 3. **delayedCall with Closure Over hintText (Lines 428-430)** ✅ SAFE
+- **Finding**: A delayedCall is registered with a 2500ms timeout that references hintText via closure.
+- **Assessment**: 
+  - If scene restarts/shuts down before 2500ms elapses, Phaser's timer manager automatically cancels pending timers during the `shutdown` event
+  - The `this.time` manager is instance-bound to the scene and destroyed on scene shutdown
+  - The closure reference to `hintText` becomes invalid, but this is harmless since the callback never fires
+- **Confirmed**: No dangling callback issue.
+
+### 4. **DESC Template Literals in abilityParams.ts** ✅ EXCELLENT
+- **Finding**: All DESC objects are module-level constants, evaluated **once at import time**.
+  - Examples: `HACKER_DESC`, `MINER_DESC`, `ARCHIEVE_DESC`, etc.
+  - Template literal expressions are all **static**: direct PARAMS property lookups + arithmetic (`1 + X`, `X * 100`)
+  - No loops, function calls, or dynamic computations in template literals
+- **Assessment**: This is perfectly efficient. Computed once at load, used many times with zero re-evaluation overhead. No waste.
+- **Pattern verified**: Lines 19, 29, 42-43, 54-55, 66, 80-81, 92-93, 109-110 all follow this pattern.
+
+### 5. **onScoreMilestone Not in Hot Path** ✅ CONFIRMED
+- **Finding**: `ability.onScoreMilestone(score, api)` is called at line 826 in GameScene.ts.
+- **Call context**: Only invoked inside `checkMissedSpawnPoints()` loop (line 814-828), which runs inside `updateScore()`, which is called only when score increases.
+- **Assessment**: Event-driven, not per-frame:
+  - Score increases ~10 times/second (100ms interval, line 508)
+  - onScoreMilestone runs only for discrete score transitions (40-point intervals, 100-point intervals, etc.)
+  - All ability implementations check `score % interval === 0` first (fast modulo check)
+  - No per-frame overhead; all implementations are guarded (HackerAbility, MaehwaAbility, GlitchAbility, etc.)
+- **Confirmed**: Zero hot-path bloat.
+
+---
+
+## SUMMARY
+
+| Category | Status | Notes |
+|----------|--------|-------|
+| **hintText lifecycle** | ✅ Safe | Transparent object; Phaser cleans up on restart |
+| **hudBg persistence** | ✅ Safe | Old Graphics destroyed on shutdown; no leak |
+| **delayedCall closure** | ✅ Safe | Timer auto-canceled on shutdown; callback never fires |
+| **DESC template literals** | ✅ Excellent | Static evaluation at import; zero runtime cost |
+| **onScoreMilestone in hot path** | ✅ Safe | Event-driven (discrete score points); all guarded |
+| **Memory leaks** | ✅ None detected | All cleanup handled by Phaser scene lifecycle |
+| **Redundant computations** | ✅ None | PARAMS constants, static DESC strings |
+| **Missed concurrency** | ✅ N/A | Single-threaded game loop; not applicable |
+
+**Verdict**: This diff introduces **no efficiency issues**. All changes are structurally sound and follow Phaser best practices.</result>
+<usage><total_tokens>41902</total_tokens><tool_uses>14</tool_uses><duration_ms>44658</duration_ms></usage>
+</task-notification>
+Full transcript available at: REDACTED.output
+
+---
+
+깃 푸시해줘.
+
+---
+
+지금 게임에서 일반똥, 특수똥 생성하는 부분에서 메모리 효율성 이슈나 뭐 그런게 있는지 확인해줘
+
+---
+
+현재 수정된 내용이 뭐고  Object Pooling 미적용 이게 뭔 내용인지 설명해줘
+
+---
+
+Object Pooling 이거 적용해줄 수 있나?
+
+---
+
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+Summary:
+1. Primary Request and Intent:
+   - Change EXTREME mode background from background.webp to background2.webp
+   - Reduce eye strain in game UI: add HUD backdrop, fix text contrast
+   - Unify HUD font sizes (both 18px, based on high score text)
+   - Reduce HUD bar size while maintaining vertical centering
+   - Centralize ability parameters (numbers like "300점", "3개") so changing one place updates both game logic AND character info panel descriptions simultaneously
+   - Run /simplify on all changed code
+   - Check poop spawning code for memory efficiency issues (found and fixed 3 issues)
+   - **[CURRENT]** Implement Object Pooling for all poop objects
+
+2. Key Technical Concepts:
+   - Phaser 3 Arcade Physics groups (`physics.add.group`) with `runChildUpdate: true`
+   - Object Pooling: `group.get()` to reuse inactive objects instead of `new` + `destroy()`
+   - TypeScript strict mode: `verbatimModuleSyntax=true`, `erasableSyntaxOnly=true` (no enum, use `as const`)
+   - Module-level constant caching (prevent per-spawn `new Date()` and array allocations)
+   - Phaser scene lifecycle: `init() → preload() → create() → update()`, all GameObjects auto-destroyed on `shutdown`
+   - Template literals for auto-generating description strings from numeric params
+   - djb2 hash-based localStorage anti-cheat signatures
+   - `PARAMS` / `DESC` pattern: same file defines numeric values and human-readable strings derived from them
+
+3. Files and Code Sections:
+
+   - **`src/scenes/GameScene.ts`**
+     - EXTREME background: preload() fallback split HARD vs EXTREME; create() `backgroundKey = 'background2'` for non-Christmas EXTREME
+     - HUD refactor in `create()`:
+       ```typescript
+       const HUD_H = 36;
+       const hudBg = this.add.graphics();
+       hudBg.fillStyle(0x000000, 0.28);
+       hudBg.fillRect(0, 0, 400, HUD_H);
+       hudBg.setDepth(9);
+       const hudTextY = Math.round(HUD_H / 2) - 11;
+       this.scoreText = this.add.text(16, hudTextY, '점수: 0', {
+         fontSize: '18px', color: '#ffffff', fontStyle: 'bold',
+         stroke: '#000000', strokeThickness: 3
+       }).setDepth(10);
+       this.highScoreText = this.add.text(384, hudTextY, `최고: ${this.highScore}`, {
+         fontSize: '18px', color: '#FFD700', fontStyle: 'bold',
+         stroke: '#000000', strokeThickness: 3
+       }).setOrigin(1, 0).setDepth(10);
+       const hintText = this.add.text(200, 58, '← → 키로 이동', {
+         fontSize: '15px', color: '#ffffff', stroke: '#000000', strokeThickness: 3
+       }).setOrigin(0.5).setAlpha(0.85).setDepth(10);
+       this.time.delayedCall(2500, () => {
+         this.tweens.add({ targets: hintText, alpha: 0, duration: 700, ease: 'Linear' });
+       });
+       ```
+     - Spawn methods still use `new Poop()` / `new GoldPoop()` etc. — **pending Object Pooling refactor**
+     - `spawnFeverPoop()` (line 1127): creates Poop, GoldPoop, DiamondPoop with `new` — needs pooling
+     - `startFeverTime()` (line ~880): calls `this.poops.clear(true, true)` to destroy all normal poops — with pooling should deactivate instead
+
+   - **`src/config/abilityParams.ts`** *(new file)*
+     - Single source of truth for all SR/UR ability numeric values and description strings:
+       ```typescript
+       export const MINER_PARAMS = { specialBonus: 10, rainbowInterval: 300 } as const;
+       export const MINER_DESC = {
+         basicEffect: `특수 똥 수집 시 +${MINER_PARAMS.specialBonus}점 추가`,
+         specialAbility: `${MINER_PARAMS.rainbowInterval}점마다 무지개똥 생성`,
+       } as const;
+       // ... repeated for HACKER, MAEHWA, ARCHIEVE, GLITCH, NOISE, SENTINEL, LEGACY
+       ```
+
+   - **`src/abilities/MinerAbility.ts`**: `10` → `MINER_PARAMS.specialBonus`, `300` → `MINER_PARAMS.rainbowInterval`
+   - **`src/abilities/MaehwaAbility.ts`**: `50`, `100`, `3`, `5` → `MAEHWA_PARAMS.*`
+   - **`src/abilities/HackerAbility.ts`**: `40`, `100`, `7` → `HACKER_PARAMS.*`
+   - **`src/abilities/ArchieveAbility.ts`**: `0.10`, `200`, `20` → `ARCHIEVE_PARAMS.*`
+   - **`src/abilities/GlitchAbility.ts`**: `200`, `1` → `GLITCH_PARAMS.*`
+   - **`src/abilities/NoiseAbility.ts`**: `200`, `2`, `{30,75,135}` → `NOISE_PARAMS.*`
+   - **`src/abilities/SentinelAbility.ts`**: removed `private static readonly START_SHIELDS/CHARGE_INTERVAL/MAX_SHIELDS` → `SENTINEL_PARAMS.*`
+   - **`src/abilities/LegacyAbility.ts`**: removed 8 `private static readonly` constants → `LEGACY_PARAMS.*`
+   - **`src/utils/character.ts`**: imports DESC objects, uses them for `basicEffect`/`specialAbility` fields
+
+   - **`src/objects/Poop.ts`** *(memory fix applied)*
+     - Removed `getAvailableTextures()` static method
+     - Added module-level cache:
+       ```typescript
+       const AVAILABLE_TEXTURES: string[] = isChristmasSeason()
+         ? [...REGULAR_POOP_KEYS, ...CHRISTMAS_POOP_KEYS]
+         : [...REGULAR_POOP_KEYS];
+       ```
+     - Constructor uses `AVAILABLE_TEXTURES` directly — no per-spawn array or `new Date()`
+     - **Needs Object Pooling refactor**: constructor → minimal setup, add `reinit()` method, `update()` deactivates instead of destroys
+
+   - **`src/objects/RainbowPoop.ts`** *(rewritten)*
+     - Was: `extends Poop` → ran full Poop constructor then overrode texture; hitbox was 125 (wrong, should be 113); depth not set
+     - Now: `extends Phaser.Physics.Arcade.Sprite` directly, uses `POOP_CONFIG.rainbow.*` for all settings (size=40, hitbox=113, depth=100)
+
+   - **`src/objects/GoldPoop.ts`** *(memory fix applied)*
+     - Removed `private fallSpeed` field and `body.setVelocityY(this.fallSpeed)` from constructor (dead code — always overridden by caller)
+     - **Needs Object Pooling refactor**: add `reinit()`, `update()` deactivates
+
+   - **`src/objects/DiamondPoop.ts`** *(memory fix applied)*
+     - Same as GoldPoop — removed `fallSpeed` field and constructor velocity
+
+   - **`src/objects/TopazPoop.ts`**: No constructor velocity (already correct). **Needs Object Pooling refactor**
+
+4. Errors and fixes:
+   - **Floating-point concern (false positive)**: Quality review agent warned `0.30 * 100 = 30.000000000000004` etc. in template literals. Confirmed via `node -e "console.log(0.30*100, 0.60*100, 1+0.10, 1+0.20)"` → all output correctly as `30 60 1.1 1.2`. Modern JS uses shortest-representation algorithm. No fix needed.
+   - **strokeThickness inconsistency**: scoreText had `strokeThickness: 3`, highScoreText had `strokeThickness: 2` and `stroke: '#000'` vs `'#000000'`. Fixed both to `strokeThickness: 3`, `stroke: '#000000'`.
+   - **JSDoc placeholder braces**: Updated ability file JSDoc comments from `{deleteInterval}점마다...` style to `수치: XPARAMS 참조` pattern.
+   - **RainbowPoop hitbox bug**: Was silently using POOP_CONFIG.normal.hitbox.normal (125) instead of POOP_CONFIG.rainbow.hitbox (113) and missing depth setting. Fixed by rewriting class.
+
+5. Problem Solving:
+   - **Centralized ability params**: PARAMS + DESC pattern ensures single source of truth. Ability files import PARAMS for logic; character.ts imports DESC for display strings.
+   - **Per-spawn allocation**: Eliminated by caching `AVAILABLE_TEXTURES` at module level — `isChristmasSeason()` and spread operator run once per session.
+   - **Object Pooling** (in progress): Plan is to add `reinit()` methods to all poop classes, change `update()` to deactivate instead of destroy, set `maxSize` on groups, and change all spawn methods to use `group.get()`.
+
+6. All user messages:
+   - "extreme mode 배경 @public/assets/backgrounds/background.webp 에서 @public/assets/backgrounds/background2.webp 로 바꿔줘"
+   - "스크린샷 2026-03-07 오후 8.51.23 이게 현재 게임 화면인데 뭔가 눈이 아픈데 좀 안아파지게 할 수 있나?"
+   - "현재 점수 최고 점수 크기 통일 시켜줘 최고 점수를 기준으로"
+   - "HUD 사이즈를 조금 줄여줘. 안에 점숨, 최고 점수는 세로 기준 가운데 정렬은 유지하고"
+   - "그 캐릭터별로 특정 조건에 따라 특정 점수 같은게 버프가 될 수 있고 너프가 될 수 있는데 한 부분만 바꿔도 적용되는 부분과 캐릭터 정보에 같이 적용이 되도록 코드를 수정해 줄 수 있나? ... 모든 캐릭터를 저런게 적용되게 수정해줘."
+   - "/simplify"
+   - "깃 푸시해줘."
+   - "지금 게임에서 일반똥, 특수똥 생성하는 부분에서 메모리 효율성 이슈나 뭐 그런게 있는지 확인해줘"
+   - "현재 수정된 내용이 뭐고 Object Pooling 미적용 이게 뭔 내용인지 설명해줘"
+   - "Object Pooling 이거 적용해줄 수 있나?"
+
+7. Pending Tasks:
+   - **Implement Object Pooling** for all poop objects (Poop, GoldPoop, DiamondPoop, TopazPoop, RainbowPoop)
+
+8. Current Work:
+   Implementing Object Pooling for poop spawning system. The plan:
+   1. Add `reinit()` method to each poop class (Poop, GoldPoop, DiamondPoop, TopazPoop, RainbowPoop) for reinitializing a recycled object
+   2. Change `update()` in each class: `this.destroy()` → `this.setActive(false).setVisible(false)` + `body.setVelocity(0,0)`
+   3. Constructor: minimal setup (add to scene/physics, set inactive), all per-spawn setup moves to `reinit()`
+   4. GameScene groups: add `maxSize` (Poop: 60, Gold/Diamond: 20, Topaz: 10, Rainbow: 5)
+   5. Spawn methods: `new Poop(...)` + `group.add(poop, true)` → `group.get() as Poop` + `poop.reinit(...)`
+   6. `startFeverTime()` at line ~896: `this.poops.clear(true, true)` → iterate and deactivate instead (to preserve pool objects)
+
+   Key challenge: `Poop` constructor takes `(scene, x, y, difficultyLevel, difficulty)` but `group.get()` only passes `(scene, x, y)`. Solution: constructor takes minimal `(scene, x, y)`, all per-spawn logic moves to `reinit(x, y, difficultyLevel, difficulty)`.
+
+   Key challenge: `abilities` (MaehwaAbility, HackerAbility) call `poop.destroy()` directly. These are infrequent (ability-triggered), so true destroy is acceptable — they get recreated as pool grows.
+
+   Last read files: `GameScene.ts` lines 880-1170 (startFeverTime, spawnFeverPoop code).
+
+9. Optional Next Step:
+   Continue implementing Object Pooling as requested: "Object Pooling 이거 적용해줄 수 있나?"
+   
+   Starting with modifying `Poop.ts`, `GoldPoop.ts`, `DiamondPoop.ts`, `TopazPoop.ts`, `RainbowPoop.ts` to add `reinit()` methods and change `update()` deactivation logic, then updating `GameScene.ts` spawn methods to use `group.get()` pattern.
+
+If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/johyunduk/.REDACTED.jsonl
+Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.
+
+---
+
+Tool loaded.
+
+---
+
+Tool loaded.
+
+---
+
+Tool loaded.
+
+---
+
+# Simplify: Code Review and Cleanup
+
+Review all changed files for reuse, quality, and efficiency. Fix any issues found.
+
+## Phase 1: Identify Changes
+
+Run `git diff` (or `git diff HEAD` if there are staged changes) to see what changed. If there are no git changes, review the most recently modified files that the user mentioned or that you edited earlier in this conversation.
+
+## Phase 2: Launch Three Review Agents in Parallel
+
+Use the Agent tool to launch all three agents concurrently in a single message. Pass each agent the full diff so it has the complete context.
+
+### Agent 1: Code Reuse Review
+
+For each change:
+
+1. **Search for existing utilities and helpers** that could replace newly written code. Use Grep to find similar patterns elsewhere in the codebase — common locations are utility directories, shared modules, and files adjacent to the changed ones.
+2. **Flag any new function that duplicates existing functionality.** Suggest the existing function to use instead.
+3. **Flag any inline logic that could use an existing utility** — hand-rolled string manipulation, manual path handling, custom environment checks, ad-hoc type guards, and similar patterns are common candidates.
+
+### Agent 2: Code Quality Review
+
+Review the same changes for hacky patterns:
+
+1. **Redundant state**: state that duplicates existing state, cached values that could be derived, observers/effects that could be direct calls
+2. **Parameter sprawl**: adding new parameters to a function instead of generalizing or restructuring existing ones
+3. **Copy-paste with slight variation**: near-duplicate code blocks that should be unified with a shared abstraction
+4. **Leaky abstractions**: exposing internal details that should be encapsulated, or breaking existing abstraction boundaries
+5. **Stringly-typed code**: using raw strings where constants, enums (string unions), or branded types already exist in the codebase
+
+### Agent 3: Efficiency Review
+
+Review the same changes for efficiency:
+
+1. **Unnecessary work**: redundant computations, repeated file reads, duplicate network/API calls, N+1 patterns
+2. **Missed concurrency**: independent operations run sequentially when they could run in parallel
+3. **Hot-path bloat**: new blocking work added to startup or per-request/per-render hot paths
+4. **Unnecessary existence checks**: pre-checking file/resource existence before operating (TOCTOU anti-pattern) — operate directly and handle the error
+5. **Memory**: unbounded data structures, missing cleanup, event listener leaks
+6. **Overly broad operations**: reading entire files when only a portion is needed, loading all items when filtering for one
+
+## Phase 3: Fix Issues
+
+Wait for all three agents to complete. Aggregate their findings and fix each issue directly. If a finding is a false positive or not worth addressing, note it and move on — do not argue with the finding, just skip it.
+
+When done, briefly summarize what was fixed (or confirm the code was already clean).
+
+---
+
+Tool loaded.
+
+---
+
+<task-notification>
+<task-id>aa67a49c6c445e892</task-id>
+<tool-use-id>toolu_01JFj3VUKgoEC4CYwFDT2KYf</tool-use-id>
+<status>completed</status>
+<summary>Agent "코드 재사용 리뷰" completed</summary>
+<result>분석에 필요한 모든 정보를 확보했습니다. 보고서를 작성합니다.
+
+---
+
+## 코드 재사용 리뷰 결과
+
+### 발견 1: 4개 특수 똥 클래스의 `reinit()` + `update()` 완전 중복
+
+`GoldPoop`, `DiamondPoop`, `TopazPoop`, `RainbowPoop` 4개 파일의 `reinit(x, y)`와 `update()` 메서드가 **한 글자도 다르지 않게** 동일합니다.
+
+```typescript
+// GoldPoop, DiamondPoop, TopazPoop, RainbowPoop — 4개 파일 전부 동일
+reinit(x: number, y: number) {
+  this.setPosition(x, y);
+  this.setActive(true).setVisible(true);
+  const body = this.body as Phaser.Physics.Arcade.Body;
+  if (body) { body.reset(x, y); body.setEnable(true); }
+}
+
+update() {
+  if (this.y > this.scene.cameras.main.height + POOP_CONFIG.destroyOffset) {
+    this.setActive(false).setVisible(false);
+    const body = this.body as Phaser.Physics.Arcade.Body;
+    if (body) { body.setVelocity(0, 0); body.setEnable(false); }
+  }
+}
+```
+
+생성자의 물리 설정 부분(`setOrigin`, `add.existing`, `setDisplaySize`, `setDepth`, `body.setSize`, `setCollideWorldBounds`, 비활성화)도 `POOP_CONFIG.xxx` 키 이름만 다를 뿐 구조가 동일합니다.
+
+**대안**: `PoolablePoopSprite`와 같은 공통 추상 베이스 클래스를 `src/objects/PoolablePoopSprite.ts`에 두고, 4개 클래스가 상속하면 됩니다. 생성자에서 config 키를 파라미터로 받으면 각 자식 클래스에는 `super(scene, x, y, 'gold_poop', POOP_CONFIG.gold)` 한 줄만 남습니다.
+
+---
+
+### 발견 2: `spawnPoop()`의 `40` 하드코딩 — `POOP_CONFIG.normal.speedIncrement`와 불일치
+
+`spawnPoop()`(L603)에서 fallSpeed를 계산할 때 `40`을 직접 쓰고 있습니다:
+
+```typescript
+// L603 — spawnPoop()
+const fallSpeed = this.difficultyConfig.baseSpeed + (this.difficultyLevel * 40);
+```
+
+반면 `spawnFeverPoop()`(L1132), `spawnGoldPoop()`(L663), `spawnDiamondPoop()`(L685), `spawnTopazPoop()`(L702), `spawnRainbowPoop()`(L717)은 모두 `POOP_CONFIG.normal.speedIncrement`를 사용합니다:
+
+```typescript
+// L1132 — spawnFeverPoop()
+const baseFallSpeed = this.difficultyConfig.baseSpeed + (this.difficultyLevel * POOP_CONFIG.normal.speedIncrement);
+```
+
+`POOP_CONFIG.normal.speedIncrement`의 실제 값이 `40`이어서 현재는 동작이 같지만, 밸런싱을 위해 `speedIncrement`를 바꾸면 `spawnPoop()`만 반영이 안 됩니다. 가장 자주 호출되는 핵심 스폰 함수라 파급 효과가 큽니다.
+
+---
+
+### 발견 3: `spawnGoldPoop()` / `spawnDiamondPoop()` / `spawnTopazPoop()` / `spawnRainbowPoop()`의 스폰 구조 중복
+
+4개 특수 스폰 메서드의 구조가 동일합니다:
+
+```typescript
+private spawnXxxPoop() {
+  if (this.gameOver) return;
+  const x = Phaser.Math.Between(50, 350);
+  const y = -50;
+  const poop = this.xxxPoops.get() as XxxPoop;
+  if (!poop) return;
+  poop.reinit(x, y);
+  if (poop.body) {
+    const fallSpeed = this.difficultyConfig.baseSpeed
+      + (this.difficultyLevel * POOP_CONFIG.normal.speedIncrement)
+      - POOP_CONFIG.xxx.speedReduction
+      [- this.ability.specialPoopSpeedReduction('xxx')]; // gold/diamond만
+    poop.body.velocity.y = fallSpeed;
+  }
+}
+```
+
+차이점은 풀 참조(`.goldPoops` 등), `POOP_CONFIG.xxx.speedReduction` 키, gold/diamond에만 있는 `ability.specialPoopSpeedReduction()` 호출뿐입니다. 헬퍼 메서드 하나로 통합할 수 있으나, `specialPoopSpeedReduction`의 유무 차이 때문에 현재도 topaz/rainbow에는 능력 보정이 빠져 있다는 점이 버그 가능성으로 보입니다(의도적 설계인지 확인 필요).
+
+---
+
+### 발견 4: `GameScene`의 풀 반환 인라인 코드 — `Poop.update()`와 중복
+
+`startFeverTime` 내 L890-893에서 활성 `Poop` 스프라이트를 수동으로 비활성화하는 코드:
+
+```typescript
+poopSprite.setActive(false).setVisible(false);
+(poopSprite.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
+(poopSprite.body as Phaser.Physics.Arcade.Body).setEnable(false);
+```
+
+이는 `Poop.update()`의 풀 반환 로직과 완전히 동일합니다. `Poop` 클래스에 `returnToPool()` 같은 public 메서드를 두면 이 코드와 `update()` 양쪽에서 호출할 수 있고, 향후 반환 로직이 바뀌어도 한 곳만 수정하면 됩니다.
+
+---
+
+### 요약 우선순위
+
+| 우선순위 | 항목 | 영향 |
+|----------|------|------|
+| 높음 | `spawnPoop()` 하드코딩 `40` → `POOP_CONFIG.normal.speedIncrement` 교체 | 밸런싱 수정 시 무조건 버그 |
+| 높음 | 4개 특수 똥 클래스 베이스 클래스 추출 | 현재 코드 120줄 → ~20줄 |
+| 중간 | `returnToPool()` 메서드 추출 | `startFeverTime` 가독성 개선 |
+| 낮음 | 4개 특수 스폰 메서드 통합 헬퍼 | topaz/rainbow의 `specialPoopSpeedReduction` 누락 여부 먼저 확인 필요 |</result>
+<usage><total_tokens>28914</total_tokens><tool_uses>13</tool_uses><duration_ms>58179</duration_ms></usage>
+</task-notification>
+Full transcript available at: REDACTED.output
+
+---
+
+<task-notification>
+<task-id>a8d3be5b23a7baa3f</task-id>
+<tool-use-id>toolu_012GfhV1xY8YjKodHzwtu2Kj</tool-use-id>
+<status>completed</status>
+<summary>Agent "코드 품질 리뷰" completed</summary>
+<result>다음은 4가지 검토 사항 각각에 대한 분석 결과입니다.
+
+---
+
+## 1. `_difficultyLevel` — 죽은 파라미터, 서명 불일치 문제
+
+**판단: 파라미터 제거가 맞음. GameScene 호출부도 맞춰야 함.**
+
+`reinit(x, y, _difficultyLevel, difficulty)` 서명에서 `_difficultyLevel`은 실제로 사용되지 않습니다. 속도 계산은 `reinit()` 안에서 이루어지지 않고, 호출자인 GameScene이 직접 `poop.body.velocity.y = fallSpeed`를 설정합니다. 즉 이 파라미터가 존재하는 이유가 없습니다.
+
+더 큰 문제는 **인터페이스 일관성**입니다. `GoldPoop.reinit(x, y)`, `DiamondPoop.reinit(x, y)`, `TopazPoop.reinit(x, y)`, `RainbowPoop.reinit(x, y)` 는 모두 `(x, y)` 2개 인자만 받는데, `Poop.reinit`만 `(x, y, _difficultyLevel, difficulty)` 4개 인자를 받습니다. `difficulty`는 실제로 사용되지만, 이것도 GameScene이 `this.difficulty`로 이미 알고 있으므로 내부 상태로 처리하거나 별도 메서드로 분리할 수 있습니다. 현재 상태는 호출부(GameScene.ts 610행, 1141행)가 `difficultyLevel`을 넘기는 코드를 불필요하게 유지해야 하는 부담을 만듭니다.
+
+---
+
+## 2. `body.setCollideWorldBounds(false)` — 불필요한 반복 호출
+
+**판단: 제거해도 되지만, 무해한 수준의 중복.**
+
+`setCollideWorldBounds(false)`는 생성자에서 한 번 호출되고, 이후 `reinit()`에서 매번 다시 호출됩니다. Phaser의 `Arcade.Body`는 `collideWorldBounds`를 인스턴스 프로퍼티로 유지하며, `body.reset(x, y)`는 이 값을 초기화하지 않습니다. 즉 이 값은 생성자에서 설정한 이후 변하지 않기 때문에 `reinit()` 내 호출은 순수 중복입니다.
+
+단, `GoldPoop`, `DiamondPoop`, `TopazPoop`, `RainbowPoop`의 `reinit()`을 보면 이들은 `setCollideWorldBounds(false)`를 `reinit()`에서 아예 호출하지 않습니다. `Poop`만 다른 패턴을 따르고 있어 **일관성 없음** 문제가 있습니다.
+
+---
+
+## 3. `this.setPosition(x, y)` + `body.reset(x, y)` — 중복 여부
+
+**판단: 실질적 중복이며, `Poop.reinit`에서 `setPosition` 호출이 불필요.**
+
+`Phaser.Physics.Arcade.Body.reset(x, y)`의 구현은 스프라이트의 `x`, `y`를 직접 설정하고 velocity를 0으로 초기화합니다. 즉 `body.reset(x, y)`가 `this.setPosition(x, y)`의 효과를 포함합니다.
+
+비교하면:
+- `GoldPoop.reinit()`: `this.setPosition(x, y)` 먼저 호출 후 `body.reset(x, y)` — 동일 패턴, 중복.
+- `Poop.reinit()`: `this.setPosition(x, y)` 먼저 호출 후 `body.reset(x, y)` — 동일 중복.
+
+`body.reset()` 이전에 `setPosition()`을 먼저 하는 것은 순서상 의미도 없습니다. `body.reset()`이 결국 위치를 덮어쓰기 때문입니다. `setPosition()` 호출 하나를 제거해도 동작에 차이가 없습니다. 단, `body`가 `null`인 엣지 케이스에서는 `setPosition`만 유효해지는데, 풀 기반 오브젝트에서 `body`가 null일 경우는 이미 다른 방어 코드가 없는 상황이므로 실질적 안전망으로 보기 어렵습니다.
+
+---
+
+## 4. `startFeverTime` forEach의 타입캐스트 패턴
+
+**판단: 타입캐스트 이중 발생 — 지역 변수로 줄일 수 있음.**
+
+```typescript
+(poopSprite.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
+(poopSprite.body as Phaser.Physics.Arcade.Body).setEnable(false);
+```
+
+같은 `poopSprite.body`에 대해 동일한 캐스트를 두 줄 연속으로 수행합니다. `poopSprite`는 이미 `Poop`으로 캐스팅된 상태이고, `Poop`이 `Phaser.Physics.Arcade.Sprite`를 상속하므로 `.body`의 타입은 `Phaser.Physics.Arcade.Body | null`입니다.
+
+추가로, `if (poopSprite.active && poopSprite.body)` 가드를 통과했음에도 타입 좁히기가 이루어지지 않아 두 줄 모두 다시 캐스트해야 합니다. 이는 TypeScript 타입 추론의 한계(`body`가 getter여서 좁혀지지 않음)에서 오는 패턴인데, 지역 변수 `const body = poopSprite.body as Phaser.Physics.Arcade.Body`를 블록 상단에 한 번만 선언하면 캐스트를 한 곳으로 집중시킬 수 있습니다. 현재 패턴은 `Poop.update()`나 `reinit()` 내부의 관행과도 불일치합니다 — 다른 곳에서는 모두 지역 변수 `body`를 사용합니다.
+
+---
+
+## 요약 표
+
+| 항목 | 심각도 | 결론 |
+|------|--------|------|
+| `_difficultyLevel` 죽은 파라미터 | 중간 — 호출부와 서명 불일치 | `reinit(x, y, difficulty)` 또는 내부 상태화로 정리 필요 |
+| `setCollideWorldBounds(false)` 반복 | 낮음 — 무해하나 불일치 | 다른 객체들과 패턴 통일 필요 |
+| `setPosition` + `body.reset` 중복 | 낮음 — 동작 차이 없음 | `setPosition` 제거 가능 |
+| 이중 타입캐스트 | 낮음 — 코드 냄새 | 지역 변수 `body`로 캐스트 일원화 |</result>
+<usage><total_tokens>21938</total_tokens><tool_uses>5</tool_uses><duration_ms>49612</duration_ms></usage>
+</task-notification>
+Full transcript available at: REDACTED.output
+
+---
+
+<task-notification>
+<task-id>a9b3c95893ee192a7</task-id>
+<tool-use-id>toolu_01Cri72gyJsnydyzvfodGA6z</tool-use-id>
+<status>completed</status>
+<summary>Agent "효율성 리뷰" completed</summary>
+<result>필요한 정보를 모두 수집했습니다. 이제 분석 결과를 보고합니다.
+
+---
+
+## 효율성 리뷰 보고서
+
+### 1. `setPosition` + `body.reset()` 중복 위치 설정 — 실제 문제 있음
+
+**파일**: `/Users/johyunduk/Projects/ddong-avoid-game/src/objects/GoldPoop.ts` (L34, L39), `DiamondPoop.ts`, `TopazPoop.ts`, `RainbowPoop.ts` 동일 패턴, `Poop.ts` (L57, L62)
+
+Phaser `Body.reset(x, y)` 소스를 직접 확인한 결과 (node_modules Body.js L1584):
+
+```javascript
+reset: function (x, y) {
+    this.stop();                       // velocity 0으로 초기화
+    gameObject.setPosition(x, y);     // sprite 위치 설정
+    gameObject.getTopLeft(pos);       // body position 재계산
+    ...
+}
+```
+
+`body.reset(x, y)` 내부에서 이미 `gameObject.setPosition(x, y)`를 호출합니다. 따라서 `reinit()`에서 `this.setPosition(x, y)`를 먼저 호출하는 것은 완전한 중복입니다. 모든 특수 똥 클래스 4종(Gold, Diamond, Topaz, Rainbow)과 `Poop` 클래스 총 5개 파일에 동일한 패턴이 있습니다.
+
+추가로 `body.reset()`은 내부에서 `this.stop()`도 호출하여 velocity를 0으로 초기화합니다. 이는 `update()`에서 풀 반환 시 `body.setVelocity(0, 0)`을 이미 처리했기 때문에 reinit 경로에서는 불필요한 연산이지만, 안전장치로서의 의미는 있습니다.
+
+---
+
+### 2. `Poop.reinit()`의 `body.setSize()` — 대부분의 호출에서 불필요한 재설정
+
+**파일**: `/Users/johyunduk/Projects/ddong-avoid-game/src/objects/Poop.ts` (L63-L64)
+
+`hitboxSize`는 `isExtreme` 분기에 따라 두 값 중 하나로만 결정됩니다. EXTREME 난이도는 세션 중 변경되지 않으므로, `hitboxSize`는 게임 시작 후 매 스폰마다 항상 동일한 값을 씁니다. `body.setSize()`는 내부적으로 `width`, `height`, `halfWidth`, `halfHeight`, `offset` 재계산 및 `updateCenter()`를 호출하는 비trivial한 연산이므로, 같은 값이 반복 설정되는 것은 낭비입니다.
+
+마찬가지로 `body.setCollideWorldBounds(false)` (L64)는 `constructor`에서 이미 `false`로 설정했고, 이후 이 값을 바꾸는 코드가 없습니다. 매 스폰마다 재설정할 이유가 없습니다.
+
+`setCollideWorldBounds`는 단순 boolean 대입이지만, `setSize`와 함께 패턴이 명확히 불필요한 호출입니다.
+
+---
+
+### 3. `startFeverTime()`의 body 이중 캐스트 — 사소하지만 명확한 낭비
+
+**파일**: `/Users/johyunduk/Projects/ddong-avoid-game/src/scenes/GameScene.ts` (L891-L892)
+
+```typescript
+(poopSprite.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
+(poopSprite.body as Phaser.Physics.Arcade.Body).setEnable(false);
+```
+
+같은 `poopSprite.body`를 두 번 독립적으로 캐스트합니다. forEach 루프 안에서 활성 똥 수만큼 반복되므로, body를 변수에 한 번 캐스트해서 재사용하는 것이 맞습니다. (단, 이 코드는 피버 타임 시작 시 1회성 루프이므로 성능 임팩트는 작습니다.)
+
+---
+
+### 4. `update()`의 `this.scene.cameras.main.height` — 분석 결과 캐싱 실익 제한적
+
+**파일**: 7개 오브젝트 파일 전체 (Poop, GoldPoop, DiamondPoop, TopazPoop, RainbowPoop, Star, Item)
+
+`this.scene.cameras.main.height`는 프로퍼티 체인 3단계 조회입니다. 캔버스 크기(600px)는 런타임에 고정이므로 변경되지 않습니다.
+
+그러나 조건 분기의 특성을 고려해야 합니다. 이 `if` 블록은 오브젝트가 화면 밖에 나갈 때만 진입하고, 한 번 진입하면 즉시 비활성화됩니다. 즉 대부분의 프레임에서는 조건이 거짓이므로 `height` 조회 자체는 발생하나 체인 비용은 미미합니다. 실측 프로파일링 없이 캐싱을 추가하는 것은 코드 복잡도 대비 실익이 불분명합니다. 단, 7개 클래스 전체에 동일한 패턴이 반복되므로, 만약 캐싱을 한다면 `POOP_CONFIG.destroyOffset`처럼 생성 시 한 번 계산해 인스턴스 변수에 보관하는 방식이 일관성 있습니다.
+
+---
+
+### 5. `SPECIAL_CHRISTMAS_TEXTURES.includes()` — 비크리스마스 시즌에도 매 스폰 실행
+
+**파일**: `/Users/johyunduk/Projects/ddong-avoid-game/src/objects/Poop.ts` (L49)
+
+`isChristmasSeason()`은 모듈 레벨에서 한 번만 실행되어 `AVAILABLE_TEXTURES`를 확정하는 것은 올바릅니다. 그러나 `AVAILABLE_TEXTURES`가 크리스마스 텍스처를 포함하지 않는 비시즌에도 `SPECIAL_CHRISTMAS_TEXTURES.includes(randomTexture)` 비교는 매 스폰마다 실행됩니다. 비시즌에는 `randomTexture`가 절대로 `SPECIAL_CHRISTMAS_TEXTURES` 원소가 될 수 없으므로, `isSpecial`은 항상 `false`입니다. 이 불필요한 `Array.includes()` 호출을 피하려면 비시즌 여부를 모듈 상수로 미리 저장하면 됩니다.
+
+---
+
+### 6. `spawnFeverPoop` 콜백 참조 — 잠재적 `this` 바인딩 주의 사항
+
+**파일**: `/Users/johyunduk/Projects/ddong-avoid-game/src/scenes/GameScene.ts` (L942)
+
+직접적인 성능 문제는 아니지만, `spawnTimer` 교체 시 `this.spawnFeverPoop`를 `callbackScope: this`와 함께 사용하는 패턴이 동일 파일의 `spawnPoop` 콜백과 일관성이 있는지 확인이 필요합니다. (L838에서 `this.isFeverTime ? this.spawnFeverPoop : this.spawnPoop` 형태로 동적 선택되는 구조이므로, 화살표 함수 여부에 따라 `this` 바인딩이 달라질 수 있습니다.)
+
+---
+
+### 우선순위 요약
+
+| 항목 | 심각도 | 발생 빈도 | 비고 |
+|------|--------|----------|------|
+| `setPosition` + `body.reset()` 이중 위치 설정 | 중간 | 스폰마다 5개 클래스 | `body.reset()`이 `setPosition` 내포 |
+| `body.setSize()` 매 스폰 재설정 | 중간 | 스폰마다 | 같은 값 반복, 내부 연산 비용 존재 |
+| `body.setCollideWorldBounds(false)` 매 스폰 재설정 | 낮음 | 스폰마다 | 단순 대입이나 생성자에서 이미 설정 |
+| `startFeverTime()` body 이중 캐스트 | 낮음 | 피버 타임 1회성 | 가독성 문제 |
+| `SPECIAL_CHRISTMAS_TEXTURES.includes()` 비시즌 실행 | 낮음 | 스폰마다 | 비시즌에 항상 false인 비교 |
+| `cameras.main.height` 매 프레임 조회 | 매우 낮음 | 매 프레임 | 고정값이나 JS 엔진 인라인 가능성 높음 |
+
+가장 실질적인 수정 지점은 항목 1(`setPosition` 제거)과 항목 2(`setSize`/`setCollideWorldBounds`를 difficulty 변경 시에만 호출)입니다.</result>
+<usage><total_tokens>32272</total_tokens><tool_uses>21</tool_uses><duration_ms>106967</duration_ms></usage>
+</task-notification>
+Full transcript available at: REDACTED.output
+
+---
+
+깃 푸시해줘
