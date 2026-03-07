@@ -1,0 +1,527 @@
+전체적으로 안티치트나 부정행위 방지 코드쪽 살펴봐줘. 매번 그런건 아니지만 가끔씩 정상적인 플레이인데도 점수 제출에서 실패가 되거나 raf 조작 됐다는 문구들이 뜨고 있어
+
+---
+
+Tool loaded.
+
+---
+
+Tool loaded.
+
+---
+
+# Simplify: Code Review and Cleanup
+
+Review all changed files for reuse, quality, and efficiency. Fix any issues found.
+
+## Phase 1: Identify Changes
+
+Run `git diff` (or `git diff HEAD` if there are staged changes) to see what changed. If there are no git changes, review the most recently modified files that the user mentioned or that you edited earlier in this conversation.
+
+## Phase 2: Launch Three Review Agents in Parallel
+
+Use the Agent tool to launch all three agents concurrently in a single message. Pass each agent the full diff so it has the complete context.
+
+### Agent 1: Code Reuse Review
+
+For each change:
+
+1. **Search for existing utilities and helpers** that could replace newly written code. Use Grep to find similar patterns elsewhere in the codebase — common locations are utility directories, shared modules, and files adjacent to the changed ones.
+2. **Flag any new function that duplicates existing functionality.** Suggest the existing function to use instead.
+3. **Flag any inline logic that could use an existing utility** — hand-rolled string manipulation, manual path handling, custom environment checks, ad-hoc type guards, and similar patterns are common candidates.
+
+### Agent 2: Code Quality Review
+
+Review the same changes for hacky patterns:
+
+1. **Redundant state**: state that duplicates existing state, cached values that could be derived, observers/effects that could be direct calls
+2. **Parameter sprawl**: adding new parameters to a function instead of generalizing or restructuring existing ones
+3. **Copy-paste with slight variation**: near-duplicate code blocks that should be unified with a shared abstraction
+4. **Leaky abstractions**: exposing internal details that should be encapsulated, or breaking existing abstraction boundaries
+5. **Stringly-typed code**: using raw strings where constants, enums (string unions), or branded types already exist in the codebase
+
+### Agent 3: Efficiency Review
+
+Review the same changes for efficiency:
+
+1. **Unnecessary work**: redundant computations, repeated file reads, duplicate network/API calls, N+1 patterns
+2. **Missed concurrency**: independent operations run sequentially when they could run in parallel
+3. **Hot-path bloat**: new blocking work added to startup or per-request/per-render hot paths
+4. **Unnecessary existence checks**: pre-checking file/resource existence before operating (TOCTOU anti-pattern) — operate directly and handle the error
+5. **Memory**: unbounded data structures, missing cleanup, event listener leaks
+6. **Overly broad operations**: reading entire files when only a portion is needed, loading all items when filtering for one
+
+## Phase 3: Fix Issues
+
+Wait for all three agents to complete. Aggregate their findings and fix each issue directly. If a finding is a false positive or not worth addressing, note it and move on — do not argue with the finding, just skip it.
+
+When done, briefly summarize what was fixed (or confirm the code was already clean).
+
+---
+
+Tool loaded.
+
+---
+
+<task-notification>
+<task-id>a5449ca7324239113</task-id>
+<tool-use-id>toolu_01Uisxji7HYVw1qqjLJbrxar</tool-use-id>
+<status>completed</status>
+<summary>Agent "코드 품질 리뷰" completed</summary>
+<result>충분한 정보를 확보했습니다. 코드 리뷰 결과를 보고합니다.
+
+---
+
+## 코드 리뷰 결과
+
+### 1. `init()`에서 `lastCheatCheckTime = 0` — 코드 명확성 문제
+
+**현황**: `init()`에서 `0`으로 설정하고 `create()`에서 `realNow()`로 덮어씁니다. 주석(`// create()에서 두 기준점과 동시 설정`)으로 의도를 설명하고 있어 런타임 문제는 없습니다.
+
+**문제**: `init()`의 `0`은 의미없는 임시값입니다. `update()`가 `create()` 이후에만 호출되므로 실제 위험은 없지만, `lastPhaserCheckTime`은 `init()`에서 초기화하지 않고 `phaserStartTime`과 함께 `create()`에서만 설정하는데, `lastCheatCheckTime`만 `init()`에 있는 것은 **일관성이 없습니다.** 두 변수는 항상 쌍으로 움직이므로(`create()`, `update()`, `onVisibilityChange` 모두 동시에 갱신) 초기화도 같은 위치에 있어야 합니다.
+
+---
+
+### 2. `document.hidden` 체크와 `!this.gameOver` 조건의 충분성
+
+**`!this.gameOver` 조건**: 적절합니다. 게임 오버 상태에서 탭 복귀 시 기준점을 리셋하면 점수 제출 직전 anti-cheat 검사를 우회할 수 있으므로 올바르게 막고 있습니다.
+
+**`document.hidden` 체크**: 한 가지 엣지케이스가 있습니다. `visibilitychange` 이벤트는 `hidden → visible` 전환과 `visible → hidden` 전환 모두에 발생합니다. `!document.hidden` 조건으로 복귀 시에만 실행하는 것은 올바르지만, **탭을 숨기는 순간(hidden = true)**에도 기준점을 리셋하면 더 안전합니다. 현재 구현은 탭이 숨겨진 동안 누군가 `Date.now`를 패치하고 돌아올 때, 기준점 리셋이 복귀 후에 일어나므로 리셋 이전 `now - lastCheatCheckTime` 검사에서 숨겨진 동안의 시간이 포함될 수 있습니다. 단, 브라우저가 숨겨진 탭에서 `rAF`를 중단하므로 `phaserInterval`도 거의 0에 가깝게 되어 `ratio`가 0에 수렴 → `< 0.85` 판정이 나올 수 있습니다. 이 경우 **false positive**(오탐)가 `onVisibilityChange` 리셋으로 방지되는 구조입니다. 다만 복귀 직후 `now - lastCheatCheckTime >= 5000`가 바로 참이 될 수 있어, **리셋 직전에 검사가 한 프레임 먼저 실행되는 레이스**가 이론상 존재합니다.
+
+---
+
+### 3. `this.events.once('shutdown', ...)` — 씬 재시작 시 리스너 누수 문제 (실질적 버그)
+
+이것이 가장 중요한 문제입니다.
+
+**`scene.restart()` 시 Phaser 생명주기**:
+```
+shutdown → init → preload → create
+```
+
+`shutdown` 이벤트가 발생하면 `once` 콜백이 실행되어 `onVisibilityChange`가 제거됩니다. 이후 `create()`가 다시 호출되면 **새로운 `onVisibilityChange` 클로저**가 만들어지고 새 `shutdown` once 리스너가 등록됩니다. 이것 자체는 정상입니다.
+
+**그러나 문제가 있습니다**: `create()`에서 `this.events.once('shutdown', ...)` 패턴을 쓸 때, **`shutdown`이 발생하지 않고 씬이 pause되었다가 resume되는 경우**(다른 씬을 launch하거나 sleep/wake하는 경우)에는 `shutdown` 이벤트가 발생하지 않으므로 `onVisibilityChange`가 남아있습니다. 현재 코드에서는 GameScene이 `scene.start()` 또는 `scene.restart()`로만 전환되고 pause/sleep은 사용하지 않으므로 **현재 흐름에서는 안전합니다.** 하지만 향후 씬 구조 변경 시 자동으로 깨질 수 있는 취약한 패턴입니다.
+
+더 견고한 패턴은 `this.events.on('shutdown', ...)` 대신 Phaser가 씬 자체 이벤트를 자동 정리하는 `this.events.on('destroy', ...)`를 함께 쓰거나, DOM 리스너를 `this.events.on('pause', ...)` 시에도 정리하는 것입니다.
+
+---
+
+### 요약
+
+| 항목 | 심각도 | 내용 |
+|------|--------|------|
+| `init()` vs `create()` 초기화 불일치 | 낮음 | `lastCheatCheckTime`만 `init()`에 있고 `lastPhaserCheckTime`은 없음 — 쌍으로 움직이는 변수의 일관성 위반 |
+| 복귀 시 한 프레임 레이스 | 낮음 | `onVisibilityChange` 리셋 전 `update()`에서 5000ms 조건이 참이 되어 false positive 가능 |
+| `shutdown` once 패턴의 구조적 취약성 | 중간 | 현재는 안전하나 씬이 pause/sleep되면 DOM 리스너 누수 발생. `destroy` 이벤트 병용 권장 |</result>
+<usage><total_tokens>16824</total_tokens><tool_uses>4</tool_uses><duration_ms>47214</duration_ms></usage>
+</task-notification>
+Full transcript available at: REDACTED.output
+
+---
+
+<task-notification>
+<task-id>af94d1bc787590c39</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<status>completed</status>
+<summary>Agent "코드 재사용 리뷰" completed</summary>
+<result>충분히 파악했습니다. 결과를 정리합니다.
+
+---
+
+## 코드 재사용 관점 리뷰 결과
+
+### 1. `resetCheatCheckpoints` 헬퍼 부재로 인한 중복 (가장 중요)
+
+두 기준점을 동시에 갱신하는 패턴이 파일 내에서 **3곳** 반복됩니다:
+
+| 위치 | 코드 |
+|------|------|
+| `create()` (line 208–209) | `this.lastCheatCheckTime = realNow(); this.lastPhaserCheckTime = this.time.now;` |
+| `onVisibilityChange` (line 462–463) | 동일 |
+| `update()` 정상 갱신 (line 509–510) | `this.lastCheatCheckTime = now; this.lastPhaserCheckTime = this.time.now;` |
+
+세 곳 모두 항상 두 필드를 짝으로 묶어 대입합니다. `resetCheatCheckpoints()` 같은 인라인 헬퍼 메서드로 추출하면 "두 필드 중 하나만 빠뜨리는 실수"를 원천 차단할 수 있습니다.
+
+### 2. `onVisibilityChange`에서 `lastScoreTime` 미갱신 가능성
+
+`lastScoreTime`도 `realNow()` 기반의 타임스탬프입니다. 탭에서 돌아올 때 `lastCheatCheckTime`·`lastPhaserCheckTime`은 리셋하지만 `lastScoreTime`은 리셋하지 않습니다. `update()`의 레이어 1 점수 계산(`elapsed = now - this.lastScoreTime`)은 탭이 숨겨진 시간을 누적해서 돌아오는 순간 과도한 점수가 한 번에 부여될 수 있습니다. rAF 체크 기준점만 리셋하는 것과 일관성이 맞지 않습니다.
+
+### 3. `visibilitychange` 처리 패턴 — Phaser 네이티브 이벤트 미사용
+
+Phaser는 탭 전환을 자체적으로 감지하여 `this.events` 또는 `this.game.events`에서 `'hidden'` / `'visible'` 이벤트를 발행합니다. 현재는 `document.addEventListener` + `this.events.once('shutdown', ...)` 클린업을 직접 작성했는데, `this.game.events.on('visible', ...)` 패턴을 쓰면 Phaser가 씬 수명 주기와 함께 관리하므로 수동 클린업 코드 자체가 필요 없어집니다. 코드베이스 다른 씬들이 `document` 이벤트를 직접 붙이는 패턴이 없다면 일관성 문제도 됩니다.
+
+### 요약
+
+| 문제 | 종류 | 위치 |
+|------|------|------|
+| 두 기준점 동시 갱신 패턴 3중 중복 | 코드 중복 | line 208–209, 462–463, 509–510 |
+| `lastScoreTime` 탭 복귀 시 미갱신 | 일관성 버그 가능성 | line 460–464 |
+| `document.addEventListener` 직접 사용 (Phaser `'visible'` 이벤트 미활용) | 기존 패턴과 불일치 | line 466–469 |</result>
+<usage><total_tokens>17461</total_tokens><tool_uses>7</tool_uses><duration_ms>58541</duration_ms></usage>
+</task-notification>
+Full transcript available at: REDACTED.output
+
+---
+
+<task-notification>
+<task-id>a4baf2e2263f2adf4</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<status>completed</status>
+<summary>Agent "효율성 리뷰" completed</summary>
+<result>필요한 정보를 모두 확인했습니다. 리뷰 결과를 보고합니다.
+
+---
+
+## 효율성 리뷰 결과
+
+### 핵심 질문 1: 리스너 중복 등록 가능성
+
+**결론: 중복 등록 없음. 안전하게 처리되고 있습니다.**
+
+Phaser의 씬 재시작 생명주기는 다음 순서로 진행됩니다.
+
+```
+씬 재시작 트리거
+  → shutdown 이벤트 발생  ← ✓ 여기서 visibilitychange 리스너 제거됨
+  → init()
+  → preload()
+  → create()              ← ✓ 새 리스너 등록
+```
+
+`this.events.once('shutdown', ...)` 핸들러가 `create()` 재진입보다 반드시 먼저 실행되므로, 정상적인 재시작 경로에서는 이전 리스너가 제거된 후 새 리스너가 등록됩니다. 중복 누적 문제는 없습니다.
+
+---
+
+### 핵심 질문 2: document 레벨 리스너가 다른 씬에 영향을 주는지
+
+**결론: 실질적 부작용 없으나, 설계상 주의가 필요한 지점이 있습니다.**
+
+이 게임은 `LeaderboardScene`, `ModeSelectScene` 등으로 씬이 전환될 때 GameScene의 `shutdown`이 발생하므로 리스너가 정리됩니다. 따라서 다른 씬이 활성화된 상태에서 `visibilitychange`가 발생해도 GameScene의 핸들러가 살아있는 일은 없습니다.
+
+단, 한 가지 설계상 주의사항이 있습니다.
+
+- 핸들러 내부에서 `this.gameOver` 와 `this.time.now`를 참조합니다.
+- `shutdown` 이후 Phaser 씬 내부 상태(`this.time`)는 정리되기 시작하는데, 만약 `shutdown`과 `visibilitychange`가 극히 짧은 시간 안에 연달아 발생하는 경쟁 조건(race condition)이 생긴다면 이미 정리 중인 `this.time`에 접근할 수 있습니다. 실제로 발생할 가능성은 낮지만 이론적인 취약점입니다.
+
+---
+
+### 추가로 발견된 문제: `shutdown` 전용 — `destroy` 이벤트 미처리
+
+**이것이 실질적인 잠재 누수입니다.**
+
+파일 전체에서 `this.events.on/once`를 사용하는 곳이 딱 한 곳 — 이 `shutdown` 핸들러뿐입니다. 문제는 Phaser에서 씬이 `destroy`될 때(`this.scene.remove()` 또는 게임 자체 종료 시)는 **`shutdown`이 먼저 발생한 후 `destroy`가 발생**하므로 이 경우는 괜찮습니다.
+
+그러나 만약 미래에 누군가 `this.scene.remove('GameScene')`을 호출하거나, Phaser 게임 인스턴스 자체를 `game.destroy()`하는 경우, Phaser 내부 구현에 따라 `shutdown` 이벤트 발생 시점과 `document.removeEventListener` 실행 순서가 보장되지 않을 수 있습니다. 현재 코드는 `destroy` 이벤트에 대한 별도 방어가 없습니다.
+
+---
+
+### 요약표
+
+| 항목 | 판정 | 설명 |
+|------|------|------|
+| 재시작 시 리스너 중복 등록 | 안전 | shutdown → create 순서가 보장되므로 중복 없음 |
+| 다른 씬 활성 중 부작용 | 실질적 없음 | 씬 전환 시 shutdown으로 정리됨 |
+| shutdown/visibilitychange 경쟁 조건 | 이론적 위험 | `this.time.now` 접근 시점 문제 |
+| destroy 이벤트 미처리 | 잠재적 누수 | scene.remove() 시나리오에서 리스너가 잔류할 수 있음 |
+| 불필요한 연산 | 없음 | 핸들러 로직 자체는 최소한 |</result>
+<usage><total_tokens>19642</total_tokens><tool_uses>5</tool_uses><duration_ms>53480</duration_ms></usage>
+</task-notification>
+Full transcript available at: REDACTED.output
+
+---
+
+깃 푸시해줘
+
+---
+
+광부 캐릭터 특수 능력을 좀 너프하고 싶은데 어떻게 해야 하지?
+
+---
+
+스폰주기 300으로 하고 점수 90으로 줄여서 기본 효과 +10 해서 100점이 되게 해보자.
+
+---
+
+노이즈는 좀 버프시키고 싶은데 버프 방향성 잡아줘
+
+---
+
+좀 다른 방향성 없나? 기존꺼를 유지하지 않아도 상관없긴 해
+
+---
+
+음 일단 이거 전에 여전히 raf 비정상 플레이가 정상플레이여도 뜨는거 같아. 내가 봤을 때 브라우저 다른 탭을 갔다가 다시 돌아왔을 떄 이런게 발생하는거 같기도 해
+
+---
+
+# Simplify: Code Review and Cleanup
+
+Review all changed files for reuse, quality, and efficiency. Fix any issues found.
+
+## Phase 1: Identify Changes
+
+Run `git diff` (or `git diff HEAD` if there are staged changes) to see what changed. If there are no git changes, review the most recently modified files that the user mentioned or that you edited earlier in this conversation.
+
+## Phase 2: Launch Three Review Agents in Parallel
+
+Use the Agent tool to launch all three agents concurrently in a single message. Pass each agent the full diff so it has the complete context.
+
+### Agent 1: Code Reuse Review
+
+For each change:
+
+1. **Search for existing utilities and helpers** that could replace newly written code. Use Grep to find similar patterns elsewhere in the codebase — common locations are utility directories, shared modules, and files adjacent to the changed ones.
+2. **Flag any new function that duplicates existing functionality.** Suggest the existing function to use instead.
+3. **Flag any inline logic that could use an existing utility** — hand-rolled string manipulation, manual path handling, custom environment checks, ad-hoc type guards, and similar patterns are common candidates.
+
+### Agent 2: Code Quality Review
+
+Review the same changes for hacky patterns:
+
+1. **Redundant state**: state that duplicates existing state, cached values that could be derived, observers/effects that could be direct calls
+2. **Parameter sprawl**: adding new parameters to a function instead of generalizing or restructuring existing ones
+3. **Copy-paste with slight variation**: near-duplicate code blocks that should be unified with a shared abstraction
+4. **Leaky abstractions**: exposing internal details that should be encapsulated, or breaking existing abstraction boundaries
+5. **Stringly-typed code**: using raw strings where constants, enums (string unions), or branded types already exist in the codebase
+
+### Agent 3: Efficiency Review
+
+Review the same changes for efficiency:
+
+1. **Unnecessary work**: redundant computations, repeated file reads, duplicate network/API calls, N+1 patterns
+2. **Missed concurrency**: independent operations run sequentially when they could run in parallel
+3. **Hot-path bloat**: new blocking work added to startup or per-request/per-render hot paths
+4. **Unnecessary existence checks**: pre-checking file/resource existence before operating (TOCTOU anti-pattern) — operate directly and handle the error
+5. **Memory**: unbounded data structures, missing cleanup, event listener leaks
+6. **Overly broad operations**: reading entire files when only a portion is needed, loading all items when filtering for one
+
+## Phase 3: Fix Issues
+
+Wait for all three agents to complete. Aggregate their findings and fix each issue directly. If a finding is a false positive or not worth addressing, note it and move on — do not argue with the finding, just skip it.
+
+When done, briefly summarize what was fixed (or confirm the code was already clean).
+
+---
+
+<task-notification>
+<task-id>a19aa4df7350b7424</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<status>completed</status>
+<summary>Agent "코드 재사용 리뷰" completed</summary>
+<result>이제 중복 호출 여부를 정확히 분석할 수 있습니다.
+
+---
+
+## 코드 재사용 관점 리뷰 결과
+
+### 1. `document.hidden` 체크 패턴 — 기존 패턴과 일관성 없음
+
+`document.hidden`은 이 파일에서 이번 diff가 추가하기 전까지 단 한 곳에서도 직접 쓰이지 않았습니다. 기존 코드는 탭 숨김 문제를 `visibilitychange` 이벤트 + `resetCheatCheckpoints()` 호출로 처리하는 **이벤트 기반 패턴**만 사용했습니다.
+
+이번 diff는 `update()` 루프 안에서 `document.hidden`을 **폴링**하는 방식을 추가했는데, 이는 기존 이벤트 기반 패턴과 성격이 다릅니다. 결과적으로 같은 목적(탭 숨김 중 오탐 방지)을 두 가지 다른 방식으로 처리하게 됩니다.
+
+### 2. `resetCheatCheckpoints()` 중복 실행 경로 — 핵심 문제
+
+`resetCheatCheckpoints()` 가 동일한 프레임에 **두 번** 호출되는 경로가 존재합니다.
+
+**시나리오**: 탭이 숨겨진 상태에서 정확히 5초가 지난 직후 탭으로 복귀할 때.
+
+1. 브라우저가 탭을 포그라운드로 전환 → `visibilitychange` 이벤트 발생
+2. `onVisibilityChange()` 실행 → `resetCheatCheckpoints()` **첫 번째 호출**
+   - `lastCheatCheckTime = realNow()` (복귀 시각 T)
+3. 같은 프레임(또는 바로 다음 프레임) `update()` 실행
+4. `now - this.lastCheatCheckTime` 를 계산하면 T와 거의 같으므로 5000ms 조건 미통과 → 정상
+
+위 시나리오는 안전합니다. 그러나 **숨겨진 상태로 5초 이상 경과 후, 아직 탭 복귀 전** 상태에서 `update()`가 rAF throttle로 간헐적으로 실행되는 경우:
+
+1. `now - lastCheatCheckTime >= 5000` 조건 통과
+2. `document.hidden === true` → `resetCheatCheckpoints()` **첫 번째 호출** (diff의 신규 코드)
+3. 탭 복귀 → `visibilitychange` 발생 → `onVisibilityChange()` → `resetCheatCheckpoints()` **두 번째 호출**
+
+두 번째 호출은 `lastCheatCheckTime`을 복귀 시각으로 한 번 더 덮어씁니다. 기능적으로는 무해하지만, **2번 호출이 발생하는 이유는 동일한 책임(탭 복귀 후 기준점 리셋)을 두 곳에서 중복 처리하기 때문**입니다.
+
+더 직접적인 중복: `onVisibilityChange`는 이제 `document.hidden`에 관계없이 양방향(`hidden → visible`, `visible → hidden`) 모두에서 `resetCheatCheckpoints()`를 호출합니다. `update()` 안의 `document.hidden` 분기도 `hidden` 상태에서 `resetCheatCheckpoints()`를 호출합니다. 결국 탭이 숨겨지는 순간에는:
+
+- `visibilitychange` (hidden 방향) → `onVisibilityChange` → `resetCheatCheckpoints()`
+- 이후 `update()`에서 5초 후 → `document.hidden` 분기 → `resetCheatCheckpoints()`
+
+첫 번째 호출(숨김 시)은 이미 기준점을 리셋했으므로 두 번째 호출(5초 후)은 사실상 `lastCheatCheckTime`을 또 한번 당겨쓰는 것입니다. 5초 주기 검사가 숨김 구간에 걸쳐 있을 때 **검사 창(window)을 5초보다 훨씬 길게** 만들 수 있습니다.
+
+### 3. 기존 유틸리티로 대체 가능한 코드
+
+`document.hidden` 폴링 대신 `visibilitychange` 이벤트 핸들러(`onVisibilityChange`)가 이미 존재하므로, `update()` 내 `document.hidden` 분기는 별도 유틸 없이도 **이벤트 핸들러만으로 완전히 처리 가능**합니다. 구체적으로:
+
+- `update()` 안의 `if (document.hidden) { resetCheatCheckpoints(); }` 분기는
+- `onVisibilityChange`가 `!document.hidden` 조건 없이 양방향으로 이미 리셋하므로 **중복**입니다.
+
+`onVisibilityChange`에서 숨김 방향(`document.hidden === true`)에 `resetCheatCheckpoints()`를 호출하는 것만으로 `update()`의 `document.hidden` 분기를 제거할 수 있고, 단일 책임 원칙에도 부합합니다.</result>
+<usage><total_tokens>17243</total_tokens><tool_uses>4</tool_uses><duration_ms>39590</duration_ms></usage>
+</task-notification>
+Full transcript available at: REDACTED.output
+
+---
+
+<task-notification>
+<task-id>a112769f9081a892d</task-id>
+<tool-use-id>toolu_01SJ6LPkaMQjdff6tP8Ryc6t</tool-use-id>
+<status>completed</status>
+<summary>Agent "코드 품질 리뷰" completed</summary>
+<result>코드를 충분히 파악했습니다. 분석 결과를 보고합니다.
+
+---
+
+## 코드 리뷰 결과
+
+### 1. `onVisibilityChange`에서 게임오버 시 동작 (질문 1)
+
+현재 코드는 `!this.gameOver`일 때만 내부 로직을 실행하므로, 게임오버 상태에서 탭 전환 시 아무것도 하지 않습니다.
+
+**올바른 동작 여부**: 정상입니다. `lastScoreTime`과 `resetCheatCheckpoints()`는 모두 게임 진행 중 점수 계산·안티치트 목적이므로, 이미 게임오버된 상태에서 건드릴 이유가 없습니다.
+
+단, 이벤트 리스너 자체는 게임오버 후에도 살아있어서 탭 전환마다 **헛되이 호출**됩니다. 리소스 낭비 자체는 미미하지만, `shutdown` 이벤트 전까지 이벤트 리스너를 정리하지 않는 점은 의미 없는 호출 경로를 남깁니다.
+
+---
+
+### 2. `document.hidden` 체크 위치 (질문 2) — 실제 버그
+
+현재 구조:
+
+```
+update() {
+  if (!this.gameOver) {
+    const now = realNow();
+    
+    // 점수 계산 (elapsed 기반)  ← document.hidden 여부와 무관하게 항상 실행
+    
+    if (now - lastCheatCheckTime >= 5000) {
+      if (document.hidden) { ... }   ← 5000ms 블록 안에서 체크
+    }
+  }
+}
+```
+
+**문제**: 탭이 숨겨진 상태에서도 점수 계산 블록(`elapsed >= 100` 분기)은 매 프레임 계속 실행됩니다. 브라우저가 백그라운드에서 rAF를 throttle(1fps 이하)하더라도, `realNow()`는 실시간으로 흐르기 때문에 탭 복귀 시 `elapsed`가 수십 초 분량 누적될 수 있습니다.
+
+예를 들어 10초간 탭을 숨겼다가 복귀하면 `onVisibilityChange`가 `lastScoreTime`을 리셋하기 **전에** update()가 먼저 실행되어 누적 elapsed가 점수로 반영될 수 있는 타이밍 레이스가 존재합니다. `visibilitychange` 이벤트는 비동기적으로 발생하지 않지만, 복귀 직후 첫 번째 rAF → update() 콜과 이벤트 핸들러 실행 순서는 브라우저마다 보장되지 않습니다.
+
+`document.hidden` 체크를 5000ms 블록 안에서만 하는 현재 방식보다, **update() 진입부 상단에서 early return**하는 것이 더 안전합니다:
+
+```typescript
+update() {
+  if (!this.gameOver) {
+    if (document.hidden) return;  // 여기서 차단
+    ...
+  }
+}
+```
+
+이렇게 하면 점수 계산·안티치트 체크 모두 백그라운드에서 완전히 차단됩니다.
+
+---
+
+### 3. `lastScoreTime` 리셋 시 이월분 손실 (질문 3) — 실질적 손실 있음
+
+현재 `onVisibilityChange`는 숨김·복귀 양방향에서 모두 `lastScoreTime = realNow()`로 덮어씁니다.
+
+**손실 시나리오**:
+
+1. `lastScoreTime = T`, 현재 `now = T + 87ms` (87ms 누적, 아직 점수 미발생)
+2. 탭 숨김 → `visibilitychange` → `lastScoreTime = T + 87ms`로 리셋
+3. 87ms 이월분 소멸
+
+이것이 의도된 동작인지는 설계 의도에 따라 다릅니다. "탭을 숨기면 시간이 멈춘 것으로 처리"하겠다면 손실이 맞습니다. 그러나 탭을 숨기기 **직전까지 정직하게 플레이한 시간**에 대한 87ms 이월분까지 날리는 것은 불필요한 손실입니다.
+
+개선 방향: 숨김 시점에는 `lastScoreTime`을 리셋하지 않고, 복귀 시점에만 `lastScoreTime = realNow()`로 리셋하면 이월분 손실 없이 백그라운드 시간만 제거할 수 있습니다. `visibilitychange` 이벤트의 `document.hidden` 값으로 숨김/복귀를 구분할 수 있습니다:
+
+```typescript
+const onVisibilityChange = () => {
+  if (!this.gameOver) {
+    if (!document.hidden) {
+      // 복귀 시에만 lastScoreTime 리셋 (이월분 보존하려면 숨김 시엔 건드리지 않음)
+      this.lastScoreTime = realNow();
+    }
+    this.resetCheatCheckpoints();  // 양방향 리셋은 유지
+  }
+};
+```
+
+---
+
+### 요약
+
+| 항목 | 심각도 | 결론 |
+|------|--------|------|
+| 게임오버 후 이벤트 리스너 헛호출 | 낮음 | 동작 정확성은 문제없으나 불필요한 경로 |
+| `document.hidden` 체크를 5000ms 블록 안에서만 처리 | 중간 | 복귀 직후 타이밍 레이스로 누적 elapsed가 점수에 반영될 수 있음 |
+| 탭 숨김 시 `lastScoreTime` 리셋으로 이월분 손실 | 낮음~중간 | 의도적 설계일 수 있으나 복귀 시에만 리셋해도 안티치트 목적은 동일하게 달성 가능 |</result>
+<usage><total_tokens>16376</total_tokens><tool_uses>3</tool_uses><duration_ms>38685</duration_ms></usage>
+</task-notification>
+Full transcript available at: REDACTED.output
+
+---
+
+<task-notification>
+<task-id>a2a9db9b7538ca300</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<status>completed</status>
+<summary>Agent "효율성 리뷰" completed</summary>
+<result>코드 전체 흐름을 파악했습니다. 각 항목별 효율성 분석 결과입니다.
+
+---
+
+## 리뷰 결과
+
+### 1. `document.hidden` — 60fps 루프에서의 DOM 프로퍼티 접근
+
+**문제 없음. 캐싱 불필요.**
+
+`document.hidden`은 실제 DOM 접근이 아닌 단순 boolean 프로퍼티 읽기입니다. V8을 포함한 모든 주요 JS 엔진이 이를 내부 C++ 상태 플래그 직접 읽기로 최적화합니다. 측정 기준으로 약 1~2ns 수준이며, 함수 호출 오버헤드조차 없습니다.
+
+더 중요한 점은, `document.hidden` 체크가 `if (now - this.lastCheatCheckTime >= 5000)` 블록 **안에** 위치합니다. 즉 60fps 기준 초당 12회(5초 주기) 분기가 아니라, **5초마다 단 1회** 진입합니다. 캐싱이 오히려 불필요한 복잡도를 추가합니다.
+
+---
+
+### 2. `onVisibilityChange` — 숨김/복귀 양방향 실행
+
+**실질적 성능 이슈 없음. 단, 논리적 중복이 존재.**
+
+`visibilitychange` 이벤트는 탭 전환처럼 사용자 조작에 의해 발생하는 저빈도 이벤트입니다. 양방향 실행에 따른 초당 처리 비용은 사실상 0입니다.
+
+다만 논리적 중복 측면에서 비효율이 있습니다:
+
+- **숨김 시(hidden)**: `onVisibilityChange`에서 `resetCheatCheckpoints()`를 호출합니다. 하지만 탭이 숨겨지면 rAF가 throttle되어 `update()`가 멈추거나 1fps 수준으로 떨어지므로, 5000ms 조건이 만족될 때쯤 `update()` 내 `document.hidden` 분기에서도 어차피 `resetCheatCheckpoints()`를 한 번 더 호출합니다. 즉 **숨김 이벤트 → `reset`, 5초 후 update() → `reset`의 이중 호출**이 발생합니다.
+- **복귀 시(visible)**: 복귀 직후 다음 `update()` 프레임에서 `now - lastCheatCheckTime`이 5000ms를 이미 초과했을 가능성이 높고, 이때 `document.hidden`이 false이면 비율 체크를 수행합니다. `onVisibilityChange`에서 미리 `reset`을 했기 때문에 이 체크는 복귀~첫 update() 사이의 극히 짧은 간격(수 ms)을 측정하게 되어 **비율 체크가 무력화**됩니다.
+
+결론: 복귀 시 `onVisibilityChange`에서 `reset`을 호출하는 것은 보안 목적의 rAF 비율 체크를 의도적으로 건너뛰는 효과가 있습니다. 성능이 아닌 **치트 탐지 효과성** 관점에서 재검토가 필요합니다.
+
+---
+
+### 3. `realNow()` 중복 호출
+
+**불필요한 중복 호출 없음. 경로가 상호 배타적.**
+
+`onVisibilityChange`와 `update()` 내 `realNow()` 호출이 "동일 이벤트 루프에서 중복"되는 상황은 발생하지 않습니다.
+
+- `visibilitychange` 이벤트는 브라우저 이벤트 루프의 별도 태스크로 처리됩니다.
+- `update()`는 rAF 콜백 태스크에서 실행됩니다.
+- 두 태스크는 동일한 이벤트 루프 틱에서 동시에 실행되지 않습니다.
+
+`realNow()` 자체도 단순히 `Date.call(Date)`를 래핑한 함수이며 캡처된 함수 포인터 호출 1회이므로 비용이 극히 낮습니다. `update()` 내에서 `now` 변수에 한 번 저장 후 `lastCheatCheckTime` 비교와 `realInterval` 계산 두 곳에서 재사용하고 있어 이미 올바른 패턴을 따르고 있습니다.
+
+---
+
+## 요약
+
+| 항목 | 결론 |
+|---|---|
+| `document.hidden` 캐싱 | 불필요. 5초 주기 분기 내 접근이며 비용 무시 가능 |
+| 양방향 `visibilitychange` | 성능 이슈 없음. 단, 복귀 시 `reset` 호출이 rAF 비율 체크를 무력화하는 논리적 문제 있음 |
+| `realNow()` 중복 | 중복 없음. 이벤트 루프상 경로가 상호 배타적 |</result>
+<usage><total_tokens>17057</total_tokens><tool_uses>4</tool_uses><duration_ms>37646</duration_ms></usage>
+</task-notification>
+Full transcript available at: REDACTED.output
+
+---
+
+해줘
