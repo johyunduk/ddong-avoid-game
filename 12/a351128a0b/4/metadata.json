@@ -1,9 +1,11 @@
 {
   "cli_version": "0.4.5",
   "checkpoint_id": "12a351128a0b",
+  "session_id": "9ce3584e-4565-42c1-b57d-f8eaca4112b5",
   "strategy": "manual-commit",
+  "created_at": "2026-03-07T01:37:03.641461Z",
   "branch": "dev",
-  "checkpoints_count": 2,
+  "checkpoints_count": 1,
   "files_touched": [
     "public/assets/illustrations_bak/archieve.png",
     "public/assets/illustrations_bak/branch.png",
@@ -37,48 +39,24 @@
     "public/assets/vids_bak/noise.mp4",
     "public/assets/vids_bak/sentinel.mp4"
   ],
-  "sessions": [
-    {
-      "metadata": "/12/a351128a0b/0/metadata.json",
-      "transcript": "/12/a351128a0b/0/full.jsonl",
-      "context": "/12/a351128a0b/0/context.md",
-      "content_hash": "/12/a351128a0b/0/content_hash.txt",
-      "prompt": "/12/a351128a0b/0/prompt.txt"
-    },
-    {
-      "metadata": "/12/a351128a0b/1/metadata.json",
-      "transcript": "/12/a351128a0b/1/full.jsonl",
-      "context": "/12/a351128a0b/1/context.md",
-      "content_hash": "/12/a351128a0b/1/content_hash.txt",
-      "prompt": "/12/a351128a0b/1/prompt.txt"
-    },
-    {
-      "metadata": "/12/a351128a0b/2/metadata.json",
-      "transcript": "/12/a351128a0b/2/full.jsonl",
-      "context": "/12/a351128a0b/2/context.md",
-      "content_hash": "/12/a351128a0b/2/content_hash.txt",
-      "prompt": "/12/a351128a0b/2/prompt.txt"
-    },
-    {
-      "metadata": "/12/a351128a0b/3/metadata.json",
-      "transcript": "/12/a351128a0b/3/full.jsonl",
-      "context": "/12/a351128a0b/3/context.md",
-      "content_hash": "/12/a351128a0b/3/content_hash.txt",
-      "prompt": "/12/a351128a0b/3/prompt.txt"
-    },
-    {
-      "metadata": "/12/a351128a0b/4/metadata.json",
-      "transcript": "/12/a351128a0b/4/full.jsonl",
-      "context": "/12/a351128a0b/4/context.md",
-      "content_hash": "/12/a351128a0b/4/content_hash.txt",
-      "prompt": "/12/a351128a0b/4/prompt.txt"
-    }
-  ],
+  "agent": "Claude Code",
+  "turn_id": "9e2e15e49e33",
+  "transcript_identifier_at_start": "bd39f837-25ad-4f9b-9efe-3ccb9e729a47",
   "token_usage": {
-    "input_tokens": 27292,
-    "cache_creation_tokens": 6146445,
-    "cache_read_tokens": 230132733,
-    "output_tokens": 1144333,
-    "api_call_count": 2285
-  }
+    "input_tokens": 616,
+    "cache_creation_tokens": 103311,
+    "cache_read_tokens": 5076404,
+    "output_tokens": 37122,
+    "api_call_count": 78
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-07T01:37:03.470784Z",
+    "agent_lines": 0,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 0,
+    "agent_percentage": 0
+  },
+  "transcript_path": ".claude/projects/-Users-johyunduk-Projects-ddong-avoid-game/9ce3584e-4565-42c1-b57d-f8eaca4112b5.jsonl"
 }
