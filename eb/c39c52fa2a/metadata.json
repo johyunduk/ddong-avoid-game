@@ -1,0 +1,32 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "ebc39c52fa2a",
+  "strategy": "manual-commit",
+  "branch": "dev",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src/objects/DiamondPoop.ts",
+    "src/objects/GoldPoop.ts",
+    "src/objects/PoolablePoopBase.ts",
+    "src/objects/Poop.ts",
+    "src/objects/RainbowPoop.ts",
+    "src/objects/TopazPoop.ts",
+    "src/scenes/GameScene.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/eb/c39c52fa2a/0/metadata.json",
+      "transcript": "/eb/c39c52fa2a/0/full.jsonl",
+      "context": "/eb/c39c52fa2a/0/context.md",
+      "content_hash": "/eb/c39c52fa2a/0/content_hash.txt",
+      "prompt": "/eb/c39c52fa2a/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 326,
+    "cache_creation_tokens": 323485,
+    "cache_read_tokens": 22007015,
+    "output_tokens": 133892,
+    "api_call_count": 243
+  }
+}
