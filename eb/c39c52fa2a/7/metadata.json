@@ -1,0 +1,39 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "ebc39c52fa2a",
+  "session_id": "e5a8b37e-b7b2-4a69-b669-abdab1083c68",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-07T14:15:48.606093Z",
+  "branch": "dev",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "src/objects/DiamondPoop.ts",
+    "src/objects/GoldPoop.ts",
+    "src/objects/PoolablePoopBase.ts",
+    "src/objects/Poop.ts",
+    "src/objects/RainbowPoop.ts",
+    "src/objects/TopazPoop.ts",
+    "src/scenes/GameScene.ts"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "468eac9dca0d",
+  "checkpoint_transcript_start": 117,
+  "transcript_lines_at_start": 117,
+  "token_usage": {
+    "input_tokens": 27,
+    "cache_creation_tokens": 33643,
+    "cache_read_tokens": 692680,
+    "output_tokens": 8104,
+    "api_call_count": 17
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-07T14:15:48.432033Z",
+    "agent_lines": 183,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 183,
+    "agent_percentage": 100
+  },
+  "transcript_path": ".claude/projects/-Users-johyunduk-Projects-ddong-avoid-game/e5a8b37e-b7b2-4a69-b669-abdab1083c68.jsonl"
+}
