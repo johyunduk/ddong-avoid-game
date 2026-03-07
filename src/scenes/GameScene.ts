@@ -286,34 +286,39 @@ export default class GameScene extends Phaser.Scene {
     this.player = new Player(this, 200, 520, this.difficultyConfig.playerSpeed + this.ability.getPlayerSpeedBonus() + gradeAwakeSpeed, playerTexturePrefix);
 
     if (this.gameMode === GameMode.CLASSIC) {
-      // 클래식 모드: 💩 그룹 생성
+      // 클래식 모드: 💩 그룹 생성 (Object Pool: maxSize로 상한 설정)
       this.poops = this.physics.add.group({
         classType: Poop,
-        runChildUpdate: true
+        runChildUpdate: true,
+        maxSize: 60,
       });
 
       // 금똥 그룹 생성
       this.goldPoops = this.physics.add.group({
         classType: GoldPoop,
-        runChildUpdate: true
+        runChildUpdate: true,
+        maxSize: 20,
       });
 
       // 다이아똥 그룹 생성
       this.diamondPoops = this.physics.add.group({
         classType: DiamondPoop,
-        runChildUpdate: true
+        runChildUpdate: true,
+        maxSize: 20,
       });
 
       // 토파즈똥 그룹 생성
       this.topazPoops = this.physics.add.group({
         classType: TopazPoop,
-        runChildUpdate: true
+        runChildUpdate: true,
+        maxSize: 10,
       });
 
       // 무지개똥 그룹 생성
       this.rainbowPoops = this.physics.add.group({
         classType: RainbowPoop,
-        runChildUpdate: true
+        runChildUpdate: true,
+        maxSize: 10,
       });
 
       // 충돌 감지
@@ -595,17 +600,15 @@ export default class GameScene extends Phaser.Scene {
     // 난이도에 따른 개수만큼 생성 (노이즈 특수 능력으로 일회성 감소 가능)
     const reduction = this.ability.getSpawnCountReduction();
     const poopCount = Math.max(1, this.difficultyConfig.poopCount - reduction);
+    const fallSpeed = this.difficultyConfig.baseSpeed + (this.difficultyLevel * POOP_CONFIG.normal.speedIncrement);
     for (let i = 0; i < poopCount; i++) {
       // 💩이 화면 전체에서 생성되도록 (💩 크기 15를 고려해서 양쪽 여유)
       const x = Phaser.Math.Between(15, 385);
       const y = Phaser.Math.Between(-200, -20);
-      const poop = new Poop(this, x, y, this.difficultyLevel, this.difficulty);
-      this.poops.add(poop, true);
-
-      // 명시적으로 velocity 설정 (그룹 추가 후)
+      const poop = this.poops.get() as Poop;
+      if (!poop) continue;
+      poop.reinit(x, y, this.difficulty);
       if (poop.body) {
-        // 난이도 기본 속도 + 시간에 따른 증가
-        const fallSpeed = this.difficultyConfig.baseSpeed + (this.difficultyLevel * 40);
         poop.body.velocity.y = fallSpeed;
       }
     }
@@ -651,11 +654,11 @@ export default class GameScene extends Phaser.Scene {
 
     // 금똥 1개를 화면 중앙 상단에서 생성 (더 잘 보이도록)
     const x = Phaser.Math.Between(50, 350);
-    const y = -50; // 화면에 더 가깝게 시작
-    const goldPoop = new GoldPoop(this, x, y);
-    this.goldPoops.add(goldPoop, true);
+    const y = -50;
+    const goldPoop = this.goldPoops.get() as GoldPoop;
+    if (!goldPoop) return;
+    goldPoop.reinit(x, y);
 
-    // 일반 똥보다 느린 속도로 설정 (난이도에 따라, 설정 기반)
     if (goldPoop.body) {
       const fallSpeed = this.difficultyConfig.baseSpeed + (this.difficultyLevel * POOP_CONFIG.normal.speedIncrement) - POOP_CONFIG.gold.speedReduction - this.ability.specialPoopSpeedReduction('gold');
       goldPoop.body.velocity.y = fallSpeed;
@@ -673,21 +676,14 @@ export default class GameScene extends Phaser.Scene {
 
     // 다이아똥 1개를 화면 중앙 상단에서 생성 (더 잘 보이도록)
     const x = Phaser.Math.Between(50, 350);
-    const y = -50; // 화면에 더 가깝게 시작
-    // console.log(`[다이아똥] DiamondPoop 객체 생성 시도: x=${x}, y=${y}`);
-    const diamondPoop = new DiamondPoop(this, x, y);
-    // console.log(`[다이아똥] DiamondPoop 객체 생성 완료: visible=${diamondPoop.visible}, alpha=${diamondPoop.alpha}`);
+    const y = -50;
+    const diamondPoop = this.diamondPoops.get() as DiamondPoop;
+    if (!diamondPoop) return;
+    diamondPoop.reinit(x, y);
 
-    this.diamondPoops.add(diamondPoop, true);
-    // console.log(`[다이아똥] diamondPoops 그룹에 추가 완료. 그룹 크기: ${this.diamondPoops.getLength()}`);
-
-    // 일반 똥보다 느린 속도로 설정 (난이도에 따라, 설정 기반)
     if (diamondPoop.body) {
       const fallSpeed = this.difficultyConfig.baseSpeed + (this.difficultyLevel * POOP_CONFIG.normal.speedIncrement) - POOP_CONFIG.diamond.speedReduction - this.ability.specialPoopSpeedReduction('diamond');
       diamondPoop.body.velocity.y = fallSpeed;
-      // console.log(`[다이아똥] 속도 설정 완료: ${fallSpeed}`);
-    } else {
-      // console.log('[다이아똥] 경고: body가 없습니다!');
     }
 
     // console.log(`다이아똥 생성! 점수: ${this.score}, 위치: (${x}, ${y}), depth: ${diamondPoop.depth}`);
@@ -698,8 +694,9 @@ export default class GameScene extends Phaser.Scene {
 
     const x = Phaser.Math.Between(50, 350);
     const y = -50;
-    const topazPoop = new TopazPoop(this, x, y);
-    this.topazPoops.add(topazPoop, true);
+    const topazPoop = this.topazPoops.get() as TopazPoop;
+    if (!topazPoop) return;
+    topazPoop.reinit(x, y);
 
     if (topazPoop.body) {
       const fallSpeed = this.difficultyConfig.baseSpeed + (this.difficultyLevel * POOP_CONFIG.normal.speedIncrement) - POOP_CONFIG.topaz.speedReduction;
@@ -712,8 +709,9 @@ export default class GameScene extends Phaser.Scene {
 
     const x = Phaser.Math.Between(50, 350);
     const y = -50;
-    const rainbowPoop = new RainbowPoop(this, x, y);
-    this.rainbowPoops.add(rainbowPoop, true);
+    const rainbowPoop = this.rainbowPoops.get() as RainbowPoop;
+    if (!rainbowPoop) return;
+    rainbowPoop.reinit(x, y);
 
     if (rainbowPoop.body) {
       const fallSpeed = this.difficultyConfig.baseSpeed + (this.difficultyLevel * POOP_CONFIG.normal.speedIncrement) - POOP_CONFIG.rainbow.speedReduction;
@@ -880,36 +878,37 @@ export default class GameScene extends Phaser.Scene {
     if (this.poops) {
       const poopPositions: Array<{ x: number; y: number; velocity: number }> = [];
 
-      // 모든 똥의 위치와 속도 저장
+      // 모든 똥의 위치와 속도 저장 후 풀에 반환 (비활성화)
       this.poops.children.entries.forEach((poop) => {
         const poopSprite = poop as Poop;
-        if (poopSprite.body) {
-          poopPositions.push({
-            x: poopSprite.x,
-            y: poopSprite.y,
-            velocity: poopSprite.body.velocity.y
-          });
-        }
+        if (!poopSprite.active) return;
+        const body = poopSprite.body as Phaser.Physics.Arcade.Body;
+        if (!body) return;
+        poopPositions.push({ x: poopSprite.x, y: poopSprite.y, velocity: body.velocity.y });
+        poopSprite.setActive(false).setVisible(false);
+        body.setVelocity(0, 0);
+        body.setEnable(false);
       });
-
-      // 기존 똥들 제거
-      this.poops.clear(true, true);
 
       // 같은 위치에 금똥/다이아똥 생성 (50:50 확률)
       poopPositions.forEach((pos) => {
         const isGold = Math.random() < 0.5;
 
         if (isGold) {
-          const goldPoop = new GoldPoop(this, pos.x, pos.y);
-          this.goldPoops.add(goldPoop, true);
-          if (goldPoop.body) {
-            goldPoop.body.velocity.y = pos.velocity * FEVER_TIME_CONFIG.speedMultiplier;
+          const goldPoop = this.goldPoops.get() as GoldPoop;
+          if (goldPoop) {
+            goldPoop.reinit(pos.x, pos.y);
+            if (goldPoop.body) {
+              goldPoop.body.velocity.y = pos.velocity * FEVER_TIME_CONFIG.speedMultiplier;
+            }
           }
         } else {
-          const diamondPoop = new DiamondPoop(this, pos.x, pos.y);
-          this.diamondPoops.add(diamondPoop, true);
-          if (diamondPoop.body) {
-            diamondPoop.body.velocity.y = pos.velocity * FEVER_TIME_CONFIG.speedMultiplier;
+          const diamondPoop = this.diamondPoops.get() as DiamondPoop;
+          if (diamondPoop) {
+            diamondPoop.reinit(pos.x, pos.y);
+            if (diamondPoop.body) {
+              diamondPoop.body.velocity.y = pos.velocity * FEVER_TIME_CONFIG.speedMultiplier;
+            }
           }
         }
       });
@@ -1127,17 +1126,18 @@ export default class GameScene extends Phaser.Scene {
   private spawnFeverPoop() {
     if (this.gameOver) return;
 
+    const baseFallSpeed = this.difficultyConfig.baseSpeed + (this.difficultyLevel * POOP_CONFIG.normal.speedIncrement);
+
     // 1. 일반 똥 생성 (피버 타임 속도 배수 적용)
+    const normalFallSpeed = baseFallSpeed * FEVER_TIME_CONFIG.speedMultiplier;
     for (let i = 0; i < FEVER_TIME_CONFIG.normalPoopCount; i++) {
       const x = Phaser.Math.Between(15, 385);
       const y = Phaser.Math.Between(-200, -20);
-      const poop = new Poop(this, x, y, this.difficultyLevel, this.difficulty);
-      this.poops.add(poop, true);
-
+      const poop = this.poops.get() as Poop;
+      if (!poop) continue;
+      poop.reinit(x, y, this.difficulty);
       if (poop.body) {
-        const baseFallSpeed = this.difficultyConfig.baseSpeed + (this.difficultyLevel * POOP_CONFIG.normal.speedIncrement);
-        const fallSpeed = baseFallSpeed * FEVER_TIME_CONFIG.speedMultiplier;
-        poop.body.velocity.y = fallSpeed;
+        poop.body.velocity.y = normalFallSpeed;
       }
     }
 
@@ -1150,20 +1150,20 @@ export default class GameScene extends Phaser.Scene {
       const isGold = Math.random() < 0.5;
 
       if (isGold) {
-        const goldPoop = new GoldPoop(this, x, y);
-        this.goldPoops.add(goldPoop, true);
-        if (goldPoop.body) {
-          const baseFallSpeed = this.difficultyConfig.baseSpeed + (this.difficultyLevel * POOP_CONFIG.normal.speedIncrement) - POOP_CONFIG.gold.speedReduction;
-          const fallSpeed = baseFallSpeed * FEVER_TIME_CONFIG.speedMultiplier;
-          goldPoop.body.velocity.y = fallSpeed;
+        const goldPoop = this.goldPoops.get() as GoldPoop;
+        if (goldPoop) {
+          goldPoop.reinit(x, y);
+          if (goldPoop.body) {
+            goldPoop.body.velocity.y = (baseFallSpeed - POOP_CONFIG.gold.speedReduction) * FEVER_TIME_CONFIG.speedMultiplier;
+          }
         }
       } else {
-        const diamondPoop = new DiamondPoop(this, x, y);
-        this.diamondPoops.add(diamondPoop, true);
-        if (diamondPoop.body) {
-          const baseFallSpeed = this.difficultyConfig.baseSpeed + (this.difficultyLevel * POOP_CONFIG.normal.speedIncrement) - POOP_CONFIG.diamond.speedReduction;
-          const fallSpeed = baseFallSpeed * FEVER_TIME_CONFIG.speedMultiplier;
-          diamondPoop.body.velocity.y = fallSpeed;
+        const diamondPoop = this.diamondPoops.get() as DiamondPoop;
+        if (diamondPoop) {
+          diamondPoop.reinit(x, y);
+          if (diamondPoop.body) {
+            diamondPoop.body.velocity.y = (baseFallSpeed - POOP_CONFIG.diamond.speedReduction) * FEVER_TIME_CONFIG.speedMultiplier;
+          }
         }
       }
     }

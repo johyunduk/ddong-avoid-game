@@ -1,12 +1,12 @@
 import Phaser from 'phaser';
 import { POOP_CONFIG } from '../config/poop';
+import PoolablePoopBase from './PoolablePoopBase';
 
-export default class TopazPoop extends Phaser.Physics.Arcade.Sprite {
+export default class TopazPoop extends PoolablePoopBase {
   constructor(scene: Phaser.Scene, x: number, y: number) {
     super(scene, x, y, 'topaz_poop');
 
     this.setOrigin(0.5);
-
     scene.add.existing(this);
     scene.physics.add.existing(this);
 
@@ -18,11 +18,8 @@ export default class TopazPoop extends Phaser.Physics.Arcade.Sprite {
       body.setSize(POOP_CONFIG.topaz.hitbox, POOP_CONFIG.topaz.hitbox);
       body.setCollideWorldBounds(false);
     }
-  }
 
-  update() {
-    if (this.y > this.scene.cameras.main.height + POOP_CONFIG.destroyOffset) {
-      this.destroy();
-    }
+    this.setActive(false).setVisible(false);
+    if (body) body.setEnable(false);
   }
 }
