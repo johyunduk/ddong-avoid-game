@@ -56,6 +56,12 @@ export default class GameScene extends Phaser.Scene {
   private feverTimeColorOffset: number = 0; // 무지개 색상 회전 오프셋
   private feverTimeColorTimer?: Phaser.Time.TimerEvent; // 색상 애니메이션 타이머
   private lastFeverTimeScore: number = 0; // 마지막 피버 타임 발동 점수
+  /** difficultyLevel 기반으로 현재 spawn 간격을 항상 최신값으로 계산 */
+  private get currentSpawnDelay(): number {
+    return Math.max(400, this.difficultyConfig.spawnDelay - (this.difficultyLevel * 80));
+  }
+
+  private static readonly CHARS_WITH_SPRITES = ['miner', 'maehwa', 'hacker', 'archieve', 'glitch', 'noise', 'sentinel', 'legacy', 'log', 'swap', 'sum', 'fork', 'seed', 'session', 'branch', 'hook', 'socket', 'index'];
   private static readonly RAINBOW_COLORS = [
     '#ff0000', '#ff7f00', '#ffff00', '#00ff00', '#0000ff', '#4b0082', '#9400d3',
   ];
@@ -139,7 +145,7 @@ export default class GameScene extends Phaser.Scene {
     }
 
     // Player assets
-    const CHARS_WITH_SPRITES = ['miner', 'maehwa', 'hacker', 'archieve', 'glitch', 'noise', 'sentinel', 'legacy', 'log', 'swap', 'sum', 'fork', 'seed', 'session', 'branch', 'hook', 'socket', 'index'];
+    const CHARS_WITH_SPRITES = GameScene.CHARS_WITH_SPRITES;
     if (CHARS_WITH_SPRITES.includes(this.selectedCharId)) {
       const p = `${this.selectedCharId}_`;
       if (!this.textures.exists(`${p}front`)) this.load.image(`${p}front`, `assets/players/${p}front.webp`);
@@ -232,7 +238,7 @@ export default class GameScene extends Phaser.Scene {
     this.physics.world.setBounds(15, 0, 370, 600);
 
     // 플레이어 생성 (난이도별 속도 적용, 게임 모드별 스프라이트)
-    const CHARS_WITH_SPRITES = ['miner', 'maehwa', 'hacker', 'archieve', 'glitch', 'noise', 'sentinel', 'legacy', 'log', 'swap', 'sum', 'fork', 'seed', 'session', 'branch', 'hook', 'socket', 'index'];
+    const CHARS_WITH_SPRITES = GameScene.CHARS_WITH_SPRITES;
     let playerTexturePrefix = '';
     if (CHARS_WITH_SPRITES.includes(this.selectedCharId)) {
       playerTexturePrefix = `${this.selectedCharId}_`;
@@ -492,6 +498,7 @@ export default class GameScene extends Phaser.Scene {
     this.gameOver = true;
     this.ability.onDestroy(this.abilityAPI);
     this.clearFeverTimeUI();
+    this.spawnTimer.remove();
     this.physics.pause();
     this.sound.stopAll();
 
@@ -707,20 +714,21 @@ export default class GameScene extends Phaser.Scene {
     }
   }
 
+  /** spawnTimer를 현재 난이도 delay로 교체하는 헬퍼 */
+  private resetSpawnTimer(callback: () => void) {
+    this.spawnTimer.remove();
+    this.spawnTimer = this.time.addEvent({
+      delay: this.currentSpawnDelay,
+      callback,
+      callbackScope: this,
+      loop: true
+    });
+  }
+
   private increaseDifficulty() {
     if (!this.gameOver) {
       this.difficultyLevel += 0.3;
-      // 생성 주기 단축 (최소 400ms, 초기 spawnDelay 기준으로 감소)
-      const newDelay = Math.max(400, this.difficultyConfig.spawnDelay - (this.difficultyLevel * 80));
-
-      // 기존 타이머 제거하고 새로 생성
-      this.spawnTimer.remove();
-      this.spawnTimer = this.time.addEvent({
-        delay: newDelay,
-        callback: this.isFeverTime ? this.spawnFeverPoop : this.spawnPoop,
-        callbackScope: this,
-        loop: true
-      });
+      this.resetSpawnTimer(this.isFeverTime ? this.spawnFeverPoop : this.spawnPoop);
     }
   }
 
@@ -815,13 +823,7 @@ export default class GameScene extends Phaser.Scene {
     }
 
     // spawnTimer를 피버 타임 생성 패턴으로 교체
-    this.spawnTimer.remove();
-    this.spawnTimer = this.time.addEvent({
-      delay: this.difficultyConfig.spawnDelay,
-      callback: this.spawnFeverPoop,
-      callbackScope: this,
-      loop: true
-    });
+    this.resetSpawnTimer(this.spawnFeverPoop);
 
     // UI 텍스트 생성 (각 글자별로 개별 Text 객체 생성)
     // 기존 텍스트 제거
@@ -944,13 +946,7 @@ export default class GameScene extends Phaser.Scene {
     this.clearFeverTimeUI();
 
     // 일반 생성 패턴으로 복구
-    this.spawnTimer.remove();
-    this.spawnTimer = this.time.addEvent({
-      delay: this.difficultyConfig.spawnDelay,
-      callback: this.spawnPoop,
-      callbackScope: this,
-      loop: true
-    });
+    this.resetSpawnTimer(this.spawnPoop);
   }
 
   /**
@@ -1018,6 +1014,7 @@ export default class GameScene extends Phaser.Scene {
     this.gameOver = true;
     this.ability.onDestroy(this.abilityAPI);
     this.clearFeverTimeUI();
+    this.spawnTimer.remove();
     this.physics.pause();
 
     // 점수 검증 데이터 로그
