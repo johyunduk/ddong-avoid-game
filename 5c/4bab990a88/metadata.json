@@ -3,7 +3,7 @@
   "checkpoint_id": "5c4bab990a88",
   "strategy": "manual-commit",
   "branch": "dev",
-  "checkpoints_count": 1,
+  "checkpoints_count": 2,
   "files_touched": [
     "docs/memory-leak-fixes.md",
     "src/abilities/GlitchAbility.ts",
@@ -72,13 +72,20 @@
       "context": "/5c/4bab990a88/7/context.md",
       "content_hash": "/5c/4bab990a88/7/content_hash.txt",
       "prompt": "/5c/4bab990a88/7/prompt.txt"
+    },
+    {
+      "metadata": "/5c/4bab990a88/8/metadata.json",
+      "transcript": "/5c/4bab990a88/8/full.jsonl",
+      "context": "/5c/4bab990a88/8/context.md",
+      "content_hash": "/5c/4bab990a88/8/content_hash.txt",
+      "prompt": "/5c/4bab990a88/8/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 27826,
-    "cache_creation_tokens": 7010144,
-    "cache_read_tokens": 262722469,
-    "output_tokens": 1408420,
-    "api_call_count": 2641
+    "input_tokens": 27859,
+    "cache_creation_tokens": 7049109,
+    "cache_read_tokens": 264390221,
+    "output_tokens": 1423285,
+    "api_call_count": 2662
   }
 }
