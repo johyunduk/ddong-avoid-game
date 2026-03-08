@@ -57,6 +57,9 @@ export default class GameScene extends Phaser.Scene {
   private feverTimeColorOffset: number = 0; // 무지개 색상 회전 오프셋
   private feverTimeColorTimer!: Phaser.Time.TimerEvent; // 색상 애니메이션 타이머
   private lastFeverTimeScore: number = 0; // 마지막 피버 타임 발동 점수
+  private static readonly RAINBOW_COLORS = [
+    '#ff0000', '#ff7f00', '#ffff00', '#00ff00', '#0000ff', '#4b0082', '#9400d3',
+  ];
   private selectedCharId: string = 'chibi'; // 선택된 캐릭터 ID
   private selectedCharGrade: string = '등급외'; // 선택된 캐릭터 등급
   private charAwakeLevel: number = 0; // 각성 단계 (init에서 계산, create에서 사용)
@@ -829,48 +832,29 @@ export default class GameScene extends Phaser.Scene {
     const initialSeconds = Math.ceil(FEVER_TIME_CONFIG.duration / 1000);
     const fullText = `FEVER TIME ${initialSeconds}초`;
 
-    // 무지개 색상 배열 (빨강, 주황, 노랑, 초록, 파랑, 남색, 보라)
-    const rainbowColors = [
-      '#ff0000', // 빨강
-      '#ff7f00', // 주황
-      '#ffff00', // 노랑
-      '#00ff00', // 초록
-      '#0000ff', // 파랑
-      '#4b0082', // 남색
-      '#9400d3'  // 보라
-    ];
-
-    // 글자 크기 측정을 위한 임시 텍스트
-    const tempText = this.add.text(0, 0, fullText, {
-      fontSize: FEVER_TIME_CONFIG.ui.fontSize,
-      fontStyle: 'bold'
-    });
-    const totalWidth = tempText.width;
-    tempText.destroy();
-
-    // 각 글자의 시작 X 위치 계산
-    const startX = FEVER_TIME_CONFIG.ui.position.x - totalWidth / 2;
-    let currentX = startX;
-
-    // 각 글자별로 Text 객체 생성
+    // 각 글자별로 Text 객체 생성 (x=0에 먼저 배치 후 width 합산해 재정렬)
+    const colors = GameScene.RAINBOW_COLORS;
     for (let i = 0; i < fullText.length; i++) {
-      const char = fullText[i];
-      const colorIndex = i % rainbowColors.length;
-
       const charText = this.add.text(
-        currentX,
+        0,
         FEVER_TIME_CONFIG.ui.position.y,
-        char,
+        fullText[i],
         {
           fontSize: FEVER_TIME_CONFIG.ui.fontSize,
-          color: rainbowColors[colorIndex],
+          color: colors[i % colors.length],
           fontStyle: 'bold',
           stroke: FEVER_TIME_CONFIG.ui.stroke,
           strokeThickness: FEVER_TIME_CONFIG.ui.strokeThickness
         }
       ).setOrigin(0, 0.5).setDepth(FEVER_TIME_CONFIG.ui.depth);
-
       this.feverTimeUITexts.push(charText);
+    }
+
+    // 생성된 Text 객체의 width를 합산해 중앙 정렬
+    const totalWidth = this.feverTimeUITexts.reduce((sum, t) => sum + t.width, 0);
+    let currentX = FEVER_TIME_CONFIG.ui.position.x - totalWidth / 2;
+    for (const charText of this.feverTimeUITexts) {
+      charText.setX(currentX);
       currentX += charText.width;
     }
 
@@ -917,16 +901,9 @@ export default class GameScene extends Phaser.Scene {
 
     // 텍스트 길이가 변경된 경우 (초 카운트 변경) 위치 재조정
     if (this.feverTimeUITexts.length > 0) {
-      const tempText = this.add.text(0, 0, newText, {
-        fontSize: FEVER_TIME_CONFIG.ui.fontSize,
-        fontStyle: 'bold'
-      });
-      const totalWidth = tempText.width;
-      tempText.destroy();
-
-      const startX = FEVER_TIME_CONFIG.ui.position.x - totalWidth / 2;
-      let currentX = startX;
-
+      // setText() 후 width가 즉시 갱신되므로 별도 측정 객체 불필요
+      const totalWidth = this.feverTimeUITexts.reduce((sum, t) => sum + t.width, 0);
+      let currentX = FEVER_TIME_CONFIG.ui.position.x - totalWidth / 2;
       for (let i = 0; i < this.feverTimeUITexts.length && i < newText.length; i++) {
         this.feverTimeUITexts[i].setX(currentX);
         currentX += this.feverTimeUITexts[i].width;
@@ -943,24 +920,10 @@ export default class GameScene extends Phaser.Scene {
    * 피버 타임 색상 애니메이션 업데이트
    */
   private updateFeverTimeColors() {
-    // 무지개 색상 배열 (빨강, 주황, 노랑, 초록, 파랑, 남색, 보라)
-    const rainbowColors = [
-      '#ff0000', // 빨강
-      '#ff7f00', // 주황
-      '#ffff00', // 노랑
-      '#00ff00', // 초록
-      '#0000ff', // 파랑
-      '#4b0082', // 남색
-      '#9400d3'  // 보라
-    ];
-
-    // 색상 오프셋을 감소시켜 반대 방향으로 이동 (오른쪽에서 왼쪽으로)
-    this.feverTimeColorOffset = (this.feverTimeColorOffset - 1 + rainbowColors.length) % rainbowColors.length;
-
-    // 각 글자의 색상 업데이트
+    const colors = GameScene.RAINBOW_COLORS;
+    this.feverTimeColorOffset = (this.feverTimeColorOffset - 1 + colors.length) % colors.length;
     for (let i = 0; i < this.feverTimeUITexts.length; i++) {
-      const colorIndex = (i + this.feverTimeColorOffset) % rainbowColors.length;
-      this.feverTimeUITexts[i].setColor(rainbowColors[colorIndex]);
+      this.feverTimeUITexts[i].setColor(colors[(i + this.feverTimeColorOffset) % colors.length]);
     }
   }
 
