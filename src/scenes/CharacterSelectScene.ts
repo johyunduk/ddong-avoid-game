@@ -45,6 +45,8 @@ export default class CharacterSelectScene extends Phaser.Scene {
   // 상세 정보 패널
   private detailPanel: Phaser.GameObjects.Container | null = null;
   private infoPanel: Phaser.GameObjects.Container | null = null;
+  private detailVideo: Phaser.GameObjects.Video | null = null;
+  private fitVideoTimers: Phaser.Time.TimerEvent[] = [];
 
   constructor() {
     super('CharacterSelectScene');
@@ -328,7 +330,10 @@ export default class CharacterSelectScene extends Phaser.Scene {
     const videoObj = hasVideo
       ? this.add.video(200, 300, def.videoKey!).setDisplaySize(400, 600).setVisible(false)
       : null;
-    if (videoObj) panel.add(videoObj);
+    if (videoObj) {
+      panel.add(videoObj);
+      this.detailVideo = videoObj;
+    }
 
     // ── 하단 그라디언트 (위 투명 → 아래 짙은 어둠) ─────────────────
     // 비디오/일러스트 위, 버튼 아래에 위치하도록 여기서 추가
@@ -458,11 +463,24 @@ export default class CharacterSelectScene extends Phaser.Scene {
     };
 
     vid.once('play', applyContain);
-    this.time.delayedCall(100, applyContain);
-    this.time.delayedCall(500, applyContain);
+    this.fitVideoTimers.push(this.time.delayedCall(100, applyContain));
+    this.fitVideoTimers.push(this.time.delayedCall(500, applyContain));
   }
 
   private hideCharacterDetail(): void {
+    // fitVideoToPanel의 pending 타이머 취소
+    for (const t of this.fitVideoTimers) t.remove();
+    this.fitVideoTimers = [];
+
+    // 비디오 명시 정지 및 HTMLVideoElement src 해제
+    if (this.detailVideo) {
+      this.detailVideo.stop();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const el: HTMLVideoElement | null = (this.detailVideo as any).video ?? null;
+      if (el) { el.src = ''; el.load(); }
+      this.detailVideo = null;
+    }
+
     this.hideInfoPanel();
     this.detailPanel?.destroy();
     this.detailPanel = null;
