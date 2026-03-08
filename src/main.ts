@@ -30,11 +30,11 @@ const config: Phaser.Types.Core.GameConfig = {
   },
   render: {
     antialias: true,
-    roundPixels: false
+    roundPixels: true
   },
   fps: {
-    // target: 60,
-    smoothStep: false
+    target: 60,
+    smoothStep: true
   }
 };
 
