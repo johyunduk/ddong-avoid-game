@@ -86,6 +86,16 @@ export class SentinelAbility extends BaseAbility {
   }
 
   // ─────────────────────────────────────────────────────────────
+  // 리소스 정리 (게임 오버 시 GameScene에서 호출)
+  // ─────────────────────────────────────────────────────────────
+
+  override onDestroy(_api: GameSceneAPI): void {
+    this.sparkTween?.stop();
+    this.sparkGfx?.destroy();
+    this.orbitDroplets.forEach(drop => drop.destroy());
+  }
+
+  // ─────────────────────────────────────────────────────────────
   // 전기 스파크 (재사용 Graphics)
   // ─────────────────────────────────────────────────────────────
 
