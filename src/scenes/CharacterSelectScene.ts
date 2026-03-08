@@ -52,6 +52,7 @@ export default class CharacterSelectScene extends Phaser.Scene {
 
   // 카드 그리드 공유 리소스
   private coresGfx!: Phaser.GameObjects.Graphics;
+  private maskGfx!: Phaser.GameObjects.Graphics;
 
   // 상세 정보 패널
   private detailPanel: Phaser.GameObjects.Container | null = null;
@@ -152,10 +153,11 @@ export default class CharacterSelectScene extends Phaser.Scene {
     this.maxScrollOffset = Math.max(0, contentBottom - SCROLL_BOTTOM);
 
     // 카드 영역 마스크 (스크롤 영역 밖 숨김)
-    const maskGfx = this.make.graphics({ x: 0, y: 0 });
-    maskGfx.fillStyle(0xffffff);
-    maskGfx.fillRect(0, SCROLL_TOP, 400, SCROLL_BOTTOM - SCROLL_TOP);
-    this.cardsContainer.setMask(maskGfx.createGeometryMask());
+    // this.make: display list에 추가되지 않으므로 shutdown 시 직접 정리 필요
+    this.maskGfx = this.make.graphics({ x: 0, y: 0 });
+    this.maskGfx.fillStyle(0xffffff);
+    this.maskGfx.fillRect(0, SCROLL_TOP, 400, SCROLL_BOTTOM - SCROLL_TOP);
+    this.cardsContainer.setMask(this.maskGfx.createGeometryMask());
 
     // ── 드래그 스크롤 입력 ───────────────────────────────────────────────
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
@@ -207,6 +209,9 @@ export default class CharacterSelectScene extends Phaser.Scene {
 
     // ── 고정 UI ─────────────────────────────────────────────────────────
     this.createBackButton();
+
+    // maskGfx는 display list 외부에 있으므로 씬 종료 시 직접 정리
+    this.events.once('shutdown', () => { this.maskGfx.destroy(); });
   }
 
   private createCharacterCard(char: CharacterDef, x: number, y: number) {

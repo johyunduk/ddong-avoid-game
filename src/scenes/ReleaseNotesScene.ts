@@ -3,6 +3,7 @@ import { RELEASE_NOTES } from '../data/releaseNotes';
 
 export default class ReleaseNotesScene extends Phaser.Scene {
   private scrollContainer!: Phaser.GameObjects.Container;
+  private maskShape!: Phaser.GameObjects.Graphics;
   private scrollY: number = 0;
   private maxScrollY: number = 0;
   private isDragging: boolean = false;
@@ -39,9 +40,10 @@ export default class ReleaseNotesScene extends Phaser.Scene {
     }).setOrigin(0.5).setDepth(10);
 
     // 스크롤 영역 마스크
-    const maskShape = this.make.graphics({ x: 0, y: 0 });
-    maskShape.fillRect(0, 70, 400, 470);
-    const mask = maskShape.createGeometryMask();
+    this.maskShape = this.make.graphics({ x: 0, y: 0 });
+    this.maskShape.fillRect(0, 70, 400, 470);
+    const mask = this.maskShape.createGeometryMask();
+    this.events.once('shutdown', () => { this.maskShape.destroy(); });
 
     // 스크롤 컨테이너
     this.scrollContainer = this.add.container(0, 70);
