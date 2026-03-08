@@ -1,7 +1,6 @@
 // erasableSyntaxOnly 설정 때문에 enum 대신 const object 사용
 export const GameMode = {
   CLASSIC: 'classic',
-  ITEM: 'item',
   GACHA: 'gacha'
 } as const;
 

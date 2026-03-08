@@ -6,7 +6,6 @@ export interface GameSceneAPI {
   readonly player: Player;
   readonly difficultyLevel: number;
   readonly baseSpeed: number;
-  readonly isClassicMode: boolean;
 
   readonly poops: Phaser.Physics.Arcade.Group;
   readonly goldPoops: Phaser.Physics.Arcade.Group;

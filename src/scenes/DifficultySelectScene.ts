@@ -58,28 +58,6 @@ export default class DifficultySelectScene extends Phaser.Scene {
       if (!this.cache.audio.exists('bgMusic')) this.load.audio('bgMusic', 'assets/bgms/poop.mp3');
       if (isChristmasSeason() && !this.cache.audio.exists('xmasBgMusic')) this.load.audio('xmasBgMusic', 'assets/bgms/xmas_poop.mp3');
 
-    } else if (this.gameMode === GameMode.ITEM) {
-      // 우주 배경
-      if (!this.textures.exists('space_background')) this.load.image('space_background', 'assets/backgrounds/space_background.webp');
-
-      // 우주비행사 플레이어
-      if (!this.textures.exists('astronaut_front')) this.load.image('astronaut_front', 'assets/players/astronaut_front.webp');
-      if (!this.textures.exists('astronaut_left')) this.load.image('astronaut_left', 'assets/players/astronaut_left.webp');
-      if (!this.textures.exists('astronaut_right')) this.load.image('astronaut_right', 'assets/players/astronaut_right.webp');
-
-      // 별 이미지
-      if (!this.textures.exists('star')) this.load.image('star', 'assets/stars/star.webp');
-      if (!this.textures.exists('star_smile')) this.load.image('star_smile', 'assets/stars/star_smile.webp');
-      if (!this.textures.exists('star_glasses')) this.load.image('star_glasses', 'assets/stars/star_glasses.webp');
-      if (!this.textures.exists('star_sunglass')) this.load.image('star_sunglass', 'assets/stars/star_sunglass.webp');
-
-      // 아이템 이미지
-      if (!this.textures.exists('hermes_shoes')) this.load.image('hermes_shoes', 'assets/items/hermes_shoes.webp');
-      if (!this.textures.exists('light_saber')) this.load.image('light_saber', 'assets/items/light_saber.webp');
-      if (!this.textures.exists('rainbow_star')) this.load.image('rainbow_star', 'assets/items/rainbow_star.webp');
-
-      // BGM
-      if (!this.cache.audio.exists('starBgMusic')) this.load.audio('starBgMusic', 'assets/bgms/star_fall.mp3');
     }
   }
 

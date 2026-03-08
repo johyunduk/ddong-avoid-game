@@ -5,8 +5,6 @@ import GoldPoop from '../objects/GoldPoop';
 import DiamondPoop from '../objects/DiamondPoop';
 import TopazPoop from '../objects/TopazPoop';
 import RainbowPoop from '../objects/RainbowPoop';
-import Star from '../objects/Star';
-import Item from '../objects/Item';
 import { GameMode, Difficulty, DIFFICULTIES, type DifficultyConfig } from '../types/GameMode';
 import { FEVER_TIME_CONFIG } from '../config/feverTime';
 import { POOP_CONFIG } from '../config/poop';
@@ -26,8 +24,6 @@ export default class GameScene extends Phaser.Scene {
   private diamondPoops!: Phaser.Physics.Arcade.Group;
   private topazPoops!: Phaser.Physics.Arcade.Group;
   private rainbowPoops!: Phaser.Physics.Arcade.Group;
-  private stars!: Phaser.Physics.Arcade.Group;
-  private items!: Phaser.Physics.Arcade.Group;
   private score: number = 0;
   private scoreText!: Phaser.GameObjects.Text;
   private highScore: number = 0;
@@ -127,70 +123,53 @@ export default class GameScene extends Phaser.Scene {
   preload() {
     // DifficultySelectScene에서 미리 로딩됨. 캐시에 없을 경우에만 fallback 로딩.
 
-    if (this.gameMode === GameMode.CLASSIC) {
-      if (this.difficulty === Difficulty.EASY && !this.textures.exists('background2')) {
-        this.load.image('background2', 'assets/backgrounds/background2.webp');
-      } else if (this.difficulty === Difficulty.NORMAL && !this.textures.exists('background3')) {
-        this.load.image('background3', 'assets/backgrounds/background3.webp');
-      } else if (this.difficulty === Difficulty.HARD && !this.textures.exists('background')) {
-        this.load.image('background', 'assets/backgrounds/background.webp');
-      } else if (this.difficulty === Difficulty.EXTREME && !this.textures.exists('background2')) {
-        this.load.image('background2', 'assets/backgrounds/background2.webp');
-      }
-      if (this.difficulty === Difficulty.EXTREME && isChristmasSeason() && !this.textures.exists('xmas_background')) {
-        this.load.image('xmas_background', 'assets/backgrounds/xmas_background.webp');
-      }
+    if (this.difficulty === Difficulty.EASY && !this.textures.exists('background2')) {
+      this.load.image('background2', 'assets/backgrounds/background2.webp');
+    } else if (this.difficulty === Difficulty.NORMAL && !this.textures.exists('background3')) {
+      this.load.image('background3', 'assets/backgrounds/background3.webp');
+    } else if (this.difficulty === Difficulty.HARD && !this.textures.exists('background')) {
+      this.load.image('background', 'assets/backgrounds/background.webp');
+    } else if (this.difficulty === Difficulty.EXTREME && !this.textures.exists('background2')) {
+      this.load.image('background2', 'assets/backgrounds/background2.webp');
+    }
+    if (this.difficulty === Difficulty.EXTREME && isChristmasSeason() && !this.textures.exists('xmas_background')) {
+      this.load.image('xmas_background', 'assets/backgrounds/xmas_background.webp');
+    }
 
-      // Player assets for Classic mode
-      const CHARS_WITH_SPRITES = ['miner', 'maehwa', 'hacker', 'archieve', 'glitch', 'noise', 'sentinel', 'legacy', 'log', 'swap', 'sum', 'fork', 'seed', 'session', 'branch', 'hook', 'socket', 'index'];
-      if (CHARS_WITH_SPRITES.includes(this.selectedCharId)) {
-        const p = `${this.selectedCharId}_`;
-        if (!this.textures.exists(`${p}front`)) this.load.image(`${p}front`, `assets/players/${p}front.webp`);
-        if (!this.textures.exists(`${p}left`)) this.load.image(`${p}left`, `assets/players/${p}left.webp`);
-        if (!this.textures.exists(`${p}right`)) this.load.image(`${p}right`, `assets/players/${p}right.webp`);
-      } else {
-        // chibi (기본) 또는 플레이어 스프라이트가 없는 UR 캐릭터 → 치비로 fallback
-        if (!this.textures.exists('front')) this.load.image('front', 'assets/players/chibi_front.webp');
-        if (!this.textures.exists('left')) this.load.image('left', 'assets/players/chibi_left.webp');
-        if (!this.textures.exists('right')) this.load.image('right', 'assets/players/chibi_right.webp');
-      }
+    // Player assets
+    const CHARS_WITH_SPRITES = ['miner', 'maehwa', 'hacker', 'archieve', 'glitch', 'noise', 'sentinel', 'legacy', 'log', 'swap', 'sum', 'fork', 'seed', 'session', 'branch', 'hook', 'socket', 'index'];
+    if (CHARS_WITH_SPRITES.includes(this.selectedCharId)) {
+      const p = `${this.selectedCharId}_`;
+      if (!this.textures.exists(`${p}front`)) this.load.image(`${p}front`, `assets/players/${p}front.webp`);
+      if (!this.textures.exists(`${p}left`)) this.load.image(`${p}left`, `assets/players/${p}left.webp`);
+      if (!this.textures.exists(`${p}right`)) this.load.image(`${p}right`, `assets/players/${p}right.webp`);
+    } else {
+      // chibi (기본) 또는 플레이어 스프라이트가 없는 UR 캐릭터 → 치비로 fallback
+      if (!this.textures.exists('front')) this.load.image('front', 'assets/players/chibi_front.webp');
+      if (!this.textures.exists('left')) this.load.image('left', 'assets/players/chibi_left.webp');
+      if (!this.textures.exists('right')) this.load.image('right', 'assets/players/chibi_right.webp');
+    }
 
-      if (!this.textures.exists('poop')) this.load.image('poop', 'assets/poops/poop.webp');
-      if (!this.textures.exists('poop_glasses')) this.load.image('poop_glasses', 'assets/poops/poop_glasses.webp');
-      if (!this.textures.exists('poop_sunglass')) this.load.image('poop_sunglass', 'assets/poops/poop_sunglass.webp');
-      if (!this.textures.exists('poop_sunglass2')) this.load.image('poop_sunglass2', 'assets/poops/poop_sunglass2.webp');
-      if (!this.textures.exists('poop_smile')) this.load.image('poop_smile', 'assets/poops/poop_smile.webp');
-      if (!this.textures.exists('gold_poop')) this.load.image('gold_poop', 'assets/poops/gold_poop.webp');
-      if (!this.textures.exists('diamond_poop')) this.load.image('diamond_poop', 'assets/poops/diamond_poop.webp');
-      if (!this.textures.exists('topaz_poop')) this.load.image('topaz_poop', 'assets/poops/topaz.webp');
-      if (!this.textures.exists('rainbow_poop')) this.load.image('rainbow_poop', 'assets/poops/rainbow_poop.webp');
+    if (!this.textures.exists('poop')) this.load.image('poop', 'assets/poops/poop.webp');
+    if (!this.textures.exists('poop_glasses')) this.load.image('poop_glasses', 'assets/poops/poop_glasses.webp');
+    if (!this.textures.exists('poop_sunglass')) this.load.image('poop_sunglass', 'assets/poops/poop_sunglass.webp');
+    if (!this.textures.exists('poop_sunglass2')) this.load.image('poop_sunglass2', 'assets/poops/poop_sunglass2.webp');
+    if (!this.textures.exists('poop_smile')) this.load.image('poop_smile', 'assets/poops/poop_smile.webp');
+    if (!this.textures.exists('gold_poop')) this.load.image('gold_poop', 'assets/poops/gold_poop.webp');
+    if (!this.textures.exists('diamond_poop')) this.load.image('diamond_poop', 'assets/poops/diamond_poop.webp');
+    if (!this.textures.exists('topaz_poop')) this.load.image('topaz_poop', 'assets/poops/topaz.webp');
+    if (!this.textures.exists('rainbow_poop')) this.load.image('rainbow_poop', 'assets/poops/rainbow_poop.webp');
 
-      if (this.difficulty === Difficulty.EXTREME && isChristmasSeason()) {
-        if (!this.textures.exists('xmas_poop_ribbon')) this.load.image('xmas_poop_ribbon', 'assets/poops/xmas_present_poop.webp');
-        if (!this.textures.exists('xmas_poop_nose')) this.load.image('xmas_poop_nose', 'assets/poops/xmas_nose_poop.webp');
-        if (!this.textures.exists('xmas_poop_santa')) this.load.image('xmas_poop_santa', 'assets/poops/xmas_santa_poop.webp');
-        if (!this.textures.exists('xmas_poop_rudolf')) this.load.image('xmas_poop_rudolf', 'assets/poops/xmas_rudolf_poop.webp');
-        if (!this.textures.exists('xmas_poop_beard')) this.load.image('xmas_poop_beard', 'assets/poops/xmas_beard_poop.webp');
-      }
-
-    } else if (this.gameMode === GameMode.ITEM) {
-      if (!this.textures.exists('space_background')) this.load.image('space_background', 'assets/backgrounds/space_background.webp');
-      if (!this.textures.exists('astronaut_front')) this.load.image('astronaut_front', 'assets/players/astronaut_front.webp');
-      if (!this.textures.exists('astronaut_left')) this.load.image('astronaut_left', 'assets/players/astronaut_left.webp');
-      if (!this.textures.exists('astronaut_right')) this.load.image('astronaut_right', 'assets/players/astronaut_right.webp');
-      if (!this.textures.exists('star')) this.load.image('star', 'assets/stars/star.webp');
-      if (!this.textures.exists('star_smile')) this.load.image('star_smile', 'assets/stars/star_smile.webp');
-      if (!this.textures.exists('star_glasses')) this.load.image('star_glasses', 'assets/stars/star_glasses.webp');
-      if (!this.textures.exists('star_sunglass')) this.load.image('star_sunglass', 'assets/stars/star_sunglass.webp');
-      if (!this.textures.exists('hermes_shoes')) this.load.image('hermes_shoes', 'assets/items/hermes_shoes.webp');
-      if (!this.textures.exists('light_saber')) this.load.image('light_saber', 'assets/items/light_saber.webp');
-      if (!this.textures.exists('rainbow_star')) this.load.image('rainbow_star', 'assets/items/rainbow_star.webp');
+    if (this.difficulty === Difficulty.EXTREME && isChristmasSeason()) {
+      if (!this.textures.exists('xmas_poop_ribbon')) this.load.image('xmas_poop_ribbon', 'assets/poops/xmas_present_poop.webp');
+      if (!this.textures.exists('xmas_poop_nose')) this.load.image('xmas_poop_nose', 'assets/poops/xmas_nose_poop.webp');
+      if (!this.textures.exists('xmas_poop_santa')) this.load.image('xmas_poop_santa', 'assets/poops/xmas_santa_poop.webp');
+      if (!this.textures.exists('xmas_poop_rudolf')) this.load.image('xmas_poop_rudolf', 'assets/poops/xmas_rudolf_poop.webp');
+      if (!this.textures.exists('xmas_poop_beard')) this.load.image('xmas_poop_beard', 'assets/poops/xmas_beard_poop.webp');
     }
 
     // BGM
-    if (this.gameMode === GameMode.ITEM) {
-      if (!this.cache.audio.exists('starBgMusic')) this.load.audio('starBgMusic', 'assets/bgms/star_fall.mp3');
-    } else if (this.difficulty === Difficulty.EXTREME && isChristmasSeason()) {
+    if (this.difficulty === Difficulty.EXTREME && isChristmasSeason()) {
       if (!this.cache.audio.exists('xmasBgMusic')) this.load.audio('xmasBgMusic', 'assets/bgms/xmas_poop.mp3');
     } else {
       if (!this.cache.audio.exists('bgMusic')) this.load.audio('bgMusic', 'assets/bgms/poop.mp3');
@@ -211,43 +190,30 @@ export default class GameScene extends Phaser.Scene {
     // 난이도별 최고 점수 로드
     this.highScore = getHighScore(this.difficulty);
 
-    // 게임 모드와 난이도별 배경 이미지 선택
+    // 난이도별 배경 이미지 선택
     let backgroundKey = 'background';
-    if (this.gameMode === GameMode.ITEM) {
-      // 아이템 모드는 우주 배경 사용
-      backgroundKey = 'space_background';
-    } else {
-      // 클래식 모드는 난이도별 배경
-      if (this.difficulty === Difficulty.EASY) {
+    if (this.difficulty === Difficulty.EASY) {
+      backgroundKey = 'background2';
+    } else if (this.difficulty === Difficulty.NORMAL) {
+      backgroundKey = 'background3';
+    } else if (this.difficulty === Difficulty.HARD) {
+      backgroundKey = 'background';
+    } else if (this.difficulty === Difficulty.EXTREME) {
+      // EXTREME 난이도: 크리스마스 시즌(12/1 ~ 1/31)이면 특별 배경
+      if (isChristmasSeason()) {
+        backgroundKey = 'xmas_background';
+      } else {
         backgroundKey = 'background2';
-      } else if (this.difficulty === Difficulty.NORMAL) {
-        backgroundKey = 'background3';
-      } else if (this.difficulty === Difficulty.HARD) {
-        backgroundKey = 'background';
-      } else if (this.difficulty === Difficulty.EXTREME) {
-        // EXTREME 난이도: 크리스마스 시즌(12/1 ~ 1/31)이면 특별 배경
-        if (isChristmasSeason()) {
-          backgroundKey = 'xmas_background';
-        } else {
-          backgroundKey = 'background2';
-        }
       }
     }
 
     // 배경 이미지 추가
     const background = this.add.image(200, 300, backgroundKey);
-    // 배경을 화면에 맞게 조정 (우주 배경은 확대)
-    if (this.gameMode === GameMode.ITEM) {
-      background.setDisplaySize(600, 900); // 우주 배경 확대
-    } else {
-      background.setDisplaySize(400, 600);
-    }
+    background.setDisplaySize(400, 600);
 
     // BGM 키 결정 (preload에서 이미 로드됨)
     let bgMusicKey = 'bgMusic';
-    if (this.gameMode === GameMode.ITEM) {
-      bgMusicKey = 'starBgMusic';
-    } else if (this.difficulty === Difficulty.EXTREME && isChristmasSeason()) {
+    if (this.difficulty === Difficulty.EXTREME && isChristmasSeason()) {
       bgMusicKey = 'xmasBgMusic';
     }
 
@@ -266,9 +232,7 @@ export default class GameScene extends Phaser.Scene {
     // 플레이어 생성 (난이도별 속도 적용, 게임 모드별 스프라이트)
     const CHARS_WITH_SPRITES = ['miner', 'maehwa', 'hacker', 'archieve', 'glitch', 'noise', 'sentinel', 'legacy', 'log', 'swap', 'sum', 'fork', 'seed', 'session', 'branch', 'hook', 'socket', 'index'];
     let playerTexturePrefix = '';
-    if (this.gameMode === GameMode.ITEM) {
-      playerTexturePrefix = 'astronaut_';
-    } else if (this.gameMode === GameMode.CLASSIC && CHARS_WITH_SPRITES.includes(this.selectedCharId)) {
+    if (CHARS_WITH_SPRITES.includes(this.selectedCharId)) {
       playerTexturePrefix = `${this.selectedCharId}_`;
     }
     // 등급 각성 패시브: ★1 R+5/SR+10/UR+15, ★2 R+10/SR+15/UR+20
@@ -285,116 +249,85 @@ export default class GameScene extends Phaser.Scene {
       : 0;
     this.player = new Player(this, 200, 520, this.difficultyConfig.playerSpeed + this.ability.getPlayerSpeedBonus() + gradeAwakeSpeed, playerTexturePrefix);
 
-    if (this.gameMode === GameMode.CLASSIC) {
-      // 클래식 모드: 💩 그룹 생성 (Object Pool: maxSize로 상한 설정)
-      this.poops = this.physics.add.group({
-        classType: Poop,
-        runChildUpdate: true,
-        maxSize: 60,
-      });
+    // 💩 그룹 생성 (Object Pool: maxSize로 상한 설정)
+    this.poops = this.physics.add.group({
+      classType: Poop,
+      runChildUpdate: true,
+      maxSize: 60,
+    });
 
-      // 금똥 그룹 생성
-      this.goldPoops = this.physics.add.group({
-        classType: GoldPoop,
-        runChildUpdate: true,
-        maxSize: 20,
-      });
+    // 금똥 그룹 생성
+    this.goldPoops = this.physics.add.group({
+      classType: GoldPoop,
+      runChildUpdate: true,
+      maxSize: 20,
+    });
 
-      // 다이아똥 그룹 생성
-      this.diamondPoops = this.physics.add.group({
-        classType: DiamondPoop,
-        runChildUpdate: true,
-        maxSize: 20,
-      });
+    // 다이아똥 그룹 생성
+    this.diamondPoops = this.physics.add.group({
+      classType: DiamondPoop,
+      runChildUpdate: true,
+      maxSize: 20,
+    });
 
-      // 토파즈똥 그룹 생성
-      this.topazPoops = this.physics.add.group({
-        classType: TopazPoop,
-        runChildUpdate: true,
-        maxSize: 10,
-      });
+    // 토파즈똥 그룹 생성
+    this.topazPoops = this.physics.add.group({
+      classType: TopazPoop,
+      runChildUpdate: true,
+      maxSize: 10,
+    });
 
-      // 무지개똥 그룹 생성
-      this.rainbowPoops = this.physics.add.group({
-        classType: RainbowPoop,
-        runChildUpdate: true,
-        maxSize: 10,
-      });
+    // 무지개똥 그룹 생성
+    this.rainbowPoops = this.physics.add.group({
+      classType: RainbowPoop,
+      runChildUpdate: true,
+      maxSize: 10,
+    });
 
-      // 충돌 감지
-      this.physics.add.overlap(
-        this.player,
-        this.poops,
-        this.hitPoop as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback,
-        undefined,
-        this
-      );
+    // 충돌 감지
+    this.physics.add.overlap(
+      this.player,
+      this.poops,
+      this.hitPoop as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback,
+      undefined,
+      this
+    );
 
-      // 금똥 충돌 감지 (수집)
-      this.physics.add.overlap(
-        this.player,
-        this.goldPoops,
-        this.collectGoldPoop as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback,
-        undefined,
-        this
-      );
+    // 금똥 충돌 감지 (수집)
+    this.physics.add.overlap(
+      this.player,
+      this.goldPoops,
+      this.collectGoldPoop as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback,
+      undefined,
+      this
+    );
 
-      // 다이아똥 충돌 감지 (수집)
-      this.physics.add.overlap(
-        this.player,
-        this.diamondPoops,
-        this.collectDiamondPoop as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback,
-        undefined,
-        this
-      );
+    // 다이아똥 충돌 감지 (수집)
+    this.physics.add.overlap(
+      this.player,
+      this.diamondPoops,
+      this.collectDiamondPoop as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback,
+      undefined,
+      this
+    );
 
-      // 토파즈똥 충돌 감지 (수집)
-      this.physics.add.overlap(
-        this.player,
-        this.topazPoops,
-        this.collectTopazPoop as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback,
-        undefined,
-        this
-      );
+    // 토파즈똥 충돌 감지 (수집)
+    this.physics.add.overlap(
+      this.player,
+      this.topazPoops,
+      this.collectTopazPoop as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback,
+      undefined,
+      this
+    );
 
-      // 무지개똥 충돌 감지 (수집)
-      this.physics.add.overlap(
-        this.player,
-        this.rainbowPoops,
-        this.collectRainbowPoop as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback,
-        undefined,
-        this
-      );
-    } else {
-      // 아이템 모드: 별과 아이템 그룹 생성
-      this.stars = this.physics.add.group({
-        classType: Star,
-        runChildUpdate: true
-      });
-
-      this.items = this.physics.add.group({
-        classType: Item,
-        runChildUpdate: true
-      });
-
-      // 별 충돌 감지 (피해야 함)
-      this.physics.add.overlap(
-        this.player,
-        this.stars,
-        this.hitStar as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback,
-        undefined,
-        this
-      );
-
-      // 아이템 충돌 감지 (획득)
-      this.physics.add.overlap(
-        this.player,
-        this.items,
-        this.collectItem as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback,
-        undefined,
-        this
-      );
-    }
+    // 무지개똥 충돌 감지 (수집)
+    this.physics.add.overlap(
+      this.player,
+      this.rainbowPoops,
+      this.collectRainbowPoop as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback,
+      undefined,
+      this
+    );
 
     // HUD 배경 패널 (반투명 다크 바)
     const HUD_H = 36;
@@ -434,39 +367,21 @@ export default class GameScene extends Phaser.Scene {
       this.tweens.add({ targets: hintText, alpha: 0, duration: 700, ease: 'Linear' });
     });
 
-    if (this.gameMode === GameMode.CLASSIC) {
-      // 클래식 모드: 💩 생성 타이머 (난이도별 초기 주기 사용)
-      this.spawnTimer = this.time.addEvent({
-        delay: this.difficultyConfig.spawnDelay,
-        callback: this.spawnPoop,
-        callbackScope: this,
-        loop: true
-      });
+    // 💩 생성 타이머 (난이도별 초기 주기 사용)
+    this.spawnTimer = this.time.addEvent({
+      delay: this.difficultyConfig.spawnDelay,
+      callback: this.spawnPoop,
+      callbackScope: this,
+      loop: true
+    });
 
-      // 난이도 증가 타이머
-      this.time.addEvent({
-        delay: 10000, // 10초마다
-        callback: this.increaseDifficulty,
-        callbackScope: this,
-        loop: true
-      });
-    } else {
-      // 아이템 모드: 별 생성 타이머 (고정 주기)
-      this.spawnTimer = this.time.addEvent({
-        delay: 1500,
-        callback: this.spawnStars,
-        callbackScope: this,
-        loop: true
-      });
-
-      // 아이템 생성 타이머 (별보다 느리게)
-      this.time.addEvent({
-        delay: 3000,
-        callback: this.spawnItem,
-        callbackScope: this,
-        loop: true
-      });
-    }
+    // 난이도 증가 타이머
+    this.time.addEvent({
+      delay: 10000, // 10초마다
+      callback: this.increaseDifficulty,
+      callbackScope: this,
+      loop: true
+    });
 
     // 점수 증가는 update()에서 Date.now() 기반으로 처리 (timeScale 조작 무력화)
 
@@ -547,7 +462,6 @@ export default class GameScene extends Phaser.Scene {
       get player()          { return self.player; },
       get difficultyLevel() { return self.difficultyLevel; },
       get baseSpeed()       { return self.difficultyConfig.baseSpeed; },
-      get isClassicMode()   { return self.gameMode === GameMode.CLASSIC; },
       get poops()           { return self.poops; },
       get goldPoops()       { return self.goldPoops; },
       get diamondPoops()    { return self.diamondPoops; },
@@ -615,39 +529,6 @@ export default class GameScene extends Phaser.Scene {
     }
 
     this.ability.onAfterSpawnPoop(this.abilityAPI);
-  }
-
-  private spawnStars() {
-    if (this.gameOver) return;
-
-    // 별 6개를 랜덤 위치에 생성
-    const starCount = 6;
-    for (let i = 0; i < starCount; i++) {
-      const x = Phaser.Math.Between(15, 385);
-      const y = Phaser.Math.Between(-200, -20);
-      const star = new Star(this, x, y);
-      this.stars.add(star, true);
-
-      // 명시적으로 velocity 설정 (그룹 추가 후)
-      if (star.body) {
-        star.body.velocity.y = 200;
-      }
-    }
-  }
-
-  private spawnItem() {
-    if (this.gameOver) return;
-
-    // 아이템 1개를 랜덤 위치에 생성
-    const x = Phaser.Math.Between(15, 385);
-    const y = -50;
-    const item = new Item(this, x, y);
-    this.items.add(item, true);
-
-    // 명시적으로 velocity 설정 (그룹 추가 후)
-    if (item.body) {
-      item.body.velocity.y = 150;
-    }
   }
 
   private spawnGoldPoop() {
@@ -782,11 +663,8 @@ export default class GameScene extends Phaser.Scene {
         this.highScoreText.setText(`최고: ${this.highScore}`);
       }
 
-      // 클래식 모드에서만 금똥과 다이아똥 생성 체크
-      if (this.gameMode === GameMode.CLASSIC) {
-        // 점수 증가 범위 내에서 건너뛴 생성 포인트를 확인
-        this.checkMissedSpawnPoints(oldScore, this.score);
-      }
+      // 점수 증가 범위 내에서 건너뛴 생성 포인트를 확인
+      this.checkMissedSpawnPoints(oldScore, this.score);
     }
   }
 
@@ -1215,84 +1093,6 @@ export default class GameScene extends Phaser.Scene {
 
     // 게임 오버 UI 표시 (비동기 처리)
     this.showGameOverUI(isNewRecord);
-  }
-
-  private hitStar(
-    _player: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile,
-    _star: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile
-  ) {
-    if (this.gameOver) return;
-
-    // 무적 상태면 충돌 무시
-    if (this.player.getIsInvincible()) {
-      // 별 제거만 하고 게임 오버 처리 안함
-      const star = _star as Star;
-      star.destroy();
-      return;
-    }
-
-    this.gameOver = true;
-    this.ability.onDestroy(this.abilityAPI);
-    this.physics.pause();
-
-    // 최고 점수 업데이트 및 갱신 여부 확인
-    const isNewRecord = updateHighScore(this.difficulty, this.score);
-
-    // 게임 오버 UI 표시 (비동기 처리)
-    this.showGameOverUI(isNewRecord);
-  }
-
-  private collectItem(
-    _player: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile,
-    _item: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile
-  ) {
-    if (this.gameOver) return;
-
-    // 아이템 제거
-    const item = _item as Item;
-    const itemTexture = item.texture.key;
-    item.destroy();
-
-    // 점수 보너스 (100점 추가) - updateScore를 통해 건너뛴 생성 포인트도 체크
-    this.updateScore(100);
-
-    // 아이템 종류에 따라 효과 적용
-    if (itemTexture === 'hermes_shoes') {
-      // 헤르메스 신발: 10초간 속도 2배 증가
-      this.player.activateSpeedBoost(10000);
-
-      // 효과 안내 텍스트
-      const boostText = this.add.text(200, 100, '⚡ 속도 증가! ⚡', {
-        fontSize: '24px',
-        color: '#ffff00',
-        fontStyle: 'bold',
-        stroke: '#000',
-        strokeThickness: 4
-      }).setOrigin(0.5);
-
-      // 2초 후 텍스트 제거
-      this.time.delayedCall(2000, () => {
-        boostText.destroy();
-      });
-    } else if (itemTexture === 'rainbow_star') {
-      // 무지개 별: 5초간 무적
-      this.player.activateInvincibility(5000);
-
-      // 효과 안내 텍스트
-      const invincibleText = this.add.text(200, 100, '⭐ 무적! ⭐', {
-        fontSize: '24px',
-        color: '#00ffff',
-        fontStyle: 'bold',
-        stroke: '#000',
-        strokeThickness: 4
-      }).setOrigin(0.5);
-
-      // 2초 후 텍스트 제거
-      this.time.delayedCall(2000, () => {
-        invincibleText.destroy();
-      });
-    }
-    // light_saber는 나중에 구현
   }
 
   private handleGoldCollected(poop: Phaser.Physics.Arcade.Sprite) {

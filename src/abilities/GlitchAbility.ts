@@ -16,8 +16,6 @@ export class GlitchAbility extends BaseAbility {
 
 
   override onCreate(api: GameSceneAPI): void {
-    if (!api.isClassicMode) return;
-
     // 초기 위치는 플레이어와 동일하게 (히스토리가 쌓이면서 자연스럽게 딜레이 생김)
     this.ghost = api.scene.physics.add.sprite(api.player.x, api.player.y, 'glitch_front');
     this.ghost.setDisplaySize(60, 80).setAlpha(0.45).setDepth(5);
@@ -43,14 +41,13 @@ export class GlitchAbility extends BaseAbility {
   }
 
   override onScoreMilestone(score: number, api: GameSceneAPI): void {
-    if (!api.isClassicMode) return;
     if (score % GLITCH_PARAMS.collectInterval === 0) {
       this.collectSpecialWithGhost(api, GLITCH_PARAMS.collectCount);
     }
   }
 
   override onUpdate(api: GameSceneAPI): void {
-    if (!this.ghost || !api.isClassicMode) return;
+    if (!this.ghost) return;
     // 현재 플레이어 위치를 히스토리에 기록
     this.posHistory.push({ x: api.player.x, y: api.player.y });
     if (this.posHistory.length > this.TRAIL_FRAMES) {

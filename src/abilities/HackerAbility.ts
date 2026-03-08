@@ -15,7 +15,6 @@ export class HackerAbility extends BaseAbility {
   }
 
   override onScoreMilestone(score: number, api: GameSceneAPI): void {
-    if (!api.isClassicMode) return;
     if (score % HACKER_PARAMS.deleteInterval === 0 && score > this.lastHackerScore) {
       this.lastHackerScore = score;
       this.removeRandomPoops(HACKER_PARAMS.deleteCount, api);

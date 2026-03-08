@@ -20,7 +20,6 @@ export class MaehwaAbility extends BaseAbility {
   }
 
   override onScoreMilestone(score: number, api: GameSceneAPI): void {
-    if (!api.isClassicMode) return;
     if (score % MAEHWA_PARAMS.slashInterval === 0 && score > this.lastMaehwaScore) {
       this.lastMaehwaScore = score;
       this.slashClosestPoops(MAEHWA_PARAMS.slashCount, api);
