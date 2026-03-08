@@ -1,0 +1,35 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "5c4bab990a88",
+  "strategy": "manual-commit",
+  "branch": "dev",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "docs/memory-leak-fixes.md",
+    "src/abilities/GlitchAbility.ts",
+    "src/abilities/HackerAbility.ts",
+    "src/abilities/MaehwaAbility.ts",
+    "src/abilities/types.ts",
+    "src/objects/Item.ts",
+    "src/objects/Star.ts",
+    "src/scenes/DifficultySelectScene.ts",
+    "src/scenes/GameScene.ts",
+    "src/types/GameMode.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/5c/4bab990a88/0/metadata.json",
+      "transcript": "/5c/4bab990a88/0/full.jsonl",
+      "context": "/5c/4bab990a88/0/context.md",
+      "content_hash": "/5c/4bab990a88/0/content_hash.txt",
+      "prompt": "/5c/4bab990a88/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 326,
+    "cache_creation_tokens": 323485,
+    "cache_read_tokens": 22007015,
+    "output_tokens": 133892,
+    "api_call_count": 243
+  }
+}
