@@ -62,9 +62,8 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     window.addEventListener('keydown', this.onKeyDown, { capture: true });
     window.addEventListener('keyup', this.onKeyUp, { capture: true });
 
-    // 씬 종료 시 이벤트 리스너 정리
+    // shutdown은 restart/stop/destroy 시 항상 먼저 호출됨 → 한 번만 등록으로 충분
     scene.events.once('shutdown', this.removeKeyListeners, this);
-    scene.events.once('destroy', this.removeKeyListeners, this);
   }
 
   private removeKeyListeners() {
