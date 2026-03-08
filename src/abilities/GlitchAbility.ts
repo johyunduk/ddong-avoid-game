@@ -64,6 +64,10 @@ export class GlitchAbility extends BaseAbility {
     }
   }
 
+  override onDestroy(_api: GameSceneAPI): void {
+    this.ghost?.destroy();
+  }
+
   private collectSpecialWithGhost(api: GameSceneAPI, count: number): void {
     if (!this.ghost) return;
 
