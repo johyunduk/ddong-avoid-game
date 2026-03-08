@@ -1,0 +1,544 @@
+자 이제 뭐 해야하지?
+
+---
+
+다른 작업 뭐 해야 할까?
+
+---
+
+버그/완성도 향상 가능 영역 이거 뭐 할게 있을까?
+
+---
+
+그런적 없던거 같은데 다시 한번 봐줄 수 있나?
+
+---
+
+버그1 피버 타임 중에는 느려진다는거지?
+
+---
+
+버그 수정해줘.
+
+---
+
+# Simplify: Code Review and Cleanup
+
+Review all changed files for reuse, quality, and efficiency. Fix any issues found.
+
+## Phase 1: Identify Changes
+
+Run `git diff` (or `git diff HEAD` if there are staged changes) to see what changed. If there are no git changes, review the most recently modified files that the user mentioned or that you edited earlier in this conversation.
+
+## Phase 2: Launch Three Review Agents in Parallel
+
+Use the Agent tool to launch all three agents concurrently in a single message. Pass each agent the full diff so it has the complete context.
+
+### Agent 1: Code Reuse Review
+
+For each change:
+
+1. **Search for existing utilities and helpers** that could replace newly written code. Look for similar patterns elsewhere in the codebase — common locations are utility directories, shared modules, and files adjacent to the changed ones.
+2. **Flag any new function that duplicates existing functionality.** Suggest the existing function to use instead.
+3. **Flag any inline logic that could use an existing utility** — hand-rolled string manipulation, manual path handling, custom environment checks, ad-hoc type guards, and similar patterns are common candidates.
+
+### Agent 2: Code Quality Review
+
+Review the same changes for hacky patterns:
+
+1. **Redundant state**: state that duplicates existing state, cached values that could be derived, observers/effects that could be direct calls
+2. **Parameter sprawl**: adding new parameters to a function instead of generalizing or restructuring existing ones
+3. **Copy-paste with slight variation**: near-duplicate code blocks that should be unified with a shared abstraction
+4. **Leaky abstractions**: exposing internal details that should be encapsulated, or breaking existing abstraction boundaries
+5. **Stringly-typed code**: using raw strings where constants, enums (string unions), or branded types already exist in the codebase
+6. **Unnecessary JSX nesting**: wrapper Boxes/elements that add no layout value — check if inner component props (flexShrink, alignItems, etc.) already provide the needed behavior
+
+### Agent 3: Efficiency Review
+
+Review the same changes for efficiency:
+
+1. **Unnecessary work**: redundant computations, repeated file reads, duplicate network/API calls, N+1 patterns
+2. **Missed concurrency**: independent operations run sequentially when they could run in parallel
+3. **Hot-path bloat**: new blocking work added to startup or per-request/per-render hot paths
+4. **Unnecessary existence checks**: pre-checking file/resource existence before operating (TOCTOU anti-pattern) — operate directly and handle the error
+5. **Memory**: unbounded data structures, missing cleanup, event listener leaks
+6. **Overly broad operations**: reading entire files when only a portion is needed, loading all items when filtering for one
+
+## Phase 3: Fix Issues
+
+Wait for all three agents to complete. Aggregate their findings and fix each issue directly. If a finding is a false positive or not worth addressing, note it and move on — do not argue with the finding, just skip it.
+
+When done, briefly summarize what was fixed (or confirm the code was already clean).
+
+---
+
+다른 버그는 뭐였지?
+
+---
+
+해줘.
+
+---
+
+# Simplify: Code Review and Cleanup
+
+Review all changed files for reuse, quality, and efficiency. Fix any issues found.
+
+## Phase 1: Identify Changes
+
+Run `git diff` (or `git diff HEAD` if there are staged changes) to see what changed. If there are no git changes, review the most recently modified files that the user mentioned or that you edited earlier in this conversation.
+
+## Phase 2: Launch Three Review Agents in Parallel
+
+Use the Agent tool to launch all three agents concurrently in a single message. Pass each agent the full diff so it has the complete context.
+
+### Agent 1: Code Reuse Review
+
+For each change:
+
+1. **Search for existing utilities and helpers** that could replace newly written code. Look for similar patterns elsewhere in the codebase — common locations are utility directories, shared modules, and files adjacent to the changed ones.
+2. **Flag any new function that duplicates existing functionality.** Suggest the existing function to use instead.
+3. **Flag any inline logic that could use an existing utility** — hand-rolled string manipulation, manual path handling, custom environment checks, ad-hoc type guards, and similar patterns are common candidates.
+
+### Agent 2: Code Quality Review
+
+Review the same changes for hacky patterns:
+
+1. **Redundant state**: state that duplicates existing state, cached values that could be derived, observers/effects that could be direct calls
+2. **Parameter sprawl**: adding new parameters to a function instead of generalizing or restructuring existing ones
+3. **Copy-paste with slight variation**: near-duplicate code blocks that should be unified with a shared abstraction
+4. **Leaky abstractions**: exposing internal details that should be encapsulated, or breaking existing abstraction boundaries
+5. **Stringly-typed code**: using raw strings where constants, enums (string unions), or branded types already exist in the codebase
+6. **Unnecessary JSX nesting**: wrapper Boxes/elements that add no layout value — check if inner component props (flexShrink, alignItems, etc.) already provide the needed behavior
+
+### Agent 3: Efficiency Review
+
+Review the same changes for efficiency:
+
+1. **Unnecessary work**: redundant computations, repeated file reads, duplicate network/API calls, N+1 patterns
+2. **Missed concurrency**: independent operations run sequentially when they could run in parallel
+3. **Hot-path bloat**: new blocking work added to startup or per-request/per-render hot paths
+4. **Unnecessary existence checks**: pre-checking file/resource existence before operating (TOCTOU anti-pattern) — operate directly and handle the error
+5. **Memory**: unbounded data structures, missing cleanup, event listener leaks
+6. **Overly broad operations**: reading entire files when only a portion is needed, loading all items when filtering for one
+
+## Phase 3: Fix Issues
+
+Wait for all three agents to complete. Aggregate their findings and fix each issue directly. If a finding is a false positive or not worth addressing, note it and move on — do not argue with the finding, just skip it.
+
+When done, briefly summarize what was fixed (or confirm the code was already clean).
+
+---
+
+브라우저 콘솔에서 비정상 플레이 방지하는것도 잘 작동하는거겠지?
+
+---
+
+그러면 이제는 뭐 해야하지?
+
+---
+
+스토리 공개 어떻게 할지 알려줘
+
+---
+
+그래 시작해봐.
+
+---
+
+[Request interrupted by user]
+
+---
+
+일단은 깃 푸시부터 해줘
+
+---
+
+자 그럼이제 1단계 부터 시작해줘.
+
+---
+
+# Simplify: Code Review and Cleanup
+
+Review all changed files for reuse, quality, and efficiency. Fix any issues found.
+
+## Phase 1: Identify Changes
+
+Run `git diff` (or `git diff HEAD` if there are staged changes) to see what changed. If there are no git changes, review the most recently modified files that the user mentioned or that you edited earlier in this conversation.
+
+## Phase 2: Launch Three Review Agents in Parallel
+
+Use the Agent tool to launch all three agents concurrently in a single message. Pass each agent the full diff so it has the complete context.
+
+### Agent 1: Code Reuse Review
+
+For each change:
+
+1. **Search for existing utilities and helpers** that could replace newly written code. Look for similar patterns elsewhere in the codebase — common locations are utility directories, shared modules, and files adjacent to the changed ones.
+2. **Flag any new function that duplicates existing functionality.** Suggest the existing function to use instead.
+3. **Flag any inline logic that could use an existing utility** — hand-rolled string manipulation, manual path handling, custom environment checks, ad-hoc type guards, and similar patterns are common candidates.
+
+### Agent 2: Code Quality Review
+
+Review the same changes for hacky patterns:
+
+1. **Redundant state**: state that duplicates existing state, cached values that could be derived, observers/effects that could be direct calls
+2. **Parameter sprawl**: adding new parameters to a function instead of generalizing or restructuring existing ones
+3. **Copy-paste with slight variation**: near-duplicate code blocks that should be unified with a shared abstraction
+4. **Leaky abstractions**: exposing internal details that should be encapsulated, or breaking existing abstraction boundaries
+5. **Stringly-typed code**: using raw strings where constants, enums (string unions), or branded types already exist in the codebase
+6. **Unnecessary JSX nesting**: wrapper Boxes/elements that add no layout value — check if inner component props (flexShrink, alignItems, etc.) already provide the needed behavior
+
+### Agent 3: Efficiency Review
+
+Review the same changes for efficiency:
+
+1. **Unnecessary work**: redundant computations, repeated file reads, duplicate network/API calls, N+1 patterns
+2. **Missed concurrency**: independent operations run sequentially when they could run in parallel
+3. **Hot-path bloat**: new blocking work added to startup or per-request/per-render hot paths
+4. **Unnecessary existence checks**: pre-checking file/resource existence before operating (TOCTOU anti-pattern) — operate directly and handle the error
+5. **Memory**: unbounded data structures, missing cleanup, event listener leaks
+6. **Overly broad operations**: reading entire files when only a portion is needed, loading all items when filtering for one
+
+## Phase 3: Fix Issues
+
+Wait for all three agents to complete. Aggregate their findings and fix each issue directly. If a finding is a false positive or not worth addressing, note it and move on — do not argue with the finding, just skip it.
+
+When done, briefly summarize what was fixed (or confirm the code was already clean).
+
+---
+
+djb2 이게 뭔데
+
+---
+
+이거 스토리는 로컬스토리지로만 관리를 해도 괜찮은건가?
+
+---
+
+2단계는 내용이 뭔지 설명부터 해줘
+
+---
+
+진행해줘.
+
+---
+
+3단계는 뭔데
+
+---
+
+진행해줘.
+
+---
+
+4단계는 어떻게 되는거지:?
+
+---
+
+스토리 진행을 중간 중간 동영상으로 보여주고 싶은데
+
+---
+
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+Summary:
+1. Primary Request and Intent:
+   - 세션 시작: 다음에 할 작업 파악 (구현 현황.md 참조)
+   - 버그/완성도 향상 작업 진행:
+     - 피버 타임 spawn delay 리셋 버그 수정
+     - CHARS_WITH_SPRITES 배열 중복 제거
+     - currentSpawnDelay 필드 → getter 리팩토링
+     - resetSpawnTimer() 헬퍼 추출
+     - 게임오버 시 spawnTimer.remove() 누락 수정
+     - djb2 함수 중복 → signing.ts 공통화
+   - 스토리 공개 시스템 구현 (1순위 TODO):
+     - 1단계: storyProgress.ts 모듈 (누적 통계 + djb2 서명 + 잠금 해제 체크)
+     - 2단계: GameScene 게임오버 시 recordGameSession() 연동
+     - 3단계: GachaScene + skor-submit 응답 연동
+     - 4단계 설계 중: 로그 표시 UI (영상 + 텍스트)
+   - 4단계 요구사항: 로그 목록에서 탭 시 재생 / 영상 새로 제작 / 영상+텍스트 병행 / 일부 로그만 영상
+
+2. Key Technical Concepts:
+   - Phaser 3 게임 씬 생명주기 (init → preload → create → update)
+   - TypeScript 엄격 설정: verbatimModuleSyntax, erasableSyntaxOnly (enum 금지, const as const 사용)
+   - localStorage + djb2 서명 안티치트 패턴
+   - Strategy 패턴 캐릭터 능력 시스템 (CharacterAbility 인터페이스)
+   - 피버 타임 시스템 (score 구간마다 발동, 무지개 UI)
+   - getter vs 필드: 파생 가능한 값은 getter로 (currentSpawnDelay)
+   - Supabase Edge Functions (gacha-pull, skor-submit, leaderboard-*)
+   - 누적 통계 기반 스토리 잠금 해제 (달린 거리, 토파즈 수집, 치비 플레이, SKOR 누적, 캐릭터 보유 수)
+
+3. Files and Code Sections:
+   - **src/scenes/GameScene.ts** (핵심 수정 파일)
+     - `currentSpawnDelay` 필드 → private getter로 교체:
+       ```typescript
+       private get currentSpawnDelay(): number {
+         return Math.max(400, this.difficultyConfig.spawnDelay - (this.difficultyLevel * 80));
+       }
+       ```
+     - `resetSpawnTimer()` 헬퍼 추가:
+       ```typescript
+       private resetSpawnTimer(callback: () => void) {
+         this.spawnTimer.remove();
+         this.spawnTimer = this.time.addEvent({
+           delay: this.currentSpawnDelay,
+           callback,
+           callbackScope: this,
+           loop: true
+         });
+       }
+       ```
+     - `CHARS_WITH_SPRITES` static readonly로 통합:
+       ```typescript
+       private static readonly CHARS_WITH_SPRITES = ['miner', 'maehwa', 'hacker', 'archieve', 'glitch', 'noise', 'sentinel', 'legacy', 'log', 'swap', 'sum', 'fork', 'seed', 'session', 'branch', 'hook', 'socket', 'index'];
+       ```
+     - 게임오버/치트 감지 시 `spawnTimer.remove()` 추가 (hitPoop, handleCheatDetected 두 곳)
+     - 스토리 연동 import 및 호출:
+       ```typescript
+       import { recordGameSession, recordSkorEarned } from '../utils/storyProgress';
+       // hitPoop() 안:
+       recordGameSession(this.score, this.topazCollected, this.selectedCharId === 'chibi');
+       // submitSkorOnGameOver() 안 (서버 응답 후):
+       recordSkorEarned(result.totalSkorAdded);
+       ```
+
+   - **src/utils/storyProgress.ts** (신규 생성)
+     - 누적 통계(StoryStats) + 잠금 해제 로그를 localStorage에 djb2 서명으로 저장
+     - 잠금 해제 조건 11개 (#001~#013, 일부 번호 비연속):
+       ```typescript
+       unlock(1,  ownedCount >= 2);          // 첫 번째 뽑기 완료
+       unlock(2,  ownedCount >= 2);          // 캐릭터 2명 보유
+       unlock(3,  stats.totalDistance >= 500);
+       unlock(4,  stats.totalSkorEarned >= 100);
+       unlock(5,  ownedCount >= 3);
+       unlock(8,  stats.totalDistance >= 5000);
+       unlock(9,  ownedCount >= 5);
+       unlock(10, stats.chibiPlayCount >= 50);
+       unlock(11, stats.totalTopazCollected >= 30);
+       unlock(12, stats.totalDistance >= 10000);
+       unlock(13, ownedCount >= CHARACTERS.length);
+       ```
+     - 공개 API: `recordGameSession()`, `recordSkorEarned()`, `checkOwnershipConditions()`, `getUnlockedLogs()`, `getStoryStats()`
+     - 주의: linter가 signing.ts import와 ownedCount 파라미터 주입을 원래대로 되돌림 → _djb2 인라인 버전이 현재 상태
+
+   - **src/utils/signing.ts** (신규 생성)
+     ```typescript
+     export function djb2(str: string): string {
+       let h = 5381;
+       for (let i = 0; i < str.length; i++) h = (((h << 5) + h) ^ str.charCodeAt(i)) >>> 0;
+       return h.toString(36);
+     }
+     ```
+
+   - **src/utils/character.ts** (수정)
+     - `import { djb2 } from './signing';` 추가
+     - `_signDupes()`, `_sign()` 두 함수의 인라인 djb2 루프 → `djb2()` 호출로 교체
+
+   - **src/scenes/GachaScene.ts** (수정)
+     ```typescript
+     import { checkOwnershipConditions } from '../utils/storyProgress';
+     // 캐릭터 저장 직후:
+     checkOwnershipConditions();
+     ```
+
+4. Errors and fixes:
+   - **`Edit` tool "Found 2 matches" 오류**: `hitPoop()`과 `handleCheatDetected()` 두 곳에 동일 패턴이 있어 unique string 부족 → `replace_all: true`로 해결
+   - **linter가 storyProgress.ts 되돌림**: signing.ts import와 `_checkConditions(stats, logs, ownedCount)` 파라미터 주입을 linter가 원래 버전으로 복원. 현재 storyProgress.ts는 `_djb2` 인라인 함수와 `_checkConditions` 내부에서 `getOwnedCharacters()` 호출하는 버전으로 유지됨.
+   - **spawn delay 버그 분석**: 처음엔 user가 "그런 적 없던 거 같은데"라며 재확인 요청 → 재검토 후 실제 버그 확인(피버 종료 후 최대 10초간 initial delay로 리셋되는 현상)
+
+5. Problem Solving:
+   - 피버 타임 spawn delay 문제: `startFeverTime()`/`endFeverTime()` 모두 `difficultyConfig.spawnDelay`(초기값) 사용 → currentSpawnDelay getter로 항상 현재 difficulty 반영
+   - 스토리 거리 환산: score 1점 = 1m로 단순화 (100ms 생존 = 1m)
+   - 스토리 localStorage vs Supabase: 경쟁 요소 없고 Toss 인앱은 단일 기기이므로 localStorage 충분
+
+6. All user messages:
+   - "자 이제 뭐 해야하지?"
+   - "다른 작업 뭐 해야 할까?"
+   - "버그/완성도 향상 가능 영역 이거 뭐 할게 있을까?"
+   - "그런적 없던거 같은데 다시 한번 봐줄 수 있나?"
+   - "버그1 피버 타임 중에는 느려진다는거지?"
+   - "버그 수정해줘."
+   - "/simplify"
+   - "다른 버그는 뭐였지?"
+   - "해줘."
+   - "/simplify"
+   - "브라우저 콘솔에서 비정상 플레이 방지하는것도 잘 작동하는거겠지?"
+   - "그러면 이제는 뭐 해야하지?"
+   - "스토리 공개 어떻게 할지 알려줘"
+   - "그래 시작해봐.[Request interrupted by user]일단은 깃 푸시부터 해줘"
+   - "자 그럼이제 1단계 부터 시작해줘."
+   - "/simplify"
+   - "djb2 이게 뭔데"
+   - "이거 스토리는 로컬스토리지로만 관리를 해도 괜찮은건가?"
+   - "2단계는 내용이 뭔지 설명부터 해줘"
+   - "진행해줘."
+   - "3단계는 뭔데"
+   - "진행해줘."
+   - "4단계는 어떻게 되는거지:?"
+   - "스토리 진행을 중간 중간 동영상으로 보여주고 싶은데"
+   - "1. 로그 목록에서 탭 했을 떄. 2. 새로 제작 3. 영상 + 텍스트 4. 일부 로그만 영상"
+
+7. Pending Tasks:
+   - **4단계: 로그 표시 UI 설계 및 구현** (현재 진행 중)
+     - ModeSelectScene 또는 CharacterSelectScene에 로그 진입점 버튼 추가
+     - 로그 목록 씬/모달 구현 (잠금/해제 상태 표시)
+     - 로그 탭 시 영상 재생 (일부 로그만) + 텍스트 표시
+     - 영상은 새로 제작 예정 (에셋 없음)
+   - storyProgress.ts의 signing.ts 통합 (linter가 되돌린 부분) 재적용 여부 확인
+
+8. Current Work:
+   4단계 로그 UI 설계 논의 중. 사용자가 "스토리 진행을 중간 중간 동영상으로 보여주고 싶은데"라고 요청했고, 다음 스펙을 확정:
+   - 재생 시점: 로그 목록에서 탭했을 때
+   - 영상: 새로 제작 (기존 캐릭터 영상 재활용 아님)
+   - 방식: 영상 + 텍스트 병행
+   - 범위: 일부 로그만 영상, 나머지는 텍스트만
+
+9. Optional Next Step:
+   사용자가 4단계 요구사항을 확정했으므로, 다음 단계는 **로그 데이터 구조 설계 및 LogScene(또는 모달) 구현**:
+   - 영상이 있는 로그와 없는 로그를 구분하는 데이터 구조 정의 (`src/data/storyLogs.ts`)
+   - 로그 목록 UI 씬 구현 (GachaScene의 터미널 스타일 참고)
+   - 로그 탭 → 영상 재생(있는 경우) → 텍스트 표시 플로우
+
+   직전 대화:
+   > 사용자: "1. 로그 목록에서 탭 했을 때. 2. 새로 제작 3. 영상 + 텍스트 4. 일부 로그만 영상"
+   > 어시스턴트가 요구사항을 확정하고 설계 단계를 기다리는 중
+
+If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/johyunduk/.REDACTED.jsonl
+Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.
+
+---
+
+# Simplify: Code Review and Cleanup
+
+Review all changed files for reuse, quality, and efficiency. Fix any issues found.
+
+## Phase 1: Identify Changes
+
+Run `git diff` (or `git diff HEAD` if there are staged changes) to see what changed. If there are no git changes, review the most recently modified files that the user mentioned or that you edited earlier in this conversation.
+
+## Phase 2: Launch Three Review Agents in Parallel
+
+Use the Agent tool to launch all three agents concurrently in a single message. Pass each agent the full diff so it has the complete context.
+
+### Agent 1: Code Reuse Review
+
+For each change:
+
+1. **Search for existing utilities and helpers** that could replace newly written code. Look for similar patterns elsewhere in the codebase — common locations are utility directories, shared modules, and files adjacent to the changed ones.
+2. **Flag any new function that duplicates existing functionality.** Suggest the existing function to use instead.
+3. **Flag any inline logic that could use an existing utility** — hand-rolled string manipulation, manual path handling, custom environment checks, ad-hoc type guards, and similar patterns are common candidates.
+
+### Agent 2: Code Quality Review
+
+Review the same changes for hacky patterns:
+
+1. **Redundant state**: state that duplicates existing state, cached values that could be derived, observers/effects that could be direct calls
+2. **Parameter sprawl**: adding new parameters to a function instead of generalizing or restructuring existing ones
+3. **Copy-paste with slight variation**: near-duplicate code blocks that should be unified with a shared abstraction
+4. **Leaky abstractions**: exposing internal details that should be encapsulated, or breaking existing abstraction boundaries
+5. **Stringly-typed code**: using raw strings where constants, enums (string unions), or branded types already exist in the codebase
+6. **Unnecessary JSX nesting**: wrapper Boxes/elements that add no layout value — check if inner component props (flexShrink, alignItems, etc.) already provide the needed behavior
+
+### Agent 3: Efficiency Review
+
+Review the same changes for efficiency:
+
+1. **Unnecessary work**: redundant computations, repeated file reads, duplicate network/API calls, N+1 patterns
+2. **Missed concurrency**: independent operations run sequentially when they could run in parallel
+3. **Hot-path bloat**: new blocking work added to startup or per-request/per-render hot paths
+4. **Unnecessary existence checks**: pre-checking file/resource existence before operating (TOCTOU anti-pattern) — operate directly and handle the error
+5. **Memory**: unbounded data structures, missing cleanup, event listener leaks
+6. **Overly broad operations**: reading entire files when only a portion is needed, loading all items when filtering for one
+
+## Phase 3: Fix Issues
+
+Wait for all three agents to complete. Aggregate their findings and fix each issue directly. If a finding is a false positive or not worth addressing, note it and move on — do not argue with the finding, just skip it.
+
+When done, briefly summarize what was fixed (or confirm the code was already clean).
+
+---
+
+이야기 버튼은 저 위치 말고 릴리즈 노트랑 나란히 놔줘.
+
+---
+
+얘네도 버튼으로 만들어줘
+
+---
+
+뭔가 UI가 별론데
+
+---
+
+클래식모드, 캐릭터 뽑기 길이를 밑에 둘과 같게 해줘
+
+---
+
+아니다 밑에 있던 버튼들을 기존 캐릭터 뽑기 사이즈로 줄여줄 수 있나?
+
+---
+
+버튼들 색상을 어울리게 바꾸는게 좋나 아니면 버튼들 마다 이미지를 넣는게 좋을까?
+
+---
+
+그래 해줘
+
+---
+
+# Simplify: Code Review and Cleanup
+
+Review all changed files for reuse, quality, and efficiency. Fix any issues found.
+
+## Phase 1: Identify Changes
+
+Run `git diff` (or `git diff HEAD` if there are staged changes) to see what changed. If there are no git changes, review the most recently modified files that the user mentioned or that you edited earlier in this conversation.
+
+## Phase 2: Launch Three Review Agents in Parallel
+
+Use the Agent tool to launch all three agents concurrently in a single message. Pass each agent the full diff so it has the complete context.
+
+### Agent 1: Code Reuse Review
+
+For each change:
+
+1. **Search for existing utilities and helpers** that could replace newly written code. Look for similar patterns elsewhere in the codebase — common locations are utility directories, shared modules, and files adjacent to the changed ones.
+2. **Flag any new function that duplicates existing functionality.** Suggest the existing function to use instead.
+3. **Flag any inline logic that could use an existing utility** — hand-rolled string manipulation, manual path handling, custom environment checks, ad-hoc type guards, and similar patterns are common candidates.
+
+### Agent 2: Code Quality Review
+
+Review the same changes for hacky patterns:
+
+1. **Redundant state**: state that duplicates existing state, cached values that could be derived, observers/effects that could be direct calls
+2. **Parameter sprawl**: adding new parameters to a function instead of generalizing or restructuring existing ones
+3. **Copy-paste with slight variation**: near-duplicate code blocks that should be unified with a shared abstraction
+4. **Leaky abstractions**: exposing internal details that should be encapsulated, or breaking existing abstraction boundaries
+5. **Stringly-typed code**: using raw strings where constants, enums (string unions), or branded types already exist in the codebase
+6. **Unnecessary JSX nesting**: wrapper Boxes/elements that add no layout value — check if inner component props (flexShrink, alignItems, etc.) already provide the needed behavior
+
+### Agent 3: Efficiency Review
+
+Review the same changes for efficiency:
+
+1. **Unnecessary work**: redundant computations, repeated file reads, duplicate network/API calls, N+1 patterns
+2. **Missed concurrency**: independent operations run sequentially when they could run in parallel
+3. **Hot-path bloat**: new blocking work added to startup or per-request/per-render hot paths
+4. **Unnecessary existence checks**: pre-checking file/resource existence before operating (TOCTOU anti-pattern) — operate directly and handle the error
+5. **Memory**: unbounded data structures, missing cleanup, event listener leaks
+6. **Overly broad operations**: reading entire files when only a portion is needed, loading all items when filtering for one
+
+## Phase 3: Fix Issues
+
+Wait for all three agents to complete. Aggregate their findings and fix each issue directly. If a finding is a false positive or not worth addressing, note it and move on — do not argue with the finding, just skip it.
+
+When done, briefly summarize what was fixed (or confirm the code was already clean).
+
+---
+
+지금 이 내용들 여기 dev 브랜치가 아니라 feature/story 브랜치에 적용해 줘.
+
+---
+
+그러면 여기에 깃 푸시해줘
