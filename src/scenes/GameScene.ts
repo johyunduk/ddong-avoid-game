@@ -38,7 +38,6 @@ export default class GameScene extends Phaser.Scene {
   private lastGoldPoopScore: number = 0;
   private lastDiamondPoopScore: number = 0;
   private lastTopazPoopScore: number = 0;
-  private feverTopazTimer!: Phaser.Time.TimerEvent;
   // 점수 검증용 데이터
   private gameStartTime: number = 0;
   private phaserStartTime: number = 0; // 씬 시작 시 Phaser 내부 시간 (재시작 시에도 정확한 delta 계산용)
@@ -492,6 +491,7 @@ export default class GameScene extends Phaser.Scene {
   private handleCheatDetected() {
     this.gameOver = true;
     this.ability.onDestroy(this.abilityAPI);
+    this.clearFeverTimeUI();
     this.physics.pause();
     this.sound.stopAll();
 
@@ -930,27 +930,18 @@ export default class GameScene extends Phaser.Scene {
   /**
    * 피버 타임 종료
    */
-  private endFeverTime() {
+  /** 피버 타임 UI/타이머 정리 (spawnTimer 재설정 없음). 비활성 상태면 no-op. */
+  private clearFeverTimeUI() {
+    if (!this.isFeverTime) return;
     this.isFeverTime = false;
-
-    // 타이머 제거
-    if (this.feverTimeTimer) {
-      this.feverTimeTimer.remove();
-    }
-
-    // 색상 애니메이션 타이머 제거
-    if (this.feverTimeColorTimer) {
-      this.feverTimeColorTimer.remove();
-    }
-
-    // 토파즈 타이머 제거
-    if (this.feverTopazTimer) {
-      this.feverTopazTimer.remove();
-    }
-
-    // UI 제거 (모든 글자 Text 객체)
-    this.feverTimeUITexts.forEach((text) => text.destroy());
+    this.feverTimeTimer?.remove();
+    this.feverTimeColorTimer?.remove();
+    this.feverTimeUITexts.forEach(t => t.destroy());
     this.feverTimeUITexts = [];
+  }
+
+  private endFeverTime() {
+    this.clearFeverTimeUI();
 
     // 일반 생성 패턴으로 복구
     this.spawnTimer.remove();
@@ -1026,6 +1017,7 @@ export default class GameScene extends Phaser.Scene {
 
     this.gameOver = true;
     this.ability.onDestroy(this.abilityAPI);
+    this.clearFeverTimeUI();
     this.physics.pause();
 
     // 점수 검증 데이터 로그
