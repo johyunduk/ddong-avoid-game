@@ -51,10 +51,10 @@ export default class GameScene extends Phaser.Scene {
   // 피버 타임 관련
   private isFeverTime: boolean = false; // 피버 타임 활성화 여부
   private feverTimeRemaining: number = 0; // 피버 타임 남은 시간 (ms)
-  private feverTimeTimer!: Phaser.Time.TimerEvent; // 피버 타임 카운트다운 타이머
+  private feverTimeTimer?: Phaser.Time.TimerEvent; // 피버 타임 카운트다운 타이머
   private feverTimeUITexts: Phaser.GameObjects.Text[] = []; // 피버 타임 UI 텍스트 (각 글자별)
   private feverTimeColorOffset: number = 0; // 무지개 색상 회전 오프셋
-  private feverTimeColorTimer!: Phaser.Time.TimerEvent; // 색상 애니메이션 타이머
+  private feverTimeColorTimer?: Phaser.Time.TimerEvent; // 색상 애니메이션 타이머
   private lastFeverTimeScore: number = 0; // 마지막 피버 타임 발동 점수
   private static readonly RAINBOW_COLORS = [
     '#ff0000', '#ff7f00', '#ffff00', '#00ff00', '#0000ff', '#4b0082', '#9400d3',
