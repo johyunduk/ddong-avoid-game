@@ -71,4 +71,7 @@ export interface CharacterAbility {
 
   /** update() 매 프레임 호출 (글리치 분신 추적 등) */
   onUpdate(api: GameSceneAPI): void;
+
+  /** 게임 오버 시 호출 — 타이머·Tween·Graphics 등 리소스 정리 */
+  onDestroy(api: GameSceneAPI): void;
 }

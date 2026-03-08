@@ -574,6 +574,7 @@ export default class GameScene extends Phaser.Scene {
 
   private handleCheatDetected() {
     this.gameOver = true;
+    this.ability.onDestroy(this.abilityAPI);
     this.physics.pause();
     this.sound.stopAll();
 
@@ -1183,6 +1184,7 @@ export default class GameScene extends Phaser.Scene {
     }
 
     this.gameOver = true;
+    this.ability.onDestroy(this.abilityAPI);
     this.physics.pause();
 
     // 점수 검증 데이터 로그
@@ -1230,6 +1232,7 @@ export default class GameScene extends Phaser.Scene {
     }
 
     this.gameOver = true;
+    this.ability.onDestroy(this.abilityAPI);
     this.physics.pause();
 
     // 최고 점수 업데이트 및 갱신 여부 확인

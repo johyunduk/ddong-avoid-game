@@ -477,7 +477,7 @@ export default class CharacterSelectScene extends Phaser.Scene {
       this.detailVideo.stop();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const el: HTMLVideoElement | null = (this.detailVideo as any).video ?? null;
-      if (el) { el.src = ''; el.load(); }
+      if (el) { el.src = ''; }
       this.detailVideo = null;
     }
 

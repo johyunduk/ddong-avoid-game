@@ -15,9 +15,12 @@ export class LegacyAbility extends BaseAbility {
   private accum           = 0;
   private lastLegacyScore = 0;
 
-  private legacyTopGlow?:    Phaser.GameObjects.Graphics;
-  private legacyPulseTween?: Phaser.Tweens.Tween;
-  private legacyRainTimer?:  Phaser.Time.TimerEvent;
+  private legacyTopGlow?:       Phaser.GameObjects.Graphics;
+  private legacyPulseTween?:    Phaser.Tweens.Tween;
+  private legacyRainTimer?:     Phaser.Time.TimerEvent;
+  private legacyEndTimer?:      Phaser.Time.TimerEvent; // activateLegacyMode 종료 delayedCall
+  private startFeverTimer?:     Phaser.Time.TimerEvent; // startFeverRain addEvent
+  private startFeverEndTimer?:  Phaser.Time.TimerEvent; // onCreate 피버 종료 delayedCall
 
   // A: 상시 불꽃 오라
   private oraTimer = 0;
@@ -60,7 +63,7 @@ export class LegacyAbility extends BaseAbility {
   override onCreate(api: GameSceneAPI): void {
     this.startFeverActive = true;
     this.startFeverRain(api);
-    api.scene.time.delayedCall(LEGACY_PARAMS.feverDuration, () => {
+    this.startFeverEndTimer = api.scene.time.delayedCall(LEGACY_PARAMS.feverDuration, () => {
       this.startFeverActive = false;
     });
   }
@@ -298,7 +301,7 @@ export class LegacyAbility extends BaseAbility {
     });
 
     // 레거시 모드 종료
-    scene.time.delayedCall(LEGACY_PARAMS.legacyDuration, () => {
+    this.legacyEndTimer = scene.time.delayedCall(LEGACY_PARAMS.legacyDuration, () => {
       this.legacyModeActive = false;
       this.legacyRainTimer?.remove();
       this.legacyRainTimer = undefined;
@@ -323,7 +326,7 @@ export class LegacyAbility extends BaseAbility {
     const scene  = api.scene;
     const REPEAT = Math.floor(LEGACY_PARAMS.feverDuration / 140) - 1;
 
-    scene.time.addEvent({
+    this.startFeverTimer = scene.time.addEvent({
       delay: 140,
       repeat: REPEAT,
       callback: () => { this.spawnRainStar(scene, LegacyAbility.RAIN_COLS_FEVER, 0.60, 0.90, 2); },
@@ -397,6 +400,19 @@ export class LegacyAbility extends BaseAbility {
       poop.destroy();
       api.updateScore(10);
     }
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // 리소스 정리 (게임 오버 시 GameScene에서 호출)
+  // ─────────────────────────────────────────────────────────────────
+
+  override onDestroy(_api: GameSceneAPI): void {
+    this.startFeverEndTimer?.remove();
+    this.startFeverTimer?.remove();
+    this.legacyEndTimer?.remove();
+    this.legacyRainTimer?.remove();
+    this.legacyPulseTween?.stop();
+    this.legacyTopGlow?.destroy();
   }
 
   // ─────────────────────────────────────────────────────────────────

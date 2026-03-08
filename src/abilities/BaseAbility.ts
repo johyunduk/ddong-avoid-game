@@ -22,4 +22,5 @@ export class BaseAbility implements CharacterAbility {
   onAfterSpawnPoop(_api: GameSceneAPI): void {}
   onHitPoop(_api: GameSceneAPI): boolean { return false; }
   onUpdate(_api: GameSceneAPI): void {}
+  onDestroy(_api: GameSceneAPI): void {}
 }
