@@ -12,6 +12,7 @@ export class GlitchAbility extends BaseAbility {
   private ghost?: Phaser.Physics.Arcade.Sprite;
   private posHistory: Array<{ x: number; y: number }> = [];
   private readonly TRAIL_FRAMES = 12; // ~0.2초 딜레이 (60fps 기준)
+  private attackTimers: Phaser.Time.TimerEvent[] = [];
 
 
   override onCreate(api: GameSceneAPI): void {
@@ -66,6 +67,7 @@ export class GlitchAbility extends BaseAbility {
 
   override onDestroy(_api: GameSceneAPI): void {
     this.ghost?.destroy();
+    this.attackTimers.forEach(t => t.remove());
   }
 
   private collectSpecialWithGhost(api: GameSceneAPI, count: number): void {
@@ -89,7 +91,7 @@ export class GlitchAbility extends BaseAbility {
         .setAlpha(1.0)
         .setDepth(6);
 
-      api.scene.time.delayedCall(1000, () => {
+      const timer = api.scene.time.delayedCall(1000, () => {
         attackGhost.destroy();
         if (!target.active) return;
         if (api.goldPoops.contains(target))         api.collectGoldPoop(target);
@@ -97,6 +99,7 @@ export class GlitchAbility extends BaseAbility {
         else if (api.topazPoops.contains(target))   api.collectTopazPoop(target);
         else if (api.rainbowPoops.contains(target)) api.collectRainbowPoop(target);
       });
+      this.attackTimers.push(timer);
     });
   }
 }
