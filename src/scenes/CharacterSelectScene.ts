@@ -23,6 +23,14 @@ const GRID_TOP = 145;
 const SCROLL_TOP = 128;
 const SCROLL_BOTTOM = 548;
 
+// 각성 코어 비주얼 상수
+const CORE_COUNT        = 5;
+const CORE_GAP          = 10;    // 코어 간 X 간격 (px)
+const CORE_Y_OFFSET     = 28;    // 카드 하단에서 코어까지의 거리 (px)
+const CORE_GLOW_RADIUS  = 5.5;   // 충전된 코어 외곽 글로우 반지름
+const CORE_INNER_RADIUS = 3.5;   // 코어 내부 원 반지름
+const CORE_HIGHLIGHT_R  = 1.2;   // 하이라이트 스팟 반지름
+
 export default class CharacterSelectScene extends Phaser.Scene {
   private selectedId: string = 'chibi';
   private ownedIds: string[] = [];
@@ -41,6 +49,9 @@ export default class CharacterSelectScene extends Phaser.Scene {
   // 동적 갱신용 ref
   private headerNameText!: Phaser.GameObjects.Text;
   private bgImage!: Phaser.GameObjects.Image;
+
+  // 카드 그리드 공유 리소스
+  private coresGfx!: Phaser.GameObjects.Graphics;
 
   // 상세 정보 패널
   private detailPanel: Phaser.GameObjects.Container | null = null;
@@ -124,6 +135,8 @@ export default class CharacterSelectScene extends Phaser.Scene {
     // ── 스크롤 가능한 카드 컨테이너 ─────────────────────────────────────
     this.cardsContainer = this.add.container(0, 0);
 
+    // 각성 코어 전용 단일 Graphics (카드당 1개 생성하던 것을 통합)
+    this.coresGfx = this.add.graphics();
     CHARACTERS.forEach((char, index) => {
       const col = index % COLS;
       const row = Math.floor(index / COLS);
@@ -131,6 +144,7 @@ export default class CharacterSelectScene extends Phaser.Scene {
       const y = GRID_TOP + row * (CARD_H + GAP_Y) + CARD_H / 2;
       this.createCharacterCard(char, x, y);
     });
+    this.cardsContainer.add(this.coresGfx);
 
     // 스크롤 최대 범위 계산
     const totalRows = Math.ceil(CHARACTERS.length / COLS);
@@ -234,34 +248,30 @@ export default class CharacterSelectScene extends Phaser.Scene {
     }).setOrigin(1, 0);
     this.cardsContainer.add(badge);
 
-    // 각성 코어 (등급외 제외, 보유 캐릭터만)
+    // 각성 코어 (등급외 제외, 보유 캐릭터만) — 공유 coresGfx에 직접 그림
     if (isOwned && char.grade !== '등급외') {
-      const dupCount     = getDuplicateCount(char.id);
-      const awakeLevel   = getAwakeningLevel(char.grade, dupCount);
-      const gradeColor   = parseInt(char.gradeColor.replace('#', ''), 16);
-      const coreY        = y + CARD_H / 2 - 28;
-      const coreGap      = 10;
-      const gfx          = this.add.graphics();
+      const dupCount   = getDuplicateCount(char.id);
+      const awakeLevel = getAwakeningLevel(char.grade, dupCount);
+      const coreY      = y + CARD_H / 2 - CORE_Y_OFFSET;
 
-      for (let i = 0; i < 5; i++) {
-        const cx = x + (i - 2) * coreGap;
+      for (let i = 0; i < CORE_COUNT; i++) {
+        const cx = x + (i - 2) * CORE_GAP;
         if (i < awakeLevel) {
           // 충전된 코어: 외곽 글로우 + 내부 밝은 원
-          gfx.fillStyle(gradeColor, 0.25);
-          gfx.fillCircle(cx, coreY, 5.5);
-          gfx.fillStyle(gradeColor, 1);
-          gfx.fillCircle(cx, coreY, 3.5);
-          gfx.fillStyle(0xffffff, 0.55);
-          gfx.fillCircle(cx - 1, coreY - 1, 1.2);
+          this.coresGfx.fillStyle(gradeColorInt, 0.25);
+          this.coresGfx.fillCircle(cx, coreY, CORE_GLOW_RADIUS);
+          this.coresGfx.fillStyle(gradeColorInt, 1);
+          this.coresGfx.fillCircle(cx, coreY, CORE_INNER_RADIUS);
+          this.coresGfx.fillStyle(0xffffff, 0.55);
+          this.coresGfx.fillCircle(cx - 1, coreY - 1, CORE_HIGHLIGHT_R);
         } else {
           // 빈 코어: 어두운 원 + 얇은 테두리
-          gfx.fillStyle(0x111111, 1);
-          gfx.fillCircle(cx, coreY, 3.5);
-          gfx.lineStyle(1, gradeColor, 0.35);
-          gfx.strokeCircle(cx, coreY, 3.5);
+          this.coresGfx.fillStyle(0x111111, 1);
+          this.coresGfx.fillCircle(cx, coreY, CORE_INNER_RADIUS);
+          this.coresGfx.lineStyle(1, gradeColorInt, 0.35);
+          this.coresGfx.strokeCircle(cx, coreY, CORE_INNER_RADIUS);
         }
       }
-      this.cardsContainer.add(gfx);
     }
 
     // 캐릭터 이름
