@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "f4a0624326ef",
+  "strategy": "manual-commit",
+  "branch": "dev",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src/scenes/CharacterSelectScene.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/f4/a0624326ef/0/metadata.json",
+      "transcript": "/f4/a0624326ef/0/full.jsonl",
+      "context": "/f4/a0624326ef/0/context.md",
+      "content_hash": "/f4/a0624326ef/0/content_hash.txt",
+      "prompt": "/f4/a0624326ef/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 326,
+    "cache_creation_tokens": 323485,
+    "cache_read_tokens": 22007015,
+    "output_tokens": 133892,
+    "api_call_count": 243
+  }
+}
