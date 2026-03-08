@@ -1,0 +1,2752 @@
+똥이 버벅이면서 내려오는거 같은데 어떻게 개선할 수 없나?
+
+---
+
+깃 푸시해줘.
+
+---
+
+자 그러면 똥은 해결된거 같고 캐릭터에서 메모리 효율성이나 뭐 그런게 개선해야 하는 부분이 있는지 봐줘
+
+---
+
+순서대로 하나씩 처리하자. 일단 1번 먼저 해줘
+
+---
+
+일단 여기서는 게임플레이시 뭐가 변경됐다는걸 알 수 있어야 하나?
+
+---
+
+일단 깃 올려줘
+
+---
+
+진행하자
+
+---
+
+# Simplify: Code Review and Cleanup
+
+Review all changed files for reuse, quality, and efficiency. Fix any issues found.
+
+## Phase 1: Identify Changes
+
+Run `git diff` (or `git diff HEAD` if there are staged changes) to see what changed. If there are no git changes, review the most recently modified files that the user mentioned or that you edited earlier in this conversation.
+
+## Phase 2: Launch Three Review Agents in Parallel
+
+Use the Agent tool to launch all three agents concurrently in a single message. Pass each agent the full diff so it has the complete context.
+
+### Agent 1: Code Reuse Review
+
+For each change:
+
+1. **Search for existing utilities and helpers** that could replace newly written code. Look for similar patterns elsewhere in the codebase — common locations are utility directories, shared modules, and files adjacent to the changed ones.
+2. **Flag any new function that duplicates existing functionality.** Suggest the existing function to use instead.
+3. **Flag any inline logic that could use an existing utility** — hand-rolled string manipulation, manual path handling, custom environment checks, ad-hoc type guards, and similar patterns are common candidates.
+
+### Agent 2: Code Quality Review
+
+Review the same changes for hacky patterns:
+
+1. **Redundant state**: state that duplicates existing state, cached values that could be derived, observers/effects that could be direct calls
+2. **Parameter sprawl**: adding new parameters to a function instead of generalizing or restructuring existing ones
+3. **Copy-paste with slight variation**: near-duplicate code blocks that should be unified with a shared abstraction
+4. **Leaky abstractions**: exposing internal details that should be encapsulated, or breaking existing abstraction boundaries
+5. **Stringly-typed code**: using raw strings where constants, enums (string unions), or branded types already exist in the codebase
+6. **Unnecessary JSX nesting**: wrapper Boxes/elements that add no layout value — check if inner component props (flexShrink, alignItems, etc.) already provide the needed behavior
+
+### Agent 3: Efficiency Review
+
+Review the same changes for efficiency:
+
+1. **Unnecessary work**: redundant computations, repeated file reads, duplicate network/API calls, N+1 patterns
+2. **Missed concurrency**: independent operations run sequentially when they could run in parallel
+3. **Hot-path bloat**: new blocking work added to startup or per-request/per-render hot paths
+4. **Unnecessary existence checks**: pre-checking file/resource existence before operating (TOCTOU anti-pattern) — operate directly and handle the error
+5. **Memory**: unbounded data structures, missing cleanup, event listener leaks
+6. **Overly broad operations**: reading entire files when only a portion is needed, loading all items when filtering for one
+
+## Phase 3: Fix Issues
+
+Wait for all three agents to complete. Aggregate their findings and fix each issue directly. If a finding is a false positive or not worth addressing, note it and move on — do not argue with the finding, just skip it.
+
+When done, briefly summarize what was fixed (or confirm the code was already clean).
+
+
+## Additional Focus
+
+이거 아까 1번이랑 같이 simplify 해줄 수 있나?
+
+---
+
+1,2 번에 대해서 simplify를 다 적용한건가?
+
+---
+
+해줘
+
+---
+
+해줘
+
+---
+
+# Simplify: Code Review and Cleanup
+
+Review all changed files for reuse, quality, and efficiency. Fix any issues found.
+
+## Phase 1: Identify Changes
+
+Run `git diff` (or `git diff HEAD` if there are staged changes) to see what changed. If there are no git changes, review the most recently modified files that the user mentioned or that you edited earlier in this conversation.
+
+## Phase 2: Launch Three Review Agents in Parallel
+
+Use the Agent tool to launch all three agents concurrently in a single message. Pass each agent the full diff so it has the complete context.
+
+### Agent 1: Code Reuse Review
+
+For each change:
+
+1. **Search for existing utilities and helpers** that could replace newly written code. Look for similar patterns elsewhere in the codebase — common locations are utility directories, shared modules, and files adjacent to the changed ones.
+2. **Flag any new function that duplicates existing functionality.** Suggest the existing function to use instead.
+3. **Flag any inline logic that could use an existing utility** — hand-rolled string manipulation, manual path handling, custom environment checks, ad-hoc type guards, and similar patterns are common candidates.
+
+### Agent 2: Code Quality Review
+
+Review the same changes for hacky patterns:
+
+1. **Redundant state**: state that duplicates existing state, cached values that could be derived, observers/effects that could be direct calls
+2. **Parameter sprawl**: adding new parameters to a function instead of generalizing or restructuring existing ones
+3. **Copy-paste with slight variation**: near-duplicate code blocks that should be unified with a shared abstraction
+4. **Leaky abstractions**: exposing internal details that should be encapsulated, or breaking existing abstraction boundaries
+5. **Stringly-typed code**: using raw strings where constants, enums (string unions), or branded types already exist in the codebase
+6. **Unnecessary JSX nesting**: wrapper Boxes/elements that add no layout value — check if inner component props (flexShrink, alignItems, etc.) already provide the needed behavior
+
+### Agent 3: Efficiency Review
+
+Review the same changes for efficiency:
+
+1. **Unnecessary work**: redundant computations, repeated file reads, duplicate network/API calls, N+1 patterns
+2. **Missed concurrency**: independent operations run sequentially when they could run in parallel
+3. **Hot-path bloat**: new blocking work added to startup or per-request/per-render hot paths
+4. **Unnecessary existence checks**: pre-checking file/resource existence before operating (TOCTOU anti-pattern) — operate directly and handle the error
+5. **Memory**: unbounded data structures, missing cleanup, event listener leaks
+6. **Overly broad operations**: reading entire files when only a portion is needed, loading all items when filtering for one
+
+## Phase 3: Fix Issues
+
+Wait for all three agents to complete. Aggregate their findings and fix each issue directly. If a finding is a false positive or not worth addressing, note it and move on — do not argue with the finding, just skip it.
+
+When done, briefly summarize what was fixed (or confirm the code was already clean).
+
+---
+
+해줘
+
+---
+
+해줘
+
+---
+
+# Simplify: Code Review and Cleanup
+
+Review all changed files for reuse, quality, and efficiency. Fix any issues found.
+
+## Phase 1: Identify Changes
+
+Run `git diff` (or `git diff HEAD` if there are staged changes) to see what changed. If there are no git changes, review the most recently modified files that the user mentioned or that you edited earlier in this conversation.
+
+## Phase 2: Launch Three Review Agents in Parallel
+
+Use the Agent tool to launch all three agents concurrently in a single message. Pass each agent the full diff so it has the complete context.
+
+### Agent 1: Code Reuse Review
+
+For each change:
+
+1. **Search for existing utilities and helpers** that could replace newly written code. Look for similar patterns elsewhere in the codebase — common locations are utility directories, shared modules, and files adjacent to the changed ones.
+2. **Flag any new function that duplicates existing functionality.** Suggest the existing function to use instead.
+3. **Flag any inline logic that could use an existing utility** — hand-rolled string manipulation, manual path handling, custom environment checks, ad-hoc type guards, and similar patterns are common candidates.
+
+### Agent 2: Code Quality Review
+
+Review the same changes for hacky patterns:
+
+1. **Redundant state**: state that duplicates existing state, cached values that could be derived, observers/effects that could be direct calls
+2. **Parameter sprawl**: adding new parameters to a function instead of generalizing or restructuring existing ones
+3. **Copy-paste with slight variation**: near-duplicate code blocks that should be unified with a shared abstraction
+4. **Leaky abstractions**: exposing internal details that should be encapsulated, or breaking existing abstraction boundaries
+5. **Stringly-typed code**: using raw strings where constants, enums (string unions), or branded types already exist in the codebase
+6. **Unnecessary JSX nesting**: wrapper Boxes/elements that add no layout value — check if inner component props (flexShrink, alignItems, etc.) already provide the needed behavior
+
+### Agent 3: Efficiency Review
+
+Review the same changes for efficiency:
+
+1. **Unnecessary work**: redundant computations, repeated file reads, duplicate network/API calls, N+1 patterns
+2. **Missed concurrency**: independent operations run sequentially when they could run in parallel
+3. **Hot-path bloat**: new blocking work added to startup or per-request/per-render hot paths
+4. **Unnecessary existence checks**: pre-checking file/resource existence before operating (TOCTOU anti-pattern) — operate directly and handle the error
+5. **Memory**: unbounded data structures, missing cleanup, event listener leaks
+6. **Overly broad operations**: reading entire files when only a portion is needed, loading all items when filtering for one
+
+## Phase 3: Fix Issues
+
+Wait for all three agents to complete. Aggregate their findings and fix each issue directly. If a finding is a false positive or not worth addressing, note it and move on — do not argue with the finding, just skip it.
+
+When done, briefly summarize what was fixed (or confirm the code was already clean).
+
+---
+
+해줘
+
+---
+
+해줘
+
+---
+
+# Simplify: Code Review and Cleanup
+
+Review all changed files for reuse, quality, and efficiency. Fix any issues found.
+
+## Phase 1: Identify Changes
+
+Run `git diff` (or `git diff HEAD` if there are staged changes) to see what changed. If there are no git changes, review the most recently modified files that the user mentioned or that you edited earlier in this conversation.
+
+## Phase 2: Launch Three Review Agents in Parallel
+
+Use the Agent tool to launch all three agents concurrently in a single message. Pass each agent the full diff so it has the complete context.
+
+### Agent 1: Code Reuse Review
+
+For each change:
+
+1. **Search for existing utilities and helpers** that could replace newly written code. Look for similar patterns elsewhere in the codebase — common locations are utility directories, shared modules, and files adjacent to the changed ones.
+2. **Flag any new function that duplicates existing functionality.** Suggest the existing function to use instead.
+3. **Flag any inline logic that could use an existing utility** — hand-rolled string manipulation, manual path handling, custom environment checks, ad-hoc type guards, and similar patterns are common candidates.
+
+### Agent 2: Code Quality Review
+
+Review the same changes for hacky patterns:
+
+1. **Redundant state**: state that duplicates existing state, cached values that could be derived, observers/effects that could be direct calls
+2. **Parameter sprawl**: adding new parameters to a function instead of generalizing or restructuring existing ones
+3. **Copy-paste with slight variation**: near-duplicate code blocks that should be unified with a shared abstraction
+4. **Leaky abstractions**: exposing internal details that should be encapsulated, or breaking existing abstraction boundaries
+5. **Stringly-typed code**: using raw strings where constants, enums (string unions), or branded types already exist in the codebase
+6. **Unnecessary JSX nesting**: wrapper Boxes/elements that add no layout value — check if inner component props (flexShrink, alignItems, etc.) already provide the needed behavior
+
+### Agent 3: Efficiency Review
+
+Review the same changes for efficiency:
+
+1. **Unnecessary work**: redundant computations, repeated file reads, duplicate network/API calls, N+1 patterns
+2. **Missed concurrency**: independent operations run sequentially when they could run in parallel
+3. **Hot-path bloat**: new blocking work added to startup or per-request/per-render hot paths
+4. **Unnecessary existence checks**: pre-checking file/resource existence before operating (TOCTOU anti-pattern) — operate directly and handle the error
+5. **Memory**: unbounded data structures, missing cleanup, event listener leaks
+6. **Overly broad operations**: reading entire files when only a portion is needed, loading all items when filtering for one
+
+## Phase 3: Fix Issues
+
+Wait for all three agents to complete. Aggregate their findings and fix each issue directly. If a finding is a false positive or not worth addressing, note it and move on — do not argue with the finding, just skip it.
+
+When done, briefly summarize what was fixed (or confirm the code was already clean).
+
+---
+
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+Summary:
+1. Primary Request and Intent:
+   The user's session goals were:
+   - Fix poop (obstacle) stuttering/jerky movement in gameplay
+   - Analyze and fix memory efficiency issues in character-related code
+   - Process fixes sequentially (#1 through #5), each with a `/simplify` review before committing
+   - Push each fix to the `dev` branch after simplify review
+
+2. Key Technical Concepts:
+   - Phaser 3 game engine: `smoothStep`, `roundPixels`, `fps.target`, `this.make` vs `this.add` graphics, GeometryMask, Tween cleanup, scene lifecycle (`shutdown` event)
+   - Object Pooling for Phaser GameObjects
+   - WebGL buffer allocation per Graphics object
+   - TypeScript strict settings: `verbatimModuleSyntax`, `erasableSyntaxOnly`
+   - Strategy pattern for character abilities (`BaseAbility`, `CharacterAbility` interface, `GameSceneAPI`)
+   - Memory leak patterns: HTMLVideoElement not releasing src, untracked `time.delayedCall` timers, orphaned Graphics from `this.make.graphics()`
+   - Phaser `events.once('shutdown')` vs `events.on('shutdown')` for scene cleanup
+
+3. Files and Code Sections:
+   - **`src/main.ts`**
+     - Fixed stuttering: `smoothStep: false→true`, `fps.target: 60`, `roundPixels: false→true`
+     - Committed: `f06e329`
+
+   - **`src/scenes/CharacterSelectScene.ts`**
+     - **Fix #1 (Video leak)**: Added class properties, video/timer cleanup in `hideCharacterDetail()`:
+       ```typescript
+       private detailVideo: Phaser.GameObjects.Video | null = null;
+       private fitVideoTimers: Phaser.Time.TimerEvent[] = [];
+       // hideCharacterDetail():
+       for (const t of this.fitVideoTimers) t.remove();
+       this.fitVideoTimers = [];
+       if (this.detailVideo) {
+         this.detailVideo.stop();
+         const el: HTMLVideoElement | null = (this.detailVideo as any).video ?? null;
+         if (el) { el.src = ''; }  // el.load() removed in simplify
+         this.detailVideo = null;
+       }
+       // fitVideoToPanel():
+       this.fitVideoTimers.push(this.time.delayedCall(100, applyContain));
+       this.fitVideoTimers.push(this.time.delayedCall(500, applyContain));
+       ```
+     - **Fix #3 (Graphics accumulation)**: Added constants and merged per-card Graphics:
+       ```typescript
+       const CORE_COUNT        = 5;
+       const CORE_GAP          = 10;
+       const CORE_Y_OFFSET     = 28;
+       const CORE_GLOW_RADIUS  = 5.5;
+       const CORE_INNER_RADIUS = 3.5;
+       const CORE_HIGHLIGHT_R  = 1.2;
+       private coresGfx!: Phaser.GameObjects.Graphics;
+       // In create(): this.coresGfx = this.add.graphics();
+       // CHARACTERS.forEach → this.createCharacterCard(char, x, y);
+       // this.cardsContainer.add(this.coresGfx);
+       // createCharacterCard draws to this.coresGfx directly
+       ```
+     - **Fix #5 (Mask Graphics leak) — IN PROGRESS (not committed)**:
+       ```typescript
+       private maskGfx!: Phaser.GameObjects.Graphics;
+       // In create():
+       this.maskGfx = this.make.graphics({ x: 0, y: 0 });
+       this.maskGfx.fillStyle(0xffffff);
+       this.maskGfx.fillRect(0, SCROLL_TOP, 400, SCROLL_BOTTOM - SCROLL_TOP);
+       this.cardsContainer.setMask(this.maskGfx.createGeometryMask());
+       // End of create():
+       this.events.once('shutdown', () => { this.maskGfx?.destroy(); });
+       ```
+       - Simplify found: `?.` should be removed (inconsistent with `!` declaration)
+       - Simplify found: `ReleaseNotesScene.ts` has same untracked `maskShape`
+
+   - **`src/abilities/types.ts`**
+     - Added `onDestroy(api: GameSceneAPI): void;` to `CharacterAbility` interface
+
+   - **`src/abilities/BaseAbility.ts`**
+     - Added no-op: `onDestroy(_api: GameSceneAPI): void {}`
+
+   - **`src/abilities/LegacyAbility.ts`**
+     - Added 3 new timer properties:
+       ```typescript
+       private legacyEndTimer?:      Phaser.Time.TimerEvent;
+       private startFeverTimer?:     Phaser.Time.TimerEvent;
+       private startFeverEndTimer?:  Phaser.Time.TimerEvent;
+       ```
+     - Stored previously untracked `delayedCall`/`addEvent` returns
+     - `onDestroy()` (simplified — no undefined reassignments):
+       ```typescript
+       override onDestroy(_api: GameSceneAPI): void {
+         this.startFeverEndTimer?.remove();
+         this.startFeverTimer?.remove();
+         this.legacyEndTimer?.remove();
+         this.legacyRainTimer?.remove();
+         this.legacyPulseTween?.stop();
+         this.legacyTopGlow?.destroy();
+       }
+       ```
+
+   - **`src/abilities/SentinelAbility.ts`**
+     - Added `onDestroy()` (simplified — no `orbitDroplets = []`):
+       ```typescript
+       override onDestroy(_api: GameSceneAPI): void {
+         this.sparkTween?.stop();
+         this.sparkGfx?.destroy();
+         this.orbitDroplets.forEach(drop => drop.destroy());
+       }
+       ```
+
+   - **`src/scenes/GameScene.ts`**
+     - Added `this.ability.onDestroy(this.abilityAPI)` at 3 game-over points:
+       - `handleCheatDetected()` after `this.gameOver = true`
+       - `hitPoop()` after `this.gameOver = true`
+       - `hitStar()` after `this.gameOver = true`
+
+   - **`src/scenes/ReleaseNotesScene.ts`**
+     - Simplify identified same `this.make.graphics()` mask leak (not yet fixed):
+       ```typescript
+       const maskShape = this.make.graphics({ x: 0, y: 0 });
+       maskShape.fillRect(0, 70, 400, 470);
+       const mask = maskShape.createGeometryMask();
+       this.scrollContainer.setMask(mask);
+       // No cleanup handler exists
+       ```
+
+4. Errors and fixes:
+   - No TypeScript errors encountered throughout. Every change was verified with `npx tsc --noEmit` returning clean output.
+   - `el.load()` was initially included after `el.src = ''` — simplify review identified it as unnecessary (triggers async reload of empty src) and it was removed.
+   - `orbitDroplets = []` was initially included in `SentinelAbility.onDestroy()` — simplify review identified it as unnecessary since `gameOver = true` prevents `onUpdate` from running, so it was removed.
+   - `coresGfx` was initially passed as a parameter to `createCharacterCard()` — simplify review recommended moving it to a class property for consistency with existing patterns, which was done.
+
+5. Problem Solving:
+   - **Stuttering**: Root cause was `smoothStep: false` (delta time not averaged) and no FPS target. Fixed with 3 config changes.
+   - **Video leak**: HTMLVideoElement not released on panel close. Fixed by tracking `detailVideo` and explicitly clearing `el.src`.
+   - **Timer leak**: `time.delayedCall()` returns not stored meant no way to cancel. Fixed by promoting to class properties and adding `onDestroy()` hook across the ability system.
+   - **Graphics accumulation**: 18 separate Graphics objects for awakening cores. Fixed with single shared Graphics drawn to by all cards.
+   - **Mask leak**: `this.make.graphics()` not in display list, so not auto-destroyed. Fixed with `events.once('shutdown')` cleanup.
+
+6. All user messages:
+   - "똥이 버벅이면서 내려오는거 같은데 어떻게 개선할 수 없나?"
+   - "깃 푸시해줘."
+   - "자 그러면 똥은 해결된거 같고 캐릭터에서 메모리 효율성이나 뭐 그런게 개선해야 하는 부분이 있는지 봐줘"
+   - (empty message — after analysis presented, user didn't respond, so assistant presented findings)
+   - "순서대로 하나씩 처리하자. 일단 1번 먼저 해줘"
+   - "일단 여기서는 게임플레이시 뭐가 변경됐다는걸 알 수 있어야 하나?"
+   - "일단 깃 올려줘"
+   - "진행하자" (Fix #2)
+   - "일단 여기서는 게임플레이시 뭐가 변경됐다는걸 알 수 있어야 하나?" — No, purely internal memory management
+   - "/simplify 이거 아까 1번이랑 같이 simplify 해줄 수 있나?" (combined simplify for fixes 1 & 2)
+   - (empty — after simplify results, user waited for fixes)
+   - "해줘" (push)
+   - "해줘" (Fix #3)
+   - "/simplify" (for Fix #3)
+   - (empty — after simplify, apply fixes)
+   - "해줘" (push Fix #3)
+   - "해줘" (Fix #4 - SentinelAbility)
+   - "/simplify" (for Fix #4)
+   - (empty — after simplify, apply fix)
+   - "해줘" (push Fix #4)
+   - "해줘" (Fix #5 - maskGfx)
+   - "/simplify" (for Fix #5)
+   - (empty — current state, waiting to apply simplify fixes)
+
+7. Pending Tasks:
+   - **Fix #5 simplify — apply 2 findings (NOT YET COMMITTED)**:
+     1. Change `this.maskGfx?.destroy()` → `this.maskGfx.destroy()` in CharacterSelectScene.ts
+     2. Fix same mask leak in `ReleaseNotesScene.ts` (add class property + shutdown handler)
+   - After commit/push of Fix #5, remaining original issues from the analysis:
+     - Fix #6: `shutdown` event not utilized (partially addressed via `events.once`)
+     - Fix #7 (Medium): HackerAbility/MaehwaAbility array creation GC pressure (mentioned but not yet scheduled)
+     - GlitchAbility `ghost` sprite cleanup (identified in simplify as needing `onDestroy`)
+
+8. Current Work:
+   The session was mid-simplify for **Fix #5 (Mask Graphics leak)**. The three review agents completed and identified two issues to fix:
+   
+   1. In `CharacterSelectScene.ts`, the shutdown handler uses `?.` but the property is declared with `!`:
+      ```typescript
+      // Current (inconsistent):
+      private maskGfx!: Phaser.GameObjects.Graphics;
+      this.events.once('shutdown', () => { this.maskGfx?.destroy(); });
+      // Should be:
+      this.events.once('shutdown', () => { this.maskGfx.destroy(); });
+      ```
+   
+   2. `ReleaseNotesScene.ts` has the exact same untracked `this.make.graphics()` mask:
+      ```typescript
+      const maskShape = this.make.graphics({ x: 0, y: 0 });
+      maskShape.fillRect(0, 70, 400, 470);
+      const mask = maskShape.createGeometryMask();
+      this.scrollContainer.setMask(mask);
+      // Missing: class property + shutdown cleanup
+      ```
+
+9. Optional Next Step:
+   Apply the two simplify fixes for Fix #5, then commit and push:
+   
+   1. Fix `CharacterSelectScene.ts`: change `this.maskGfx?.destroy()` → `this.maskGfx.destroy()` (remove unnecessary optional chaining)
+   2. Fix `ReleaseNotesScene.ts`: promote `maskShape` to class property and add `events.once('shutdown')` cleanup handler — same pattern as CharacterSelectScene
+   
+   This is directly in line with the user's established workflow: apply simplify findings → commit → push → move to next fix.
+
+If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/johyunduk/.REDACTED.jsonl
+Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.
+
+---
+
+해줘
+
+---
+
+# Simplify: Code Review and Cleanup
+
+Review all changed files for reuse, quality, and efficiency. Fix any issues found.
+
+## Phase 1: Identify Changes
+
+Run `git diff` (or `git diff HEAD` if there are staged changes) to see what changed. If there are no git changes, review the most recently modified files that the user mentioned or that you edited earlier in this conversation.
+
+## Phase 2: Launch Three Review Agents in Parallel
+
+Use the Agent tool to launch all three agents concurrently in a single message. Pass each agent the full diff so it has the complete context.
+
+### Agent 1: Code Reuse Review
+
+For each change:
+
+1. **Search for existing utilities and helpers** that could replace newly written code. Look for similar patterns elsewhere in the codebase — common locations are utility directories, shared modules, and files adjacent to the changed ones.
+2. **Flag any new function that duplicates existing functionality.** Suggest the existing function to use instead.
+3. **Flag any inline logic that could use an existing utility** — hand-rolled string manipulation, manual path handling, custom environment checks, ad-hoc type guards, and similar patterns are common candidates.
+
+### Agent 2: Code Quality Review
+
+Review the same changes for hacky patterns:
+
+1. **Redundant state**: state that duplicates existing state, cached values that could be derived, observers/effects that could be direct calls
+2. **Parameter sprawl**: adding new parameters to a function instead of generalizing or restructuring existing ones
+3. **Copy-paste with slight variation**: near-duplicate code blocks that should be unified with a shared abstraction
+4. **Leaky abstractions**: exposing internal details that should be encapsulated, or breaking existing abstraction boundaries
+5. **Stringly-typed code**: using raw strings where constants, enums (string unions), or branded types already exist in the codebase
+6. **Unnecessary JSX nesting**: wrapper Boxes/elements that add no layout value — check if inner component props (flexShrink, alignItems, etc.) already provide the needed behavior
+
+### Agent 3: Efficiency Review
+
+Review the same changes for efficiency:
+
+1. **Unnecessary work**: redundant computations, repeated file reads, duplicate network/API calls, N+1 patterns
+2. **Missed concurrency**: independent operations run sequentially when they could run in parallel
+3. **Hot-path bloat**: new blocking work added to startup or per-request/per-render hot paths
+4. **Unnecessary existence checks**: pre-checking file/resource existence before operating (TOCTOU anti-pattern) — operate directly and handle the error
+5. **Memory**: unbounded data structures, missing cleanup, event listener leaks
+6. **Overly broad operations**: reading entire files when only a portion is needed, loading all items when filtering for one
+
+## Phase 3: Fix Issues
+
+Wait for all three agents to complete. Aggregate their findings and fix each issue directly. If a finding is a false positive or not worth addressing, note it and move on — do not argue with the finding, just skip it.
+
+When done, briefly summarize what was fixed (or confirm the code was already clean).
+
+
+## Additional Focus
+
+6번 안했던거 같은데 해줘
+
+---
+
+<task-notification>
+<task-id>a939af3544e1b0298</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>REDACTED.output</output-file>
+<status>completed</status>
+<summary>Agent "코드 품질 리뷰 — GlitchAbility" completed</summary>
+<result>코드를 검토했습니다. diff 및 파일 내용을 기반으로 발견한 이슈를 보고합니다.
+
+## 검토 결과
+
+### 1. `onDestroy` 메서드의 `?.` 연산자 — ✅ 적절함
+- `this.ghost`는 optional이고 (12번 줄에서 `private ghost?: ...`로 선언)
+- `onDestroy`는 능력이 폐기될 때 호출되므로, 이미 `ghost`가 파괴되었을 가능성도 있음
+- **✅ 올바른 방어적 프로그래밍**
+
+---
+
+### 2. `collectSpecialWithGhost`에서 `attackGhost` 정리 — ⚠️ 게임 오버 시 누수 위험
+- **문제**: `delayedCall` (92번 줄)은 게임 오버 시 **자동으로 취소되지 않음**
+  - `api.scene.time.delayedCall(...)`은 Phaser 타이머로, 씬 전환/게임 오버 시에도 실행됨
+  - 게임이 1000ms 이내에 오버되면, `attackGhost` 이미지 객체가 메모리에 남을 수 있음
+  
+**권장 수정**: 
+```typescript
+// 타이머 참조 저장 후 onDestroy에서 정리 필요
+private attackTimers: Phaser.Time.TimerEvent[] = [];
+// ...
+const timer = api.scene.time.delayedCall(1000, ...);
+this.attackTimers.push(timer);
+
+override onDestroy(_api: GameSceneAPI): void {
+  this.ghost?.destroy();
+  this.attackTimers.forEach(t => t.remove());
+  this.attackTimers = [];
+}
+```
+
+---
+
+### 3. `posHistory` 배열의 무한 성장 — ✅ 제어됨
+- **55번 줄**: `if (this.posHistory.length > this.TRAIL_FRAMES)` 체크
+- `shift()`로 가장 오래된 항목 제거 → **최대 12개 요소만 유지**
+- 안전함 ✅
+
+---
+
+### 4. 그 외 hacky 패턴 — ⚠️ 약간의 주의 필요
+
+**a) `target`이 이미 파괴된 후 수집될 가능성**
+- 94번 줄: `if (!target.active) return;` 체크는 있으나
+- 95-98번 줄의 `contains()` 체크는 **그룹에 여전히 포함되어 있는지만 확인**
+- 만약 다른 능력이 `target`을 이미 파괴했다면, `contains()`는 false지만 `target` 객체는 좀비 상태일 수 있음
+- 하지만 실제로는 `collectGoldPoop()` 등이 `destroy()` 직전에 그룹에서 제거하므로 대체로 안전
+
+**b) 연쇄 수집 가능성** (by design인지 확인 필요)
+- 같은 `target`에 대해 여러 `delayedCall`이 중첩되면, 92번 줄의 수집 로직이 반복 실행될 수 있음
+- 현재는 **1회 호출 설계**인 듯하지만, 방어 코드 부족
+
+---
+
+## 결론
+
+| 항목 | 상태 | 심각도 |
+|------|------|--------|
+| `onDestroy`의 `?.` 연산자 | ✅ 적절 | — |
+| `posHistory` 제어 | ✅ 안전 | — |
+| `attackGhost` 타이머 정리 | ⚠️ 누수 위험 | **중간** |
+| `target` 유효성 검증 | ⚠️ 경계 필요 | **낮음** (현재는 대체로 안전) |
+
+**최우선 개선 사항**: `onDestroy`에서 진행 중인 `delayedCall` 타이머들을 정리하는 코드 추가가 필요합니다.</result>
+<usage><total_tokens>20147</total_tokens><tool_uses>1</tool_uses><duration_ms>13860</duration_ms></usage>
+</task-notification>
+Full transcript available at: REDACTED.output
+
+---
+
+<task-notification>
+<task-id>a2c3ad15b18942f25</task-id>
+<tool-use-id>toolu_018zN5QM7w6qyZ7xj7RGXwQt</tool-use-id>
+<output-file>REDACTED.output</output-file>
+<status>completed</status>
+<summary>Agent "코드 재사용 리뷰 — GlitchAbility" completed</summary>
+<result>완벽합니다. 이제 전체 분석을 정리하겠습니다.
+
+## 코드 재사용성 검토 보고서
+
+### 1. 새로 추가된 코드 분석
+
+GlitchAbility의 `onDestroy` 메서드는 다음과 같습니다:
+```typescript
+override onDestroy(_api: GameSceneAPI): void {
+  this.ghost?.destroy();
+}
+```
+
+**결론**: 이 코드는 **기존 유틸리티로 대체 불가능**합니다. 분신(ghost) 스프라이트는 GlitchAbility의 내부 상태 프로퍼티이므로, 이 클래스에서만 cleanup할 수 있습니다.
+
+---
+
+### 2. 다른 Ability 클래스들의 onDestroy 패턴 분석
+
+전체 10개 Ability 클래스 중 **onDestroy를 구현한 클래스는 3개**입니다:
+
+#### 구현된 클래스:
+| 클래스 | onDestroy 내용 | 정리 대상 |
+|--------|----------------|---------|
+| **GlitchAbility** | `this.ghost?.destroy()` | 분신 스프라이트 |
+| **SentinelAbility** | `sparkTween.stop()`, `sparkGfx.destroy()`, `orbitDroplets[]` 순회 | Tween, Graphics, 방울 배열 |
+| **LegacyAbility** | 5개 타이머/이벤트 + 1개 Tween + 1개 Graphics | 상태 이펙트 전부 |
+
+#### 미구현 클래스:
+- **HackerAbility**: 이펙트가 모두 tween의 `onComplete` 콜백으로 정리됨 (dynamic 생성)
+- **MinerAbility**: 상태 프로퍼티 없음
+- **MaehwaAbility**: 이펙트가 모두 tween의 `onComplete` 콜백으로 정리됨
+- **NoiseAbility**: 상태 프로퍼티 없음
+- **RGradeAbility**: 미확인
+- **ArchieveAbility**: 미확인
+
+---
+
+### 3. 일관성 평가: 주요 발견사항
+
+#### 문제점:
+
+1. **cleanup 대상 분류 불균형**
+   - **Persistent 객체 타입**만 cleanup 필요:
+     - Phaser.Tweens.Tween (명시적 stop 필요)
+     - Phaser.GameObjects.Graphics (수동 destroy 필요)  
+     - 배열/객체 (저장된 참조 정리)
+   
+   - **자동 정리 객체**:
+     - 모든 tween이 `onComplete` 콜백으로 정리되는 경우 → onDestroy 불필요
+
+2. **SentinelAbility의 복잡한 cleanup**
+   ```typescript
+   override onDestroy(_api: GameSceneAPI): void {
+     this.sparkTween?.stop();              // Tween 명시적 정지 필수
+     this.sparkGfx?.destroy();            // Graphics 명시적 제거 필수
+     this.orbitDroplets.forEach(drop => drop.destroy()); // 배열 순회 정리
+   }
+   ```
+   이것이 가장 완전한 패턴입니다.
+
+3. **LegacyAbility의 과도한 cleanup**
+   ```typescript
+   override onDestroy(_api: GameSceneAPI): void {
+     this.startFeverEndTimer?.remove();
+     this.startFeverTimer?.remove();
+     this.legacyEndTimer?.remove();
+     this.legacyRainTimer?.remove();
+     this.legacyPulseTween?.stop();
+     this.legacyTopGlow?.destroy();
+   }
+   ```
+   - 5개의 TimerEvent를 `remove()`로 정리
+   - 1개의 Tween을 `stop()`으로 정지
+   - 1개의 Graphics를 `destroy()`로 제거
+   - 이미 종료된 타이머는 `remove()` 호출 시 안전함
+
+4. **GlitchAbility는 최소한의 cleanup**만 수행
+   - 분신 스프라이트만 destroy
+   - 히스토리 배열(`posHistory`)은 정리 불필요 (참조만, 객체 아님)
+
+---
+
+### 4. 권장 개선사항
+
+#### 현재 상태 평가
+`GlitchAbility`의 `onDestroy` 구현은 **올바르고 최적화**되어 있습니다.
+
+#### 다른 클래스들과 비교:
+- **HackerAbility**: `onDestroy` 불필요 (모든 이펙트가 tween 콜백으로 정리)
+- **MaehwaAbility**: `onDestroy` 불필요 (모든 이펙트가 tween 콜백으로 정리)
+- **SentinelAbility** & **LegacyAbility**: 반드시 필요 (persistent 자원 관리)
+
+---
+
+### 5. 패턴 일관성 검토 결과
+
+**결론: 패턴 불일치는 의도적이고 적절합니다.**
+
+| Ability | cleanup 패턴 | 이유 |
+|---------|-------------|------|
+| Glitch | `sprite?.destroy()` | persistent 스프라이트 1개 |
+| Sentinel | `tween?.stop()` + `gfx?.destroy()` + 배열 순회 | persistent tween, graphics, 방울 5~7개 |
+| Legacy | 5× `timer?.remove()` + `tween?.stop()` + `gfx?.destroy()` | persistent timer, tween, graphics |
+| Hacker | ❌ 불필요 | 모든 gfx가 tween 콜백으로 cleanup |
+| Maehwa | ❌ 불필요 | 모든 gfx가 tween 콜백으로 cleanup |
+
+---
+
+### 최종 판정
+
+✅ **GlitchAbility의 onDestroy 메서드는 올바르고, 다른 구현들과 일관성이 있습니다.**
+
+- `this.ghost?.destroy()`는 유일한 persistent 자원이므로 꼭 필요한 정리입니다.
+- 히스토리 배열은 primitive 값의 배열이므로 GC에서 자동으로 정리됩니다.
+- SentinelAbility와 LegacyAbility의 더 복잡한 cleanup은 더 많은 자원을 관리하기 때문입니다.</result>
+<usage><total_tokens>42210</total_tokens><tool_uses>10</tool_uses><duration_ms>27280</duration_ms></usage>
+</task-notification>
+Full transcript available at: REDACTED.output
+
+---
+
+<task-notification>
+<task-id>a4aff37011b1ae3d3</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>REDACTED.output</output-file>
+<status>completed</status>
+<summary>Agent "효율성 리뷰 — GlitchAbility" completed</summary>
+<result>분석 완료. 효율성 관점에서 GlitchAbility.ts의 성능 이슈를 보고합니다.
+
+## 검토 결과
+
+### 1. `posHistory` 배열 — **O(n) shift() 문제** (HOT PATH)
+
+**심각도: 중** | **프레임당 호출: 1회**
+
+현재 구현 (line 54-57):
+```typescript
+this.posHistory.push({ x: api.player.x, y: api.player.y });
+if (this.posHistory.length > this.TRAIL_FRAMES) {
+  const target = this.posHistory.shift()!;  // ← O(n) 연산!
+```
+
+**문제**:
+- `shift()`는 배열의 모든 요소를 왼쪽으로 이동시키는 O(n) 연산
+- TRAIL_FRAMES = 12이므로, 매 프레임마다 최대 12개 요소를 이동
+- 60fps 기준 초당 60회 호출 → 누적 비용 증가
+
+**권장 개선**:
+순환 버퍼(Ring Buffer) 패턴으로 O(1)로 개선 가능
+```typescript
+// 인덱스 기반 순환 구조
+private posHistoryBuffer: Array<{ x: number; y: number }> = [];
+private historyIndex = 0;
+
+// push 대신
+this.posHistoryBuffer[this.historyIndex] = { x: api.player.x, y: api.player.y };
+this.historyIndex = (this.historyIndex + 1) % this.TRAIL_FRAMES;
+
+// shift 대신
+const target = this.posHistoryBuffer[this.historyIndex];
+```
+
+**추정 성능 개선**: 약 50-70% CPU 감소 (배열 크기 12의 shift/unshift 연산 제거)
+
+---
+
+### 2. `collectSpecialWithGhost` — **Group.getChildren() spread+concat** (점수 이벤트)
+
+**심각도: 낮음** | **호출 빈도: 200점마다 1회** (매우 드문 이벤트)
+
+현재 구현 (line 74-79):
+```typescript
+const allSpecial = [
+  ...api.goldPoops.getChildren(),
+  ...api.diamondPoops.getChildren(),
+  ...api.topazPoops.getChildren(),
+  ...api.rainbowPoops.getChildren(),
+].filter(p => (p as Phaser.GameObjects.GameObject).active) as Phaser.Physics.Arcade.Sprite[];
+```
+
+**분석**:
+- 4개 Group에서 각각 `getChildren()` 호출 → 4번의 배열 복사
+- spread 연산 `[...arr]` → 4번의 배열 재할당
+- concat 동작 3회 (4개 배열 병합)
+- filter로 또 다른 배열 순회
+
+**현재 영향도**: **무시할 수 있는 수준**
+- 호출 빈도가 200점마다 1회
+- 각 Group의 크기가 최대 수십 개 (실시간 낙하 오브젝트)
+- 1회 연산 시간 < 1ms (일반적인 모던 브라우저)
+
+**개선 가능성**:
+정확한 최적화보다는 **명확성 우선** 권장
+```typescript
+// 현재 구현도 충분히 명확하고 성능 영향 미미
+// 필요시 병합 로직을 명시적으로 작성
+const targets: Phaser.Physics.Arcade.Sprite[] = [];
+[api.goldPoops, api.diamondPoops, api.topazPoops, api.rainbowPoops].forEach(group => {
+  group.getChildren().forEach(p => {
+    const sprite = p as Phaser.Physics.Arcade.Sprite;
+    if (sprite.active) targets.push(sprite);
+  });
+});
+```
+
+---
+
+### 3. `onDestroy()` 추가 — **적절한 리소스 관리**
+
+**평가: 좋음** ✓
+
+코드 (line 67-69):
+```typescript
+override onDestroy(_api: GameSceneAPI): void {
+  this.ghost?.destroy();
+}
+```
+
+**장점**:
+- 게임 오버 시 분신 sprite 메모리 누수 방지
+- Phaser 생명주기와 일치
+- 텍스처 캐시는 자동 관리되므로 추가 정리 불필요
+
+**확인**: `posHistory` 배열도 GC 대상이 되므로 명시적 정리 불필요 ✓
+
+---
+
+### 4. 그 외 불필요한 연산
+
+**없음** — 현재 구현은 상당히 최적화됨
+
+다만 주목할 점:
+- Line 94: `if (!target.active) return;` — 적절한 안전 장치
+- Line 95-98: `contains()` 4회 호출 → O(n) 검색이지만, delayedCall 내부이므로 경합 없음 ✓
+
+---
+
+## 최종 정리
+
+| 항목 | 심각도 | 영향 | 개선 우선도 |
+|------|--------|------|-----------|
+| `shift()` O(n) | 🟠 중 | 매 프레임 누적 | **높음** (ring buffer 전환) |
+| `getChildren()` spread+concat | 🟢 낮음 | 호출 드물고 크기 작음 | 낮음 (현재 유지 가능) |
+| `onDestroy()` 추가 | ✅ 우수 | 메모리 누수 방지 | — |
+
+**권장**: ring buffer로 `posHistory` 최적화하면 매 프레임 O(n) → O(1) 개선 가능.</result>
+<usage><total_tokens>25586</total_tokens><tool_uses>5</tool_uses><duration_ms>24428</duration_ms></usage>
+</task-notification>
+Full transcript available at: REDACTED.output
+
+---
+
+일단 1~6번에 대한 변경 전후 내용 문서로 작성해줘.
+
+---
+
+자 그러면 이제 더이상 메모리에 대한 걱정을 할 부분이 없는지 남은게 있는지 한번 봐줘
+
+---
+
+아이템 모드가 아직 남아있나? 아이템모드는 없애도 될거 같은데?
+
+---
+
+삭제하자 만들더라도 지금꺼가 아니라 완전 다른거일테니 없애는게 좋겠어.
+
+---
+
+하나씩 진행하자. 일단 B 해줘
+
+---
+
+[Request interrupted by user for tool use]
+
+---
+
+# Simplify: Code Review and Cleanup
+
+Review all changed files for reuse, quality, and efficiency. Fix any issues found.
+
+## Phase 1: Identify Changes
+
+Run `git diff` (or `git diff HEAD` if there are staged changes) to see what changed. If there are no git changes, review the most recently modified files that the user mentioned or that you edited earlier in this conversation.
+
+## Phase 2: Launch Three Review Agents in Parallel
+
+Use the Agent tool to launch all three agents concurrently in a single message. Pass each agent the full diff so it has the complete context.
+
+### Agent 1: Code Reuse Review
+
+For each change:
+
+1. **Search for existing utilities and helpers** that could replace newly written code. Look for similar patterns elsewhere in the codebase — common locations are utility directories, shared modules, and files adjacent to the changed ones.
+2. **Flag any new function that duplicates existing functionality.** Suggest the existing function to use instead.
+3. **Flag any inline logic that could use an existing utility** — hand-rolled string manipulation, manual path handling, custom environment checks, ad-hoc type guards, and similar patterns are common candidates.
+
+### Agent 2: Code Quality Review
+
+Review the same changes for hacky patterns:
+
+1. **Redundant state**: state that duplicates existing state, cached values that could be derived, observers/effects that could be direct calls
+2. **Parameter sprawl**: adding new parameters to a function instead of generalizing or restructuring existing ones
+3. **Copy-paste with slight variation**: near-duplicate code blocks that should be unified with a shared abstraction
+4. **Leaky abstractions**: exposing internal details that should be encapsulated, or breaking existing abstraction boundaries
+5. **Stringly-typed code**: using raw strings where constants, enums (string unions), or branded types already exist in the codebase
+6. **Unnecessary JSX nesting**: wrapper Boxes/elements that add no layout value — check if inner component props (flexShrink, alignItems, etc.) already provide the needed behavior
+
+### Agent 3: Efficiency Review
+
+Review the same changes for efficiency:
+
+1. **Unnecessary work**: redundant computations, repeated file reads, duplicate network/API calls, N+1 patterns
+2. **Missed concurrency**: independent operations run sequentially when they could run in parallel
+3. **Hot-path bloat**: new blocking work added to startup or per-request/per-render hot paths
+4. **Unnecessary existence checks**: pre-checking file/resource existence before operating (TOCTOU anti-pattern) — operate directly and handle the error
+5. **Memory**: unbounded data structures, missing cleanup, event listener leaks
+6. **Overly broad operations**: reading entire files when only a portion is needed, loading all items when filtering for one
+
+## Phase 3: Fix Issues
+
+Wait for all three agents to complete. Aggregate their findings and fix each issue directly. If a finding is a false positive or not worth addressing, note it and move on — do not argue with the finding, just skip it.
+
+When done, briefly summarize what was fixed (or confirm the code was already clean).
+
+---
+
+<task-notification>
+<task-id>a912b83d283ce8725</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>REDACTED.output</output-file>
+<status>completed</status>
+<summary>Agent "품질 리뷰 — tempText 제거" completed</summary>
+<result>코드를 정확히 분석했습니다. 다음은 발견한 이슈 보고입니다.
+
+---
+
+## 피버 타임 UI 코드 품질 검토 보고
+
+### 1. ✅ `startFeverTime()`: reduce 범위 — **정확함**
+
+```typescript
+const totalWidth = this.feverTimeUITexts.reduce((sum, t) => sum + t.width, 0);
+```
+
+- `startFeverTime()` 초반에 `this.feverTimeUITexts = []`로 초기화됨 (825-826줄)
+- 직후 for loop에서 새 Text 객체를 모두 push함 (857줄)
+- reduce는 생성된 모든 객체를 포함하므로 **범위가 정확함**
+
+---
+
+### 2. ⚠️ `updateFeverTime()`: `.slice(0, newText.length)` — **오버엔지니어링**
+
+**문제**:
+```typescript
+const totalWidth = this.feverTimeUITexts
+  .slice(0, newText.length)
+  .reduce((sum, t) => sum + t.width, 0);
+for (let i = 0; i < this.feverTimeUITexts.length && i < newText.length; i++) {
+```
+
+텍스트 길이 변화 분석:
+- 초기: `"FEVER TIME 5초"` (14 글자)
+- 1초 후: `"FEVER TIME 4초"` (14 글자)
+- ...
+- 끝: `"FEVER TIME 0초"` (14 글자)
+
+**실제로는 항상 14글자로 고정됨.** (숫자가 한 자리 수이므로 자리수 변화 없음)
+
+따라서 `.slice(0, newText.length)`는 항상 전체 배열을 포함하므로 **불필요한 방어 코드**입니다.
+
+**근본 원인**: `startFeverTime()`에서 초기 `initialSeconds`의 자리수를 고정으로 가정했으나, 만약 지속 시간이 1000ms 이상인 경우(현재: 5000ms) 초단위는 항상 1-9 범위이므로 문제 없음.
+
+---
+
+### 3. ⚠️ 두 pass 루프 — **최적화 가능하지만 필요충분함**
+
+**현재 구조** (`startFeverTime` 823-866줄):
+
+```typescript
+// Pass 1: Text 객체 생성 + width 계산
+for (let i = 0; i < fullText.length; i++) {
+  const charText = this.add.text(0, ..., fullText[i], {...});
+  this.feverTimeUITexts.push(charText);
+}
+// Pass 2: x좌표 재정렬
+const totalWidth = this.feverTimeUITexts.reduce((sum, t) => sum + t.width, 0);
+let currentX = FEVER_TIME_CONFIG.ui.position.x - totalWidth / 2;
+for (const charText of this.feverTimeUITexts) {
+  charText.setX(currentX);
+  currentX += charText.width;
+}
+```
+
+**분석**:
+- Phaser의 Text 객체는 **생성 직후 width를 알 수 없음** (렌더링 완료 필요)
+- Pass 1에서 `x = 0`으로 생성한 후, 다음 프레임에 width가 계산됨
+- Pass 2는 **필수적임** (한 루프로 불가능)
+
+→ **두 pass는 타당하며, 단일 pass로 합칠 수 없음**
+
+---
+
+### 4. 🚩 **Hacky 패턴 발견**
+
+#### 4-1. 글자별 색상 적용의 비효율성
+
+**현재** (`startFeverTime` 832-858줄):
+```typescript
+for (let i = 0; i < fullText.length; i++) {
+  const charText = this.add.text(0, FEVER_TIME_CONFIG.ui.position.y, fullText[i], {
+    color: rainbowColors[i % rainbowColors.length],  // ← 각 글자마다 개별 색상 설정
+    ...
+  });
+}
+```
+
+- 글자마다 별도 Text 객체 생성
+- 색상 애니메이션 시마다 모든 글자 순회 (`updateFeverTimeColors` 947-950줄)
+
+**근본 원인**: Phaser Text는 **gradient fill을 지원하지 않음**. 글자별 색상 적용 필요.
+
+**개선안**:
+- BitmapText 사용 (성능 더 좋음)
+- Graphics 객체로 문자를 그림 (복잡함)
+- 현재 방식 유지 (가장 간단)
+
+→ **현재 구조가 합리적이나, 색상 배열 중복 선언은 리팩토링 기회** (startFeverTime과 updateFeverTimeColors에서 동일 배열 재정의)
+
+#### 4-2. `newText.length` vs `fullText.length`의 불일치 위험
+
+**updateFeverTime** (900-920줄):
+```typescript
+const newText = `FEVER TIME ${secondsRemaining}초`;  // ← 동적 계산
+for (let i = 0; i < this.feverTimeUITexts.length; i++) {
+  if (i < newText.length) {
+    this.feverTimeUITexts[i].setText(newText[i]);
+  }
+}
+```
+
+**잠재 버그**:
+- `feverTimeUITexts` 길이 = 초기 `fullText` 길이 (14글자)
+- 만약 시간 설정을 변경해 `secondsRemaining`이 10 이상이 되면?
+  - 예: duration = 15000ms → 초기값 15초 = `"FEVER TIME 15초"` (15글자)
+  - 그 다음 업데이트에서 14초 = `"FEVER TIME 14초"` (15글자)
+  - 15글자이지만 `feverTimeUITexts.length = 14`에서 마지막 글자 누락!
+
+**현재는 안전한 이유**: `FEVER_TIME_CONFIG.duration = 5000ms` → 최대 5초 → `"FEVER TIME 5초"` (14글자로 고정)
+
+→ **지속 시간이 10초 이상으로 변경되면 버그 발생 가능** (설정 변경 시 주의 필요)
+
+---
+
+### 5. 📋  종합 평가
+
+| 항목 | 상태 | 심각도 |
+|------|------|--------|
+| reduce 범위 (`startFeverTime`) | ✅ 정확함 | - |
+| `.slice(0, newText.length)` | ⚠️ 불필요하지만 무해 | 낮음 |
+| 두 pass 루프 | ✅ 필요충분 | - |
+| 색상 배열 중복 선언 | 🟡 코드 중복 | 낮음 |
+| 자리수 변화 미처리 | 🚩 잠재 버그 | **중간** |
+
+---
+
+## 권장사항
+
+1. **즉시 필요**: 색상 배열을 상수로 추출 (`FEVER_TIME_CONFIG`에 추가)
+2. **중기**: 지속 시간이 10초 이상인 경우를 대비해 동적 배열 크기 조정 로직 추가
+3. **선택**: `.slice(0, newText.length)` 제거 (불필요 방어)</result>
+<usage><total_tokens>23819</total_tokens><tool_uses>3</tool_uses><duration_ms>25279</duration_ms></usage>
+</task-notification>
+Full transcript available at: REDACTED.output
+
+---
+
+<task-notification>
+<task-id>a1a0ef5f3197c810f</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>REDACTED.output</output-file>
+<status>completed</status>
+<summary>Agent "재사용 리뷰 — tempText 제거" completed</summary>
+<result>완벽합니다. 이제 전체 상황을 정리할 수 있습니다. 최종 검토 보고서를 작성하겠습니다.
+
+## 검토 결과 보고서
+
+### 1. 중앙 정렬 계산 로직 중복 분석
+
+**발견된 중복**:
+- `startFeverTime()` (라인 862): `let currentX = FEVER_TIME_CONFIG.ui.position.x - totalWidth / 2;`
+- `updateFeverTime()` (라인 915): `let currentX = FEVER_TIME_CONFIG.ui.position.x - totalWidth / 2;`
+
+**중복 성격**: 두 메서드 모두 동일한 중앙 정렬 공식을 사용하고 있습니다:
+1. 전체 너비 합산 (`totalWidth`)
+2. 중심점에서 (너비 / 2) 만큼 빼기
+3. 순회하며 각 요소의 X 위치 설정
+
+**공통 헬퍼 추출의 가치**:
+
+**긍정적인 측면**:
+- 공식이 명확하고 짧음 (3줄 코드)
+- 향후 중앙 정렬 로직 변경 시 두 곳을 동시에 수정할 필요가 없어짐
+- 시맨틱 명확성: `layoutCharactersCenter()` 같은 메서드명으로 의도 표현 가능
+
+**부정적인 측면**:
+- 현재 코드베이스에서는 이 로직이 피버 타임에만 국한되어 있음 (다른 곳에서 재사용 예시 없음)
+- 헬퍼 추출 시 파라미터 관리 필요 (texts 배열, centerX, length)
+- 현 단계에서 추출하기보다는 **자동생성 부분의 패턴 개선**이 더 효과적일 수 있음
+
+**권장사항**: 지금 당장 추출할 필요는 없지만, 향후 유사한 문자 배치 로직이 추가되면 그때 고려할 가치가 있음
+
+---
+
+### 2. 기존 코드베이스의 텍스트 너비 계산 유틸리티 조사
+
+**발견된 패턴들**:
+
+#### A. CharacterSelectScene (라인 549-558) - 임시 텍스트 객체 생성
+```typescript
+const btMeasure = this.add.text(0, -999, text, { fontSize: '13px', wordWrap: { width: WRAP_W } });
+// ... height 측정
+btMeasure.destroy();
+```
+- **용도**: 동적 UI 카드 높이 계산 (개행 텍스트의 높이)
+- **목적**: `wordWrap`이 있는 텍스트는 생성 후에만 실제 높이를 알 수 있음
+- **패턴**: 측정 전용 객체를 오프스크린(-999)에 생성 → 높이 추출 → 즉시 파괴
+
+#### B. GameScene (신규 변경) - 동적 생성 후 너비 합산
+```typescript
+for (let i = 0; i < fullText.length; i++) {
+  const charText = this.add.text(0, ..., fullText[i], {...});
+  this.feverTimeUITexts.push(charText);
+}
+const totalWidth = this.feverTimeUITexts.reduce((sum, t) => sum + t.width, 0);
+```
+- **용도**: 개별 문자별 크기 측정 및 중앙 정렬
+- **장점**: 임시 객체가 아닌 실제 UI 객체를 사용하므로 나중에 애니메이션/업데이트 가능
+- **패턴**: 먼저 생성 → width 합산 → 위치 조정
+
+---
+
+### 3. 핵심 이슈 및 개선 기회
+
+#### 문제점 1: 무지개 색상 배열 중복
+```typescript
+// startFeverTime() - 라인 833-841
+const rainbowColors = [ '#ff0000', ... '#9400d3' ];
+
+// updateFeverTimeColors() - 라인 933-941
+const rainbowColors = [ '#ff0000', ... '#9400d3' ];
+```
+**영향도**: 높음 (7개 요소, 2곳 중복)  
+**권장사항**: `FEVER_TIME_CONFIG`에 통합하거나 클래스 프로퍼티로 추출
+
+#### 문제점 2: 중앙 정렬 로직의 반복
+```typescript
+// startFeverTime에서 (라인 861-866)
+const totalWidth = this.feverTimeUITexts.reduce((sum, t) => sum + t.width, 0);
+let currentX = FEVER_TIME_CONFIG.ui.position.x - totalWidth / 2;
+for (const charText of this.feverTimeUITexts) { ... }
+
+// updateFeverTime에서 (라인 912-919)
+const totalWidth = this.feverTimeUITexts
+  .slice(0, newText.length)
+  .reduce((sum, t) => sum + t.width, 0);
+let currentX = FEVER_TIME_CONFIG.ui.position.x - totalWidth / 2;
+for (let i = 0; i < this.feverTimeUITexts.length && i < newText.length; i++) { ... }
+```
+**영향도**: 중간 (패턴은 같지만 입력 데이터 처리가 다름)  
+**권장사항**: 공통 헬퍼 메서드로 추출 가능하지만, `slice()` 처리 때문에 직관적이지 않을 수 있음
+
+---
+
+### 4. 코드베이스 전체 텍스트 너비 계산 현황
+
+| 파일 | 패턴 | 용도 |
+|------|------|------|
+| `CharacterSelectScene.ts` | 임시 객체 생성 → 높이 측정 | 동적 UI 카드 높이 (wordWrap 포함) |
+| `GameScene.ts` (신규) | 실제 객체 생성 → width 합산 | 피버 타임 UI 중앙 정렬 |
+
+**결론**: 코드베이스에 통합 유틸리티는 없음. 각 씬에서 자신의 필요에 맞게 구현되어 있음.
+
+---
+
+### 최종 권장사항
+
+**현 단계에서 필수 개선**:
+1. **무지개 색상 배열 추출**: `FEVER_TIME_CONFIG`에 `RAINBOW_COLORS` 필드 추가
+   ```typescript
+   // src/config/feverTime.ts
+   export const FEVER_TIME_CONFIG = {
+     // ...
+     RAINBOW_COLORS: ['#ff0000', '#ff7f00', '#ffff00', '#00ff00', '#0000ff', '#4b0082', '#9400d3']
+   };
+   ```
+
+**향후 고려사항**:
+2. 피버 타임이 추가로 확장되거나 유사한 문자 배치 UI가 생기면, 그때 공통 헬퍼 메서드 추출
+3. Phaser 자체의 `Scene.add.text()` 체이닝이나 Container 사용으로 더 우아한 패턴이 있는지 검토
+
+파일 경로: `/Users/johyunduk/Projects/ddong-avoid-game/src/scenes/GameScene.ts`</result>
+<usage><total_tokens>28328</total_tokens><tool_uses>12</tool_uses><duration_ms>38201</duration_ms></usage>
+</task-notification>
+Full transcript available at: REDACTED.output
+
+---
+
+<task-notification>
+<task-id>a2075f28784fc7bcb</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>REDACTED.output</output-file>
+<status>completed</status>
+<summary>Agent "효율성 리뷰 — tempText 제거" completed</summary>
+<result>완벽합니다. 이제 전체 분석 보고서를 작성하겠습니다.
+
+---
+
+## 피버 타임 UI 성능 검토 보고서
+
+### 1. 임시 Text 객체 제거 검토 ✅
+
+**현황**: 코드가 이미 최적화되어 있습니다. 임시 Text 객체 생성 패턴이 없습니다.
+
+- **Line 861** (`startFeverTime`): `const totalWidth = this.feverTimeUITexts.reduce((sum, t) => sum + t.width, 0);`
+  - 이미 실제 생성된 Text 객체의 width를 합산하고 있음
+  
+- **Line 912-914** (`updateFeverTime`): 
+  ```typescript
+  const totalWidth = this.feverTimeUITexts
+    .slice(0, newText.length)
+    .reduce((sum, t) => sum + t.width, 0);
+  ```
+  - `.slice(0, newText.length)` → 현재 실제 렌더링되는 글자 범위만 합산
+  - 임시 객체 생성/파괴 없음
+
+**평가**: 이미 효율적으로 구현됨. 추가 최적화 불필요.
+
+---
+
+### 2. GPU 드로우콜 영향 분석 ✅
+
+**아키텍처**: 
+- `startFeverTime()` 라인 844-858에서 x=0에 모든 Text 생성
+- 라인 862-866에서 재배치 (루프로 setX 호출)
+
+**Phaser 3 드로우콜 특성**:
+- Phaser는 자동으로 dirty flag를 관리함
+- `setText()`, `setX()` 등의 변경사항은 내부적으로 marked as dirty
+- 다음 프레임의 렌더링 단계에서 한 번에 배치 처리됨
+- Text 객체 최대 16개 (초기: "FEVER TIME 5초" = 13자, 최대: "FEVER TIME 10초" = 15자)
+
+**결론**: 두 번의 루프(생성 후 재배치)는 GPU에 영향을 주지 않음. 각각 단일 배치로 처리됨.
+
+---
+
+### 3. Hot Path 성능: updateFeverTime() 분석 ✅
+
+**호출 빈도**: 100ms 마다 (라인 875)
+
+**핫 경로 작업**:
+
+| 작업 | 라인 | 복잡도 | 성능 영향 |
+|------|------|---------|-----------|
+| `setText()` 루프 | 903-907 | O(n), n≤15 | **무시할 수 있음** |
+| `.slice(0, newText.length)` | 913 | O(n), n≤15 | **무시할 수 있음** |
+| `.reduce()` | 914 | O(n), n≤15 | **무시할 수 있음** |
+| `setX()` 루프 | 916-919 | O(n), n≤15 | **무시할 수 있음** |
+
+**배열 규모 확인**:
+- `feverTimeUITexts` 배열: **최대 15개** (FEVER_TIME_CONFIG.duration = 5000ms → "FEVER TIME 10초" 최악 케이스)
+- MEMORY에 언급된 TRAIL_FRAMES와 다름 (TRAIL_FRAMES는 게임 루프 프레임 수)
+- 100ms 타이머이므로 초당 10회만 호출
+
+**계산량 실측**:
+```
+100ms 마다:
+- setText: 13-15회 호출
+- width 접근: 13-15회
+- reduce: O(15) = 극히 미미
+- setX: 13-15회 호출
+
+총 약 50-60회의 객체 메서드 호출 = JavaScript 레벨에서 0.1ms 이하 예상
+```
+
+**결론**: ✅ Hot path에 완전히 적합함. 측정 불필요할 정도로 가볍습니다.
+
+---
+
+### 4. 불필요한 연산 분석 ⚠️
+
+#### 4.1 **`updateFeverTime()` 라인 913의 `.slice()` — 미세 개선 가능**
+
+```typescript
+// 현재 코드 (라인 912-914)
+const totalWidth = this.feverTimeUITexts
+  .slice(0, newText.length)    // 새 배열 생성 (메모리 할당)
+  .reduce((sum, t) => sum + t.width, 0);
+```
+
+**문제**: 
+- 매 100ms마다 새 배열 생성 (garbage collection 대상)
+- 실제로는 `newText.length` ≤ `feverTimeUITexts.length` 이므로, `.slice()`가 거의 전체 배열을 복사함
+- 초 단위 전환시만(초 자리 변경시) 길이 변경 발생 (1초마다 최대 1회)
+
+**대안**:
+```typescript
+// 개선안: reduce의 인덱스 매개변수로 제어
+const totalWidth = this.feverTimeUITexts.reduce((sum, t, i) => {
+  return i < newText.length ? sum + t.width : sum;
+}, 0);
+// 또는
+let totalWidth = 0;
+for (let i = 0; i < newText.length && i < this.feverTimeUITexts.length; i++) {
+  totalWidth += this.feverTimeUITexts[i].width;
+}
+```
+
+**평가**: 이론상 개선 가능하지만, 실무적으로는 100ms 타이머 내에서 배열 복사 비용이 < 0.01ms 수준이므로, **코드 가독성 vs 성능** 트레이드오프. 현재 코드가 명확하고 우선도 낮음.
+
+#### 4.2 **`updateFeverTimeColors()` 라인 933-941 — 불필요한 배열 생성**
+
+```typescript
+// 라인 933-941
+const rainbowColors = [
+  '#ff0000', // 빨강
+  '#ff7f00', // 주황
+  ...
+];
+```
+
+**문제**: 
+- 호출마다 새 배열 생성 (라인 931-949, 매 50ms마다 호출됨)
+- `startFeverTime()`의 라인 833-841에도 동일한 배열 정의됨 (중복)
+
+**대안**:
+- `feverTime.ts`의 상수로 정의하거나
+- 클래스 프로퍼티(`private readonly RAINBOW_COLORS`)로 정의
+
+**개선 효과**: 
+- 매 호출마다 배열 객체 7개 메모리 할당 제거
+- GC 압력 감소
+- 영향도: **낮음** (모바일 한정, 데스크톱에선 무시할 수 있음)
+
+---
+
+### 5. 번외: 업데이트 빈도 확인 ✅
+
+**라인 874-879** (카운트다운 타이머):
+```typescript
+this.feverTimeTimer = this.time.addEvent({
+  delay: 100,  // 100ms = 초당 10회
+  callback: this.updateFeverTime,
+  loop: true
+});
+```
+
+**라인 880-890** (색상 애니메이션 타이머):
+```typescript
+this.feverTimeColorTimer = this.time.addEvent({
+  delay: 50,  // 50ms = 초당 20회
+  callback: this.updateFeverTimeColors,
+  loop: true
+});
+```
+
+**분석**:
+- 카운트다운: 100ms 적절 (초 단위 표시, 더 빈번할 필요 없음)
+- 색상: 50ms → 초당 20회 프레임 애니메이션
+  - Phaser는 기본 60fps이므로 이상 없음
+  - 하지만 5초(5000ms) 동안 100회 호출 → 용도상 적절
+
+**평가**: ✅ 타이머 빈도 최적.
+
+---
+
+## 최종 평가
+
+| 항목 | 현황 | 평가 |
+|------|------|------|
+| 임시 Text 객체 패턴 | 없음 | ✅ 이미 최적화됨 |
+| GPU 드로우콜 | 영향 없음 (자동 배치) | ✅ 우려 불필요 |
+| Hot path (100ms 타이머) | O(15) 미만 | ✅ 완전히 적합 |
+| `.slice()` 중복 배열 생성 | 있음 | ⚠️ 미세 개선 가능 (우선도 낮음) |
+| `rainbowColors` 중복 생성 | 있음 | ⚠️ 미세 개선 가능 (모바일 고려) |
+| 타이머 빈도 | 최적 | ✅ 적절 |
+
+### 권장사항
+
+**즉시 조치 불필요**. 현재 코드는 성능상 문제가 없습니다.
+
+**선택적 개선** (우선도 낮음):
+1. `rainbowColors` 배열을 클래스 프로퍼티 상수로 이동 → 매 호출마다의 배열 객체 생성 제거
+2. `.slice()` 대신 inline loop 사용 → 배열 복사 메모리 절감 (하지만 코드 명확성 감소)</result>
+<usage><total_tokens>24968</total_tokens><tool_uses>8</tool_uses><duration_ms>38035</duration_ms></usage>
+</task-notification>
+Full transcript available at: REDACTED.output
+
+---
+
+해줘
+
+---
+
+[Request interrupted by user for tool use]
+
+---
+
+# Simplify: Code Review and Cleanup
+
+Review all changed files for reuse, quality, and efficiency. Fix any issues found.
+
+## Phase 1: Identify Changes
+
+Run `git diff` (or `git diff HEAD` if there are staged changes) to see what changed. If there are no git changes, review the most recently modified files that the user mentioned or that you edited earlier in this conversation.
+
+## Phase 2: Launch Three Review Agents in Parallel
+
+Use the Agent tool to launch all three agents concurrently in a single message. Pass each agent the full diff so it has the complete context.
+
+### Agent 1: Code Reuse Review
+
+For each change:
+
+1. **Search for existing utilities and helpers** that could replace newly written code. Look for similar patterns elsewhere in the codebase — common locations are utility directories, shared modules, and files adjacent to the changed ones.
+2. **Flag any new function that duplicates existing functionality.** Suggest the existing function to use instead.
+3. **Flag any inline logic that could use an existing utility** — hand-rolled string manipulation, manual path handling, custom environment checks, ad-hoc type guards, and similar patterns are common candidates.
+
+### Agent 2: Code Quality Review
+
+Review the same changes for hacky patterns:
+
+1. **Redundant state**: state that duplicates existing state, cached values that could be derived, observers/effects that could be direct calls
+2. **Parameter sprawl**: adding new parameters to a function instead of generalizing or restructuring existing ones
+3. **Copy-paste with slight variation**: near-duplicate code blocks that should be unified with a shared abstraction
+4. **Leaky abstractions**: exposing internal details that should be encapsulated, or breaking existing abstraction boundaries
+5. **Stringly-typed code**: using raw strings where constants, enums (string unions), or branded types already exist in the codebase
+6. **Unnecessary JSX nesting**: wrapper Boxes/elements that add no layout value — check if inner component props (flexShrink, alignItems, etc.) already provide the needed behavior
+
+### Agent 3: Efficiency Review
+
+Review the same changes for efficiency:
+
+1. **Unnecessary work**: redundant computations, repeated file reads, duplicate network/API calls, N+1 patterns
+2. **Missed concurrency**: independent operations run sequentially when they could run in parallel
+3. **Hot-path bloat**: new blocking work added to startup or per-request/per-render hot paths
+4. **Unnecessary existence checks**: pre-checking file/resource existence before operating (TOCTOU anti-pattern) — operate directly and handle the error
+5. **Memory**: unbounded data structures, missing cleanup, event listener leaks
+6. **Overly broad operations**: reading entire files when only a portion is needed, loading all items when filtering for one
+
+## Phase 3: Fix Issues
+
+Wait for all three agents to complete. Aggregate their findings and fix each issue directly. If a finding is a false positive or not worth addressing, note it and move on — do not argue with the finding, just skip it.
+
+When done, briefly summarize what was fixed (or confirm the code was already clean).
+
+---
+
+<task-notification>
+<task-id>aa5f20353217b62c6</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>REDACTED.output</output-file>
+<status>completed</status>
+<summary>Agent "재사용 리뷰 — clearFeverTimeUI" completed</summary>
+<result>이제 필요한 정보를 충분히 수집했습니다. 코드를 분석하고 리뷰 보고서를 작성하겠습니다.
+
+## 코드 재사용성 검토 보고서
+
+### 현재 구현 분석
+
+diff의 `clearFeverTimeUI()` 메서드와 호출 지점들을 분석한 결과, **2가지 코드 재사용성 이슈**를 확인했습니다.
+
+---
+
+### **이슈 1: 기존 정리 패턴과의 부분적 중복**
+
+#### 중복 패턴
+`startFeverTime()` 메서드에서 이미 유사한 정리 로직이 구현되어 있습니다:
+
+```typescript
+// Line 829-830 (startFeverTime 내부)
+this.feverTimeUITexts.forEach((text) => text.destroy());
+this.feverTimeUITexts = [];
+```
+
+`clearFeverTimeUI()`와 동일한 로직:
+```typescript
+// Line 940-941 (clearFeverTimeUI 내부)
+this.feverTimeUITexts.forEach(t => t.destroy());
+this.feverTimeUITexts = [];
+```
+
+#### 영향도
+- **최소**: 텍스트 배열 정리는 매우 간단한 작업
+- **발견**: startFeverTime() → spawnFeverPoop()으로 재시작할 때만 호출되므로, 게임 오버 시에는 호출되지 않음
+- **현황**: 불필요한 재작성이지만, 코드 복잡도 증가는 미미
+
+#### 권장 개선
+차라리 `clearFeverTimeUI()`를 먼저 도입한 후, `startFeverTime()` 초반에서도 호출하는 방식이 더 나음:
+
+```typescript
+private startFeverTime() {
+  if (this.gameOver) return;
+  
+  this.clearFeverTimeUI(); // 기존 UI 정리 (재시작 안전)
+  
+  this.isFeverTime = true;
+  // ... 나머지 코드
+}
+```
+
+---
+
+### **이슈 2: 호출자의 불필요한 조건 검사 (주요 이슈)**
+
+#### 현재 코드
+```typescript
+// Line 495 (handleCheatDetected)
+if (this.isFeverTime) this.clearFeverTimeUI();
+
+// Line 1021 (hitPoop)
+if (this.isFeverTime) this.clearFeverTimeUI();
+```
+
+`clearFeverTimeUI()` 메서드:
+```typescript
+private clearFeverTimeUI() {
+  this.isFeverTime = false;  // ← 무조건 false로 설정
+  this.feverTimeTimer?.remove();
+  this.feverTimeColorTimer?.remove();
+  this.feverTopazTimer?.remove();
+  this.feverTimeUITexts.forEach(t => t.destroy());
+  this.feverTimeUITexts = [];
+}
+```
+
+#### 문제점
+1. **중복 검사**: `this.isFeverTime` 을 호출자와 메서드 내부에서 체크함
+2. **내부 일관성**: 메서드는 `this.isFeverTime = false`를 무조건 수행하므로, 이미 false인 상태에서도 안전함
+3. **Defensive Coding 위반**: 호출자가 상태를 먼저 확인하면, 메서드 내부 가드가 사실상 의미 없음
+
+#### 비교: 유사한 패턴들
+파일 내 다른 메서드들은 호출자가 조건을 검사하지 않음:
+
+```typescript
+// hitPoop에서 플레이어 무적 상태 체크
+if (this.player.getIsInvincible()) return;  // ← 호출자 조건
+
+// 하지만 ability.onHitPoop() 내부는 자체 방어 로직 구현
+if (this.ability.onHitPoop(this.abilityAPI)) { ... }
+```
+
+```typescript
+// spawnPoop에서
+if (this.gameOver) return;  // ← 메서드 내부에서만 체크
+```
+
+---
+
+### **권장 개선 방안**
+
+#### 안티 패턴 제거
+```typescript
+private clearFeverTimeUI() {
+  // if (this.isFeverTime) 체크 제거
+  // 메서드 자체가 멱등성(idempotent) 보장하도록
+  this.isFeverTime = false;
+  this.feverTimeTimer?.remove();      // ?.remove() 사용 → null-safe
+  this.feverTimeColorTimer?.remove();
+  this.feverTopazTimer?.remove();
+  this.feverTimeUITexts.forEach(t => t.destroy());
+  this.feverTimeUITexts = [];
+}
+```
+
+#### 호출자 정리
+```typescript
+// handleCheatDetected
+private handleCheatDetected() {
+  this.gameOver = true;
+  this.ability.onDestroy(this.abilityAPI);
+  this.clearFeverTimeUI();  // ← 조건 제거
+  this.physics.pause();
+  ...
+}
+
+// hitPoop
+this.gameOver = true;
+this.ability.onDestroy(this.abilityAPI);
+this.clearFeverTimeUI();  // ← 조건 제거
+this.physics.pause();
+```
+
+---
+
+### **결론**
+
+| 항목 | 판정 | 이유 |
+|------|------|------|
+| **패턴 중복** | ⚠️ 경미 | `startFeverTime()`과 텍스트 정리 로직 중복, 하지만 구조적 문제 아님 |
+| **조건 검사 중복** | ⚠️ 개선 필요 | Optional chaining(`?.remove()`)으로 메서드를 멱등성 있게 만들어 호출자 조건 제거 가능 |
+| **안전성** | ✅ 양호 | `?.remove()` 덕분에 null-safe, 현재 구현으로도 누수 방지 |
+
+**최우선 개선**: 호출자의 `if (this.isFeverTime)` 조건 제거 → 메서드 자체가 상태 체크하도록 일원화
+
+파일 경로: `/Users/johyunduk/Projects/ddong-avoid-game/src/scenes/GameScene.ts`</result>
+<usage><total_tokens>30360</total_tokens><tool_uses>7</tool_uses><duration_ms>35033</duration_ms></usage>
+</task-notification>
+Full transcript available at: REDACTED.output
+
+---
+
+<task-notification>
+<task-id>a4af204bc8daea8cc</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>REDACTED.output</output-file>
+<status>completed</status>
+<summary>Agent "효율성 리뷰 — clearFeverTimeUI" completed</summary>
+<result>이제 전체 구조를 파악했습니다. 최종 리뷰 보고서를 작성하겠습니다.
+
+## 피버 타임 UI 정리 메서드 효율성 검토 보고서
+
+### 1. `feverTimeUITexts.forEach(t => t.destroy())` - 배열 크기 분석
+
+**최대 예상 크기:**
+- 텍스트 패턴: `FEVER TIME ${seconds}초`
+- `initialSeconds = Math.ceil(5000 / 1000) = 5`
+- 최대 문자열: `"FEVER TIME 5초"`
+- **최대 글자 수: 15개**
+
+따라서 배열 크기는 **최대 15개 Text 객체**입니다.
+
+**평가:** ✅ **문제 없음**
+- O(15) = O(1) 수준의 매우 작은 연산
+- forEach는 배열이 작을 때 가장 직관적이고 효율적
+
+---
+
+### 2. 타이머 3개를 순차적으로 remove() - 문제점 존재
+
+```typescript
+this.feverTimeTimer?.remove();       // 줄 937
+this.feverTimeColorTimer?.remove();  // 줄 938
+this.feverTopazTimer?.remove();      // 줄 939
+```
+
+**발견된 문제:**
+
+| 타이머 | 선언 위치 | 할당 위치 | 상태 |
+|--------|---------|---------|------|
+| `feverTimeTimer` | 줄 55 | 줄 868 (startFeverTime) | ✅ 정상 |
+| `feverTimeColorTimer` | 줄 58 | 줄 879 (startFeverTime) | ✅ 정상 |
+| `feverTopazTimer` | 줄 41 | **할당 코드 없음** | ⚠️ 문제 |
+
+**`feverTopazTimer` 이슈:**
+- 클래스 프로퍼티로 선언만 되고 `!` (non-null assertion)으로 되어 있음
+- 전체 코드베이스에서 `this.feverTopazTimer = ` 할당 코드가 없음
+- `clearFeverTimeUI()`에서 `this.feverTopazTimer?.remove()`를 호출하지만 실제로 생성/설정된 적 없음
+- **Optional chaining(`?.`)으로 보호되어 있어 런타임 에러는 없지만, 사실상 데드 코드**
+
+**타이머 순차 호출 자체:** ✅ 문제 없음
+- 3개 타이머 제거는 빠른 연산이므로 순차 호출 오버헤드 무시할 수 있음
+- 병렬화 필요 없음
+
+---
+
+### 3. 기타 불필요한 연산
+
+**발견 사항:**
+
+1. **`isFeverTime = false` 중복 설정** (줄 936)
+   - `clearFeverTimeUI()` 시작부에 `this.isFeverTime = false` 설정
+   - 이는 `endFeverTime()` (줄 944) → `clearFeverTimeUI()` 호출 시 필요
+   - 하지만 `handleCheatDetected()` (줄 495), `hitPoop()` (줄 1021)에서도 호출
+   - **게임 오버 시점에 이미 `gameOver = true`로 설정되어 있음** (줄 1019)
+   - → `isFeverTime` 플래그는 정규 게임플레이에서만 필요하므로 **중복이지만 타당**
+
+2. **`feverTimeColorOffset` 리셋** (줄 831 vs. 941)
+   - `startFeverTime()` 줄 831: `this.feverTimeColorOffset = 0;` (새 피버 타임 시작 시)
+   - `clearFeverTimeUI()` 줄 ???: **재설정 없음** → 이전 값 유지
+   - **의도: 다음 피버 타임 시작 시 초기화되므로 정리할 필요 없음** (OK)
+
+3. **배열 리셋** (줄 941)
+   - `this.feverTimeUITexts = []` — **중복 가능성**
+   - forEach에서 모든 요소를 destroy()한 후 배열 할당 제거 → 보수적 접근
+
+---
+
+## 최종 평가 및 권장사항
+
+| 항목 | 평가 | 심각도 | 조치 |
+|------|------|--------|------|
+| `feverTimeUITexts.forEach(destroy)` | ✅ 효율적 (15개 이하) | 없음 | 유지 |
+| 3개 타이머 순차 제거 | ✅ 충분히 빠름 | 없음 | 유지 |
+| `feverTopazTimer` 사용 | ⚠️ 데드 코드 | 낮음 | **라인 939 제거 권장** |
+| 전체 구조 | ✅ 견고함 | 없음 | 유지 |
+
+**주요 권장사항:**
+1. **`clearFeverTimeUI()` 줄 939 제거**: `this.feverTopazTimer?.remove();`
+   - 이 타이머는 생성되지 않으므로 제거해도 안전
+   - 혼동을 방지하기 위해 삭제 권장
+
+2. **주석 명확화 권장** (줄 934)
+   - 현재: `/** 게임 오버 시 피버 타임 UI/타이머만 즉시 정리... */`
+   - 개선: `/** 게임 오버/피버 타임 종료 시 UI/타이머 정리. feverTopazTimer는 미사용 */`
+
+---
+
+## 결론
+
+**전체 효율성: 우수** — 이 메서드는 게임 오버 시 한 번만 호출되므로 미리초 단위 최적화는 불필요합니다. 현재 구현은 명확하고 안전합니다. 유일한 개선점은 미사용 `feverTopazTimer?.remove()` 라인 제거입니다.</result>
+<usage><total_tokens>33537</total_tokens><tool_uses>11</tool_uses><duration_ms>36304</duration_ms></usage>
+</task-notification>
+Full transcript available at: REDACTED.output
+
+---
+
+<task-notification>
+<task-id>abdbf7416161397f1</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>REDACTED.output</output-file>
+<status>completed</status>
+<summary>Agent "품질 리뷰 — clearFeverTimeUI" completed</summary>
+<result>흥미로운 발견입니다. `feverTopazTimer`는 선언만 되고 할당되지 않습니다. 이제 최종 리포트를 작성하겠습니다.
+
+## 코드 리뷰 보고서: GameScene.ts 피버 타임 UI 누수 수정
+
+### 현재 상태 분석
+
+**파일 위치**: `/Users/johyunduk/Projects/ddong-avoid-game/src/scenes/GameScene.ts`
+
+**타이머 선언 방식**:
+- Line 41: `private feverTopazTimer!: Phaser.Time.TimerEvent;` — 할당되지 않은 상태
+- Line 55: `private feverTimeTimer!: Phaser.Time.TimerEvent;` — 할당됨
+- Line 58: `private feverTimeColorTimer!: Phaser.Time.TimerEvent;` — 할당됨
+
+---
+
+## 발견된 이슈
+
+### 1️⃣ `feverTopazTimer`의 "쓰레기 참조" 문제 (심각)
+
+**상황**:
+- 선언: Line 41에서 `!` 비할당 선언
+- 할당: 코드 전체에서 **단 한 번도 할당되지 않음**
+- 삭제 시도: Line 939에서 `this.feverTopazTimer?.remove()` 호출
+
+**문제**:
+```
+✗ feverTopazTimer는 영구적으로 undefined 상태
+✗ ?.remove()를 호출해도 아무것도 일어나지 않음
+✗ 선언문의 ! (non-null assertion)과 사용부의 ? (optional chaining)이 모순
+```
+
+**원인 추측**:
+- 초기 설계 단계에서 "피버타임 중 토파즈 타이머 별도 관리"를 고려했으나 구현되지 않음
+- 아마도 토파즈 포프는 일반 `spawnPoop()` 패턴에 통합됨
+
+---
+
+### 2️⃣ Optional Chaining의 과도한 사용 (스타일 불일관성)
+
+**Line 937-939**:
+```typescript
+this.feverTimeTimer?.remove();
+this.feverTimeColorTimer?.remove();
+this.feverTopazTimer?.remove();
+```
+
+**Line 865-868, 876-879**:
+```typescript
+if (this.feverTimeTimer) {
+  this.feverTimeTimer.remove();
+}
+this.feverTimeTimer = ...;
+
+if (this.feverTimeColorTimer) {
+  this.feverTimeColorTimer.remove();
+}
+this.feverTimeColorTimer = ...;
+```
+
+**불일관성**:
+- 할당 전에는 `if` 가드 사용 (방어적)
+- 정리 시에는 `?.` 선택 연산자 사용
+- 선언에 `!`를 썼으므로 `clearFeverTimeUI()`에서도 `if` 가드가 더 안전함
+
+---
+
+### 3️⃣ `clearFeverTimeUI()`의 중복 상태 초기화 (경미)
+
+**Line 935-942**:
+```typescript
+private clearFeverTimeUI() {
+  this.isFeverTime = false;  // ← Line 936
+  this.feverTimeTimer?.remove();
+  // ...
+}
+```
+
+**호출 경로**:
+
+| 호출처 | Line | `isFeverTime` 상태 |
+|--------|------|---|
+| `endFeverTime()` | 945 | `true` (정상) |
+| `hitPoop()` | 1021 | `true` (정상) |
+| `handleCheatDetected()` | 495 | `true` (정상) |
+
+**평가**:
+- `endFeverTime()`은 피버타임 카운트다운 완료 시에만 호출되므로 항상 `isFeverTime === true`
+- `hitPoop()`, `handleCheatDetected()` 모두 `if (this.isFeverTime)` 가드 후 호출
+- **결과**: `clearFeverTimeUI()`에서 `this.isFeverTime = false`는 중복이지만 해롭지 않음
+
+**개선 제안**:
+```typescript
+// 메서드 내부 가드 추가 (호출자 가드 제거 가능)
+private clearFeverTimeUI() {
+  if (!this.isFeverTime) return;
+  
+  this.isFeverTime = false;
+  // ...
+}
+
+// 그러면 호출자:
+if (this.isFeverTime) this.clearFeverTimeUI();  // ← 불필요 (메서드 내부에서 처리)
+// 또는
+this.clearFeverTimeUI();  // ← 더 간단
+```
+
+---
+
+### 4️⃣ 가드 조건의 위치 (디자인 패턴 이슈)
+
+**현재 패턴** (Line 495, 1021):
+```typescript
+if (this.isFeverTime) this.clearFeverTimeUI();
+this.physics.pause();
+```
+
+**문제점**:
+- 호출자가 상태 체크를 담당
+- `clearFeverTimeUI()` 메서드는 멱등성(idempotent) 없음 → 안전하지 않음
+
+**개선된 패턴**:
+```typescript
+// 메서드 내부에서 자기 방어
+private clearFeverTimeUI() {
+  if (!this.isFeverTime) return;
+  
+  this.isFeverTime = false;
+  this.feverTimeTimer?.remove();
+  this.feverTimeColorTimer?.remove();
+  this.feverTopazTimer?.remove();  // (현재 사용 안 됨)
+  this.feverTimeUITexts.forEach(t => t.destroy());
+  this.feverTimeUITexts = [];
+}
+
+// 호출자는 무조건 호출 (더 간결)
+this.clearFeverTimeUI();
+this.physics.pause();
+```
+
+---
+
+## 최종 평가
+
+| 항목 | 심각도 | 설명 |
+|------|--------|------|
+| `feverTopazTimer` 미할당 | 🔴 높음 | 무의미한 코드, 선언만 남겨짐 |
+| Optional Chaining 혼용 | 🟡 중간 | 스타일 불일관성, 방어성 약함 |
+| 중복 상태 초기화 | 🟢 낮음 | 부작용 없음, 단순 과잉 설계 |
+| 호출자의 가드 조건 | 🟡 중간 | 메서드 설계 패턴으로 개선 가능 |
+
+**권장 조치**:
+1. **즉시**: `feverTopazTimer` 선언 제거 (사용 안 됨)
+2. **스타일**: `clearFeverTimeUI()` 내부에 가드 추가 후 호출자 조건 제거
+3. **방어성**: 모든 제거 호출을 `if` 패턴으로 통일하거나 `?.` 모두 사용</result>
+<usage><total_tokens>24244</total_tokens><tool_uses>14</tool_uses><duration_ms>47606</duration_ms></usage>
+</task-notification>
+Full transcript available at: REDACTED.output
+
+---
+
+해줘
+
+---
+
+[Request interrupted by user for tool use]
+
+---
+
+# Simplify: Code Review and Cleanup
+
+Review all changed files for reuse, quality, and efficiency. Fix any issues found.
+
+## Phase 1: Identify Changes
+
+Run `git diff` (or `git diff HEAD` if there are staged changes) to see what changed. If there are no git changes, review the most recently modified files that the user mentioned or that you edited earlier in this conversation.
+
+## Phase 2: Launch Three Review Agents in Parallel
+
+Use the Agent tool to launch all three agents concurrently in a single message. Pass each agent the full diff so it has the complete context.
+
+### Agent 1: Code Reuse Review
+
+For each change:
+
+1. **Search for existing utilities and helpers** that could replace newly written code. Look for similar patterns elsewhere in the codebase — common locations are utility directories, shared modules, and files adjacent to the changed ones.
+2. **Flag any new function that duplicates existing functionality.** Suggest the existing function to use instead.
+3. **Flag any inline logic that could use an existing utility** — hand-rolled string manipulation, manual path handling, custom environment checks, ad-hoc type guards, and similar patterns are common candidates.
+
+### Agent 2: Code Quality Review
+
+Review the same changes for hacky patterns:
+
+1. **Redundant state**: state that duplicates existing state, cached values that could be derived, observers/effects that could be direct calls
+2. **Parameter sprawl**: adding new parameters to a function instead of generalizing or restructuring existing ones
+3. **Copy-paste with slight variation**: near-duplicate code blocks that should be unified with a shared abstraction
+4. **Leaky abstractions**: exposing internal details that should be encapsulated, or breaking existing abstraction boundaries
+5. **Stringly-typed code**: using raw strings where constants, enums (string unions), or branded types already exist in the codebase
+6. **Unnecessary JSX nesting**: wrapper Boxes/elements that add no layout value — check if inner component props (flexShrink, alignItems, etc.) already provide the needed behavior
+
+### Agent 3: Efficiency Review
+
+Review the same changes for efficiency:
+
+1. **Unnecessary work**: redundant computations, repeated file reads, duplicate network/API calls, N+1 patterns
+2. **Missed concurrency**: independent operations run sequentially when they could run in parallel
+3. **Hot-path bloat**: new blocking work added to startup or per-request/per-render hot paths
+4. **Unnecessary existence checks**: pre-checking file/resource existence before operating (TOCTOU anti-pattern) — operate directly and handle the error
+5. **Memory**: unbounded data structures, missing cleanup, event listener leaks
+6. **Overly broad operations**: reading entire files when only a portion is needed, loading all items when filtering for one
+
+## Phase 3: Fix Issues
+
+Wait for all three agents to complete. Aggregate their findings and fix each issue directly. If a finding is a false positive or not worth addressing, note it and move on — do not argue with the finding, just skip it.
+
+When done, briefly summarize what was fixed (or confirm the code was already clean).
+
+---
+
+[Request interrupted by user]
+
+---
+
+# Simplify: Code Review and Cleanup
+
+Review all changed files for reuse, quality, and efficiency. Fix any issues found.
+
+## Phase 1: Identify Changes
+
+Run `git diff` (or `git diff HEAD` if there are staged changes) to see what changed. If there are no git changes, review the most recently modified files that the user mentioned or that you edited earlier in this conversation.
+
+## Phase 2: Launch Three Review Agents in Parallel
+
+Use the Agent tool to launch all three agents concurrently in a single message. Pass each agent the full diff so it has the complete context.
+
+### Agent 1: Code Reuse Review
+
+For each change:
+
+1. **Search for existing utilities and helpers** that could replace newly written code. Look for similar patterns elsewhere in the codebase — common locations are utility directories, shared modules, and files adjacent to the changed ones.
+2. **Flag any new function that duplicates existing functionality.** Suggest the existing function to use instead.
+3. **Flag any inline logic that could use an existing utility** — hand-rolled string manipulation, manual path handling, custom environment checks, ad-hoc type guards, and similar patterns are common candidates.
+
+### Agent 2: Code Quality Review
+
+Review the same changes for hacky patterns:
+
+1. **Redundant state**: state that duplicates existing state, cached values that could be derived, observers/effects that could be direct calls
+2. **Parameter sprawl**: adding new parameters to a function instead of generalizing or restructuring existing ones
+3. **Copy-paste with slight variation**: near-duplicate code blocks that should be unified with a shared abstraction
+4. **Leaky abstractions**: exposing internal details that should be encapsulated, or breaking existing abstraction boundaries
+5. **Stringly-typed code**: using raw strings where constants, enums (string unions), or branded types already exist in the codebase
+6. **Unnecessary JSX nesting**: wrapper Boxes/elements that add no layout value — check if inner component props (flexShrink, alignItems, etc.) already provide the needed behavior
+
+### Agent 3: Efficiency Review
+
+Review the same changes for efficiency:
+
+1. **Unnecessary work**: redundant computations, repeated file reads, duplicate network/API calls, N+1 patterns
+2. **Missed concurrency**: independent operations run sequentially when they could run in parallel
+3. **Hot-path bloat**: new blocking work added to startup or per-request/per-render hot paths
+4. **Unnecessary existence checks**: pre-checking file/resource existence before operating (TOCTOU anti-pattern) — operate directly and handle the error
+5. **Memory**: unbounded data structures, missing cleanup, event listener leaks
+6. **Overly broad operations**: reading entire files when only a portion is needed, loading all items when filtering for one
+
+## Phase 3: Fix Issues
+
+Wait for all three agents to complete. Aggregate their findings and fix each issue directly. If a finding is a false positive or not worth addressing, note it and move on — do not argue with the finding, just skip it.
+
+When done, briefly summarize what was fixed (or confirm the code was already clean).
+
+
+## Additional Focus
+
+simplify안했던거 같이해줘 이거 전꺼 안한거 같은데
+
+---
+
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+Summary:
+1. Primary Request and Intent:
+   - Fix stuttering/jerky poop movement (completed earlier, main.ts)
+   - Analyze and fix memory efficiency issues sequentially (#1-6), each with /simplify before committing
+   - Push each fix to dev branch
+   - Full memory audit of remaining issues after fixes 1-6
+   - Remove ITEM mode entirely (user decided it's dead code)
+   - Fix remaining memory issues B→F (B=tempText, C=feverTimeUI game over, D=GachaScene timer, E=CharacterSelectScene fitVideoTimers, F=Player keyboard listener)
+   - Run /simplify on every fix before committing
+
+2. Key Technical Concepts:
+   - Phaser 3: TimeManager.shutdown() auto-clears all timers on scene transition → D and E were false positives
+   - Phaser 3 scene lifecycle: `shutdown` fires before `destroy` in all cases (restart/stop/destroy)
+   - `this.make.graphics()` vs `this.add.graphics()`: make not in display list, must be manually destroyed
+   - `scene.events.once('shutdown') + once('destroy')` — double registration causes stale handler accumulation on scene restart
+   - Phaser Text `.width` updates synchronously after `setText()` — no temp object needed for measurement
+   - `static readonly` class constants — allocated once, not per-instance
+   - Idempotent method pattern: internal guard (`if (!this.isFeverTime) return`) lets callers skip conditional checks
+   - ITEM mode was dead code (no entry point in ModeSelectScene) — fully removed
+   - TypeScript strict: `verbatimModuleSyntax`, `erasableSyntaxOnly`, no enums
+
+3. Files and Code Sections:
+   - **`src/scenes/CharacterSelectScene.ts`**
+     - Fix #5 simplify: `this.maskGfx?.destroy()` → `this.maskGfx.destroy()` (remove inconsistent optional chain on `!`-declared field)
+   
+   - **`src/scenes/ReleaseNotesScene.ts`**
+     - Fix #5: Promoted `maskShape` to class property, added shutdown handler:
+     ```ts
+     private maskShape!: Phaser.GameObjects.Graphics;
+     // in create():
+     this.maskShape = this.make.graphics({ x: 0, y: 0 });
+     this.events.once('shutdown', () => { this.maskShape.destroy(); });
+     ```
+   
+   - **`src/abilities/GlitchAbility.ts`**
+     - Fix #6: Added `attackTimers` tracking + `onDestroy()`:
+     ```ts
+     private attackTimers: Phaser.Time.TimerEvent[] = [];
+     
+     override onDestroy(_api: GameSceneAPI): void {
+       this.ghost?.destroy();
+       this.attackTimers.forEach(t => t.remove());
+     }
+     // In collectSpecialWithGhost():
+     const timer = api.scene.time.delayedCall(1000, () => { ... });
+     this.attackTimers.push(timer);
+     ```
+     - Also removed `if (!api.isClassicMode) return;` guards (3 places) after ITEM mode removal
+   
+   - **`docs/memory-leak-fixes.md`** — Created documenting all fixes #0-#6 with before/after code
+   
+   - **`src/types/GameMode.ts`** — Removed `ITEM: 'item'`
+   
+   - **`src/objects/Item.ts`** — Deleted
+   - **`src/objects/Star.ts`** — Deleted
+   
+   - **`src/scenes/GameScene.ts`** — Multiple changes:
+     - ITEM mode removal: 6 branches, `spawnStars()`, `spawnItem()`, `hitStar()`, `collectItem()` methods, imports, class properties
+     - Fix B (tempText): Two-pass char layout replaces temp Text object:
+     ```ts
+     // startFeverTime(): create all chars at x=0, then sum widths and reposition
+     const colors = GameScene.RAINBOW_COLORS;
+     for (let i = 0; i < fullText.length; i++) {
+       const charText = this.add.text(0, FEVER_TIME_CONFIG.ui.position.y, fullText[i], {
+         color: colors[i % colors.length], ...
+       });
+       this.feverTimeUITexts.push(charText);
+     }
+     const totalWidth = this.feverTimeUITexts.reduce((sum, t) => sum + t.width, 0);
+     let currentX = FEVER_TIME_CONFIG.ui.position.x - totalWidth / 2;
+     for (const charText of this.feverTimeUITexts) {
+       charText.setX(currentX);
+       currentX += charText.width;
+     }
+     // updateFeverTime(): no more .slice(), direct reduce
+     const totalWidth = this.feverTimeUITexts.reduce((sum, t) => sum + t.width, 0);
+     ```
+     - RAINBOW_COLORS extracted as static constant:
+     ```ts
+     private static readonly RAINBOW_COLORS = [
+       '#ff0000', '#ff7f00', '#ffff00', '#00ff00', '#0000ff', '#4b0082', '#9400d3',
+     ];
+     ```
+     - updateFeverTimeColors() simplified to use constant
+     - Fix C (clearFeverTimeUI):
+     ```ts
+     /** 피버 타임 UI/타이머 정리. 비활성 상태면 no-op. */
+     private clearFeverTimeUI() {
+       if (!this.isFeverTime) return;
+       this.isFeverTime = false;
+       this.feverTimeTimer?.remove();
+       this.feverTimeColorTimer?.remove();
+       this.feverTimeUITexts.forEach(t => t.destroy());
+       this.feverTimeUITexts = [];
+     }
+     
+     private endFeverTime() {
+       this.clearFeverTimeUI();
+       // spawnTimer reset...
+     }
+     // hitPoop() and handleCheatDetected() both call this.clearFeverTimeUI() unconditionally
+     ```
+     - Removed dead `private feverTopazTimer!: Phaser.Time.TimerEvent;` (never assigned)
+   
+   - **`src/scenes/DifficultySelectScene.ts`** — Removed ITEM mode preload block (lines 61-83)
+   
+   - **`src/abilities/types.ts`** — Removed `readonly isClassicMode: boolean`
+   - **`src/abilities/HackerAbility.ts`** — Removed `if (!api.isClassicMode) return` guard
+   - **`src/abilities/MaehwaAbility.ts`** — Removed `if (!api.isClassicMode) return` guard
+   
+   - **`src/objects/Player.ts`** — Fix F (current uncommitted change):
+     ```ts
+     // Before:
+     scene.events.once('shutdown', this.removeKeyListeners, this);
+     scene.events.once('destroy', this.removeKeyListeners, this);
+     // After:
+     // shutdown은 restart/stop/destroy 시 항상 먼저 호출됨 → 한 번만 등록으로 충분
+     scene.events.once('shutdown', this.removeKeyListeners, this);
+     ```
+
+4. Errors and fixes:
+   - No TypeScript errors encountered throughout. All changes verified with `npx tsc --noEmit`.
+   - Fix D (GachaScene slideshow timer) — initially flagged as issue, but determined to be false positive: Phaser's `TimeManager.shutdown()` auto-removes all timers; `advanceSlide()` also guards with `!this.scene.isActive()`
+   - Fix E (CharacterSelectScene fitVideoTimers) — false positive for same reason
+   - `feverTopazTimer` found to be declared with `!` but never assigned anywhere — dead code, removed entirely
+
+5. Problem Solving:
+   - ITEM mode identified as fully dead code (no entry point in ModeSelectScene) — user approved complete removal
+   - tempText pattern: Phaser Text `.width` is synchronous after creation/setText, so two-pass layout (create at x=0, sum widths, reposition) avoids temporary object entirely
+   - `clearFeverTimeUI()` idempotent pattern: internal `if (!this.isFeverTime) return` guard means callers don't need conditional — cleaner call sites
+   - Player stale handler: `once('destroy')` accumulates on scene restarts because shutdown fires and removes its own `once` handler, but the `destroy` `once` remains and keeps old Player objects alive until scene destroy
+
+6. All user messages:
+   - (empty — waiting for agents after Fix #5 simplify)
+   - "해줘" (apply Fix #5 simplify fixes)
+   - "해줘" (Fix #6 GlitchAbility)
+   - "/simplify 6번 안했던거 같은데 해줘"
+   - (empty — waiting)
+   - (empty — waiting)
+   - (empty — waiting for third agent)
+   - "해줘" (apply simplify fixes for Fix #6, commit/push)
+   - "일단 1~6번에 대한 변경 전후 내용 문서로 작성해줘"
+   - "자 그러면 이제 더이상 메모리에 대한 걱정을 할 부분이 없는지 남은게 있는지 한번 봐줘"
+   - "아이템 모드가 아직 남아있나? 아이템모드는 없애도 될거 같은데?"
+   - "삭제하자 만들더라도 지금꺼가 아니라 완전 다른거일테니 없애는게 좋겠어"
+   - (empty — after ITEM mode deletion)
+   - "하나씩 진행하자. 일단 B 해줘"
+   - (interrupted commit with /simplify)
+   - (empty — waiting)
+   - (empty — waiting)
+   - (empty — waiting for third agent)
+   - (empty — after all agents done)
+   - "해줘" (apply simplify fixes: RAINBOW_COLORS constant, slice removal)
+   - (interrupted commit with /simplify again)
+   - (empty × 3 — waiting for agents)
+   - (empty — after all agents done)
+   - "해줘" (Fix C - clearFeverTimeUI)
+   - (interrupted with /simplify)
+   - (empty × 3 — waiting)
+   - (empty — after agents complete)
+   - "해줘" (Fix D → false positive, Fix E → false positive, Fix F Player.ts)
+   - (interrupted commit with /simplify "simplify안했던거 같이해줘 이거 전꺼 안한거 같은데")
+
+7. Pending Tasks:
+   - **Awaiting three /simplify review agents** for Fix C (GameScene.ts clearFeverTimeUI) + Fix F (Player.ts destroy handler removal) — agents are currently running in background (agentIds: a0a3dd7246e01ad97, a047fd185f10c8dea, ad373b15e31f512b4)
+   - After simplify: apply any fixes, then commit and push both C and F changes
+
+8. Current Work:
+   Three /simplify agents running in background reviewing:
+   - **Fix C** (already committed as 1aee563): `clearFeverTimeUI()` extraction, `feverTopazTimer` removal, `endFeverTime()` refactor in GameScene.ts
+   - **Fix F** (uncommitted): Removal of `scene.events.once('destroy', this.removeKeyListeners, this)` from Player.ts
+   
+   Combined diff being reviewed:
+   ```diff
+   // GameScene.ts (Fix C - committed)
+   -  private feverTopazTimer!: Phaser.Time.TimerEvent;
+   +  private clearFeverTimeUI() {
+   +    if (!this.isFeverTime) return;
+   +    this.isFeverTime = false;
+   +    this.feverTimeTimer?.remove();
+   +    this.feverTimeColorTimer?.remove();
+   +    this.feverTimeUITexts.forEach(t => t.destroy());
+   +    this.feverTimeUITexts = [];
+   +  }
+   // hitPoop + handleCheatDetected: this.clearFeverTimeUI() (unconditional)
+   // endFeverTime: calls this.clearFeverTimeUI() then resets spawnTimer
+   
+   // Player.ts (Fix F - uncommitted)
+   -    scene.events.once('destroy', this.removeKeyListeners, this);
+   +    // shutdown은 restart/stop/destroy 시 항상 먼저 호출됨 → 한 번만 등록으로 충분
+   ```
+
+9. Optional Next Step:
+   Wait for the three background agents to complete their review, then aggregate findings, apply any needed fixes to Player.ts (and potentially amend/add to GameScene.ts), and commit+push both Fix C and Fix F together. The user explicitly ran "/simplify simplify안했던거 같이해줘 이거 전꺼 안한거 같은데" to review Fix C and Fix F together before committing Fix F.
+
+If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/johyunduk/.REDACTED.jsonl
+Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.
+
+---
+
+<task-notification>
+<task-id>a047fd185f10c8dea</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>REDACTED.output</output-file>
+<status>completed</status>
+<summary>Agent "품질 리뷰 — Fix C+F 합산" completed</summary>
+<result>완벽합니다. 이제 전체 코드를 분석할 준비가 되었습니다. 코드 품질 리뷰를 작성하겠습니다.
+
+---
+
+## 코드 품질 리뷰 — 두 개의 Fix
+
+### **Fix C (GameScene.ts) — `clearFeverTimeUI()` 추가**
+
+#### 1. 메서드 이름과 역할 분리 명확성 ✅ (문제 없음)
+
+**현재 구조:**
+- `clearFeverTimeUI()`: UI 텍스트 파괴 + 타이머 제거 + 상태 초기화 (전담)
+- `endFeverTime()`: `clearFeverTimeUI()` 호출 + spawnTimer 재설정 (피버 타임 종료 로직의 상위 개념)
+
+**분석:**
+- 역할 분리가 잘 되어 있습니다. `clearFeverTimeUI()`는 "UI 정리"에만 집중하고, `endFeverTime()`은 "피버 타임 모드 해제 + 일반 생성 재개"라는 더 높은 수준의 개념을 담당합니다.
+- **호출 지점 3곳:**
+  - Line 494: `endFeverTime()` 내부 (의도적)
+  - Line 1020: `hitPoop()` 내부 (게임오버 시, UI 정리만 필요)
+  - Line 828-829: `displayFeverTimeUI()` 내부 (UI 재구성 전 기존 UI 정리)
+- 메서드 이름이 정확히 "UI 정리"를 의미하므로 혼동 없음.
+
+**결론:** **명확하고 적절합니다.**
+
+---
+
+#### 2. 타이머 null-safe 처리의 일관성 ⚠️ (소소한 불일치)
+
+**현재 선언:**
+```typescript
+private feverTimeTimer!: Phaser.Time.TimerEvent;      // line 54
+private feverTimeColorTimer!: Phaser.Time.TimerEvent;  // line 57
+```
+
+**clearFeverTimeUI() 에서의 사용:**
+```typescript
+this.feverTimeTimer?.remove();        // optional chaining
+this.feverTimeColorTimer?.remove();   // optional chaining
+```
+
+**문제점:**
+- `!` (non-null assertion)로 선언되었으므로 **TypeScript 타입 시스템상** 항상 값이 있어야 합니다.
+- 그런데 `?.remove()`로 null-safe하게 처리하는 것은 런타임과 타입 선언이 불일치합니다.
+
+**실제 할당 지점 확인:**
+```typescript
+// Line 864-867: 첫 할당 (create() 또는 spawnFeverTime()에서)
+if (this.feverTimeTimer) {
+  this.feverTimeTimer.remove();
+}
+this.feverTimeTimer = this.time.addEvent({...});
+
+// Line 875-878: 두 번째 할당
+if (this.feverTimeColorTimer) {
+  this.feverTimeColorTimer.remove();
+}
+this.feverTimeColorTimer = this.time.addEvent({...});
+```
+
+**분석:**
+- 타이머는 게임 진행 중 **계속 재할당**됩니다.
+- `?.remove()`는 방어적 프로그래밍(defensive programming)이므로 **런타임 안전성은 높습니다.**
+- 하지만 타입 선언과 실제 사용 패턴의 의도가 명확하지 않습니다.
+
+**더 나은 선택지:**
+```typescript
+// 선택지 1: 선언을 nullable로 바꾸기 (타입과 사용이 일치)
+private feverTimeTimer: Phaser.Time.TimerEvent | null = null;
+private feverTimeColorTimer: Phaser.Time.TimerEvent | null = null;
+
+// 선택지 2: ! 유지 + remove() 호출 시 null 체크 제거
+// (단, 초기 선언 후 항상 할당되어야 함 보장 필요)
+```
+
+**현재 코드의 평가:**
+- 선택지 1 (nullable)이 **의도를 더 명확하게** 표현합니다.
+- 현재 코드는 "모순은 아니지만 불명확"한 상태입니다.
+
+**결론:** **소소한 일관성 문제. 심각하지는 않으나 개선 권장.**
+
+---
+
+### **Fix F (Player.ts) — `once('shutdown')` vs `once('destroy')`**
+
+#### 3. Phaser 3 씬 라이프사이클 검증 ✅ (정확함)
+
+**Phaser 3 공식 문서 및 소스 코드 기준:**
+
+```
+씬 상태 전환 순서:
+├─ pause() 또는 sleep() 
+│  └─ 'pause'/'sleep' 이벤트 발생
+├─ stop()
+│  └─ 'shutdown' 이벤트 발생 (이미지/사운드/등록된 이벤트 정리)
+│  └─ 'sleep'은 emit 안 함
+├─ restart() (stop() → init() → preload() → create())
+│  └─ shutdown이 먼저 발생, 그 다음 새 사이클 시작
+└─ destroy() 또는 scene 완전 제거
+   └─ 'shutdown' 이벤트 발생 (stop 직후)
+   └─ 그 다음 'sleep' 이벤트 (씬 완전 제거 전)
+```
+
+**실제 코드 분석:**
+
+Player.ts 에서:
+```typescript
+// Line 65-66: shutdown 한 번만 등록
+scene.events.once('shutdown', this.removeKeyListeners, this);
+```
+
+**removeKeyListeners() 동작:**
+```typescript
+private removeKeyListeners() {
+  window.removeEventListener('keydown', this.onKeyDown, { capture: true });
+  window.removeEventListener('keyup', this.onKeyUp, { capture: true });
+}
+```
+
+**평가:**
+
+1. **restart() 시나리오:**
+   - `scene.restart()` → `shutdown` 이벤트 발생 → `removeKeyListeners()` 실행 ✅
+   - 새 씬 인스턴스 생성 → 새 `Player` 객체 → 새로운 `addEventListener()` 실행 ✅
+   - `once()` 사용이므로 중복 등록 안 됨 ✅
+
+2. **destroy() 시나리오:**
+   - `scene.destroy()` → `shutdown` 이벤트 발생 → `removeKeyListeners()` 실행 ✅
+   - 씬 완전 제거 ✅
+
+3. **stop() 시나리오:**
+   - `scene.stop()` → `shutdown` 이벤트 발생 → `removeKeyListeners()` 실행 ✅
+   - (다른 씬으로 전환되지만 이 씬의 update()는 호출 안 됨)
+
+**실제 GameScene.ts 사용 패턴:**
+```typescript
+// Line 1486: 게임 재시작
+this.scene.restart({ gameMode: this.gameMode, difficulty: this.difficulty });
+
+// Line 409-411: visibilitychange 리스너만 정리
+this.events.once('shutdown', () => {
+  document.removeEventListener('visibilitychange', onVisibilityChange);
+});
+```
+
+**평가:**
+- GameScene도 `once('shutdown')`으로 이벤트 리스너를 정리하고 있습니다.
+- **패턴이 일관되고, Phaser 3 라이프사이클에 정확합니다.**
+
+**결론:** **정확함. 수정 코멘트도 정확합니다.**
+
+---
+
+#### 4. 그 외 hacky 패턴
+
+**Player.ts 전체 평가:**
+
+**좋은 점:**
+- window 레벨 이벤트 리스너를 명시적으로 관리 (capture phase 사용)
+- `once()`로 중복 등록 방지
+- 효과 타이머들(`speedBoostTimer`, `invincibleTimer`, `rainbowTimer`)을 정리하는 `cleanupEffects()` 메서드 제공
+
+**잠재적 문제:**
+1. **타이머 선언 - 선택적 필드:**
+   ```typescript
+   private invincibleTimer?: Phaser.Time.TimerEvent;      // optional
+   private speedBoostTimer?: Phaser.Time.TimerEvent;       // optional
+   private rainbowTimer?: Phaser.Time.TimerEvent;          // optional
+   ```
+   
+   **vs. GameScene의 피버 타임 타이머:**
+   ```typescript
+   private feverTimeTimer!: Phaser.Time.TimerEvent;        // non-null assertion
+   private feverTimeColorTimer!: Phaser.Time.TimerEvent;   // non-null assertion
+   ```
+   
+   - Player는 `?` (optional)으로 선언하고 필드 초기화 없음 (undefined에서 시작)
+   - GameScene은 `!`으로 선언하지만 초기화 시점이 불명확
+   - **패턴 불일치** (같은 개념인데 다르게 처리)
+
+2. **cleanupEffects() 미호출 위험:**
+   ```typescript
+   // GameScene에서만 호출
+   this.player.cleanupEffects();  // Line 1482, 1501
+   ```
+   
+   - Player가 파괴될 때 자동으로 호출되지 않음
+   - GameScene이 명시적으로 호출해야 함
+   - `shutdown` 이벤트에서 자동 정리하면 더 안전:
+     ```typescript
+     scene.events.once('shutdown', () => {
+       this.cleanupEffects();
+       this.removeKeyListeners();
+     });
+     ```
+
+**결론:** **현재 구조는 hacky하지 않으나, 패턴 일관성과 자동 정리 안전성 개선 여지 있음.**
+
+---
+
+## 최종 요약
+
+| 항목 | 상태 | 코멘트 |
+|------|------|--------|
+| **Fix C: `clearFeverTimeUI()` 메서드 분리** | ✅ 좋음 | 역할 분리가 명확하고 적절함 |
+| **Fix C: 타이머 null-safe 처리 일관성** | ⚠️ 소소한 불일치 | `!` 선언 vs `?.remove()` 사용 — 선언을 `?` 로 바꾸면 명확해짐 |
+| **Fix F: `once('shutdown')` 적용** | ✅ 정확함 | Phaser 3 라이프사이클에 맞음, restart/destroy 모두 커버 |
+| **Fix F: 코멘트 정확성** | ✅ 정확함 | "restart/stop/destroy 시 항상 shutdown 먼저" — 맞음 |
+| **Player 효과 타이머 패턴** | ⚠️ 불일치 | `?` (optional)로 선언 vs GameScene의 `!` — 패턴 통일 필요 |
+| **자동 정리 안전성** | ⚠️ 개선 가능 | `cleanupEffects()` 명시 호출 필요 → shutdown 이벤트에서 자동 호출 권장 |</result>
+<usage><total_tokens>28355</total_tokens><tool_uses>7</tool_uses><duration_ms>42907</duration_ms></usage>
+</task-notification>
+Full transcript available at: REDACTED.output
+
+---
+
+<task-notification>
+<task-id>a0a3dd7246e01ad97</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>REDACTED.output</output-file>
+<status>completed</status>
+<summary>Agent "재사용 리뷰 — Fix C+F 합산" completed</summary>
+<result>완벽합니다! 이제 정보를 종합하여 최종 보고서를 작성할 수 있습니다.
+
+---
+
+## 코드 재사용 및 패턴 검토 보고서
+
+### 1. `clearFeverTimeUI()` 기존 코드베이스 중복 분석
+
+**발견 사항: 중복 있음**
+
+Fix C의 `clearFeverTimeUI()` 메서드는 GameScene 내부에서 **이미 같은 로직이 분산되어 있습니다**:
+
+| 위치 | 코드 | 비고 |
+|------|------|------|
+| Line 828-829 | `this.feverTimeUITexts.forEach((text) => text.destroy()); this.feverTimeUITexts = [];` | startFeverTime()에서 기존 UI 정리 |
+| Line 864-867 | `if (this.feverTimeTimer) { this.feverTimeTimer.remove(); } this.feverTimeTimer = this.time.addEvent(...)` | 타이머 초기화 |
+| Line 875-877 | `if (this.feverTimeColorTimer) { this.feverTimeColorTimer.remove(); }` | 색상 타이머 초기화 |
+| Line 934-941 | **새로운 clearFeverTimeUI()** | 통합된 정리 메서드 |
+
+**문제점**:
+- `startFeverTime()` 메서드 내에서 이미 기존 텍스트를 destroy하는 로직 존재
+- 타이머 제거 로직이 여러 곳에서 부분적으로 반복됨
+- `isFeverTime` 플래그 확인이 새로운 메서드에만 있음 (기존 코드는 flag 체크 없음)
+
+**긍정적 측면**:
+- `clearFeverTimeUI()`의 도입으로 `isFeverTime` guard 추가 → **멱등성(idempotency) 개선**
+  - 여러 경로(endFeverTime, hitPoop, handleCheatDetected)에서 안전하게 호출 가능
+  - 비활성 상태에서 재호출해도 no-op
+
+---
+
+### 2. Player.ts의 `events.once()` 이중 등록 패턴 분석
+
+**발견 사항: Phaser 생명주기 원칙 위반**
+
+현재 HEAD에서 Player.ts line 66-67:
+```typescript
+scene.events.once('shutdown', this.removeKeyListeners, this);
+scene.events.once('destroy', this.removeKeyListeners, this);
+```
+
+**Phaser 씬 생명주기 실제 동작**:
+```
+씬 전환 시 호출 순서:
+1. 'shutdown' 이벤트 발생 (항상 먼저 호출)
+2. 'destroy' 이벤트 발생 (선택적, 메모리 정리)
+
+shutdown은 다음 상황 모두에서 먼저 실행됨:
+- scene.start() → 새 씬 시작
+- scene.stop() → 씬 일시정지
+- scene.restart() → 씬 재시작 (init 호출)
+```
+
+**실제 문제**:
+- `shutdown`만 등록해도 충분하지만, `destroy`도 중복 등록됨
+- 가능한 시나리오:
+  1. **정상 경로**: shutdown → 리스너 제거 → destroy 이벤트 (리스너 없음, no-op)
+  2. **비정상 경로 (드문 경우)**: destroy 단독 호출 시만 의미 있음
+
+**코드베이스 전체 패턴 검토**:
+
+| 파일 | 패턴 | 비고 |
+|------|------|------|
+| Player.ts (현재) | `once('shutdown') + once('destroy')` | 이중 등록 |
+| CharacterSelectScene.ts:214 | `once('shutdown')` | 정확함 |
+| ReleaseNotesScene.ts:46 | `once('shutdown')` | 정확함 |
+| GameScene.ts:409 | `once('shutdown')` | 정확함 |
+
+**발견**: 다른 모든 씬과 오브젝트는 **`shutdown`만 사용** → Player.ts가 유일한 이중 등록 사례
+
+---
+
+### 3. 다른 오브젝트 정리 패턴 검토
+
+**Poop 계열 (Poop.ts, PoolablePoopBase.ts)**:
+- `destroy()` 호출 없음 (Object Pool 재사용)
+- `update()` 메서드에서 화면 밖 → `setActive(false)` 로직만 사용
+- **cleanup 메서드 없음** (씬 종료 시 자동 정리)
+
+**Player.ts**:
+- `cleanupEffects()` 메서드 존재 (line 222-232)
+  - 타이머 3개(`speedBoostTimer`, `invincibleTimer`, `rainbowTimer`) 정리
+  - **하지만 씬 shutdown 시 자동 호출되지 않음** (명시적으로 호출 코드 없음)
+
+---
+
+## 최종 결론
+
+### Fix C (clearFeverTimeUI 추출)
+✅ **권장 - 하지만 개선 필요**
+- **장점**: `isFeverTime` guard로 멱등성 강화
+- **개선점**: startFeverTime()의 기존 정리 로직과 통일 (라인 828-829 제거 후 startFeverTime()에서 `clearFeverTimeUI()` 호출)
+
+### Fix F (Player.ts destroy 제거)
+✅ **권장 - Phaser 표준 준수**
+- 다른 모든 씬/오브젝트가 `shutdown`만 사용
+- Phaser 공식 생명주기 문서 확인: shutdown이 항상 먼저 호출됨
+- **부수 문제**: Player.cleanupEffects()가 자동으로 호출되지 않음
+  - 현재는 타이머 누수 가능성 존재
+  - 권장: shutdown 이벤트에서 cleanupEffects() 자동 호출하도록 개선
+
+---
+
+## 추가 발견 사항
+
+**Player.ts 타이머 누수 위험**:
+```typescript
+// 현재 상태: cleanupEffects()가 어디서도 호출되지 않음
+// shutdown 이벤트에서도, 게임 오버 시에도 미호출
+// → 속도 부스트/무적 상태로 남으면 타이머 메모리 누수
+```
+
+**권장 조치**:
+- 같은 패턴으로 Player 생성자에 `scene.events.once('shutdown', this.cleanupEffects, this)` 추가
+- 또는 GameScene.hitPoop()에서 게임 오버 시 `this.player.cleanupEffects()` 명시적 호출
+
+---
+
+## 보고서 파일 경로
+- `/Users/johyunduk/Projects/ddong-avoid-game/src/scenes/GameScene.ts` (Line 934-954, 1005-1021, 491-511)
+- `/Users/johyunduk/Projects/ddong-avoid-game/src/objects/Player.ts` (Line 65-67, 222-232)</result>
+<usage><total_tokens>40758</total_tokens><tool_uses>25</tool_uses><duration_ms>58477</duration_ms></usage>
+</task-notification>
+Full transcript available at: REDACTED.output
+
+---
+
+<task-notification>
+<task-id>ad373b15e31f512b4</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>REDACTED.output</output-file>
+<status>completed</status>
+<summary>Agent "효율성 리뷰 — Fix C+F 합산" completed</summary>
+<result>분석이 완료되었습니다. 효율성 관점에서 이슈를 보고하겠습니다.
+
+---
+
+## 효율성 검토 리포트
+
+### 1. Fix C (GameScene.ts) - `clearFeverTimeUI()` hot path 오염 분석
+
+**현재 호출 경로:**
+- `handleCheatDetected()` (라인 494) → 게임 오버 전용 경로
+- `hitPoop()` (라인 1020) → 게임 오버 전용 경로  
+- `endFeverTime()` (라인 944) → 피버 타임 정상 종료 경로
+- `startFeverTime()` (라인 863-883) → 타이머 재설정 전 정리 용도
+
+**이슈 1: 불필요한 guard clause 중복**
+```typescript
+// Fix C 후:
+clearFeverTimeUI() {
+  if (!this.isFeverTime) return;  // guard clause
+  this.isFeverTime = false;
+  ...
+}
+
+// 호출 측에서도 이미 체크:
+// hitPoop (라인 1009): if (this.gameOver) return; 
+// handleCheatDetected (라인 492): this.gameOver = true 설정 후 바로 호출
+```
+
+**문제점:**
+- 게임 오버 경로에서는 `isFeverTime = true`일 확률이 매우 낮음 (피버 타임 중 게임 오버는 드문 사건)
+- 게임 오버 path는 "한 번만 실행" 경로이므로 early return 비용이 거의 무시할 수 있을 수준
+- **이미 if 체크 없이 호출해도 작동함** (내부 guard clause가 있으므로)
+
+**결론:** hot path 오염은 없음. 게임 오버는 저빈도 이벤트이고, 피버 타임 중 게임 오버는 극히 드문 시나리오.
+
+---
+
+### 2. Fix C - `endFeverTime()` 두 단계 실행의 불필요한 중간 상태
+
+```typescript
+// 현재 endFeverTime() 구현:
+private endFeverTime() {
+  this.clearFeverTimeUI();  // 상태: isFeverTime = false 설정
+  
+  // 중간 상태: UI 정리됨, 하지만 spawnPoop은 아직 이전 로직(spawnFeverPoop) 사용 가능
+  this.spawnTimer.remove();
+  this.spawnTimer = this.time.addEvent({
+    delay: this.difficultyConfig.spawnDelay,
+    callback: this.isFeverTime ? this.spawnFeverPoop : this.spawnPoop,  // 조건부 콜백
+    callbackScope: this,
+    loop: true
+  });
+}
+```
+
+**이슈 2: 조건부 콜백에 의한 런타임 branch 비용**
+
+라인 720:
+```typescript
+callback: this.isFeverTime ? this.spawnFeverPoop : this.spawnPoop,
+```
+
+- `endFeverTime()` 직후 `spawnTimer` 콜백 실행 시: `isFeverTime = false`이므로 항상 `spawnPoop` 선택됨
+- **하지만 `increaseDifficulty()` (라인 710-725)에서도 같은 패턴이 있음:**
+  ```typescript
+  callback: this.isFeverTime ? this.spawnFeverPoop : this.spawnPoop,
+  ```
+- 이 조건부는 **필요함** (피버 타임 중 난이도 증가 시에는 `spawnFeverPoop` 유지)
+
+**결론:** `endFeverTime()` 직후에는 불필요한 조건부이지만, 성능 영향은 무시할 수 있는 수준 (타이머 콜백은 밀리초 단위, 조건부 비교는 나노초 단위).
+
+---
+
+### 3. Fix F (Player.ts) - `destroy` once 핸들러 제거
+
+**현재 구현:**
+```typescript
+// 제거 전 (라인 66):
+scene.events.once('shutdown', this.removeKeyListeners, this);
+
+// 제거 후:
+// 핸들러 등록 제거 → removeKeyListeners()가 자동 호출되지 않음
+// (다른 곳에서 명시적 호출 필요)
+```
+
+**Phaser 씬 라이프사이클 분석:**
+```
+Constructor (new Player) 
+  ↓
+scene.events.once('shutdown', ...) ← 이벤트 등록
+  ↓
+[게임 실행] 
+  ↓
+scene.restart() or scene.start() 호출 
+  ↓
+Phaser 내부: 'shutdown' 이벤트 발생 → removeKeyListeners() 호출
+  ↓
+Player 인스턴스 파괴 (GC 대상)
+```
+
+**이슈 3: 핸들러 축적 위험성 분석**
+
+현재 상황:
+- `GameScene.create()` (라인 169): `this.player = new Player(...)`
+- 게임 재시작: `scene.restart()` (라인 1486)
+- **Phaser 동작:** `restart()` 호출 시 'shutdown' 이벤트 자동 발생 후 `create()` 재호출
+
+**문제점:**
+1. **`once()` 사용으로 인해 안전함** - 같은 핸들러가 여러 번 등록되지 않음
+2. **하지만 Fix F 제거 후:**
+   - `removeKeyListeners()` 명시적 호출 필요
+   - 호출 안 하면 → `window.addEventListener`는 유지되지만 Player 인스턴스는 GC
+   - **메모리 누수 아님** (Closure로 `onKeyDown/onKeyUp` 함수는 유지되지만, Player 참조는 끊어짐)
+   - **기능 저하:** 이전 Player의 키 리스너가 정리되지 않아 중복 이벤트 수신 가능
+
+**제거된 핸들러 위험:**
+```typescript
+// Player A (restart 전)
+window.addEventListener('keydown', this.onKeyDown, { capture: true });
+
+// scene.restart() → 'shutdown' 이벤트 원래 호출되는데, Fix F로 인해 미호출
+// window.removeEventListener('keydown', this.onKeyDown, { capture: true }); ← 미실행!
+
+// Player B (restart 후)
+window.addEventListener('keydown', this.onKeyDown, { capture: true });
+// 이제 window에는 2개의 keydown 핸들러 등록됨 (Player A, B)
+```
+
+**실제 영향:**
+- 키 입력이 2번 처리될 수 있음 (중복 상태 변경)
+- 메모리 누수는 아니지만 **동작 오류 가능성**
+
+**결론:** Fix F는 "핸들러 자동 제거 메커니즘 제거"이며, **반드시 명시적 정리 호출(`cleanupEffects()` 같은 곳)이 필요함**. 현재 라인 1482에서 `this.player.cleanupEffects()`가 호출되는데, **이곳에 `removeKeyListeners()` 호출이 추가되어야 함**.
+
+---
+
+### 4. 종합 효율성 평가
+
+| Fix | 이슈 | 성능 영향 | 기능 영향 | 권장사항 |
+|-----|------|---------|---------|--------|
+| **Fix C** | guard clause 중복 | 무시할 수 있음 (저빈도 경로) | 없음 | 수용 가능 |
+| **Fix C** | 조건부 콜백 | 무시할 수 있음 (나노초 단위) | 없음 | 수용 가능 |
+| **Fix F** | 이벤트 핸들러 정리 미흡 | 없음 | **핸들러 중복 등록 위험** | 신중함 필요 |
+
+### 5. Fix F에 대한 추가 주의
+
+**현재 상태:**
+- `scene.restart()` 호출 시 자동 'shutdown' 이벤트
+- 하지만 Fix F로 인해 `removeKeyListeners()` 미호출
+- GameScene 라인 1482에서 `this.player.cleanupEffects()` 호출 전에 **씬 재시작** 발생
+
+**권장 수정:**
+```typescript
+// 현재 (불완전):
+this.player.cleanupEffects();  // Timer만 정리
+this.scene.restart();
+
+// 권장:
+this.player.cleanupEffects();
+this.player.removeKeyListeners();  // 명시적 호출 필요
+this.scene.restart();
+```
+
+---
+
+## 최종 결론
+
+**Fix C:** 효율성 관점에서 부작용 없음. 코드 가독성 향상.
+
+**Fix F:** **구현 완료 전 검토 필요**. `removeKeyListeners()` 메서드가 public으로 공개되지 않으면 외부 호출 불가능. 현재 `private`이므로 GameScene에서 호출 불가 → **Player 클래스 설계 변경 필요**.</result>
+<usage><total_tokens>34174</total_tokens><tool_uses>13</tool_uses><duration_ms>53464</duration_ms></usage>
+</task-notification>
+Full transcript available at: REDACTED.output
+
+---
+
+그러면 더 해야 하는건 없는건가?
+
+---
+
+@src/scenes/GameScene.ts 여기에 빨간줄 간것들이 좀 보이는데
+
+---
+
+462번 줄 return  에 나오긴해.
