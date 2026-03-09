@@ -16,7 +16,7 @@ Deno.serve(async (req: Request) => {
     const limit = parseInt(limitParam ?? '100', 10);
 
     // 입력 검증
-    const validDifficulties = ['easy', 'normal', 'hard', 'extreme'];
+    const validDifficulties = ['easy', 'normal', 'hard', 'extreme', 'physical'];
     if (!difficulty || !validDifficulties.includes(difficulty)) {
       return new Response(
         JSON.stringify({ error: 'Invalid difficulty' }),

@@ -9,6 +9,7 @@ export default class LeaderboardScene extends Phaser.Scene {
   private loadingText?: Phaser.GameObjects.Text;
   private errorText?: Phaser.GameObjects.Text;
   private currentRequestId: number = 0; // 요청 추적용 ID
+  private difficultyButtons = new Map<Difficulty, Phaser.GameObjects.Rectangle>();
 
   constructor() {
     super('LeaderboardScene');
@@ -61,15 +62,18 @@ export default class LeaderboardScene extends Phaser.Scene {
   }
 
   private createDifficultyButtons() {
+    this.difficultyButtons.forEach(btn => btn.destroy());
+    this.difficultyButtons.clear();
+
     const difficulties: Difficulty[] = [
-      DifficultyEnum.EASY,
       DifficultyEnum.NORMAL,
       DifficultyEnum.HARD,
-      DifficultyEnum.EXTREME
+      DifficultyEnum.EXTREME,
+      DifficultyEnum.PHYSICAL
     ];
 
-    const buttonWidth = 80;
-    const spacing = 90;
+    const buttonWidth = 70;
+    const spacing = 85;
     const startX = 200 - (spacing * 1.5);
     const y = 95;
 
@@ -93,6 +97,7 @@ export default class LeaderboardScene extends Phaser.Scene {
         fontStyle: 'bold'
       }).setOrigin(0.5);
 
+      this.difficultyButtons.set(difficulty, button);
       button.setInteractive({ useHandCursor: true });
 
       button.on('pointerover', () => {
@@ -122,15 +127,10 @@ export default class LeaderboardScene extends Phaser.Scene {
     this.selectedDifficulty = difficulty;
 
     // 모든 버튼 스타일 재설정
-    this.children.list.forEach((child) => {
-      if (child instanceof Phaser.GameObjects.Rectangle && child.y === 95) {
-        const index = Math.floor((child.x - 20) / 90);
-        const difficulties = [DifficultyEnum.EASY, DifficultyEnum.NORMAL, DifficultyEnum.HARD, DifficultyEnum.EXTREME];
-        const isSelected = difficulties[index] === difficulty;
-
-        child.setFillStyle(isSelected ? 0xffff99 : 0xffffff);
-        child.setStrokeStyle(3, isSelected ? 0xff0000 : 0x000000);
-      }
+    this.difficultyButtons.forEach((btn, diff) => {
+      const isSelected = diff === difficulty;
+      btn.setFillStyle(isSelected ? 0xffff99 : 0xffffff);
+      btn.setStrokeStyle(3, isSelected ? 0xff0000 : 0x000000);
     });
 
     // 새로운 난이도 데이터 로드

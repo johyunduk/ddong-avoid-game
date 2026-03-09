@@ -1,6 +1,17 @@
 import Phaser from 'phaser';
-import { GameMode, DIFFICULTIES, type Difficulty, type DifficultyConfig } from '../types/GameMode';
+import { Difficulty, GameMode, DIFFICULTIES, type DifficultyConfig } from '../types/GameMode';
 import { isChristmasSeason } from '../utils/seasonChecker';
+
+interface ButtonCardConfig {
+  color: number;
+  strokeColor?: number;
+  emoji: string;
+  title: string;
+  description: string;
+  info1: string;
+  info2: string;
+  onPointerDown: () => void;
+}
 
 export default class DifficultySelectScene extends Phaser.Scene {
   private gameMode: GameMode = GameMode.CLASSIC;
@@ -70,20 +81,21 @@ export default class DifficultySelectScene extends Phaser.Scene {
     this.add.rectangle(200, 300, 400, 600, 0x000000, 0.4);
 
     // 타이틀 배경
-    this.add.rectangle(200, 70, 350, 60, 0x000000, 0.7)
+    this.add.rectangle(200, 75, 350, 72, 0x000000, 0.7)
       .setStrokeStyle(3, 0xFFD700);
 
     // 타이틀
-    this.add.text(200, 55, '🎮 난이도 선택 🎮', {
-      fontSize: '28px',
+    this.add.text(200, 60, '🎮 난이도 선택 🎮', {
+      fontSize: '26px',
       color: '#FFD700',
       fontStyle: 'bold',
       stroke: '#000',
-      strokeThickness: 5
+      strokeThickness: 5,
+      padding: { top: 4 }
     }).setOrigin(0.5);
 
-    this.add.text(200, 82, '도전할 난이도를 선택하세요', {
-      fontSize: '14px',
+    this.add.text(200, 92, '도전할 난이도를 선택하세요', {
+      fontSize: '13px',
       color: '#ffffff',
       stroke: '#000',
       strokeThickness: 3
@@ -103,6 +115,9 @@ export default class DifficultySelectScene extends Phaser.Scene {
 
       this.createDifficultyButton(difficultyConfig, x, y);
     });
+
+    // 4번째 셀 (col=1, row=1): PHYSICAL 버튼
+    this.createPureButton(startX + spacingX, startY + spacingY);
 
     // 뒤로가기 버튼
     const backButtonBg = this.add.rectangle(200, 560, 150, 40, 0xffffff, 1);
@@ -136,25 +151,49 @@ export default class DifficultySelectScene extends Phaser.Scene {
   }
 
   private createDifficultyButton(difficultyConfig: DifficultyConfig, x: number, y: number) {
-    // 그림자 효과
-    const shadow = this.add.rectangle(x + 3, y + 3, 170, 150, 0x000000, 0.5);
+    this.createButtonCard(x, y, {
+      color: difficultyConfig.color,
+      emoji: this.getDifficultyEmoji(difficultyConfig.difficulty),
+      title: difficultyConfig.name,
+      description: difficultyConfig.description,
+      info1: `💩 ${difficultyConfig.poopCount}개`,
+      info2: `⚡ ${this.getSpeedText(difficultyConfig.baseSpeed)}`,
+      onPointerDown: () => this.startGame(difficultyConfig.difficulty)
+    });
+  }
 
-    // 카드 배경
-    const button = this.add.rectangle(x, y, 170, 150, difficultyConfig.color, 1);
-    button.setStrokeStyle(4, 0x000000);
+  private createPureButton(x: number, y: number) {
+    this.createButtonCard(x, y, {
+      color: 0xeeeeee,
+      strokeColor: 0x888888,
+      emoji: '⚡',
+      title: 'PHYSICAL',
+      description: '능력 없음 · 순수 실력',
+      info1: '🚫 캐릭터 능력 비활성',
+      info2: '📊 EXTREME 기준 난이도',
+      onPointerDown: () => this.scene.start('GameScene', {
+        gameMode: this.gameMode,
+        difficulty: Difficulty.EXTREME,
+        purePhysical: true
+      })
+    });
+  }
 
-    // 내부 테두리 (깊이감)
-    const innerBorder = this.add.rectangle(x, y, 160, 140, difficultyConfig.color, 0)
-      .setStrokeStyle(2, this.darkenColor(difficultyConfig.color));
+  private createButtonCard(x: number, y: number, config: ButtonCardConfig) {
+    const { color, strokeColor = 0x000000 } = config;
 
-    // 난이도 이모지
-    const emoji = this.getDifficultyEmoji(difficultyConfig.difficulty);
-    const emojiText = this.add.text(x, y - 48, emoji, {
-      fontSize: '32px'
+    const shadow = this.add.rectangle(x + 4, y + 4, 170, 165, 0x000000, 0.4);
+
+    const button = this.add.rectangle(x, y, 170, 165, color, 1);
+    button.setStrokeStyle(3, strokeColor);
+
+    // 이모지: 카드 상단에서 충분한 여백 확보 (카드 상단 y-82, 이모지 중심 y-44)
+    const emojiText = this.add.text(x, y - 44, config.emoji, {
+      fontSize: '34px',
+      padding: { top: 6 }
     }).setOrigin(0.5);
 
-    // 난이도 이름
-    const title = this.add.text(x, y - 15, difficultyConfig.name, {
+    const title = this.add.text(x, y - 10, config.title, {
       fontSize: '20px',
       color: '#000',
       fontStyle: 'bold',
@@ -162,31 +201,29 @@ export default class DifficultySelectScene extends Phaser.Scene {
       strokeThickness: 2
     }).setOrigin(0.5);
 
-    // 설명
-    const description = this.add.text(x, y + 10, difficultyConfig.description, {
+    const description = this.add.text(x, y + 14, config.description, {
       fontSize: '11px',
-      color: '#222',
+      color: '#333',
       align: 'center'
     }).setOrigin(0.5);
 
-    // 정보 박스
-    const infoBg = this.add.rectangle(x, y + 42, 150, 38, 0xffffff, 0.8);
+    const infoBg = this.add.rectangle(x, y + 47, 154, 40, 0x000000, 0.15)
+      .setStrokeStyle(1, 0x000000, 0.2);
 
-    const poopInfo = this.add.text(x, y + 34, `💩 ${difficultyConfig.poopCount}개`, {
+    const info1 = this.add.text(x, y + 38, config.info1, {
       fontSize: '11px',
-      color: '#000',
+      color: '#111',
       fontStyle: 'bold'
     }).setOrigin(0.5);
 
-    const speedInfo = this.add.text(x, y + 50, `⚡ ${this.getSpeedText(difficultyConfig.baseSpeed)}`, {
+    const info2 = this.add.text(x, y + 55, config.info2, {
       fontSize: '11px',
-      color: '#000',
+      color: '#111',
       fontStyle: 'bold'
     }).setOrigin(0.5);
 
     button.setInteractive({ useHandCursor: true });
-    const elements = [button, innerBorder, emojiText, title, description, infoBg, poopInfo, speedInfo];
-    const originalColor = difficultyConfig.color;
+    const elements = [button, emojiText, title, description, infoBg, info1, info2];
 
     elements.forEach(element => {
       if (element !== button) {
@@ -194,40 +231,37 @@ export default class DifficultySelectScene extends Phaser.Scene {
       }
 
       element.on('pointerover', () => {
-        button.setFillStyle(this.lightenColor(originalColor));
-        button.setScale(1.08);
-        shadow.setScale(1.08);
-        innerBorder.setScale(1.08);
-        emojiText.setScale(1.1);
+        button.setFillStyle(this.lightenColor(color));
+        button.setScale(1.06);
+        shadow.setScale(1.06);
+        emojiText.setScale(1.15);
         title.setScale(1.05);
         description.setScale(1.05);
-        infoBg.setScale(1.08);
-        poopInfo.setScale(1.05);
-        speedInfo.setScale(1.05);
+        infoBg.setScale(1.06);
+        info1.setScale(1.05);
+        info2.setScale(1.05);
       });
 
       element.on('pointerout', () => {
-        button.setFillStyle(originalColor);
+        button.setFillStyle(color);
         button.setScale(1);
         shadow.setScale(1);
-        innerBorder.setScale(1);
         emojiText.setScale(1);
         title.setScale(1);
         description.setScale(1);
         infoBg.setScale(1);
-        poopInfo.setScale(1);
-        speedInfo.setScale(1);
+        info1.setScale(1);
+        info2.setScale(1);
       });
 
       element.on('pointerdown', () => {
-        this.startGame(difficultyConfig.difficulty);
+        config.onPointerDown();
       });
     });
   }
 
   private getDifficultyEmoji(difficulty: string): string {
     switch (difficulty) {
-      case 'easy': return '😊';
       case 'normal': return '😐';
       case 'hard': return '😰';
       case 'extreme': return '💀';
@@ -243,18 +277,9 @@ export default class DifficultySelectScene extends Phaser.Scene {
   }
 
   private lightenColor(color: number): number {
-    // 색상을 밝게 만들기
     const r = Math.min(255, ((color >> 16) & 0xFF) + 30);
     const g = Math.min(255, ((color >> 8) & 0xFF) + 30);
     const b = Math.min(255, (color & 0xFF) + 30);
-    return (r << 16) | (g << 8) | b;
-  }
-
-  private darkenColor(color: number): number {
-    // 색상을 어둡게 만들기
-    const r = Math.max(0, ((color >> 16) & 0xFF) - 40);
-    const g = Math.max(0, ((color >> 8) & 0xFF) - 40);
-    const b = Math.max(0, (color & 0xFF) - 40);
     return (r << 16) | (g << 8) | b;
   }
 

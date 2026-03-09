@@ -11,6 +11,7 @@ const SCORE_CAPS: Record<string, number> = {
   normal: 15000,
   hard: 20000,
   extreme: 30000,
+  physical: 30000,
 };
 
 Deno.serve(async (req: Request) => {
@@ -29,7 +30,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const validDifficulties = ['easy', 'normal', 'hard', 'extreme'];
+    const validDifficulties = ['easy', 'normal', 'hard', 'extreme', 'physical'];
     if (!validDifficulties.includes(difficulty)) {
       return new Response(
         JSON.stringify({ error: 'Invalid difficulty' }),

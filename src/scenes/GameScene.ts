@@ -15,6 +15,7 @@ import { getSafeSelectedCharacter, getCharacterDef, getDuplicateCount, getAwaken
 import { isChristmasSeason } from '../utils/seasonChecker';
 import type { CharacterAbility, GameSceneAPI } from '../abilities/types';
 import { getCharacterAbility } from '../abilities/index';
+import { BaseAbility } from '../abilities/BaseAbility';
 import { realNow } from '../utils/realTime';
 
 export default class GameScene extends Phaser.Scene {
@@ -33,7 +34,11 @@ export default class GameScene extends Phaser.Scene {
   private difficultyLevel: number = 2;
   private bgMusic!: Phaser.Sound.BaseSound;
   private gameMode: GameMode = GameMode.CLASSIC;
-  private difficulty: Difficulty = Difficulty.HARD;
+  private difficulty: Difficulty = Difficulty.HARD;  // 게임플레이 파라미터 기준
+  private purePhysical: boolean = false;
+  private get scoreDifficulty(): Difficulty {         // 점수/리더보드 저장 키
+    return this.purePhysical ? Difficulty.PHYSICAL : this.difficulty;
+  }
   private difficultyConfig!: DifficultyConfig;
   private lastGoldPoopScore: number = 0;
   private lastDiamondPoopScore: number = 0;
@@ -44,6 +49,7 @@ export default class GameScene extends Phaser.Scene {
   private lastScoreTime: number = 0;        // realNow() 기반 점수용
   private lastCheatCheckTime: number = 0;   // timeScale 감지용 (realNow 기준)
   private lastPhaserCheckTime: number = 0;  // 구간 비율 감지용 Phaser 기준점
+  private cheatSuspicionCount: number = 0;  // 연속 이상 탐지 횟수 (2회 연속시 차단)
   private goldCollected: number = 0;
   private diamondCollected: number = 0;
   private topazCollected: number = 0;
@@ -78,7 +84,7 @@ export default class GameScene extends Phaser.Scene {
     super('GameScene');
   }
 
-  init(data: { gameMode?: GameMode; difficulty?: Difficulty }) {
+  init(data: { gameMode?: GameMode; difficulty?: Difficulty; purePhysical?: boolean }) {
     // 게임 재시작 시 점수 관련 변수 초기화
     this.score = 0;
     this.gameOver = false;
@@ -90,6 +96,7 @@ export default class GameScene extends Phaser.Scene {
     this.phaserStartTime = 0; // create()에서 설정
     this.lastScoreTime = realNow();
     this.goldCollected = 0;
+    this.cheatSuspicionCount = 0;
     this.diamondCollected = 0;
     this.topazCollected = 0;
     this.rainbowCollected = 0;
@@ -105,7 +112,9 @@ export default class GameScene extends Phaser.Scene {
     const awakeLevel     = getAwakeningLevel(charDef.grade, dupCount);
     this.selectedCharGrade = charDef.grade;
     this.charAwakeLevel    = awakeLevel;
+    this.purePhysical = data.purePhysical ?? false;
     this.ability = getCharacterAbility(this.selectedCharId, awakeLevel);
+    if (this.purePhysical) this.ability = new BaseAbility();
 
     // ModeSelectScene/DifficultySelectScene으로부터 게임 모드와 난이도를 받음
     if (data.gameMode) {
@@ -114,8 +123,7 @@ export default class GameScene extends Phaser.Scene {
     }
     if (data.difficulty) {
       this.difficulty = data.difficulty;
-      // console.log('Difficulty:', this.difficulty);
-      localStorage.setItem('lastPlayedDifficulty', data.difficulty);
+      localStorage.setItem('lastPlayedDifficulty', this.scoreDifficulty);
     }
 
     // 난이도 설정 찾기
@@ -131,9 +139,7 @@ export default class GameScene extends Phaser.Scene {
   preload() {
     // DifficultySelectScene에서 미리 로딩됨. 캐시에 없을 경우에만 fallback 로딩.
 
-    if (this.difficulty === Difficulty.EASY && !this.textures.exists('background2')) {
-      this.load.image('background2', 'assets/backgrounds/background2.webp');
-    } else if (this.difficulty === Difficulty.NORMAL && !this.textures.exists('background3')) {
+    if (this.difficulty === Difficulty.NORMAL && !this.textures.exists('background3')) {
       this.load.image('background3', 'assets/backgrounds/background3.webp');
     } else if (this.difficulty === Difficulty.HARD && !this.textures.exists('background')) {
       this.load.image('background', 'assets/backgrounds/background.webp');
@@ -196,13 +202,11 @@ export default class GameScene extends Phaser.Scene {
     this.resetCheatCheckpoints();
 
     // 난이도별 최고 점수 로드
-    this.highScore = getHighScore(this.difficulty);
+    this.highScore = getHighScore(this.scoreDifficulty);
 
     // 난이도별 배경 이미지 선택
     let backgroundKey = 'background';
-    if (this.difficulty === Difficulty.EASY) {
-      backgroundKey = 'background2';
-    } else if (this.difficulty === Difficulty.NORMAL) {
+    if (this.difficulty === Difficulty.NORMAL) {
       backgroundKey = 'background3';
     } else if (this.difficulty === Difficulty.HARD) {
       backgroundKey = 'background';
@@ -398,7 +402,7 @@ export default class GameScene extends Phaser.Scene {
     this.ability.onCreate(this.abilityAPI);
 
     // 서버 세션 비동기 시작 — 게임과 병렬 실행, 점수 제출 시 await
-    this.sessionPromise = startGameSession(this.difficulty);
+    this.sessionPromise = startGameSession(this.scoreDifficulty);
 
     // 탭 전환 시 기준점 리셋 — 숨김/복귀 양방향으로 처리
     // 숨김 시: 기준점만 리셋 (lastScoreTime 보존 → 숨기기 직전 이월분 유지)
@@ -449,14 +453,21 @@ export default class GameScene extends Phaser.Scene {
         const phaserInterval = this.time.now - this.lastPhaserCheckTime;
         const ratio = phaserInterval / realInterval;
 
-        // 정상 범위: 0.85 ~ 1.15 (브라우저 rAF 지연 허용)
-        // ratio < 0.85: rAF 슬로우 조작 (slow-motion 치트)
-        // ratio > 1.15: rAF 패스트 조작 (fast-forward 치트)
-        if (ratio < 0.85 || ratio > 1.15) {
-          console.warn('[Anti-cheat] rAF 조작 감지:', ratio.toFixed(2));
-          this.handleCheatDetected();
-          return;
+        // 정상 범위: 0.70 ~ 1.30 (모바일 OS 스로틀 허용)
+        // ratio < 0.70: rAF 슬로우 조작 (slow-motion 치트)
+        // ratio > 1.30: rAF 패스트 조작 (fast-forward 치트)
+        // 연속 2회 이상 탐지시에만 차단 (일시적 OS 스로틀 오탐 방지)
+        if (ratio < 0.70 || ratio > 1.30) {
+          this.cheatSuspicionCount++;
+          console.warn('[Anti-cheat] rAF 이상 감지:', ratio.toFixed(2), `(${this.cheatSuspicionCount}회 연속)`);
+          if (this.cheatSuspicionCount >= 2) {
+            this.handleCheatDetected();
+            return;
+          }
+        } else {
+          this.cheatSuspicionCount = 0; // 정상 구간 → 연속 카운터 초기화
         }
+        // 기준점 갱신은 정상/이상 구분 없이 항상 수행
         this.resetCheatCheckpoints();
       }
     }
@@ -1041,7 +1052,7 @@ export default class GameScene extends Phaser.Scene {
     });
 
     // 최고 점수 업데이트 및 갱신 여부 확인
-    const isNewRecord = updateHighScore(this.difficulty, this.score);
+    const isNewRecord = updateHighScore(this.scoreDifficulty, this.score);
 
     // 게임 오버 UI 표시 (비동기 처리)
     this.showGameOverUI(isNewRecord);
@@ -1271,7 +1282,7 @@ export default class GameScene extends Phaser.Scene {
 
         const result = await submitScore(
           this.score,
-          this.difficulty,
+          this.scoreDifficulty,
           initials,
           {
             gameStartTime: this.gameStartTime,
@@ -1480,7 +1491,7 @@ export default class GameScene extends Phaser.Scene {
         }
 
         // 같은 게임 모드와 난이도로 재시작
-        this.scene.restart({ gameMode: this.gameMode, difficulty: this.difficulty });
+        this.scene.restart({ gameMode: this.gameMode, difficulty: this.difficulty, purePhysical: this.purePhysical });
       });
 
       // 메인 메뉴 버튼 클릭

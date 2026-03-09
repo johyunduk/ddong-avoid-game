@@ -13,7 +13,7 @@ Deno.serve(async (req: Request) => {
   try {
     const { difficulty } = await req.json();
 
-    const validDifficulties = ['easy', 'normal', 'hard', 'extreme'];
+    const validDifficulties = ['easy', 'normal', 'hard', 'extreme', 'physical'];
     if (!validDifficulties.includes(difficulty)) {
       return new Response(
         JSON.stringify({ error: 'Invalid difficulty' }),

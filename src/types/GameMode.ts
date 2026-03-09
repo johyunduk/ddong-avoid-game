@@ -22,10 +22,10 @@ export const GAME_MODES: GameModeConfig[] = [
 
 // 난이도 타입 정의
 export const Difficulty = {
-  EASY: 'easy',
   NORMAL: 'normal',
   HARD: 'hard',
-  EXTREME: 'extreme'
+  EXTREME: 'extreme',
+  PHYSICAL: 'physical'
 } as const;
 
 export type Difficulty = typeof Difficulty[keyof typeof Difficulty];
@@ -42,16 +42,6 @@ export interface DifficultyConfig {
 }
 
 export const DIFFICULTIES: DifficultyConfig[] = [
-  {
-    difficulty: Difficulty.EASY,
-    name: 'EASY',
-    description: '천천히 시작해보세요',
-    poopCount: 4,
-    baseSpeed: 125,
-    spawnDelay: 1500, // 1.5초마다 생성
-    playerSpeed: 300, // 기본 속도
-    color: 0x90EE90
-  },
   {
     difficulty: Difficulty.NORMAL,
     name: 'NORMAL',
