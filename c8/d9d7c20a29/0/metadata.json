@@ -1,0 +1,38 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "c8d9d7c20a29",
+  "session_id": "00ebb649-9122-43d1-98b0-778392e42545",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-09T11:11:07.637678Z",
+  "branch": "dev",
+  "checkpoints_count": 14,
+  "files_touched": [
+    "src/scenes/DifficultySelectScene.ts",
+    "src/scenes/GameScene.ts",
+    "src/scenes/LeaderboardScene.ts",
+    "src/types/GameMode.ts",
+    "supabase/functions/game-start/index.ts",
+    "supabase/functions/leaderboard-submit/index.ts",
+    "supabase/functions/leaderboard-top/index.ts",
+    "supabase/migrations/20260308_add_physical_difficulty.sql"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "12793ca436a7",
+  "token_usage": {
+    "input_tokens": 208,
+    "cache_creation_tokens": 447653,
+    "cache_read_tokens": 14529193,
+    "output_tokens": 70623,
+    "api_call_count": 162
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-09T11:11:05.584938Z",
+    "agent_lines": 155,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 155,
+    "agent_percentage": 100
+  },
+  "transcript_path": ".claude/projects/-Users-johyunduk-Projects-ddong-avoid-game/00ebb649-9122-43d1-98b0-778392e42545.jsonl"
+}
