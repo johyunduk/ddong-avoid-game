@@ -50,6 +50,7 @@ canvas {
   outline: none;
   border: 2px solid #333;
   box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+  touch-action: none;
 }
 
 /* 모바일 터치 최적화 */
