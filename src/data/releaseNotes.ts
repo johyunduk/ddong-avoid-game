@@ -6,6 +6,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: 'v2.1.0',
+    date: '2026-03-09',
+    changes: [
+      'PHYSICAL 모드 추가 — 캐릭터 능력 없이 순수 실력으로 경쟁 (EXTREME 기준 난이도)',
+      'EASY 난이도 제거',
+      '정상 플레이가 비정상으로 감지되던 문제 수정',
+    ],
+  },
+  {
     version: 'v2.0.0',
     date: '2026-03-02',
     changes: [
