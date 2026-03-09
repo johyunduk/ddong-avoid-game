@@ -21,8 +21,8 @@ export const HACKER_DESC = {
 
 // ── 광부 (Miner / SR) ─────────────────────────────────────────────────
 export const MINER_PARAMS = {
-  specialBonus: 10,         // 특수 똥 수집 시 추가 점수
-  rainbowInterval: 300,     // 무지개똥 생성 점수 간격
+  specialBonus: 5,         // 특수 똥 수집 시 추가 점수
+  rainbowInterval: 350,     // 무지개똥 생성 점수 간격
 } as const;
 
 export const MINER_DESC = {
