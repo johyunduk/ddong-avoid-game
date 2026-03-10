@@ -1001,6 +1001,8 @@ export default class GameScene extends Phaser.Scene {
         }
       }
     }
+
+    this.ability.onAfterSpawnPoop(this.abilityAPI);
   }
 
   private hitPoop(
