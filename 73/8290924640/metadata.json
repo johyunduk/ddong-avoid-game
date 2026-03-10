@@ -3,7 +3,7 @@
   "checkpoint_id": "738290924640",
   "strategy": "manual-commit",
   "branch": "dev",
-  "checkpoints_count": 1,
+  "checkpoints_count": 2,
   "files_touched": [
     "src/config/abilityParams.ts",
     "src/config/feverTime.ts"
@@ -22,13 +22,20 @@
       "context": "/73/8290924640/1/context.md",
       "content_hash": "/73/8290924640/1/content_hash.txt",
       "prompt": "/73/8290924640/1/prompt.txt"
+    },
+    {
+      "metadata": "/73/8290924640/2/metadata.json",
+      "transcript": "/73/8290924640/2/full.jsonl",
+      "context": "/73/8290924640/2/context.md",
+      "content_hash": "/73/8290924640/2/content_hash.txt",
+      "prompt": "/73/8290924640/2/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 2064,
-    "cache_creation_tokens": 856398,
-    "cache_read_tokens": 36907298,
-    "output_tokens": 185272,
-    "api_call_count": 375
+    "input_tokens": 2141,
+    "cache_creation_tokens": 1066923,
+    "cache_read_tokens": 39812999,
+    "output_tokens": 210370,
+    "api_call_count": 431
   }
 }
