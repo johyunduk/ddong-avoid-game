@@ -435,7 +435,11 @@ export default class GameScene extends Phaser.Scene {
     // this.physics.world.drawDebug = true;
   }
 
-  update() {
+  update(_time: number, delta: number) {
+    // 프레임 드랍 시 물리 속도 정규화 — 터치/저사양 환경에서 delta가 커져도 초당 이동거리 동일하게 유지
+    const TARGET_DELTA = 1000 / 60; // 16.67ms
+    this.physics.world.timeScale = Math.min(1.0, TARGET_DELTA / delta);
+
     if (!this.gameOver) {
       this.player.update();
 
