@@ -1194,22 +1194,38 @@ export default class GameScene extends Phaser.Scene {
     inputElement.type = 'text';
     inputElement.maxLength = 3;
     inputElement.placeholder = 'ABC';
+
+    // 캔버스 실제 위치·스케일에 맞춰 input 좌표 계산
+    // (Phaser FIT 스케일 모드에서 캔버스가 이동/축소될 수 있으므로 DOM 좌표계와 동기화)
+    const canvas = this.game.canvas;
+    const rect = canvas.getBoundingClientRect();
+    const gameW = this.game.config.width as number;   // 400
+    const gameH = this.game.config.height as number;  // 600
+    const scaleX = rect.width / gameW;
+    const scaleY = rect.height / gameH;
+    // 게임 좌표 (200, 285) → viewport 픽셀 좌표로 변환
+    const screenLeft = rect.left + 200 * scaleX;
+    const screenTop  = rect.top  + 285 * scaleY;
+
     inputElement.style.cssText = `
-      position: absolute;
-      left: 50%;
-      top: 315px;
+      position: fixed;
+      left: ${screenLeft}px;
+      top: ${screenTop}px;
       transform: translateX(-50%);
-      width: 120px;
-      height: 40px;
-      font-size: 24px;
+      width: ${Math.round(130 * scaleX)}px;
+      height: ${Math.round(44 * scaleY)}px;
+      font-size: ${Math.round(22 * scaleY)}px;
       text-align: center;
       text-transform: uppercase;
-      border: 3px solid #FFD700;
+      border: ${Math.max(2, Math.round(3 * scaleY))}px solid #FFD700;
       border-radius: 8px;
       background: #000;
       color: #fff;
       font-weight: bold;
-      letter-spacing: 8px;
+      letter-spacing: ${Math.round(6 * scaleX)}px;
+      outline: none;
+      box-sizing: border-box;
+      z-index: 9999;
     `;
 
     // 기존 이니셜이 있으면 미리 채우기
@@ -1228,7 +1244,7 @@ export default class GameScene extends Phaser.Scene {
     });
 
     // 제출 버튼 텍스트
-    const submitButtonText = this.add.text(200, 360, '랭킹 등록', {
+    const submitButtonText = this.add.text(200, 375, '랭킹 등록', {
       fontSize: '24px',
       color: '#00ff00',
       fontStyle: 'bold',
@@ -1247,7 +1263,7 @@ export default class GameScene extends Phaser.Scene {
       // 검증
       if (initials.length !== 3) {
         if (errorText) errorText.destroy();
-        errorText = this.add.text(200, 410, '정확히 3글자를 입력하세요', {
+        errorText = this.add.text(200, 420, '정확히 3글자를 입력하세요', {
           fontSize: '16px',
           color: '#ff0000',
           fontStyle: 'bold',
@@ -1259,7 +1275,7 @@ export default class GameScene extends Phaser.Scene {
 
       if (!/^[A-Z]{3}$/.test(initials)) {
         if (errorText) errorText.destroy();
-        errorText = this.add.text(200, 410, '영어 대문자만 입력하세요', {
+        errorText = this.add.text(200, 420, '영어 대문자만 입력하세요', {
           fontSize: '16px',
           color: '#ff0000',
           fontStyle: 'bold',
