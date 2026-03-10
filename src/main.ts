@@ -10,7 +10,7 @@ import { ensureLoggedIn } from './utils/auth';
 import './style.css';
 
 const config: Phaser.Types.Core.GameConfig = {
-  type: Phaser.AUTO,
+  type: Phaser.WEBGL,
   width: 400,
   height: 600,
   parent: 'game-container',
@@ -29,7 +29,7 @@ const config: Phaser.Types.Core.GameConfig = {
     autoCenter: Phaser.Scale.CENTER_BOTH
   },
   render: {
-    antialias: true,
+    antialias: false,
     roundPixels: true
   },
   fps: {
