@@ -1,0 +1,819 @@
+여전히 모바일에서 왼쪽이나 오른쪽 누를때 똥이 좀 더 빠르게 내려오는 현상이 있는거 같아.
+
+---
+
+음 그리고 여전히 메모리 이슈가 있는거 같아. 전체적으로 캐릭터를 전부 봐줘.
+
+---
+
+게임 플레이에서 주로 발생하는거 같던데. 캐릭터들의 능력 때문에 여기도 봐줘
+
+---
+
+레거시 캐릭터의 능력들은 괜찮은가? 얘 플레이 했을 때 브라우저 메모리가 많이 늘어나는거 같던데
+
+---
+
+근데 1.1G로 고정이 된거 같은데? 새로고침을 해도 1.1G 로 나와
+
+---
+
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+Summary:
+1. Primary Request and Intent:
+   - Fix mobile touch causing poops to fall faster (physics catch-up bug)
+   - Review and fix memory issues in character-related scenes (CharacterSelectScene, GachaScene)
+   - Review and fix memory issues in character ability system (all ability files)
+   - Specifically investigate LegacyAbility's memory behavior
+   - Investigate browser memory stuck at 1.1GB even after page refresh (root cause: CharacterSelectScene eagerly preloading all 9 character videos)
+
+2. Key Technical Concepts:
+   - Phaser 3 `fixedStep: true` + catch-up physics substeps causing frame-spike speed issues on mobile touch
+   - `game.loop.deltaMax` (Phaser TimeStep runtime property, not in TypeScript FPSConfig types) to cap delta
+   - Browser media decoder memory pool (outside V8 heap, persists across JS GC and page refresh) — released only via `el.removeAttribute('src'); el.load()`
+   - Phaser VideoCache holding HTMLVideoElement references — must explicitly `cache.video.remove(key)` to drop reference after src clear
+   - "GC pressure" vs actual memory leak — transient high concurrent object count (Graphics) causes GC pressure without being a true permanent leak
+   - Self-referencing closure pattern for timer+object pair tracking in GlitchAbility
+   - On-demand (lazy) video loading via `this.load.video(key, path)` + `this.load.once(COMPLETE, cb)` + `this.load.start()`
+   - `el.removeAttribute('src'); el.load()` — W3C standard method to fully unload video media buffers
+
+3. Files and Code Sections:
+
+   - **`src/main.ts`**
+     - Fixed mobile touch → physics catch-up bug by setting `game.loop.deltaMax = 50`
+     - `fps.deltaMax` and `fps.max` are NOT in Phaser's FPSConfig TypeScript types — must set on the loop instance directly
+     ```typescript
+     const game = new Phaser.Game(config);
+     // Phaser FPSConfig 타입에 없어 직접 설정
+     (game.loop as unknown as { deltaMax: number }).deltaMax = 50;
+     ```
+
+   - **`src/scenes/GachaScene.ts`**
+     - **Fix 1** — `playCommonVideo` failsafe: added `vid.stop(); vid.destroy()` before `resolve()` in 12-second timeout
+     ```typescript
+     this.time.delayedCall(12000, () => {   // 12초 failsafe
+       if (vid.active) { vid.stop(); vid.destroy(); }
+       resolve();
+     });
+     ```
+     - **Fix 2** — `clearUI()`: added HTMLVideoElement src release for Video game objects before destroy
+     ```typescript
+     this.children.getAll().forEach(c => {
+       if (c instanceof Phaser.GameObjects.Video) {
+         // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         const el: HTMLVideoElement | undefined = (c as any).video;
+         if (el) { el.pause(); el.removeAttribute('src'); el.load(); }
+       }
+       c.destroy();
+     });
+     ```
+
+   - **`src/scenes/CharacterSelectScene.ts`**
+     - **Fix 1** — `shutdown` event: added `hideCharacterDetail()` call to ensure fitVideoTimers + HTMLVideoElement src are released on scene exit
+     ```typescript
+     this.events.once('shutdown', () => {
+       this.hideCharacterDetail(); // fitVideoTimers 취소 + video src 해제 + 패널 destroy
+       this.maskGfx.destroy();
+     });
+     ```
+     - **PENDING** — Remove video loading from `preload()` (9 videos eagerly loaded = root cause of 1.1GB)
+     - **PENDING** — Add `private detailVideoKey: string | null = null;` instance variable
+     - **PENDING** — Lazy-load video in `showCharacterDetail()` (if cached → immediate; if not → `this.load.video()` + `load.once(COMPLETE)`)
+     - **PENDING** — Extract video interaction setup to `private setupDetailVideo(def, illust, panel)` method
+     - **PENDING** — In `hideCharacterDetail()`: add `this.cache.video.remove(this.detailVideoKey)` after src clear (fixes broken-cache-entry bug)
+
+   - **`src/abilities/GlitchAbility.ts`**
+     - Renamed `attackTimers: Phaser.Time.TimerEvent[]` → `pendingAttacks: Array<{timer, ghost}>` 
+     - Timer callback self-removes its entry from array via `indexOf`/`splice` pattern
+     - `onDestroy` now also destroys pending ghost images
+     ```typescript
+     private pendingAttacks: Array<{ timer: Phaser.Time.TimerEvent; ghost: Phaser.GameObjects.Image }> = [];
+
+     override onDestroy(_api: GameSceneAPI): void {
+       this.ghost?.destroy();
+       this.pendingAttacks.forEach(({ timer, ghost }) => {
+         timer.remove();
+         if (ghost.active) ghost.destroy();
+       });
+       this.pendingAttacks = [];
+     }
+
+     // In collectSpecialWithGhost:
+     const entry: { timer: Phaser.Time.TimerEvent; ghost: Phaser.GameObjects.Image } = {
+       timer: null as unknown as Phaser.Time.TimerEvent,
+       ghost: attackGhost,
+     };
+     entry.timer = api.scene.time.delayedCall(1000, () => {
+       const idx = this.pendingAttacks.indexOf(entry);
+       if (idx !== -1) this.pendingAttacks.splice(idx, 1);
+       if (attackGhost.active) attackGhost.destroy();
+       if (!target.active) return;
+       // collect logic...
+     });
+     this.pendingAttacks.push(entry);
+     ```
+
+   - **`src/abilities/LegacyAbility.ts`**
+     - Reduced `spawnRainStar` tween duration: `2200~3600ms → 900~1500ms` (concurrent objects: ~90 → ~37)
+     - Reduced `playBurnEffect` flame particles: `10 → 6`
+     - Reduced `playBurnEffect` ember particles: `8 → 5`
+     - Reduced `playBurnEffect` smoke particles: `4 → 2`
+     - Reduced `spawnOraFlame` legacy count: `5~7 → 3~5`
+
+   - **`src/utils/character.ts`** (read-only)
+     - Confirmed `videoKey` format: `'vid_chibi'`, `'vid_hacker'`, etc.
+     - GachaScene uses `vid_${id}` — **same keys**, so cache is shared between scenes
+
+4. Errors and Fixes:
+   - **`deltaMax` not in FPSConfig TypeScript types**: Tried adding to `fps: { deltaMax: 50 }` → TS2353 error. Tried `fps: { max: 50 }` → also TS2353. Fixed by casting and setting on the `game.loop` instance: `(game.loop as unknown as { deltaMax: number }).deltaMax = 50`
+   - **`clearUI` Video src not released**: `c.destroy()` alone does not clear HTMLVideoElement src. Fixed by explicitly calling `el.pause(); el.removeAttribute('src'); el.load()` before `c.destroy()` for Video instances.
+   - **CharacterSelectScene broken VideoCache entry (pre-existing bug)**: `hideCharacterDetail()` clears `el.src` on the active video but doesn't remove from Phaser's VideoCache. Next time same character detail is opened, `cache.video.exists(key)` returns true but the HTMLVideoElement has empty src → video won't play. Fix pending: add `this.cache.video.remove(this.detailVideoKey)`.
+
+5. Problem Solving:
+   - **Mobile touch physics speed-up**: Phaser's `fixedStep: true` runs multiple physics substeps to "catch up" when a frame is delayed (e.g., by touch event processing). Capping `deltaMax = 50ms` limits catch-up to max 3 substeps.
+   - **1.1GB fixed memory after refresh**: Root cause is `CharacterSelectScene.preload()` loading all 9 character videos (~100MB each) into browser media decoder memory. This memory lives outside V8 heap and persists across page refreshes. Solution: lazy-load videos on-demand per character.
+   - **GlitchAbility attackTimers leak**: Array accumulated completed `TimerEvent` references + associated ghost `Image` objects were not destroyed on `onDestroy`. Fixed with self-cleaning pair tracking.
+   - **LegacyAbility Graphics concurrency**: No permanent leak, but 450+ concurrent Graphics objects at peak in legacy mode caused heavy GC pressure. Fixed by reducing particle counts and tween durations.
+
+6. All user messages:
+   - "여전히 모바일에서 왼쪽이나 오른쪽 누를때 똥이 좀 더 빠르게 내려오는 현상이 있는거 같아."
+   - "음 그리고 여전히 메모리 이슈가 있는거 같아. 전체적으로 캐릭터를 전부 봐줘."
+   - (empty message — submitted with no content)
+   - "게임 플레이에서 주로 발생하는거 같던데. 캐릭터들의 능력 때문에 여기도 봐줘"
+   - "레거시 캐릭터의 능력들은 괜찮은가? 얘 플레이 했을 때 브라우저 메모리가 많이 늘어나는거 같던데"
+   - "근데 1.1G로 고정이 된거 같은데? 새로고침을 해도 1.1G 로 나와"
+
+7. Pending Tasks:
+   - Implement lazy-load for character videos in CharacterSelectScene:
+     1. Remove video loading block from `preload()`
+     2. Add `private detailVideoKey: string | null = null;` instance variable
+     3. In `showCharacterDetail()`: check cache → if cached call `setupDetailVideo()` immediately, else call `this.load.video()` + `this.load.once(COMPLETE, cb)` + `this.load.start()`
+     4. Extract video interaction code to `private setupDetailVideo(def: CharacterDef, illust: Phaser.GameObjects.Image, panel: Phaser.GameObjects.Container): void`
+     5. In `hideCharacterDetail()`: add `this.cache.video.remove(this.detailVideoKey); this.detailVideoKey = null;` after the HTMLVideoElement src clear
+
+8. Current Work:
+   Immediately before the summary request, the work was implementing the fix for the 1.1GB fixed memory issue in `src/scenes/CharacterSelectScene.ts`. The root cause was identified: `preload()` eagerly loads all 9 character videos (`videoKey: 'vid_chibi'`, `'vid_hacker'`, etc.), creating 9 HTMLVideoElement objects that the browser's media decoder keeps buffered even across page refreshes.
+
+   The file had just been read (lines 54-80) to confirm the instance variable layout and preload structure. The pending implementation requires:
+   - Removing the video-loading block from `preload()`
+   - Adding `private detailVideoKey: string | null = null;` after `private fitVideoTimers`
+   - Refactoring `showCharacterDetail()` to lazy-load with `Phaser.Loader.Events.COMPLETE` callback
+   - Adding `private setupDetailVideo(def, illust, panel)` method
+   - Updating `hideCharacterDetail()` to call `this.cache.video.remove(this.detailVideoKey)`
+
+9. Optional Next Step:
+   Continue implementing the CharacterSelectScene video lazy-load fix, which was directly in progress when the summary was requested. The user said "근데 1.1G로 고정이 된거 같은데? 새로고침을 해도 1.1G 로 나와" and the identified fix (removing eager video preload + on-demand loading) was being implemented. The next step is to edit `src/scenes/CharacterSelectScene.ts`:
+
+   1. Remove the video loading from `preload()`:
+   ```typescript
+   // Remove:
+   if (char.videoKey && char.videoPath && !this.cache.video.exists(char.videoKey)) {
+     this.load.video(char.videoKey, char.videoPath);
+   }
+   ```
+   2. Add `private detailVideoKey: string | null = null;` to instance variables
+   3. Replace the inline video setup in `showCharacterDetail()` with lazy-load + `setupDetailVideo()` extraction
+   4. Update `hideCharacterDetail()` to add `this.cache.video.remove(this.detailVideoKey); this.detailVideoKey = null;`
+
+If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/johyunduk/.REDACTED.jsonl
+Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.
+
+---
+
+# Simplify: Code Review and Cleanup
+
+Review all changed files for reuse, quality, and efficiency. Fix any issues found.
+
+## Phase 1: Identify Changes
+
+Run `git diff` (or `git diff HEAD` if there are staged changes) to see what changed. If there are no git changes, review the most recently modified files that the user mentioned or that you edited earlier in this conversation.
+
+## Phase 2: Launch Three Review Agents in Parallel
+
+Use the Agent tool to launch all three agents concurrently in a single message. Pass each agent the full diff so it has the complete context.
+
+### Agent 1: Code Reuse Review
+
+For each change:
+
+1. **Search for existing utilities and helpers** that could replace newly written code. Look for similar patterns elsewhere in the codebase — common locations are utility directories, shared modules, and files adjacent to the changed ones.
+2. **Flag any new function that duplicates existing functionality.** Suggest the existing function to use instead.
+3. **Flag any inline logic that could use an existing utility** — hand-rolled string manipulation, manual path handling, custom environment checks, ad-hoc type guards, and similar patterns are common candidates.
+
+### Agent 2: Code Quality Review
+
+Review the same changes for hacky patterns:
+
+1. **Redundant state**: state that duplicates existing state, cached values that could be derived, observers/effects that could be direct calls
+2. **Parameter sprawl**: adding new parameters to a function instead of generalizing or restructuring existing ones
+3. **Copy-paste with slight variation**: near-duplicate code blocks that should be unified with a shared abstraction
+4. **Leaky abstractions**: exposing internal details that should be encapsulated, or breaking existing abstraction boundaries
+5. **Stringly-typed code**: using raw strings where constants, enums (string unions), or branded types already exist in the codebase
+6. **Unnecessary JSX nesting**: wrapper Boxes/elements that add no layout value — check if inner component props (flexShrink, alignItems, etc.) already provide the needed behavior
+
+### Agent 3: Efficiency Review
+
+Review the same changes for efficiency:
+
+1. **Unnecessary work**: redundant computations, repeated file reads, duplicate network/API calls, N+1 patterns
+2. **Missed concurrency**: independent operations run sequentially when they could run in parallel
+3. **Hot-path bloat**: new blocking work added to startup or per-request/per-render hot paths
+4. **Unnecessary existence checks**: pre-checking file/resource existence before operating (TOCTOU anti-pattern) — operate directly and handle the error
+5. **Memory**: unbounded data structures, missing cleanup, event listener leaks
+6. **Overly broad operations**: reading entire files when only a portion is needed, loading all items when filtering for one
+
+## Phase 3: Fix Issues
+
+Wait for all three agents to complete. Aggregate their findings and fix each issue directly. If a finding is a false positive or not worth addressing, note it and move on — do not argue with the finding, just skip it.
+
+When done, briefly summarize what was fixed (or confirm the code was already clean).
+
+---
+
+아 그리고 현재 똥이 낙하하는 속도가 어떤 기준으로 빨라지고 있나? 시간에 비례해서인가 점수에 비례해서 인가?
+
+---
+
+점수 기반이 맞는거 같아. 그리고 지금 빨라지는 속도가 좀 빠른거 같아.
+
+---
+
+똥 낙하 말고 플레이어가 빨라지는 것도 점수 기반으로 수정을 했나?
+
+---
+
+# Simplify: Code Review and Cleanup
+
+Review all changed files for reuse, quality, and efficiency. Fix any issues found.
+
+## Phase 1: Identify Changes
+
+Run `git diff` (or `git diff HEAD` if there are staged changes) to see what changed. If there are no git changes, review the most recently modified files that the user mentioned or that you edited earlier in this conversation.
+
+## Phase 2: Launch Three Review Agents in Parallel
+
+Use the Agent tool to launch all three agents concurrently in a single message. Pass each agent the full diff so it has the complete context.
+
+### Agent 1: Code Reuse Review
+
+For each change:
+
+1. **Search for existing utilities and helpers** that could replace newly written code. Look for similar patterns elsewhere in the codebase — common locations are utility directories, shared modules, and files adjacent to the changed ones.
+2. **Flag any new function that duplicates existing functionality.** Suggest the existing function to use instead.
+3. **Flag any inline logic that could use an existing utility** — hand-rolled string manipulation, manual path handling, custom environment checks, ad-hoc type guards, and similar patterns are common candidates.
+
+### Agent 2: Code Quality Review
+
+Review the same changes for hacky patterns:
+
+1. **Redundant state**: state that duplicates existing state, cached values that could be derived, observers/effects that could be direct calls
+2. **Parameter sprawl**: adding new parameters to a function instead of generalizing or restructuring existing ones
+3. **Copy-paste with slight variation**: near-duplicate code blocks that should be unified with a shared abstraction
+4. **Leaky abstractions**: exposing internal details that should be encapsulated, or breaking existing abstraction boundaries
+5. **Stringly-typed code**: using raw strings where constants, enums (string unions), or branded types already exist in the codebase
+6. **Unnecessary JSX nesting**: wrapper Boxes/elements that add no layout value — check if inner component props (flexShrink, alignItems, etc.) already provide the needed behavior
+
+### Agent 3: Efficiency Review
+
+Review the same changes for efficiency:
+
+1. **Unnecessary work**: redundant computations, repeated file reads, duplicate network/API calls, N+1 patterns
+2. **Missed concurrency**: independent operations run sequentially when they could run in parallel
+3. **Hot-path bloat**: new blocking work added to startup or per-request/per-render hot paths
+4. **Unnecessary existence checks**: pre-checking file/resource existence before operating (TOCTOU anti-pattern) — operate directly and handle the error
+5. **Memory**: unbounded data structures, missing cleanup, event listener leaks
+6. **Overly broad operations**: reading entire files when only a portion is needed, loading all items when filtering for one
+
+## Phase 3: Fix Issues
+
+Wait for all three agents to complete. Aggregate their findings and fix each issue directly. If a finding is a false positive or not worth addressing, note it and move on — do not argue with the finding, just skip it.
+
+When done, briefly summarize what was fixed (or confirm the code was already clean).
+
+---
+
+근데 게임 오버 됐을 떄 asset들 말고 나머지는 메모리에서 없애도 되지 않나? 특시 캐릭터 능력 같은것들은?
+
+---
+
+그리고 정상 플레이를 했는데 점수 제출이 안되는 경우가 가끔 있는거 같은데 찾아줘. 이게 supabase 에 뭐가 배포안된건지 뭔지 모르겠네
+
+---
+
+[Request interrupted by user for tool use]
+
+---
+
+# Simplify: Code Review and Cleanup
+
+Review all changed files for reuse, quality, and efficiency. Fix any issues found.
+
+## Phase 1: Identify Changes
+
+Run `git diff` (or `git diff HEAD` if there are staged changes) to see what changed. If there are no git changes, review the most recently modified files that the user mentioned or that you edited earlier in this conversation.
+
+## Phase 2: Launch Three Review Agents in Parallel
+
+Use the Agent tool to launch all three agents concurrently in a single message. Pass each agent the full diff so it has the complete context.
+
+### Agent 1: Code Reuse Review
+
+For each change:
+
+1. **Search for existing utilities and helpers** that could replace newly written code. Look for similar patterns elsewhere in the codebase — common locations are utility directories, shared modules, and files adjacent to the changed ones.
+2. **Flag any new function that duplicates existing functionality.** Suggest the existing function to use instead.
+3. **Flag any inline logic that could use an existing utility** — hand-rolled string manipulation, manual path handling, custom environment checks, ad-hoc type guards, and similar patterns are common candidates.
+
+### Agent 2: Code Quality Review
+
+Review the same changes for hacky patterns:
+
+1. **Redundant state**: state that duplicates existing state, cached values that could be derived, observers/effects that could be direct calls
+2. **Parameter sprawl**: adding new parameters to a function instead of generalizing or restructuring existing ones
+3. **Copy-paste with slight variation**: near-duplicate code blocks that should be unified with a shared abstraction
+4. **Leaky abstractions**: exposing internal details that should be encapsulated, or breaking existing abstraction boundaries
+5. **Stringly-typed code**: using raw strings where constants, enums (string unions), or branded types already exist in the codebase
+6. **Unnecessary JSX nesting**: wrapper Boxes/elements that add no layout value — check if inner component props (flexShrink, alignItems, etc.) already provide the needed behavior
+
+### Agent 3: Efficiency Review
+
+Review the same changes for efficiency:
+
+1. **Unnecessary work**: redundant computations, repeated file reads, duplicate network/API calls, N+1 patterns
+2. **Missed concurrency**: independent operations run sequentially when they could run in parallel
+3. **Hot-path bloat**: new blocking work added to startup or per-request/per-render hot paths
+4. **Unnecessary existence checks**: pre-checking file/resource existence before operating (TOCTOU anti-pattern) — operate directly and handle the error
+5. **Memory**: unbounded data structures, missing cleanup, event listener leaks
+6. **Overly broad operations**: reading entire files when only a portion is needed, loading all items when filtering for one
+
+## Phase 3: Fix Issues
+
+Wait for all three agents to complete. Aggregate their findings and fix each issue directly. If a finding is a false positive or not worth addressing, note it and move on — do not argue with the finding, just skip it.
+
+When done, briefly summarize what was fixed (or confirm the code was already clean).
+
+---
+
+일단 배포는 나중에하고. 근데 왜 브라우저의 메모리 사용량은 계속 늘어나는거지? 일단 bgm 쪽에도 문제가 있는지 봐줘
+
+---
+
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+Summary:
+1. Primary Request and Intent:
+   - Fix mobile touch causing poops to fall faster (physics catch-up bug)
+   - Fix memory issues in CharacterSelectScene (1.1GB fixed after refresh from eager video preloading)
+   - Fix memory issues in ability system (GlitchAbility timer leak, LegacyAbility particle GC pressure)
+   - Fix GachaScene video memory not released on clearUI
+   - Run /simplify multiple times to clean up code after changes
+   - Change difficulty scaling from time-based (10s timer) to score-based, and slow it down
+   - Investigate score submission intermittently failing for normal play
+   - Investigate why browser memory keeps growing (BGM and general)
+
+2. Key Technical Concepts:
+   - Phaser `fixedStep: true` catch-up substeps causing frame-spike speed issues on mobile touch
+   - `game.loop.deltaMax` (Phaser runtime property, not in TypeScript FPSConfig types) — caps delta to limit physics substeps
+   - Browser media decoder memory pool (outside V8 heap) — released only via `el.removeAttribute('src'); el.load()`
+   - Phaser `VideoCache` — must call `cache.video.remove(key)` after src clear to avoid broken cache entries
+   - On-demand (lazy) video loading via `this.load.video()` + `this.load.once(Phaser.Loader.Events.COMPLETE, cb)` + `this.load.start()`
+   - Phaser Container `addAt(child, index)` for inserting lazy-loaded video at correct z-order
+   - Strategy pattern for abilities: `BaseAbility` → character-specific `Ability`, `GameSceneAPI` interface
+   - Phaser object pool: `setActive(false).setVisible(false)` vs `destroy()` — inactive objects stay in group and are never recycled if spawnPoop always creates `new Poop()`
+   - Supabase Edge Function time gate: `minRequiredSec = timeBasedScore * 0.05` using only time-based portion of score, not bonus items
+   - Score-based difficulty: `checkMissedSpawnPoints` loop + `score % DIFFICULTY_SCALING.scoreInterval === 0`
+   - `DIFFICULTY_SCALING = { scoreInterval: 500, levelIncrement: 0.2 }` in GameMode.ts
+
+3. Files and Code Sections:
+
+   - **`src/main.ts`**
+     - Added `deltaMax = 50` on game loop instance to prevent mobile touch catch-up
+     ```typescript
+     const game = new Phaser.Game(config);
+     (game.loop as unknown as { deltaMax: number }).deltaMax = 50;
+     ```
+
+   - **`src/utils/videoUtils.ts`** (new file)
+     - Common utility for releasing HTMLVideoElement media buffers
+     ```typescript
+     import Phaser from 'phaser';
+     export function releaseVideoElement(vid: Phaser.GameObjects.Video): void {
+       // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       const el: HTMLVideoElement | undefined = (vid as any).video;
+       if (!el) return;
+       el.pause();
+       el.removeAttribute('src');
+       el.load();
+     }
+     ```
+
+   - **`src/scenes/CharacterSelectScene.ts`**
+     - Removed all video loading from `preload()` (was the 1.1GB root cause)
+     - Added `private detailVideoKey: string | null = null;`
+     - Lazy-load video on card tap via `Phaser.Loader.Events.COMPLETE`
+     - `setupDetailVideo(videoKey: string, illust, panel)` — inserts video at z-index 2 via `panel.addAt(videoObj, 2)`
+     - `hideCharacterDetail()` — calls `releaseVideoElement()` + `cache.video.remove(detailVideoKey)`
+     - Added `events.once('shutdown', () => { this.hideCharacterDetail(); this.maskGfx.destroy(); })`
+
+   - **`src/scenes/GachaScene.ts`**
+     - `clearUI()` now calls `releaseVideoElement(c)` for Video objects before `c.destroy()`
+     - 12-second failsafe timer now calls `vid.stop(); vid.destroy()` before `resolve()`
+
+   - **`src/abilities/GlitchAbility.ts`**
+     - `attackTimers: TimerEvent[]` → `pendingAttacks: Array<{ timer?: TimerEvent; ghost: Image }>`
+     - `onDestroy` now also destroys pending ghost images
+     - Timer callback self-removes entry from array via `indexOf/splice`
+     ```typescript
+     private pendingAttacks: Array<{ timer?: Phaser.Time.TimerEvent; ghost: Phaser.GameObjects.Image }> = [];
+     override onDestroy(_api: GameSceneAPI): void {
+       this.ghost?.destroy();
+       this.pendingAttacks.forEach(({ timer, ghost }) => {
+         timer?.remove();
+         if (ghost.active) ghost.destroy();
+       });
+       this.pendingAttacks = [];
+     }
+     ```
+
+   - **`src/abilities/LegacyAbility.ts`**
+     - Reduced tween duration: 2200~3600ms → 900~1500ms
+     - Reduced flame particles: 10→6, ember: 8→5, smoke: 4→2
+     - Reduced legacy ORA count: 5~7→3~5
+     - **REGRESSION (pending fix)**: `poop.destroy()` was changed to `poop.setActive(false).setVisible(false)` in `burnRandomPoops()`. Since `spawnPoop` always creates `new Poop()` (never recycling pool members), inactive poops accumulate and are never freed until scene restart. This causes per-game memory growth.
+
+   - **`src/config/abilityParams.ts`**
+     - Balance changes: `legacyInterval: 500→550`, `legacyDuration: 10000→5200`, `burnChanceNormal: 0.30→0.40`, `burnChanceLegacy: 0.60→0.80`
+
+   - **`src/config/feverTime.ts`**
+     - `firstTriggerScore: 300`, `repeatInterval: 1200→1400`, `duration: 5000→4500`
+
+   - **`src/types/GameMode.ts`**
+     - Added `DIFFICULTY_SCALING` constant (user changed `scoreInterval` from 100 to 500):
+     ```typescript
+     export const DIFFICULTY_SCALING = {
+       scoreInterval: 500,  // user changed from 100
+       levelIncrement: 0.2,
+     } as const;
+     ```
+
+   - **`src/scenes/GameScene.ts`**
+     - Removed 10-second `time.addEvent` for `increaseDifficulty`
+     - Added score-based trigger in `checkMissedSpawnPoints`:
+     ```typescript
+     if (score % DIFFICULTY_SCALING.scoreInterval === 0) this.increaseDifficulty();
+     ```
+     - Removed redundant `if (!this.gameOver)` from `increaseDifficulty()` (already guarded by `updateScore`)
+     - Changed `difficultyLevel += 0.3` → `difficultyLevel += DIFFICULTY_SCALING.levelIncrement`
+
+   - **`supabase/functions/leaderboard-submit/index.ts`**
+     - Added `calcBonusScore()` helper at top of file
+     - Time gate now subtracts bonus item scores before applying minimum time check:
+     ```typescript
+     function calcBonusScore(v: { goldCollected?: number; diamondCollected?: number; topazCollected?: number; rainbowCollected?: number } | undefined): number {
+       if (!v) return 0;
+       return (v.goldCollected ?? 0) * 20 + (v.diamondCollected ?? 0) * 40 +
+              (v.topazCollected ?? 0) * 80 + (v.rainbowCollected ?? 0) * 90;
+     }
+     // In session validation:
+     const timeBasedScore = Math.max(0, score - calcBonusScore(verification));
+     const minRequiredSec = timeBasedScore * 0.05;
+     ```
+     - User rejected deployment; pending manual deploy
+
+4. Errors and Fixes:
+   - **`deltaMax` not in FPSConfig TypeScript types**: `fps: { deltaMax: 50 }` caused TS2353. Fixed by casting and setting on `game.loop` instance directly.
+   - **Video cache broken entry bug**: `hideCharacterDetail()` cleared `el.src` but didn't remove from Phaser VideoCache, causing broken entry on next open. Fixed by adding `cache.video.remove(detailVideoKey)`.
+   - **GlitchAbility ghost images not cleaned up**: `onDestroy` only removed timers, not the ghost `Image` objects. Fixed by tracking `{timer?, ghost}` pairs.
+   - **LegacyAbility `setActive(false)` regression**: Changed from `poop.destroy()` to `setActive(false)` thinking it was pool reuse, but `spawnPoop` always creates `new Poop()`, so inactive poops accumulate. **Not yet fixed — identified at end of conversation.**
+   - **Leaderboard time gate rejecting valid scores**: Formula `score * 0.1 * 0.5` failed when bonus items (fever time rainbow ×8 = 720pts in 4.5s) pushed score above time threshold. Fixed by using `timeBasedScore = score - calcBonusScore(verification)`.
+
+5. Problem Solving:
+   - **1.1GB fixed memory after refresh**: Root cause was CharacterSelectScene.preload() loading all 9 videos (~100MB each) into browser media decoder. Fixed with lazy loading per-character on detail panel open.
+   - **Score submission intermittent failure**: Found that `game-start` and `leaderboard-submit` are both deployed (all 5 functions active). The time gate `minRequiredSec = score * 0.1 * 0.5` didn't account for bonus item score spikes — the fix uses only the time-proportional portion of the score.
+   - **Player speed doesn't scale with difficulty**: Confirmed player speed is set once at game start from `difficultyConfig.playerSpeed` — it's a fixed value per difficulty, not dynamically increasing.
+   - **BGM memory investigation**: BGM is correctly managed — `this.bgMusic.destroy()` is called before new `sound.add()` on each `create()`. AudioBuffers are cached once. `visibilitychange` listener is properly cleaned up via `events.once('shutdown', ...)`. BGM is NOT the memory growth cause.
+   - **Real memory growth cause**: LegacyAbility's `burnRandomPoops` uses `setActive(false)` instead of `destroy()`, causing inactive poop objects to accumulate per game session (never recycled since spawnPoop creates new objects).
+
+6. All user messages:
+   - "여전히 모바일에서 왼쪽이나 오른쪽 누를때 똥이 좀 더 빠르게 내려오는 현상이 있는거 같아."
+   - "음 그리고 여전히 메모리 이슈가 있는거 같아. 전체적으로 캐릭터를 전부 봐줘."
+   - (empty message — continued previous simplify session)
+   - "게임 플레이에서 주로 발생하는거 같던데. 캐릭터들의 능력 때문에 여기도 봐줘"
+   - "레거시 캐릭터의 능력들은 괜찮은가? 얘 플레이 했을 때 브라우저 메모리가 많이 늘어나는거 같던데"
+   - "근데 1.1G로 고정이 된거 같은데? 새로고침을 해도 1.1G 로 나와"
+   - (empty — continued simplify)
+   - (empty — continued simplify)
+   - /simplify (first run, launched 1 agent then user sent empty twice)
+   - /simplify (second run, all 3 agents)
+   - "아 그리고 현재 똥이 낙하하는 속도가 어떤 기준으로 빨라지고 있나? 시간에 비례해서인가 점수에 비례해서 인가?"
+   - "점수 기반이 맞는거 같아. 그리고 지금 빨라지는 속도가 좀 빠른거 같아."
+   - /simplify (third run)
+   - "똥 낙하 말고 플레이어가 빨라지는 것도 점수 기반으로 수정을 했나?"
+   - /simplify (fourth run)
+   - "근데 게임 오버 됐을 때 asset들 말고 나머지는 메모리에서 없애도 되지 않나? 특히 캐릭터 능력 같은것들은?"
+   - "그리고 정상 플레이를 했는데 점수 제출이 안되는 경우가 가끔 있는거 같은데 찾아줘. 이게 supabase에 뭐가 배포안된건지 뭔지 모르겠네"
+   - (user rejected deployment of leaderboard-submit)
+   - /simplify (fifth run on leaderboard-submit change)
+   - (empty — after simplify agents returned)
+   - "일단 배포는 나중에하고. 근데 왜 브라우저의 메모리 사용량은 계속 늘어나는거지? 일단 bgm 쪽에도 문제가 있는지 봐줘"
+
+7. Pending Tasks:
+   - **Fix LegacyAbility `burnRandomPoops`**: Revert `poop.setActive(false).setVisible(false)` back to `poop.destroy()` — this is the identified cause of per-game memory growth
+   - **Deploy `leaderboard-submit`**: User explicitly said "배포는 나중에" (deploy later) — pending when ready: `supabase functions deploy leaderboard-submit --no-verify-jwt`
+
+8. Current Work:
+   Investigating why browser memory keeps growing. BGM analysis concluded it is NOT leaking (proper destroy/add cycle). The real identified cause is in `src/abilities/LegacyAbility.ts` in `burnRandomPoops()`:
+
+   ```typescript
+   // Current (regression — causes memory growth):
+   poop.setActive(false).setVisible(false);
+   const body = poop.body as Phaser.Physics.Arcade.Body;
+   if (body) { body.setVelocity(0, 0); body.setEnable(false); }
+
+   // Should be reverted to:
+   poop.destroy();
+   ```
+
+   The issue: `spawnPoop()` always creates `new Poop()` and adds to the group — it never calls `group.get()` to recycle inactive pool members. So `setActive(false)` poops accumulate in the group's `children.entries` indefinitely (their `update()` doesn't run since `runChildUpdate` skips inactive objects, so they never self-destroy via the `y > height` check). Only `poop.destroy()` actually frees the memory.
+
+9. Optional Next Step:
+   Fix the LegacyAbility regression immediately — revert `poop.setActive(false).setVisible(false)` back to `poop.destroy()` in `burnRandomPoops()`. The user asked "왜 브라우저의 메모리 사용량은 계속 늘어나는거지?" and we identified this as the concrete cause of per-game memory growth:
+
+   In `src/abilities/LegacyAbility.ts`, `burnRandomPoops()`:
+   ```typescript
+   // Revert from:
+   poop.setActive(false).setVisible(false);
+   const body = poop.body as Phaser.Physics.Arcade.Body;
+   if (body) { body.setVelocity(0, 0); body.setEnable(false); }
+   // Back to:
+   poop.destroy();
+   ```
+
+If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/johyunduk/.REDACTED.jsonl
+Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.
+
+---
+
+다른 부분은 없어? 전체적으로 좀 봐줘봐
+
+---
+
+그러면 사용량이 1.2 기가까지 사용되는 이유는 뭐지
+
+---
+
+근데 그냥 게임만 해도 메모리 사용량이 오르던데 다른 화면 간건 없고
+
+---
+
+처음 시작할 때 몇초간 느려졌고 똥낙하든 뭐든 그리고 똥이 다시 버벅이며 내려오는데
+
+---
+
+/ㅕㄴㅁㅎㄷ
+
+---
+
+[Request interrupted by user]
+
+---
+
+이어서 진행해줘
+
+---
+
+음 여전히 뭔가 부드럽게 내려오지 않아.
+
+---
+
+그냥 계속 부드럽게 내려오지 않아 그리고 맨처음 시작시 똥이 처음에만 느리게 나오고
+
+---
+
+아 그냥 일단 전부 롤백했어 일단은.
+
+---
+
+똥 낙하속도 빨라지는것만 점수 기반으로 바꿔줘
+
+---
+
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+Summary:
+1. Primary Request and Intent:
+   - Fix LegacyAbility `burnRandomPoops` regression (setActive → destroy) — completed
+   - Comprehensive memory leak review across all ability files and scenes — completed
+   - Investigate 1.2GB browser memory usage — completed (determined to be normal)
+   - Investigate gameplay-only memory growth — completed (V8 GC pressure, not true leaks)
+   - Fix poop fall stuttering and slow initial start — multiple fixes attempted, user rolled back ALL changes
+   - After rollback: change poop fall speed increase from time-based (10s timer) to score-based only — completed
+
+2. Key Technical Concepts:
+   - **Phaser Object Pool**: `group.get()` recycles inactive members; `setActive(false)` returns to pool; `destroy()` removes from pool. Both are valid patterns since `spawnPoop` uses `group.get()`.
+   - **Phaser Scene Shutdown**: `DisplayList.destroy()` automatically calls `destroy()` on all scene-registered objects. Graphics with `onComplete: () => gfx.destroy()` tweens are safe — Phaser cleans them up on shutdown even if tweens don't complete. (HackerAbility/MaehwaAbility false alarm)
+   - **`fixedStep: true` substep stutter**: With `fixedStep: true`, slow frames trigger multiple physics substeps in one visual frame, causing visible position jumps. `fixedStep: false` + `deltaMax: 50` avoids this.
+   - **`roundPixels: true` alternating jump**: At non-integer pixel speeds (e.g., 3.33px/frame), integer rounding creates alternating 3/4px visual jumps. `roundPixels: false` gives sub-pixel smooth rendering.
+   - **CSS canvas scaling + image-rendering**: When Phaser's `Scale.FIT` scales the 400×600 canvas via CSS, bilinear interpolation causes shimmer. `image-rendering: pixelated` forces nearest-neighbor.
+   - **120Hz display + 60fps target**: rAF at 120Hz (8.33ms), Phaser skips alternates to hit 60fps — irregular render timing causes perceived stutter. `target: 120` lets it run natively.
+   - **V8 GC pressure**: Many short-lived Graphics objects (LegacyAbility effects) accumulate between GC cycles. Not a true leak — Chrome "Collect garbage" would drop memory.
+   - **Score-based difficulty**: `checkMissedSpawnPoints` loop already handles all score-milestone events; adding `score % scoreInterval === 0` to trigger `increaseDifficulty` replaces the time-based 10s timer.
+   - **`startAt` in Phaser `addEvent`**: Setting `startAt: delay` causes the event to fire immediately on the first frame (elapsed starts at delay).
+   - **Web Audio API decoding**: MP3 files decoded to full PCM float32. Small compressed files can decode to tens of MB.
+   - **`DIFFICULTY_SCALING.levelIncrement: 0.2`** vs old `0.3` per 10s timer.
+
+3. Files and Code Sections:
+
+   - **`src/abilities/LegacyAbility.ts`**
+     - Session started needing to revert `burnRandomPoops` from `setActive(false)` back to `poop.destroy()`
+     - User then rolled back ALL changes, reverting LegacyAbility to its pre-session state (with `setActive(false)` re-applied and counts reverted to 5~7, 10, 8, 4)
+     - Current state: user's rolled-back version (setActive(false), original particle counts)
+
+   - **`src/types/GameMode.ts`** ← CURRENTLY MODIFIED
+     - Added `DIFFICULTY_SCALING` constant at end of file:
+     ```typescript
+     /** 점수 기반 난이도 스케일링 파라미터 */
+     export const DIFFICULTY_SCALING = {
+       /** 이 점수마다 difficultyLevel 1회 증가 */
+       scoreInterval: 500,
+       /** 1회당 difficultyLevel 증가량 */
+       levelIncrement: 0.2,
+     } as const;
+     ```
+
+   - **`src/scenes/GameScene.ts`** ← CURRENTLY MODIFIED
+     - Import updated to include `DIFFICULTY_SCALING`:
+     ```typescript
+     import { GameMode, Difficulty, DIFFICULTIES, DIFFICULTY_SCALING, type DifficultyConfig } from '../types/GameMode';
+     ```
+     - Removed 10s timer block from `create()`:
+     ```typescript
+     // REMOVED:
+     // this.time.addEvent({
+     //   delay: 10000,
+     //   callback: this.increaseDifficulty,
+     //   callbackScope: this,
+     //   loop: true
+     // });
+     ```
+     - Added score-based trigger in `checkMissedSpawnPoints` (before ability milestone):
+     ```typescript
+     // 점수 기반 난이도 증가
+     if (score % DIFFICULTY_SCALING.scoreInterval === 0) this.increaseDifficulty();
+     ```
+     - Simplified `increaseDifficulty` (removed redundant `gameOver` guard):
+     ```typescript
+     private increaseDifficulty() {
+       this.difficultyLevel += DIFFICULTY_SCALING.levelIncrement;
+       this.resetSpawnTimer(this.isFeverTime ? this.spawnFeverPoop : this.spawnPoop);
+     }
+     ```
+
+   - **`src/main.ts`** — rolled back to original state:
+     - `fixedStep: true`, `antialias: true`, `roundPixels: true`, `fps.target: 60`, `deltaMax: 50` on game.loop (per original session state)
+     - Note: The rollback system reminder shows `new Phaser.Game(config)` without storing result, meaning `deltaMax` line is also gone
+
+   - **`src/style.css`** — rolled back, `image-rendering: pixelated` removed
+
+   - **`src/abilities/GlitchAbility.ts`** — reviewed; properly tracks `{timer?, ghost}` pairs in `pendingAttacks` and cleans up in `onDestroy`
+
+   - **`src/abilities/SentinelAbility.ts`** — reviewed; persistent `sparkGfx` reused via `clear()`; `orbitDroplets` destroyed in `onDestroy`; safe
+
+   - **`src/abilities/HackerAbility.ts`** — reviewed; flagged by agent as potentially leaky but confirmed safe (Phaser scene shutdown handles all `scene.add.graphics()` objects)
+
+   - **`src/abilities/MaehwaAbility.ts`** — same conclusion as HackerAbility; false positive
+
+   - **`src/scenes/GachaScene.ts`** — `clearUI()` calls `releaseVideoElement()` but not `cache.video.remove()`. Could cause broken VideoCache entries after gacha reveals. Not fixed this session.
+
+   - **`supabase/functions/leaderboard-submit/index.ts`** — from prior session: `calcBonusScore()` added, time gate uses `timeBasedScore = score - calcBonusScore(verification)`. Deployment pending (user said "배포는 나중에").
+
+4. Errors and Fixes:
+   - **LegacyAbility `setActive(false)` regression (prior session)**: Believed `spawnPoop` used `new Poop()`, so inactive objects accumulated. Reverted to `poop.destroy()`. CORRECTION: pool IS properly implemented with `group.get()`, so `setActive(false)` was actually valid pool behavior. Both approaches are acceptable. User rolled back everything anyway.
+   - **Agent false positive on HackerAbility/MaehwaAbility**: Agent reported high memory leak risk. Determined false positive — Phaser's `DisplayList.destroy()` on scene shutdown handles all `scene.add.graphics()` objects automatically.
+   - **Performance fixes all rolled back**: User tried `fixedStep: false`, `roundPixels: false`, `antialias: false`, CSS `image-rendering: pixelated`, `fps.target: 120`, immediate first spawn — all rolled back by user as they didn't fully resolve the issue.
+
+5. Problem Solving:
+   - **Memory 1.2GB**: Determined to be normal — browser overhead (200-400MB) + WebGL textures + decoded audio PCM buffers + video media decoder. CharacterSelectScene lazy-load fix (from prior session) addresses the main abnormal contributor.
+   - **Gameplay memory growth**: V8 GC pressure from LegacyAbility short-lived Graphics objects. Not a true leak. GC will collect them; Chrome's "Collect garbage" button would confirm this.
+   - **Poop stuttering**: Multiple causes investigated: `fixedStep: true` substeps, `roundPixels: true` alternating jumps, 120Hz display frame skipping, CSS canvas bilinear scaling. User rolled back all fixes — issue unresolved.
+   - **Score-based difficulty**: Successfully implemented — 10s timer replaced with `score % 500 === 0` trigger. `difficultyLevel += 0.2` per trigger (was `0.3` per 10s).
+   - **Pending from prior session**: Deploy `leaderboard-submit` with `--no-verify-jwt` when user is ready.
+
+6. All User Messages:
+   - (Empty — continued from previous session summary, LegacyAbility fix already in progress)
+   - "다른 부분은 없어? 전체적으로 좀 봐줘봐" (Are there other parts? Review everything comprehensively)
+   - (Empty — after agent returned comprehensive ability analysis)
+   - "그러면 사용량이 1.2 기가까지 사용되는 이유는 뭐지" (Why is memory usage up to 1.2GB?)
+   - "근데 그냥 게임만 해도 메모리 사용량이 오르던데 다른 화면 간건 없고" (Memory rises even just playing the game, without navigating other screens)
+   - "처음 시작할 때 몇초간 느려졌고 똥낙하든 뭐든 그리고 똥이 다시 버벅이며 내려오는데" (Game is slow for first few seconds at start, and poops stutter while falling)
+   - "음 여전히 뭔가 부드럽게 내려오지 않아." (Still not falling smoothly)
+   - "그냥 계속 부드럽게 내려오지 않아 그리고 맨처음 시작시 똥이 처음에만 느리게 나오고" (Continuously not smooth, and at very start poops come out slowly at first)
+   - "아 그냥 일단 전부 롤백했어 일단은." (I just rolled back everything for now)
+   - "이어서 진행해줘" (Continue from where we left off — after /usage command)
+   - "똥 낙하속도 빨라지는것만 점수 기반으로 바꿔줘" (Change only the poop fall speed increase to score-based)
+
+7. Pending Tasks:
+   - **Deploy `leaderboard-submit`**: `supabase functions deploy leaderboard-submit --no-verify-jwt` — user said "배포는 나중에" (deploy later)
+   - **Poop fall stuttering**: Unresolved — user rolled back all performance fixes. Root causes identified (fixedStep substeps, roundPixels alternating jump, 120Hz frame skipping, CSS bilinear scaling) but no accepted fix yet
+   - **GachaScene `cache.video.remove()`**: After `clearUI()` releases video element src, should also call `cache.video.remove(vidKey)` to prevent broken cache entries. Not yet fixed.
+
+8. Current Work:
+   Implemented score-based difficulty scaling as the user's final explicit request:
+   
+   **`src/types/GameMode.ts`** — added at end of file:
+   ```typescript
+   export const DIFFICULTY_SCALING = {
+     scoreInterval: 500,
+     levelIncrement: 0.2,
+   } as const;
+   ```
+   
+   **`src/scenes/GameScene.ts`** — three changes:
+   1. Import: `import { GameMode, Difficulty, DIFFICULTIES, DIFFICULTY_SCALING, type DifficultyConfig } from '../types/GameMode';`
+   2. Removed 10s `time.addEvent` for `increaseDifficulty` from `create()`
+   3. Added in `checkMissedSpawnPoints` loop: `if (score % DIFFICULTY_SCALING.scoreInterval === 0) this.increaseDifficulty();`
+   4. Simplified `increaseDifficulty`: removed `if (!this.gameOver)` guard, changed `0.3` → `DIFFICULTY_SCALING.levelIncrement`
+   
+   TypeScript check passed with no errors.
+
+9. Optional Next Step:
+   No immediate next step — the user's explicit request "똥 낙하속도 빨라지는것만 점수 기반으로 바꿔줘" has been fully completed. The poop fall speed increase now triggers every 500 points (`DIFFICULTY_SCALING.scoreInterval`) with `difficultyLevel += 0.2` (`DIFFICULTY_SCALING.levelIncrement`) instead of the previous 10-second timer with `difficultyLevel += 0.3`. Awaiting further user instructions.
+
+If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/johyunduk/.REDACTED.jsonl
+
+---
+
+점수 등록 안되는 경우 있다는데 그거 알아봐줘.
+
+---
+
+모바일 관련해서 뭐 대응했었는데 그게 뭐지 그거 이후로 뭔가 이상해진게 있는거 같아서.
+
+---
+
+음 그러면 그냥 일단 모바일 대응은 빼보자
+
+---
+
+깃 푸시해줘
+
+---
+
+레거시 캐릭터 불태우기가 제대로 동작을 안하는게 있던거 같은데
+
+---
+
+레거시 모드가 어떻게 발동이 되나? 발동중인 상태에서 점수를 또 채우면 다시 발동이 되나
+
+---
+
+의도야. 일단 이렇게 깃 푸시해줘
+
+---
+
+@src/config/abilityParams.ts @src/config/feverTime.ts 이거 변경된 부분보고 주석 수정할 거 있으면 수정해줘
+
+---
+
+지금 변경된거 전부 깃 푸시해줘
+
+---
+
+아니 갑자기 왜 또 버벅이지?
+
+---
+
+[Request interrupted by user]
+
+---
+
+잠깐 c96036e8 이 커밋으로 돌아갈 수 있나
+
+---
+
+아니면 브랜치를 새로만드는데 저때의 커밋이 마지막인 새 브랜치를 만든다면 위에 두개를 안없애도 되지 않나?
+
+---
+
+걍 임시로 만들거니까 암거나 해줘
+
+---
+
+그럼 버벅이는게 뭐가 문제일까. 아까전에 뭐 하기 전까지만 해도 버벅이는게 없었는데
+
+---
+
+1. 뭘 하든간에. 2. 처음부터. 3. 처음부터. 일단은 점수 기반 속도 이거랑 피버타임 불태우기 이거 없애보자.
+
+---
+
+안사라졌어 그리고 맨 첫판에만 시작할때 캐릭터 속도든 똥 속도는 느리게 시작을 하는데 왜 그렇지? 이 버벅이는게 생기면서 저것도 이래졌는데
+
+---
+
+음 근데 버벅인다는게 약간 렉 처럼 뚝뚝 끊긴다는게 아니라 프레임 드랍이라고 해야 하나? 그게 문제야
+
+---
+
+와 충전기 차이였네
