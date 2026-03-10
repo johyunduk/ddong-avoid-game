@@ -16,7 +16,7 @@ export interface FeverTimeConfig {
   normalPoopCount: number;
   /** 피버 타임 중 금똥/다이아똥 생성 개수 */
   bonusPoopCount: number;
-  /** 피버 타임 중 낙하 속도 배수 (1.0 = 일반 속도, 1.5 = 1.5배 빠름) */
+  /** 피버 타임 중 낙하 속도 배수 (1.0 = 일반 속도, 1.2 = 1.2배 빠름) */
   speedMultiplier: number;
   /** UI 관련 설정 */
   ui: {
@@ -33,19 +33,19 @@ export interface FeverTimeConfig {
  * 피버 타임 기본 설정
  *
  * @example
- * // 100점에서 첫 피버 타임 발동
- * // 이후 1300, 2500, 3700점... (1200점 간격)
- * // 5초간 지속
- * // 일반 똥 2개 + 금똥/다이아똥 6개 생성
- * // 낙하 속도 1.3배 빠름
+ * // 300점에서 첫 피버 타임 발동
+ * // 이후 1600, 2900, 4200점... (1300점 간격)
+ * // 4.5초간 지속
+ * // 일반 똥 2개 + 금똥/다이아똥 8개 생성
+ * // 낙하 속도 1.2배 빠름
  */
 export const FEVER_TIME_CONFIG: FeverTimeConfig = {
   firstTriggerScore: 300,
-  repeatInterval: 1200,
-  duration: 5000,
+  repeatInterval: 1300,
+  duration: 4500,
   normalPoopCount: 2,
   bonusPoopCount: 8,
-  speedMultiplier: 1.2, // 피버 타임 중 1.5배 빠른 속도
+  speedMultiplier: 1.2, // 피버 타임 중 1.2배 빠른 속도
   ui: {
     fontSize: '32px',
     color: '#ff9900', // 주황색
