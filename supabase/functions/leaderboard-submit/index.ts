@@ -117,8 +117,15 @@ Deno.serve(async (req: Request) => {
       }
 
       // 핵심 검증: 이 점수가 나오려면 최소 N초는 걸렸어야 함
-      // 1점 = 100ms → score점 = score * 0.1초, 50% 여유 적용
-      const minRequiredSec = score * 0.1 * 0.5;
+      // 보너스 아이템(금똥/다이아/토파즈/무지개)은 시간 없이도 점수를 올리므로 제외
+      // 1점 = 100ms → timeBasedScore점 = timeBasedScore * 0.1초, 50% 여유 적용
+      const bonusScore =
+        (verification?.goldCollected ?? 0) * 20 +
+        (verification?.diamondCollected ?? 0) * 40 +
+        (verification?.topazCollected ?? 0) * 80 +
+        (verification?.rainbowCollected ?? 0) * 90;
+      const timeBasedScore = Math.max(0, score - bonusScore);
+      const minRequiredSec = timeBasedScore * 0.1 * 0.5;
       if (elapsedSec < minRequiredSec) {
         console.warn('Session time gate failed', { score, elapsedSec, minRequiredSec });
         return new Response(

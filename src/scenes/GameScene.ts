@@ -5,7 +5,7 @@ import GoldPoop from '../objects/GoldPoop';
 import DiamondPoop from '../objects/DiamondPoop';
 import TopazPoop from '../objects/TopazPoop';
 import RainbowPoop from '../objects/RainbowPoop';
-import { GameMode, Difficulty, DIFFICULTIES, type DifficultyConfig } from '../types/GameMode';
+import { GameMode, Difficulty, DIFFICULTIES, DIFFICULTY_SCALING, type DifficultyConfig } from '../types/GameMode';
 import { FEVER_TIME_CONFIG } from '../config/feverTime';
 import { POOP_CONFIG } from '../config/poop';
 import { getHighScore, updateHighScore } from '../utils/localStorage';
@@ -387,15 +387,8 @@ export default class GameScene extends Phaser.Scene {
       loop: true
     });
 
-    // 난이도 증가 타이머
-    this.time.addEvent({
-      delay: 10000, // 10초마다
-      callback: this.increaseDifficulty,
-      callbackScope: this,
-      loop: true
-    });
-
     // 점수 증가는 update()에서 Date.now() 기반으로 처리 (timeScale 조작 무력화)
+    // 난이도는 점수 기반으로 증가 (checkMissedSpawnPoints에서 처리)
 
     // ── 캐릭터 능력 초기화 (모든 그룹 생성 완료 후) ─────────────────────
     this.abilityAPI = this.buildAPI();
@@ -720,6 +713,9 @@ export default class GameScene extends Phaser.Scene {
         }
       }
 
+      // 점수 기반 난이도 증가
+      if (score % DIFFICULTY_SCALING.scoreInterval === 0) this.increaseDifficulty();
+
       // 캐릭터 능력 마일스톤 (광부 무지개똥, 루트 똥 제거, 매화 슬래시 등)
       this.ability.onScoreMilestone(score, this.abilityAPI);
     }
@@ -737,10 +733,8 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private increaseDifficulty() {
-    if (!this.gameOver) {
-      this.difficultyLevel += 0.3;
-      this.resetSpawnTimer(this.isFeverTime ? this.spawnFeverPoop : this.spawnPoop);
-    }
+    this.difficultyLevel += DIFFICULTY_SCALING.levelIncrement;
+    this.resetSpawnTimer(this.isFeverTime ? this.spawnFeverPoop : this.spawnPoop);
   }
 
   /**

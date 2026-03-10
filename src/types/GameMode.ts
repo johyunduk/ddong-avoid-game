@@ -73,3 +73,11 @@ export const DIFFICULTIES: DifficultyConfig[] = [
     color: 0xFF4500
   }
 ];
+
+/** 점수 기반 난이도 스케일링 파라미터 */
+export const DIFFICULTY_SCALING = {
+  /** 이 점수마다 difficultyLevel 1회 증가 */
+  scoreInterval: 500,
+  /** 1회당 difficultyLevel 증가량 */
+  levelIncrement: 0.2,
+} as const;
