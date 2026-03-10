@@ -12,6 +12,9 @@ const AVAILABLE_TEXTURES: string[] = isChristmasSeason()
 const SPECIAL_CHRISTMAS_TEXTURES = ['xmas_poop_nose', 'xmas_poop_ribbon', 'xmas_poop_santa', 'xmas_poop_beard'];
 
 export default class Poop extends Phaser.Physics.Arcade.Sprite {
+  private _displaySize: number = 0;
+  private _hitboxSize: number = 0;
+
   constructor(
     scene: Phaser.Scene,
     x: number,
@@ -23,11 +26,15 @@ export default class Poop extends Phaser.Physics.Arcade.Sprite {
     scene.add.existing(this);
     scene.physics.add.existing(this);
 
-    this.setDisplaySize(POOP_CONFIG.normal.size.normal, POOP_CONFIG.normal.size.normal);
+    const initSize = POOP_CONFIG.normal.size.normal;
+    const initHitbox = POOP_CONFIG.normal.hitbox.normal;
+    this.setDisplaySize(initSize, initSize);
+    this._displaySize = initSize;
 
     const body = this.body as Phaser.Physics.Arcade.Body;
     if (body) {
-      body.setSize(POOP_CONFIG.normal.hitbox.normal, POOP_CONFIG.normal.hitbox.normal);
+      body.setSize(initHitbox, initHitbox);
+      this._hitboxSize = initHitbox;
       body.setCollideWorldBounds(false);
     }
 
@@ -53,13 +60,19 @@ export default class Poop extends Phaser.Physics.Arcade.Sprite {
       : (isExtreme ? POOP_CONFIG.normal.size.extreme : POOP_CONFIG.normal.size.normal);
     const hitboxSize = isExtreme ? POOP_CONFIG.normal.hitbox.extreme : POOP_CONFIG.normal.hitbox.normal;
 
-    this.setDisplaySize(displaySize, displaySize);
+    if (displaySize !== this._displaySize) {
+      this.setDisplaySize(displaySize, displaySize);
+      this._displaySize = displaySize;
+    }
     this.setActive(true).setVisible(true);
 
     const body = this.body as Phaser.Physics.Arcade.Body;
     if (body) {
       body.reset(x, y); // position + velocity 초기화 (내부에서 setPosition 호출)
-      body.setSize(hitboxSize, hitboxSize);
+      if (hitboxSize !== this._hitboxSize) {
+        body.setSize(hitboxSize, hitboxSize);
+        this._hitboxSize = hitboxSize;
+      }
       body.setEnable(true);
     }
 

@@ -296,6 +296,23 @@ export default class GameScene extends Phaser.Scene {
       maxSize: 10,
     });
 
+    // 풀 사전 할당 — create() 시점에 오브젝트를 미리 생성해 게임 중 런타임 생성 히치 방지
+    const prewarm = (group: Phaser.Physics.Arcade.Group, count: number) => {
+      for (let i = 0; i < count; i++) {
+        const obj = group.get(0, -200) as Phaser.Physics.Arcade.Sprite;
+        if (obj) {
+          obj.setActive(false).setVisible(false);
+          const body = obj.body as Phaser.Physics.Arcade.Body;
+          if (body) body.setEnable(false);
+        }
+      }
+    };
+    prewarm(this.poops, 36);        // 스폰당 최대 6개 × 여유
+    prewarm(this.goldPoops, 5);
+    prewarm(this.diamondPoops, 5);
+    prewarm(this.topazPoops, 4);
+    prewarm(this.rainbowPoops, 4);
+
     // 충돌 감지
     this.physics.add.overlap(
       this.player,
