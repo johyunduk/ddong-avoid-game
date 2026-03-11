@@ -1,5 +1,9 @@
 import Phaser from 'phaser';
 import Player from '../objects/Player';
+
+// [안티치트] 모듈 로드 시점(콘솔 스크립트 주입 이전)에 원본 함수 캡처
+const _origOverlap     = Phaser.Physics.Arcade.World.prototype.overlap;
+const _origIntersects  = Phaser.Physics.Arcade.World.prototype.intersects;
 import Poop from '../objects/Poop';
 import GoldPoop from '../objects/GoldPoop';
 import DiamondPoop from '../objects/DiamondPoop';
@@ -442,6 +446,28 @@ export default class GameScene extends Phaser.Scene {
       // 탭 숨김 중엔 모든 게임 로직 차단 (rAF throttle로 인한 오탐 및 타이밍 레이스 방지)
       if (document.hidden) return;
 
+      // [안티치트 레이어 3] Phaser 내부 함수 변조 감지
+      // 모듈 로드 시 캡처한 원본과 다르면 콘솔 치트가 prototype을 덮어쓴 것
+      if (
+        Phaser.Physics.Arcade.World.prototype.overlap    !== _origOverlap ||
+        Phaser.Physics.Arcade.World.prototype.intersects !== _origIntersects
+      ) {
+        this.handleCheatDetected();
+        return;
+      }
+
+      // [안티치트 레이어 4] 물리 엔진 강제 일시정지 감지
+      // 치트 shield 루프가 setInterval로 physics.world.pause()를 반복 호출할 때 차단
+      if (this.physics.world.isPaused) {
+        this.handleCheatDetected();
+        return;
+      }
+
+      // [안티치트 레이어 5] 수동 AABB 충돌 감지
+      // physics.overlap이 변조되거나 body가 비활성화되어도 스프라이트 좌표로 직접 계산
+      this.checkManualPoopCollision();
+      if (this.gameOver) return;
+
       // realNow(): 모듈 로드 시점에 캡처한 원본 Date.now — 콘솔 조작 무효
       const now = realNow();
 
@@ -515,6 +541,36 @@ export default class GameScene extends Phaser.Scene {
     this.lastPhaserCheckTime = this.time.now;
   }
 
+  /**
+   * [안티치트 레이어 5] 수동 AABB 충돌 감지
+   * Layer 3(prototype 변조)·Layer 4(physics pause)를 통과한 후에도 실행.
+   * prototype은 그대로지만 body.enable=false 또는 body.setSize(0,0)으로
+   * physics.overlap 콜백을 무력화하는 치트를 스프라이트 좌표 직접 계산으로 차단.
+   * - 플레이어 히트박스: 20×40px (display 50×80 의 중앙)
+   * - 똥 히트박스: display 40×40px 기준
+   * - 겹침 임계: 반폭합 30px, 반높이합 40px
+   * - 정상 상태에서 hitPoop 이중 호출되어도 gameOver 가드로 안전하게 무시됨
+   */
+  private checkManualPoopCollision() {
+    if (this.gameOver) return;
+    const px = this.player.x;
+    const py = this.player.y;
+    const HIT_X = 30;
+    const HIT_Y = 40;
+
+    for (const obj of this.poops.getChildren()) {
+      const poop = obj as Phaser.Physics.Arcade.Sprite;
+      if (!poop.active || !poop.visible) continue;
+      if (Math.abs(poop.x - px) < HIT_X && Math.abs(poop.y - py) < HIT_Y) {
+        this.hitPoop(
+          this.player as unknown as Phaser.Types.Physics.Arcade.GameObjectWithBody,
+          poop as unknown as Phaser.Types.Physics.Arcade.GameObjectWithBody
+        );
+        return;
+      }
+    }
+  }
+
   private handleCheatDetected() {
     this.gameOver = true;
     this.ability.onDestroy(this.abilityAPI);
@@ -532,6 +588,11 @@ export default class GameScene extends Phaser.Scene {
       strokeThickness: 4,
       align: 'center',
     }).setOrigin(0.5).setDepth(501);
+
+    // SceneManager.prototype.stop 변조 대비: 네이티브 setTimeout으로 강제 새로고침
+    // shutdown 이벤트 시 취소 → scene.start()가 정상 작동하면 reload 불필요
+    const reloadTimer = window.setTimeout(() => window.location.reload(), 3500);
+    this.events.once('shutdown', () => window.clearTimeout(reloadTimer));
 
     this.time.delayedCall(3000, () => {
       this.scene.start('ModeSelectScene');
