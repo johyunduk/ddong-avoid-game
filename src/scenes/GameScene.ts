@@ -83,6 +83,8 @@ export default class GameScene extends Phaser.Scene {
   // ── 캐릭터 능력 시스템 ────────────────────────────────────────────────
   private ability!: CharacterAbility;
   private abilityAPI!: GameSceneAPI;
+  // [디버그] 수동 충돌 영역 시각화
+  private manualHitboxDebug?: Phaser.GameObjects.Graphics;
 
   constructor() {
     super('GameScene');
@@ -105,6 +107,8 @@ export default class GameScene extends Phaser.Scene {
     this.topazCollected = 0;
     this.rainbowCollected = 0;
     this.sessionPromise = null; // 재시작 시 이전 세션 프로미스 해제
+    // 디버그 Graphics 참조 초기화 (씬 재시작 시 이전 객체는 Phaser가 파괴하므로 참조만 해제)
+    this.manualHitboxDebug = undefined;
     // 피버 타임 초기화
     this.isFeverTime = false;
     this.feverTimeRemaining = 0;
@@ -544,24 +548,31 @@ export default class GameScene extends Phaser.Scene {
   /**
    * [안티치트 레이어 5] 수동 AABB 충돌 감지
    * Layer 3(prototype 변조)·Layer 4(physics pause)를 통과한 후에도 실행.
-   * prototype은 그대로지만 body.enable=false 또는 body.setSize(0,0)으로
-   * physics.overlap 콜백을 무력화하는 치트를 스프라이트 좌표 직접 계산으로 차단.
-   * - 플레이어 히트박스: 20×40px (display 50×80 의 중앙)
-   * - 똥 히트박스: display 40×40px 기준
-   * - 겹침 임계: 반폭합 30px, 반높이합 40px
+   * _origIntersects: 모듈 로드 시 캡처한 원본 함수 — prototype 변조 우회 불가.
+   * body bounds를 직접 비교하므로 body.enable=false 치트도 차단.
    * - 정상 상태에서 hitPoop 이중 호출되어도 gameOver 가드로 안전하게 무시됨
    */
   private checkManualPoopCollision() {
     if (this.gameOver) return;
-    const px = this.player.x;
-    const py = this.player.y;
-    const HIT_X = 30;
-    const HIT_Y = 40;
+    const playerBody = this.player.body as Phaser.Physics.Arcade.Body;
+    if (!playerBody) return;
+
+    // [디버그] physics debug 활성화 시 플레이어 body 영역을 빨간 테두리로 표시 (보라 박스와 일치해야 함)
+    if (this.physics.world.drawDebug) {
+      if (!this.manualHitboxDebug) {
+        this.manualHitboxDebug = this.add.graphics().setDepth(9999);
+      }
+      this.manualHitboxDebug.clear();
+      this.manualHitboxDebug.lineStyle(2, 0xff0000, 1);
+      this.manualHitboxDebug.strokeRect(playerBody.x, playerBody.y, playerBody.width, playerBody.height);
+    }
 
     for (const obj of this.poops.getChildren()) {
       const poop = obj as Phaser.Physics.Arcade.Sprite;
       if (!poop.active || !poop.visible) continue;
-      if (Math.abs(poop.x - px) < HIT_X && Math.abs(poop.y - py) < HIT_Y) {
+      const poopBody = poop.body as Phaser.Physics.Arcade.Body;
+      if (!poopBody) continue;
+      if (_origIntersects.call(this.physics.world, playerBody, poopBody)) {
         this.hitPoop(
           this.player as unknown as Phaser.Types.Physics.Arcade.GameObjectWithBody,
           poop as unknown as Phaser.Types.Physics.Arcade.GameObjectWithBody
@@ -1097,6 +1108,7 @@ export default class GameScene extends Phaser.Scene {
     }
 
     this.gameOver = true;
+    this.manualHitboxDebug?.clear();
     this.ability.onDestroy(this.abilityAPI);
     this.clearFeverTimeUI();
     this.spawnTimer.remove();

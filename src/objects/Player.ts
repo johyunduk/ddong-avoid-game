@@ -38,8 +38,8 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     // 목표 world 크기: 20×40 px (display 50×80 의 40%/50%), 중앙 정렬
     const sx = this.scaleX;  // = 50 / textureWidth
     const sy = this.scaleY;  // = 80 / textureHeight
-    this.setSize(20 / sx, 40 / sy);
-    this.setOffset((50 - 20) / 2 / sx, (80 - 40) / 2 / sy);
+    this.setSize(16 / sx, 40 / sy);
+    this.setOffset((50 - 16) / 2 / sx, (80 - 40) / 2 / sy);
 
     // 물리 설정
     this.setCollideWorldBounds(true);
