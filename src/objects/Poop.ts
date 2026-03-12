@@ -52,7 +52,7 @@ export default class Poop extends Phaser.Physics.Arcade.Sprite {
     ];
     this.setTexture(randomTexture);
 
-    const isExtreme = difficulty === DifficultyEnum.EXTREME;
+    const isExtreme = difficulty === DifficultyEnum.EXTREME || difficulty === DifficultyEnum.PHYSICAL;
     const isSpecial = SPECIAL_CHRISTMAS_TEXTURES.includes(randomTexture);
 
     const displaySize = isSpecial
