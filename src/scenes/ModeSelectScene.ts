@@ -180,10 +180,12 @@ export default class ModeSelectScene extends Phaser.Scene {
       strokeThickness: 3,
     }).setOrigin(0.5);
 
-    text.setInteractive({ useHandCursor: true });
-    text.on('pointerover', () => text.setColor('#FFD700'));
-    text.on('pointerout',  () => text.setColor('#cccccc'));
-    text.on('pointerdown', () => this.scene.start('ReleaseNotesScene'));
+    this.time.delayedCall(200, () => {
+      text.setInteractive({ useHandCursor: true });
+      text.on('pointerover', () => text.setColor('#FFD700'));
+      text.on('pointerout',  () => text.setColor('#cccccc'));
+      text.on('pointerdown', () => this.scene.start('ReleaseNotesScene'));
+    });
   }
 
   private startGame(mode: GameMode) {
