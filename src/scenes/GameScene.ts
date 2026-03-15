@@ -17,6 +17,7 @@ import { submitScore, getUserInitials, setUserInitials, startGameSession } from 
 import { submitSkor, type SkorSubmitResponse } from '../utils/skor';
 import { getSafeSelectedCharacter, getCharacterDef, getDuplicateCount, getAwakeningLevel } from '../utils/character';
 import { getSafeSelectedWallpaper, getWallpaperDef } from '../utils/wallpaper';
+import { getSynergy, type WallpaperSynergy } from '../config/synergyMap';
 import { isChristmasSeason } from '../utils/seasonChecker';
 import type { CharacterAbility, GameSceneAPI } from '../abilities/types';
 import { getCharacterAbility } from '../abilities/index';
@@ -80,6 +81,7 @@ export default class GameScene extends Phaser.Scene {
   private selectedCharGrade: string = '등급외'; // 선택된 캐릭터 등급
   private charAwakeLevel: number = 0; // 각성 단계 (init에서 계산, create에서 사용)
   private selectedWpId: string | null = null; // 선택된 배경화면 ID (null = 기본)
+  private activeSynergy: WallpaperSynergy | null = null; // 배경화면-캐릭터 시너지
   // 서버 세션 (게임 시작 시 비동기 생성, 점수 제출 시 await)
   private sessionPromise: Promise<string | null> | null = null;
   // ── 캐릭터 능력 시스템 ────────────────────────────────────────────────
@@ -126,6 +128,7 @@ export default class GameScene extends Phaser.Scene {
     this.purePhysical = data.purePhysical ?? false;
     this.ability = getCharacterAbility(this.selectedCharId, awakeLevel);
     if (this.purePhysical) this.ability = new BaseAbility();
+    this.activeSynergy = this.purePhysical ? null : getSynergy(this.selectedWpId, this.selectedCharId);
 
     // ModeSelectScene/DifficultySelectScene으로부터 게임 모드와 난이도를 받음
     if (data.gameMode) {
@@ -274,7 +277,7 @@ export default class GameScene extends Phaser.Scene {
       : this.charAwakeLevel >= 2 ? _gs(10, 15, 20)
       : this.charAwakeLevel >= 1 ? _gs(5, 10, 15)
       : 0;
-    this.player = new Player(this, 200, 520, this.difficultyConfig.playerSpeed + this.ability.getPlayerSpeedBonus() + gradeAwakeSpeed, playerTexturePrefix);
+    this.player = new Player(this, 200, 520, this.difficultyConfig.playerSpeed + this.ability.getPlayerSpeedBonus() + gradeAwakeSpeed + (this.activeSynergy?.speedBonus ?? 0), playerTexturePrefix);
 
     // 💩 그룹 생성 (Object Pool: maxSize로 상한 설정)
     this.poops = this.physics.add.group({
@@ -425,6 +428,28 @@ export default class GameScene extends Phaser.Scene {
     // ── 캐릭터 능력 초기화 (모든 그룹 생성 완료 후) ─────────────────────
     this.abilityAPI = this.buildAPI();
     this.ability.onCreate(this.abilityAPI);
+
+    // 시너지 뱃지 (배경화면-캐릭터 조합 일치 시 게임 시작 직후 표시)
+    if (this.activeSynergy) {
+      const badge = this.add.text(200, 15, `✦ ${this.activeSynergy.label}`, {
+        fontSize: '12px',
+        color: '#FFD700',
+        stroke: '#000',
+        strokeThickness: 3,
+      }).setOrigin(0.5, 0).setDepth(10).setAlpha(0);
+
+      this.tweens.add({
+        targets: badge,
+        alpha: { from: 0, to: 1 },
+        duration: 400,
+        onComplete: () => {
+          this.time.delayedCall(3000, () => {
+            this.tweens.add({ targets: badge, alpha: 0, duration: 600,
+              onComplete: () => { badge.destroy(); } });
+          });
+        }
+      });
+    }
 
     // 서버 세션 비동기 시작 — 게임과 병렬 실행, 점수 제출 시 await
     this.sessionPromise = startGameSession(this.scoreDifficulty);
@@ -722,7 +747,7 @@ export default class GameScene extends Phaser.Scene {
     if (this.gameOver) return;
     poop.destroy();
     counterIncrement();
-    const bonus = this.ability.onCollectSpecial(type);
+    const bonus = this.ability.onCollectSpecial(type) + (this.activeSynergy?.collectBonus ?? 0);
     const total = baseScore + bonus;
     this.updateScore(total);
     if (!this.isFeverTime) {
