@@ -137,23 +137,26 @@ export default class DifficultySelectScene extends Phaser.Scene {
       fontStyle: 'bold'
     }).setOrigin(0.5);
 
-    backButtonBg.setInteractive({ useHandCursor: true });
-    backButton.setInteractive({ useHandCursor: true });
+    // 씬 전환 직후 포인터 상태 전파 방지
+    this.time.delayedCall(200, () => {
+      backButtonBg.setInteractive({ useHandCursor: true });
+      backButton.setInteractive({ useHandCursor: true });
 
-    const backElements = [backButtonBg, backButton];
-    backElements.forEach(element => {
-      element.on('pointerover', () => {
-        backButtonBg.setFillStyle(0xffff99);
-        backButton.setScale(1.05);
-      });
+      const backElements = [backButtonBg, backButton];
+      backElements.forEach(element => {
+        element.on('pointerover', () => {
+          backButtonBg.setFillStyle(0xffff99);
+          backButton.setScale(1.05);
+        });
 
-      element.on('pointerout', () => {
-        backButtonBg.setFillStyle(0xffffff);
-        backButton.setScale(1);
-      });
+        element.on('pointerout', () => {
+          backButtonBg.setFillStyle(0xffffff);
+          backButton.setScale(1);
+        });
 
-      element.on('pointerdown', () => {
-        this.scene.start('ModeSelectScene');
+        element.on('pointerdown', () => {
+          this.scene.start('ModeSelectScene');
+        });
       });
     });
   }
@@ -230,40 +233,43 @@ export default class DifficultySelectScene extends Phaser.Scene {
       fontStyle: 'bold'
     }).setOrigin(0.5);
 
-    button.setInteractive({ useHandCursor: true });
-    const elements = [button, emojiText, title, description, infoBg, info1, info2];
+    // 씬 전환 직후 포인터 상태 전파 방지
+    this.time.delayedCall(200, () => {
+      button.setInteractive({ useHandCursor: true });
+      const elements = [button, emojiText, title, description, infoBg, info1, info2];
 
-    elements.forEach(element => {
-      if (element !== button) {
-        element.setInteractive({ useHandCursor: true });
-      }
+      elements.forEach(element => {
+        if (element !== button) {
+          element.setInteractive({ useHandCursor: true });
+        }
 
-      element.on('pointerover', () => {
-        button.setFillStyle(this.lightenColor(color));
-        button.setScale(1.06);
-        shadow.setScale(1.06);
-        emojiText.setScale(1.15);
-        title.setScale(1.05);
-        description.setScale(1.05);
-        infoBg.setScale(1.06);
-        info1.setScale(1.05);
-        info2.setScale(1.05);
-      });
+        element.on('pointerover', () => {
+          button.setFillStyle(this.lightenColor(color));
+          button.setScale(1.06);
+          shadow.setScale(1.06);
+          emojiText.setScale(1.15);
+          title.setScale(1.05);
+          description.setScale(1.05);
+          infoBg.setScale(1.06);
+          info1.setScale(1.05);
+          info2.setScale(1.05);
+        });
 
-      element.on('pointerout', () => {
-        button.setFillStyle(color);
-        button.setScale(1);
-        shadow.setScale(1);
-        emojiText.setScale(1);
-        title.setScale(1);
-        description.setScale(1);
-        infoBg.setScale(1);
-        info1.setScale(1);
-        info2.setScale(1);
-      });
+        element.on('pointerout', () => {
+          button.setFillStyle(color);
+          button.setScale(1);
+          shadow.setScale(1);
+          emojiText.setScale(1);
+          title.setScale(1);
+          description.setScale(1);
+          infoBg.setScale(1);
+          info1.setScale(1);
+          info2.setScale(1);
+        });
 
-      element.on('pointerdown', () => {
-        config.onPointerDown();
+        element.on('pointerdown', () => {
+          config.onPointerDown();
+        });
       });
     });
   }
