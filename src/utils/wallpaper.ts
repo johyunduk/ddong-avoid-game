@@ -47,69 +47,6 @@ export const WALLPAPERS: BackgroundDef[] = [
     description: 'HARD · EXTREME 기본 배경',
   },
   {
-    id: 'wp_neon_city',
-    name: '네온 도시',
-    thumbKey: 'wp_neon_city_thumb',
-    thumbPath: 'assets/wallpapers/neon_city_thumb.webp',
-    bgKey: 'wp_neon_city_bg',
-    bgPath: 'assets/wallpapers/neon_city.webp',
-    description: '빛나는 네온이 가득한 사이버 도시의 밤',
-  },
-  {
-    id: 'wp_pixel_forest',
-    name: '픽셀 숲',
-    thumbKey: 'wp_pixel_forest_thumb',
-    thumbPath: 'assets/wallpapers/pixel_forest_thumb.webp',
-    bgKey: 'wp_pixel_forest_bg',
-    bgPath: 'assets/wallpapers/pixel_forest.webp',
-    description: '픽셀로 이루어진 초록빛 숲의 고요한 오후',
-  },
-  {
-    id: 'wp_static_noise',
-    name: '정적 노이즈',
-    thumbKey: 'wp_static_noise_thumb',
-    thumbPath: 'assets/wallpapers/static_noise_thumb.webp',
-    bgKey: 'wp_static_noise_bg',
-    bgPath: 'assets/wallpapers/static_noise.webp',
-    description: '오래된 CRT 모니터의 잡음 속 패턴',
-  },
-  {
-    id: 'wp_cyber_grid',
-    name: '사이버 그리드',
-    thumbKey: 'wp_cyber_grid_thumb',
-    thumbPath: 'assets/wallpapers/cyber_grid_thumb.webp',
-    bgKey: 'wp_cyber_grid_bg',
-    bgPath: 'assets/wallpapers/cyber_grid.webp',
-    description: '무한히 펼쳐지는 사이버 공간의 격자망',
-  },
-  {
-    id: 'wp_aurora',
-    name: '오로라',
-    thumbKey: 'wp_aurora_thumb',
-    thumbPath: 'assets/wallpapers/aurora_thumb.webp',
-    bgKey: 'wp_aurora_bg',
-    bgPath: 'assets/wallpapers/aurora.webp',
-    description: '밤하늘을 수놓는 신비로운 오로라 광채',
-  },
-  {
-    id: 'wp_cosmos',
-    name: '우주 공간',
-    thumbKey: 'wp_cosmos_thumb',
-    thumbPath: 'assets/wallpapers/cosmos_thumb.webp',
-    bgKey: 'wp_cosmos_bg',
-    bgPath: 'assets/wallpapers/cosmos.webp',
-    description: '성운과 별빛이 흩뿌려진 광활한 우주',
-  },
-  {
-    id: 'wp_matrix',
-    name: '매트릭스',
-    thumbKey: 'wp_matrix_thumb',
-    thumbPath: 'assets/wallpapers/matrix_thumb.webp',
-    bgKey: 'wp_matrix_bg',
-    bgPath: 'assets/wallpapers/matrix.webp',
-    description: '끝없이 흐르는 초록 코드의 폭포 — 세계의 이면',
-  },
-  {
     id: 'wp_hanok',
     name: '한옥',
     thumbKey: 'wp_hanok_thumb',
@@ -136,7 +73,21 @@ export const WALLPAPERS: BackgroundDef[] = [
     bgPath: 'assets/wallpapers/maehwa_bg.webp',
     description: '이른 봄 흰 매화가 눈처럼 흩날리는 언덕',
   },
+  {
+    id: 'wp_gold_mine',
+    name: '황금 광산',
+    thumbKey: 'wp_gold_mine_thumb',
+    thumbPath: 'assets/wallpapers/gold_mine_thumb.webp',
+    bgKey: 'wp_gold_mine_bg',
+    bgPath: 'assets/wallpapers/gold_mine_bg.webp',
+    description: '반짝이는 금맥이 흐르는 지하 광산',
+  },
 ];
+
+/** 가챠로 획득 가능한 배경화면 ID — WALLPAPERS에서 자동 파생, 직접 수정 불필요 */
+export const GACHA_WP_IDS: string[] = WALLPAPERS
+  .filter(w => !(DEFAULT_WP_IDS as readonly string[]).includes(w.id))
+  .map(w => w.id);
 
 // ── localStorage 서명 (djb2, character.ts 패턴과 동일) ──────────────────────
 

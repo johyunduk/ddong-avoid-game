@@ -10,6 +10,7 @@ import {
 } from '../utils/character';
 import {
   WALLPAPERS,
+  GACHA_WP_IDS,
   DEFAULT_WP_IDS,
   getOwnedWallpapers,
   getSelectedWallpaper,
@@ -38,10 +39,8 @@ const WP_GAP_Y = 15;
 const WP_GRID_LEFT = (400 - (WP_COLS * WP_CARD_W + (WP_COLS - 1) * WP_GAP_X)) / 2; // 20px
 const WP_GRID_TOP = 105;
 
-// 현재 가챠에서 획득 가능한 배경화면 (가챠 전용)
-const GACHA_WP_IDS = ['wp_hanok', 'wp_lake', 'wp_maehwa'];
-// 표시할 전체 배경화면 = 기본 제공 3종 + 가챠 3종 (총 6종, 2행 3열)
-const AVAILABLE_WP_IDS = [...DEFAULT_WP_IDS, ...GACHA_WP_IDS];
+// 표시할 전체 배경화면 = 기본 제공 + 가챠 (wallpaper.ts WALLPAPERS 기준 자동 파생)
+const AVAILABLE_WP_SET = new Set([...DEFAULT_WP_IDS, ...GACHA_WP_IDS]);
 
 // ── 스크롤 영역 (헤더 아래 ~ 하단 버튼 위) ─────────────────────────────────
 const SCROLL_TOP = 95;
@@ -113,7 +112,7 @@ export default class CharacterSelectScene extends Phaser.Scene {
       }
     }
     // 배경화면 bgKey(세로 이미지) 사전 로드 — 표시 대상 3종만
-    for (const wp of WALLPAPERS.filter(w => AVAILABLE_WP_IDS.includes(w.id))) {
+    for (const wp of WALLPAPERS.filter(w => AVAILABLE_WP_SET.has(w.id))) {
       if (!this.textures.exists(wp.bgKey)) {
         this.load.image(wp.bgKey, wp.bgPath);
       }
@@ -312,7 +311,7 @@ export default class CharacterSelectScene extends Phaser.Scene {
     // ownedWpIds: create() 초기화 + sync callback에서 직접 갱신
     // selectedWpId: applyWallpaper()가 항상 동기 업데이트 → 재조회 불필요
 
-    const availableWps = WALLPAPERS.filter(w => AVAILABLE_WP_IDS.includes(w.id));
+    const availableWps = WALLPAPERS.filter(w => AVAILABLE_WP_SET.has(w.id));
     availableWps.forEach((wp, index) => {
       const col = index % WP_COLS;
       const row = Math.floor(index / WP_COLS);

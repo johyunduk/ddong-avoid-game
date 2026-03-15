@@ -10,9 +10,10 @@ const corsHeaders = {
 // 뽑기당 드롭율 3.5% → 종당 실효 확률 0.35% (캐릭터 UR과 동일 수준)
 const WP_DROP_CHANCE = 0.035; // 슬롯당 3.5% → 종당 실효 확률 약 1.17%
 const WP_POOL = [
-  { id: 'wp_hanok'  },
-  { id: 'wp_lake'   },
-  { id: 'wp_maehwa' },
+  { id: 'wp_hanok'     },
+  { id: 'wp_lake'      },
+  { id: 'wp_maehwa'    },
+  { id: 'wp_gold_mine' },
 ];
 
 function pullWallpaper(): { id: string } {
