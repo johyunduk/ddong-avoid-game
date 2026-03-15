@@ -1,0 +1,107 @@
+Implement the following plan:
+
+# 기본 배경화면 기본 제공 플랜
+
+## Context
+기존 난이도별 기본 배경(background.webp, background2.webp, background3.webp)을 수집 화면의 배경 탭에 처음부터 보유 상태로 노출한다(Option A). 가챠 배경(한옥/호수/매화)과 함께 6종이 2행 3열로 표시되며, 기본 배경은 잠금 없이 항상 선택 가능하다. 선택하지 않으면 난이도별 기본 배경이 그대로 유지된다.
+
+---
+
+## 수정 파일
+
+| 파일 | 변경 내용 |
+|------|---------|
+| `src/utils/wallpaper.ts` | DEFAULT_WP_IDS 상수 추가, WALLPAPERS에 3종 기본 배경 항목 추가, getOwnedWallpapers()에서 DEFAULT_WP_IDS 항상 포함 |
+| `src/scenes/CharacterSelectScene.ts` | AVAILABLE_WP_IDS 확장(6종), preload/카드 배지 구분 |
+
+GameScene, DifficultySelectScene, gacha-pull 수정 없음.
+
+---
+
+## 구현 단계
+
+### Step 1: `src/utils/wallpaper.ts`
+
+#### 1-1. DEFAULT_WP_IDS 상수 추가
+```typescript
+export const DEFAULT_WP_IDS = ['wp_bg_easy', 'wp_bg_normal', 'wp_bg_hard'];
+```
+
+#### 1-2. WALLPAPERS 배열 상단에 기본 배경 3종 추가
+기존 에셋(assets/backgrounds/*.webp) 재활용. bgKey는 GameScene에서 이미 사용 중인 텍스처 키 그대로 사용.
+
+```typescript
+// WALLPAPERS 배열 맨 앞에 추가
+{ id: 'wp_bg_easy',   name: '배경 I',   thumbKey: 'background',  thumbPath: 'assets/backgrounds/background.webp',  bgKey: 'background',  bgPath: 'assets/backgrounds/background.webp',  description: 'EASY · HARD 기본 배경' },
+{ id: 'wp_bg_normal', name: '배경 II',  thumbKey: 'background3', thumbPath: 'assets/backgrounds/background3.webp', bgKey: 'background3', bgPath: 'assets/backgrounds/background3.webp', description: 'NORMAL 기본 배경' },
+{ id: 'wp_bg_hard',   name: '배경 III', thumbKey: 'background2', thumbPath: 'assets/backgrounds/background2.webp', bgKey: 'background2', bgPath: 'assets/backgrounds/background2.webp', description: 'EXTREME 기본 배경' },
+```
+
+> thumbKey = bgKey (별도 썸네일 없음, 동일 이미지 재사용)
+
+#### 1-3. getOwnedWallpapers() 반환 시 DEFAULT_WP_IDS 항상 병합
+character.ts의 chibi 패턴과 동일.
+
+```typescript
+// 기존 return list; 직전에 삽입
+for (const id of DEFAULT_WP_IDS) {
+  if (!list.includes(id)) list.push(id);
+}
+return list;
+```
+
+서명(sig)은 저장된 목록 기준으로 검증하므로 이 병합은 읽기 전용으로 서명에 영향 없음.
+getSafeSelectedWallpaper()는 getOwnedWallpapers()를 호출하므로 DEFAULT_WP_IDS 선택도 유효 처리됨.
+
+---
+
+### Step 2: `src/scenes/CharacterSelectScene.ts`
+
+#### 2-1. AVAILABLE_WP_IDS 상수 변경
+```typescript
+// 기존
+const AVAILABLE_WP_IDS = ['wp_hanok', 'wp_lake', 'wp_maehwa'];
+
+// 변경 후 (DEFAULT_WP_IDS import 추가)
+import { WALLPAPERS, DEFAULT_WP_IDS, getOwnedWallpapers, ... } from '../utils/wallpaper';
+
+const GACHA_WP_IDS = ['wp_hanok', 'wp_lake', 'wp_maehwa'];
+const AVAILABLE_WP_IDS = [...DEFAULT_WP_IDS, ...GACHA_WP_IDS]; // 6종
+```
+
+그리드: 6종 × 3열 = 2행. 스크롤 없음(contentBottom ≈ 460 < SCROLL_BOTTOM 548).
+
+#### 2-2. preload() — 기본 배경 bgKey 조건부 로드
+기존 코드가 `AVAILABLE_WP_IDS` 기준으로 필터링해서 로드하므로 자동 처리됨.
+단, 기본 배경의 bgKey(`background`, `background2`, `background3`)는 DifficultySelectScene에서 이미 로드됐을 수 있음 → `!this.textures.exists()` 체크가 이미 있어 중복 로드 없음.
+
+#### 2-3. createWallpaperCard() — 기본/가챠 배지 구분
+```typescript
+// WP 배지 텍스트를 기본/가챠에 따라 다르게
+const isDefault = DEFAULT_WP_IDS.includes(wp.id);
+const badgeText = isDefault ? '기본' : 'WP';
+const badgeColor = isDefault ? '#aaaaaa' : WP_ACCENT_HEX;
+```
+
+기본 배경 카드: 항상 isOwned=true이므로 자물쇠 없음, 테두리는 WP_ACCENT_INT 유지.
+
+---
+
+## 검증
+
+1. `npx tsc --noEmit` — 에러 없음 확인
+2. CharacterSelectScene → 배경 탭 → 6종 카드 표시, 기본 3종 잠금 없음 확인
+3. 기본 배경 선택 → 인게임 적용 확인 (EASY/NORMAL/HARD 모두)
+4. 가챠 배경 선택 → 기본 배경과 동일하게 모든 난이도에 적용되는지 확인
+5. 선택 해제(null) → 난이도별 기본 배경으로 복귀 확인
+
+
+If you need specific details from before exiting plan mode (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/johyunduk/.REDACTED.jsonl
+
+---
+
+이거 릴리즈 노트 작성해줘
+
+---
+
+깃 푸시해줘

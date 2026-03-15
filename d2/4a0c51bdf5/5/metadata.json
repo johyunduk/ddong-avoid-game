@@ -1,0 +1,40 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "d24a0c51bdf5",
+  "session_id": "7765584d-831a-44d2-a245-b57b31aacb4c",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-15T04:00:26.800598Z",
+  "branch": "dev",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "public/assets/wallpapers/hanok_bg.webp",
+    "public/assets/wallpapers/hanok_thumb.webp",
+    "public/assets/wallpapers/lake_bg.webp",
+    "public/assets/wallpapers/lake_thumb.webp",
+    "public/assets/wallpapers/maehwa_bg.webp",
+    "public/assets/wallpapers/maehwa_thumb.webp",
+    "src/data/releaseNotes.ts",
+    "src/scenes/CharacterSelectScene.ts",
+    "src/utils/wallpaper.ts",
+    "supabase/migrations/20260315_user_wallpapers.sql"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "5b2321b02b8f",
+  "token_usage": {
+    "input_tokens": 31,
+    "cache_creation_tokens": 94273,
+    "cache_read_tokens": 1038147,
+    "output_tokens": 8112,
+    "api_call_count": 25
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-15T04:00:26.694475Z",
+    "agent_lines": 656,
+    "human_added": 334,
+    "human_modified": 5,
+    "human_removed": 0,
+    "total_committed": 995,
+    "agent_percentage": 65.92964824120602
+  },
+  "transcript_path": ".claude/projects/-Users-johyunduk-Projects-ddong-avoid-game/7765584d-831a-44d2-a245-b57b31aacb4c.jsonl"
+}
