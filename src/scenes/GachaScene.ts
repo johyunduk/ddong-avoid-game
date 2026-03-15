@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { gachaPull, syncOwnedCharacters, syncOwnedWallpapers, type PulledCharacter, type PulledWallpaper } from '../utils/gacha';
 import { CHARACTERS, getCharacterDef, addOwnedCharacter, getDuplicateCount, setDuplicateCount, type CharacterDef } from '../utils/character';
-import { WALLPAPERS, addOwnedWallpaper, WP_ACCENT_INT, WP_ACCENT_HEX, type BackgroundDef } from '../utils/wallpaper';
+import { WALLPAPERS, getWallpaperDef, addOwnedWallpaper, WP_ACCENT_INT, WP_ACCENT_HEX, type BackgroundDef } from '../utils/wallpaper';
 import { getSkorBalance, getCachedSkorBalance, cacheSkorBalance } from '../utils/skor';
 
 // vids/ 디렉토리에 개인 영상이 존재하는 캐릭터 목록
@@ -577,7 +577,7 @@ export default class GachaScene extends Phaser.Scene {
 
     // 배경화면 슬롯이면 배경 리빌 카드로 분기
     if (item.kind === 'wallpaper') {
-      const def = WALLPAPERS.find(w => w.id === item.data.id);
+      const def = getWallpaperDef(item.data.id);
       this.showWallpaperRevealCard(item.data, def);
       return;
     }
@@ -793,7 +793,7 @@ export default class GachaScene extends Phaser.Scene {
       const row = Math.floor(globalIndex / 5);
       const x = startX + col * (cardW + gapX);
       const y = startY + row * (cardH + gapY);
-      const wpDef = WALLPAPERS.find(w => w.id === wp.id);
+      const wpDef = getWallpaperDef(wp.id);
 
       const bg = this.add.rectangle(x, y, cardW, cardH, 0x0d0d1a)
         .setStrokeStyle(1.5, WP_ACCENT_INT).setAlpha(0);

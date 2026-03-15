@@ -178,7 +178,8 @@ export function getOwnedWallpapers(): string[] {
       if (!list.includes(id)) list.push(id);
     }
     return list;
-  } catch {
+  } catch (e) {
+    console.error('[getOwnedWallpapers] JSON 파싱 실패:', e);
     return [...DEFAULT_WP_IDS];
   }
 }

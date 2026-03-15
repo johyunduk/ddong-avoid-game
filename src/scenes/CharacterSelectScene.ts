@@ -156,7 +156,10 @@ export default class CharacterSelectScene extends Phaser.Scene {
       if (!this.scene.isActive()) return;
       const wpChanged = synced.length !== this.ownedWpIds.length ||
         synced.some(id => !this.ownedWpIds.includes(id));
-      if (wpChanged && this.activeTab === 'wallpaper') this.rebuildGrid();
+      if (wpChanged) {
+        this.ownedWpIds = synced;
+        if (this.activeTab === 'wallpaper') this.rebuildGrid();
+      }
     }).catch(() => { /* 네트워크 오류 시 로컬 상태 유지 */ });
 
     const selectedDef = CHARACTERS.find(c => c.id === this.selectedId) ?? CHARACTERS[0];
@@ -306,8 +309,8 @@ export default class CharacterSelectScene extends Phaser.Scene {
 
   private buildWallpaperGrid() {
     this.wpHighlights.clear();
-    this.ownedWpIds = getOwnedWallpapers();
-    this.selectedWpId = getSelectedWallpaper();
+    // ownedWpIds: create() 초기화 + sync callback에서 직접 갱신
+    // selectedWpId: applyWallpaper()가 항상 동기 업데이트 → 재조회 불필요
 
     const availableWps = WALLPAPERS.filter(w => AVAILABLE_WP_IDS.includes(w.id));
     availableWps.forEach((wp, index) => {
