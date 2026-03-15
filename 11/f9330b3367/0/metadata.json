@@ -1,0 +1,32 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "11f9330b3367",
+  "session_id": "2bef8c3c-b9ff-4895-97cc-7eb9a3e2b622",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-15T12:33:16.486193Z",
+  "branch": "dev",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src/scenes/DifficultySelectScene.ts"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "93ff5cc5527e",
+  "transcript_identifier_at_start": "caa0046c-7d82-4d01-ba67-e92b307cb627",
+  "token_usage": {
+    "input_tokens": 84,
+    "cache_creation_tokens": 337899,
+    "cache_read_tokens": 3907797,
+    "output_tokens": 32000,
+    "api_call_count": 62
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-15T12:33:16.234317Z",
+    "agent_lines": 0,
+    "human_added": 6,
+    "human_modified": 44,
+    "human_removed": 0,
+    "total_committed": 6,
+    "agent_percentage": 0
+  },
+  "transcript_path": ".claude/projects/-Users-johyunduk-Projects-ddong-avoid-game/2bef8c3c-b9ff-4895-97cc-7eb9a3e2b622.jsonl"
+}
