@@ -10,6 +10,9 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
   private readonly onKeyDown: (e: KeyboardEvent) => void;
   private readonly onKeyUp: (e: KeyboardEvent) => void;
 
+  // 현재 텍스처 방향 캐시 — setTexture를 매 프레임 호출하지 않기 위해
+  private currentDir: string = 'front';
+
   // 아이템 효과 상태
   private isInvincible: boolean = false;
   private speedBoostActive: boolean = false;
@@ -73,15 +76,16 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
 
   update() {
     let isMoving = false;
+    let nextDir: string = this.currentDir;
 
     // 좌우 이동 (Phaser 키보드 OR window 레벨 키보드 둘 다 체크)
     if (this.cursors.left.isDown || this.leftKeyDown) {
       this.setVelocityX(-this.speed);
-      this.setTexture(`${this.texturePrefix}left`);
+      nextDir = 'left';
       isMoving = true;
     } else if (this.cursors.right.isDown || this.rightKeyDown) {
       this.setVelocityX(this.speed);
-      this.setTexture(`${this.texturePrefix}right`);
+      nextDir = 'right';
       isMoving = true;
     } else {
       this.setVelocityX(0);
@@ -94,18 +98,24 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
 
       if (pointerX < screenCenter) {
         this.setVelocityX(-this.speed);
-        this.setTexture(`${this.texturePrefix}left`); // 왼쪽 이미지
+        nextDir = 'left';
         isMoving = true;
       } else if (pointerX > screenCenter) {
         this.setVelocityX(this.speed);
-        this.setTexture(`${this.texturePrefix}right`); // 오른쪽 이미지
+        nextDir = 'right';
         isMoving = true;
       }
     }
 
     // 멈춰있을 때는 정면 이미지
     if (!isMoving && this.body?.velocity.x === 0) {
-      this.setTexture(`${this.texturePrefix}front`);
+      nextDir = 'front';
+    }
+
+    // 방향이 실제로 바뀔 때만 setTexture 호출 (매 프레임 호출 방지)
+    if (nextDir !== this.currentDir) {
+      this.setTexture(`${this.texturePrefix}${nextDir}`);
+      this.currentDir = nextDir;
     }
   }
 

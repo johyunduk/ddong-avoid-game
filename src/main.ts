@@ -23,6 +23,11 @@ const config: Phaser.Types.Core.GameConfig = {
       fixedStep: true
     }
   },
+  input: {
+    touch: {
+      capture: false // CSS touch-action: none이 스크롤 방지 → preventDefault 불필요, 컴포지터 블로킹 제거
+    }
+  },
   scene: [ModeSelectScene, DifficultySelectScene, GameScene, LeaderboardScene, ReleaseNotesScene, CharacterSelectScene, GachaScene],
   scale: {
     mode: Phaser.Scale.FIT,
