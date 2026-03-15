@@ -1,0 +1,27 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "d6beff393753",
+  "strategy": "manual-commit",
+  "branch": "dev",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src/config/synergyMap.ts",
+    "src/scenes/GameScene.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/d6/beff393753/0/metadata.json",
+      "transcript": "/d6/beff393753/0/full.jsonl",
+      "context": "/d6/beff393753/0/context.md",
+      "content_hash": "/d6/beff393753/0/content_hash.txt",
+      "prompt": "/d6/beff393753/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 155,
+    "cache_creation_tokens": 491288,
+    "cache_read_tokens": 9533868,
+    "output_tokens": 51746,
+    "api_call_count": 110
+  }
+}
