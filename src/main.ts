@@ -20,7 +20,7 @@ const config: Phaser.Types.Core.GameConfig = {
     arcade: {
       gravity: { y: 0, x: 0 },
       debug: false, // 히트박스 on/off
-      fixedStep: true
+      fixedStep: false
     }
   },
   input: {
@@ -38,8 +38,7 @@ const config: Phaser.Types.Core.GameConfig = {
     roundPixels: true
   },
   fps: {
-    target: 60,
-    smoothStep: true
+    smoothStep: false // 네이티브 리프레시 레이트 사용, raw delta로 프레임 타이밍 드리프트 방지
   }
 };
 
