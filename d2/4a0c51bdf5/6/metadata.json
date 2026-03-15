@@ -1,0 +1,44 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "d24a0c51bdf5",
+  "session_id": "cfaa36d6-e5ec-412b-abee-4c5292c8f4bf",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-15T04:00:30.932685Z",
+  "branch": "dev",
+  "checkpoints_count": 13,
+  "files_touched": [
+    "public/assets/wallpapers/hanok_bg.webp",
+    "public/assets/wallpapers/hanok_thumb.webp",
+    "public/assets/wallpapers/lake_bg.webp",
+    "public/assets/wallpapers/lake_thumb.webp",
+    "public/assets/wallpapers/maehwa_bg.webp",
+    "public/assets/wallpapers/maehwa_thumb.webp",
+    "src/scenes/CharacterSelectScene.ts",
+    "src/scenes/DifficultySelectScene.ts",
+    "src/scenes/GachaScene.ts",
+    "src/scenes/GameScene.ts",
+    "src/utils/gacha.ts",
+    "src/utils/wallpaper.ts",
+    "supabase/functions/gacha-pull/index.ts",
+    "supabase/migrations/20260315_user_wallpapers.sql"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "199249f9af3f",
+  "token_usage": {
+    "input_tokens": 1290,
+    "cache_creation_tokens": 280116,
+    "cache_read_tokens": 17396037,
+    "output_tokens": 108202,
+    "api_call_count": 158
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-15T04:00:29.512636Z",
+    "agent_lines": 949,
+    "human_added": 0,
+    "human_modified": 18,
+    "human_removed": 11,
+    "total_committed": 967,
+    "agent_percentage": 98.13857290589452
+  },
+  "transcript_path": ".claude/projects/-Users-johyunduk-Projects-ddong-avoid-game/cfaa36d6-e5ec-412b-abee-4c5292c8f4bf.jsonl"
+}
