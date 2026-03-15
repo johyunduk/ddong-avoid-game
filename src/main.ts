@@ -20,7 +20,7 @@ const config: Phaser.Types.Core.GameConfig = {
     arcade: {
       gravity: { y: 0, x: 0 },
       debug: false, // 히트박스 on/off
-      fixedStep: false
+      fixedStep: true
     }
   },
   scene: [ModeSelectScene, DifficultySelectScene, GameScene, LeaderboardScene, ReleaseNotesScene, CharacterSelectScene, GachaScene],
