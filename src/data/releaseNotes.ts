@@ -6,6 +6,13 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: 'v2.2.0',
+    date: '2026-03-15',
+    changes: [
+      '배경화면 시스템 추가',
+    ],
+  },
+  {
     version: 'v2.1.0',
     date: '2026-03-09',
     changes: [

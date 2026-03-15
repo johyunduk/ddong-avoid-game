@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
-import { gachaPull, syncOwnedCharacters, type PulledCharacter } from '../utils/gacha';
+import { gachaPull, syncOwnedCharacters, syncOwnedWallpapers, type PulledCharacter, type PulledWallpaper } from '../utils/gacha';
 import { CHARACTERS, getCharacterDef, addOwnedCharacter, getDuplicateCount, setDuplicateCount, type CharacterDef } from '../utils/character';
+import { WALLPAPERS, addOwnedWallpaper, WP_ACCENT_INT, WP_ACCENT_HEX, type BackgroundDef } from '../utils/wallpaper';
 import { getSkorBalance, getCachedSkorBalance, cacheSkorBalance } from '../utils/skor';
 
 // vids/ 디렉토리에 개인 영상이 존재하는 캐릭터 목록
@@ -29,7 +30,9 @@ export default class GachaScene extends Phaser.Scene {
   private skorBalance = 0;
   private remainingSkor = 0;
   private pullResults: PulledCharacter[] = [];
-  private revealIndex = 0;
+  private wpResults: PulledWallpaper[] = [];
+  private revealItems: Array<{ kind: 'character'; data: PulledCharacter } | { kind: 'wallpaper'; data: PulledWallpaper }> = [];
+  private revealItemIndex = 0;
   private terminalTexts: Phaser.GameObjects.Text[] = [];
   private skipTerminal = false;
 
@@ -74,7 +77,8 @@ export default class GachaScene extends Phaser.Scene {
 
   create() {
     this.pullResults = [];
-    this.revealIndex = 0;
+    this.revealItems = [];
+    this.revealItemIndex = 0;
     this.buildLobby();
   }
 
@@ -283,7 +287,14 @@ export default class GachaScene extends Phaser.Scene {
       if (!this.scene.isActive()) return;
 
       this.pullResults = result.characters;
+      this.wpResults = result.wallpapers ?? [];
       this.remainingSkor = result.remainingSkor;
+      // 슬롯 순서 보존: 캐릭터 → 배경 순 통합 큐
+      this.revealItems = [
+        ...result.characters.map(c => ({ kind: 'character' as const, data: c })),
+        ...(result.wallpapers ?? []).map(w => ({ kind: 'wallpaper' as const, data: w })),
+      ];
+      this.revealItemIndex = 0;
 
       // ① 결과의 신규 캐릭터 즉시 저장 (sync 실패 대비 fallback)
       result.characters.filter(c => c.isNew).forEach(c => addOwnedCharacter(c.id));
@@ -291,8 +302,11 @@ export default class GachaScene extends Phaser.Scene {
       result.characters.filter(c => !c.isNew).forEach(c => {
         setDuplicateCount(c.id, getDuplicateCount(c.id) + 1);
       });
+      // ① 신규 배경화면 즉시 저장 (sync 실패 대비 fallback)
+      this.wpResults.filter(w => w.isNew).forEach(w => addOwnedWallpaper(w.id));
       // ② 서버 DB 전체 동기화 (비동기, 에러 로그만)
       syncOwnedCharacters().catch(e => console.error('[GachaScene] syncOwnedCharacters 실패:', e));
+      syncOwnedWallpapers().catch(e => console.error('[GachaScene] syncOwnedWallpapers 실패:', e));
 
       // ② 터미널 애니메이션 (UR이면 중반부터 빨간 에러 스타일로 전환)
       const isUR = result.video === 'red'
@@ -304,10 +318,12 @@ export default class GachaScene extends Phaser.Scene {
       await this.runTerminalAnimation(count, isUR);
       this.skipTerminal = false;
 
-      // ③ 캐릭터별 개인 영상 동적 로드 → 리빌
-      await this.loadCharVideos(result.characters.map(c => c.id));
+      // ③ 캐릭터별 개인 영상 + 배경화면 이미지 동적 로드 → 리빌
+      await Promise.all([
+        this.loadCharVideos(result.characters.map(c => c.id)),
+        this.loadWallpaperBgs(this.wpResults.map(w => w.id)),
+      ]);
 
-      this.revealIndex = 0;
       this.showNextReveal();
     } catch {
       if (!this.scene.isActive()) return;
@@ -388,6 +404,134 @@ export default class GachaScene extends Phaser.Scene {
     this.time.delayedCall(500, applyContain);
   }
 
+  private loadWallpaperBgs(ids: string[]): Promise<void> {
+    const toLoad = ids.filter(id => {
+      const def = WALLPAPERS.find(w => w.id === id);
+      return def && !this.textures.exists(def.bgKey);
+    });
+    if (toLoad.length === 0) return Promise.resolve();
+
+    return new Promise(resolve => {
+      toLoad.forEach(id => {
+        const def = WALLPAPERS.find(w => w.id === id);
+        if (def) this.load.image(def.bgKey, def.bgPath);
+      });
+      this.load.once(Phaser.Loader.Events.COMPLETE, resolve);
+      this.load.once(Phaser.Loader.Events.FILE_LOAD_ERROR, resolve);
+      this.load.start();
+    });
+  }
+
+  private showWallpaperRevealCard(wp: PulledWallpaper, def: BackgroundDef | undefined) {
+    this.clearUI();
+
+    const wpName = def?.name ?? wp.id;
+
+    // ── 배경: 실제 배경화면 이미지 (있으면) 또는 단색 ──
+    if (def && this.textures.exists(def.bgKey)) {
+      this.add.image(200, 300, def.bgKey).setDisplaySize(400, 600);
+    } else {
+      this.add.rectangle(200, 300, 400, 600, 0x050515);
+    }
+    // 어두운 오버레이
+    this.add.rectangle(200, 300, 400, 600, 0x000000, 0.5);
+
+    // 보라 헤이즈
+    this.add.circle(200, 260, 220, WP_ACCENT_INT, 0.10);
+    this.add.circle(200, 260, 120, WP_ACCENT_INT, 0.07);
+
+    // ── 상단 타이틀 ──
+    const title = this.add.text(200, 60, '배경화면 획득!', {
+      fontSize: '22px', color: '#ffffff', fontStyle: 'bold',
+      stroke: '#000000', strokeThickness: 5,
+    }).setOrigin(0.5).setAlpha(0);
+    this.tweens.add({ targets: title, alpha: 1, duration: 300, delay: 100 });
+
+    // ── WALLPAPER 배지 ──
+    const badge = this.add.text(200, 100, 'WALLPAPER', {
+      fontSize: '13px', color: WP_ACCENT_HEX, fontStyle: 'bold',
+      stroke: '#000000', strokeThickness: 4,
+      fontFamily: 'monospace', letterSpacing: 4,
+    }).setOrigin(0.5).setAlpha(0);
+    this.tweens.add({ targets: badge, alpha: 1, duration: 300, delay: 250 });
+
+    // ── 배경화면 이름 ──
+    const nameText = this.add.text(200, 500, wpName, {
+      fontSize: '30px', color: '#ffffff', fontStyle: 'bold',
+      stroke: '#000000', strokeThickness: 6,
+    }).setOrigin(0.5).setAlpha(0);
+    this.tweens.add({
+      targets: nameText, alpha: 1, y: { from: 520, to: 500 },
+      duration: 400, ease: 'Back.easeOut', delay: 400,
+    });
+
+    // ── 설명 ──
+    if (def?.description) {
+      const desc = this.add.text(200, 544, def.description, {
+        fontSize: '13px', color: '#cccccc',
+        stroke: '#000000', strokeThickness: 3,
+      }).setOrigin(0.5).setAlpha(0);
+      this.tweens.add({ targets: desc, alpha: 1, duration: 300, delay: 550 });
+    }
+
+    // ── NEW! 배지 ──
+    if (wp.isNew) {
+      const newBadge = this.add.text(325, 145, ' NEW! ', {
+        fontSize: '15px', color: '#ffff00', fontStyle: 'bold',
+        backgroundColor: '#cc0000', stroke: '#000', strokeThickness: 2,
+      }).setOrigin(0.5).setAlpha(0).setScale(0);
+      this.tweens.add({
+        targets: newBadge, alpha: 1, scaleX: 1, scaleY: 1,
+        duration: 300, ease: 'Back.easeOut', delay: 650,
+      });
+    }
+
+    // ── 탭 안내 ──
+    const isLast = this.revealItemIndex >= this.revealItems.length - 1;
+    const hint = isLast ? 'TAP → RESULTS' : `TAP → NEXT  (${this.revealItemIndex + 1}/${this.revealItems.length})`;
+    const tapHint = this.add.text(200, 576, hint, {
+      fontSize: '13px', color: '#555555', fontFamily: 'monospace',
+    }).setOrigin(0.5);
+    this.tweens.add({
+      targets: tapHint, alpha: { from: 0.3, to: 1 }, duration: 600, yoyo: true, repeat: -1,
+    });
+
+    // 10연차: 결과 화면으로 바로 건너뛰기
+    if (this.revealItems.length > 1) {
+      this.addSkipButton(() => {
+        this.tweens.killAll();
+        this.time.removeAllEvents();
+        this.input.off('pointerdown');
+        this.showSummary();
+      });
+    }
+
+    // 700ms 후 탭 진행
+    this.time.delayedCall(700, () => {
+      if (!this.scene.isActive()) return;
+
+      let advanced = false;
+      const advance = () => {
+        if (advanced) return;
+        advanced = true;
+        this.input.off('pointerdown', advance);
+        this.tweens.killAll();
+        this.time.removeAllEvents();
+        this.revealItemIndex++;
+        this.showNextReveal();
+      };
+
+      this.input.on('pointerdown', advance);
+
+      // 10뽑기는 3.5초 자동 진행
+      if (this.revealItems.length > 1) {
+        this.time.delayedCall(3500, () => {
+          if (this.scene.isActive()) advance();
+        });
+      }
+    });
+  }
+
   private loadCharVideos(ids: string[]): Promise<void> {
     const toLoad = ids.filter(
       id => CHARS_WITH_VIDS.has(id) && !this.cache.video.exists(`vid_${id}`)
@@ -424,12 +568,21 @@ export default class GachaScene extends Phaser.Scene {
   // ═══════════════════════════════════════════════════
 
   private showNextReveal() {
-    if (this.revealIndex >= this.pullResults.length) {
+    if (this.revealItemIndex >= this.revealItems.length) {
       this.showSummary();
       return;
     }
 
-    const pulled = this.pullResults[this.revealIndex];
+    const item = this.revealItems[this.revealItemIndex];
+
+    // 배경화면 슬롯이면 배경 리빌 카드로 분기
+    if (item.kind === 'wallpaper') {
+      const def = WALLPAPERS.find(w => w.id === item.data.id);
+      this.showWallpaperRevealCard(item.data, def);
+      return;
+    }
+
+    const pulled = item.data;
     const def = getCharacterDef(pulled.id);
 
     const { width, height } = this.cameras.main;
@@ -456,7 +609,7 @@ export default class GachaScene extends Phaser.Scene {
         this.input.off('pointerdown', proceed);
         if (vid.active) vid.destroy();
         // 10연차: 영상 스킵 시 남은 리빌 전체 건너뛰고 결과 화면으로
-        if (this.pullResults.length > 1) {
+        if (this.revealItems.length > 1) {
           this.showSummary();
         } else {
           this.showRevealCard(pulled, def);
@@ -471,6 +624,9 @@ export default class GachaScene extends Phaser.Scene {
   }
 
   private showRevealCard(pulled: PulledCharacter, def: CharacterDef) {
+    // 영상 페이즈의 스킵 버튼 등 잔여 오브젝트 제거
+    this.clearUI();
+
     const gColor = GRADE_COLORS[pulled.grade] ?? 0xffffff;
 
     // ── 배경: 사이버 우주 이미지 + 등급 컬러 헤이즈 ──
@@ -532,10 +688,10 @@ export default class GachaScene extends Phaser.Scene {
     }
 
     // 탭 안내
-    const isLast = this.revealIndex >= this.pullResults.length - 1;
+    const isLast = this.revealItemIndex >= this.revealItems.length - 1;
     const hint = isLast
       ? 'TAP → RESULTS'
-      : `TAP → NEXT  (${this.revealIndex + 1}/${this.pullResults.length})`;
+      : `TAP → NEXT  (${this.revealItemIndex + 1}/${this.revealItems.length})`;
     const tapHint = this.add.text(200, 562, hint, {
       fontSize: '13px', color: '#555555', fontFamily: 'monospace',
     }).setOrigin(0.5);
@@ -544,7 +700,7 @@ export default class GachaScene extends Phaser.Scene {
     });
 
     // 10연차: 결과 화면으로 바로 건너뛰기 (영상 유무와 무관하게 항상 표시)
-    if (this.pullResults.length > 1) {
+    if (this.revealItems.length > 1) {
       this.addSkipButton(() => {
         this.tweens.killAll();
         this.time.removeAllEvents();
@@ -564,14 +720,14 @@ export default class GachaScene extends Phaser.Scene {
         this.input.off('pointerdown', advance);
         this.tweens.killAll();
         this.time.removeAllEvents();
-        this.revealIndex++;
+        this.revealItemIndex++;
         this.showNextReveal();
       };
 
       this.input.on('pointerdown', advance);
 
       // 10뽑기는 3.5초 자동 진행
-      if (this.pullResults.length > 1) {
+      if (this.revealItems.length > 1) {
         this.time.delayedCall(3500, () => {
           if (this.scene.isActive()) advance();
         });
@@ -596,14 +752,17 @@ export default class GachaScene extends Phaser.Scene {
       fontSize: '17px', color: '#00ff41', fontStyle: 'bold', fontFamily: 'monospace',
     }).setOrigin(0.5);
 
-    // 결과 카드 그리드
-    const total = this.pullResults.length;
+    // ── 캐릭터 + 배경화면 통합 그리드 ───────────────────────────────
+    const charCount = this.pullResults.length;
+    const wpCount = this.wpResults.length;
+    const total = charCount + wpCount;
     const cols = Math.min(total, 5);
     const cardW = 64, cardH = 84, gapX = 8, gapY = 12;
     const totalW = cols * cardW + (cols - 1) * gapX;
     const startX = (400 - totalW) / 2 + cardW / 2;
     const startY = total > 5 ? 130 : 175;
 
+    // 캐릭터 카드
     this.pullResults.forEach((pulled, i) => {
       const def = getCharacterDef(pulled.id);
       const col = i % 5;
@@ -616,34 +775,84 @@ export default class GachaScene extends Phaser.Scene {
       const img = this.add.image(x, y - 8, def.imageKey).setDisplaySize(cardW - 19, cardH - 22).setAlpha(0);
       const nm  = this.add.text(x, y + cardH / 2 - 10, def.name, { fontSize: '9px', color: '#cccccc' }).setOrigin(0.5).setAlpha(0);
 
+      const charTargets: Phaser.GameObjects.GameObject[] = [bg, img, nm];
       if (pulled.isNew) {
-        this.add.text(x + cardW / 2, y - cardH / 2 + 2, 'NEW', {
+        const newBadge = this.add.text(x + cardW / 2, y - cardH / 2 + 2, 'NEW', {
           fontSize: '8px', color: '#ffff00', backgroundColor: '#aa0000', padding: { x: 2, y: 1 },
         }).setOrigin(1, 0).setAlpha(0);
+        charTargets.push(newBadge);
       }
 
-      this.tweens.add({ targets: [bg, img, nm], alpha: 1, duration: 200, delay: i * 60 });
+      this.tweens.add({ targets: charTargets, alpha: 1, duration: 200, delay: i * 60 });
     });
 
+    // 배경화면 카드 (캐릭터 뒤에 이어서 배치)
+    this.wpResults.forEach((wp, i) => {
+      const globalIndex = charCount + i;
+      const col = globalIndex % 5;
+      const row = Math.floor(globalIndex / 5);
+      const x = startX + col * (cardW + gapX);
+      const y = startY + row * (cardH + gapY);
+      const wpDef = WALLPAPERS.find(w => w.id === wp.id);
+
+      const bg = this.add.rectangle(x, y, cardW, cardH, 0x0d0d1a)
+        .setStrokeStyle(1.5, WP_ACCENT_INT).setAlpha(0);
+
+      // 썸네일 (bgKey로 미리 로드된 이미지 사용)
+      if (wpDef && this.textures.exists(wpDef.bgKey)) {
+        const thumb = this.add.image(x, y - 8, wpDef.bgKey)
+          .setDisplaySize(cardW - 4, cardH - 22).setAlpha(0);
+        this.tweens.add({ targets: thumb, alpha: 1, duration: 200, delay: globalIndex * 60 });
+      }
+
+      // WP 배지 (우상단)
+      const wpBadge = this.add.text(x + cardW / 2, y - cardH / 2 + 2, 'WP', {
+        fontSize: '8px', color: WP_ACCENT_HEX, backgroundColor: '#000000cc',
+        padding: { x: 2, y: 1 },
+      }).setOrigin(1, 0).setAlpha(0);
+
+      const nm = this.add.text(x, y + cardH / 2 - 10, wpDef?.name ?? wp.id, {
+        fontSize: '9px', color: WP_ACCENT_HEX,
+      }).setOrigin(0.5).setAlpha(0);
+
+      const wpTargets: Phaser.GameObjects.GameObject[] = [bg, nm, wpBadge];
+      if (wp.isNew) {
+        const newBadge = this.add.text(x - cardW / 2, y - cardH / 2 + 2, 'NEW', {
+          fontSize: '8px', color: '#ffff00', backgroundColor: '#aa0000', padding: { x: 2, y: 1 },
+        }).setOrigin(0, 0).setAlpha(0);
+        wpTargets.push(newBadge);
+      }
+
+      this.tweens.add({ targets: wpTargets, alpha: 1, duration: 200, delay: globalIndex * 60 });
+    });
+
+    // 그리드 하단 계산
+    const totalRows = Math.ceil(total / 5);
+    const gridBottom = startY + (totalRows - 1) * (cardH + gapY) + cardH / 2;
+
     // 잔여 SKOR
-    const skorY = total > 5 ? 350 : 340;
+    const skorY = gridBottom + 20;
     this.add.text(200, skorY, `잔여 SKOR: ${Math.floor(this.remainingSkor)}`, {
       fontSize: '14px', color: '#00ff41', fontFamily: 'monospace',
     }).setOrigin(0.5);
 
     // 한 번 더 / 메인으로 버튼
-    const againBtn = this.add.rectangle(200, 445, 260, 52, 0x080818)
+    // btn1Y: skor 텍스트 하단(skorY+11) + 여백(14) + 버튼 반높이(26) = skorY+51
+    const btn1Y = Math.min(skorY + 51, 470);
+    const btn2Y = Math.min(btn1Y + 68, 550);
+
+    const againBtn = this.add.rectangle(200, btn1Y, 260, 52, 0x080818)
       .setStrokeStyle(1, 0x00ff41).setInteractive({ useHandCursor: true });
-    this.add.text(200, 445, '한 번 더', {
+    this.add.text(200, btn1Y, '한 번 더', {
       fontSize: '19px', color: '#00ff41', fontStyle: 'bold', fontFamily: 'monospace',
     }).setOrigin(0.5);
     againBtn.on('pointerover', () => againBtn.setFillStyle(0x081808));
     againBtn.on('pointerout',  () => againBtn.setFillStyle(0x080818));
     againBtn.on('pointerdown', () => this.buildLobby());
 
-    const mainBtn = this.add.rectangle(200, 525, 260, 52, 0x1a1a1a)
+    const mainBtn = this.add.rectangle(200, btn2Y, 260, 52, 0x1a1a1a)
       .setStrokeStyle(1, 0x444444).setInteractive({ useHandCursor: true });
-    this.add.text(200, 525, '메인으로', {
+    this.add.text(200, btn2Y, '메인으로', {
       fontSize: '19px', color: '#888888', fontStyle: 'bold', fontFamily: 'monospace',
     }).setOrigin(0.5);
     mainBtn.on('pointerover', () => mainBtn.setFillStyle(0x282828));

@@ -5,6 +5,20 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// ── 배경화면 풀 정의 ─────────────────────────────────────────────────────
+// 등급 없음. 10종 균등 확률.
+// 뽑기당 드롭율 3.5% → 종당 실효 확률 0.35% (캐릭터 UR과 동일 수준)
+const WP_DROP_CHANCE = 0.035; // 슬롯당 3.5% → 종당 실효 확률 약 1.17%
+const WP_POOL = [
+  { id: 'wp_hanok'  },
+  { id: 'wp_lake'   },
+  { id: 'wp_maehwa' },
+];
+
+function pullWallpaper(): { id: string } {
+  return WP_POOL[Math.floor(Math.random() * WP_POOL.length)];
+}
+
 // ── 뽑기 풀 정의 ────────────────────────────────────────────────────────
 // R 80% (10종 균등 배분), SR 19.3% (6종 균등 배분), UR 0.7% (2종 균등 배분)
 const SR_W  = 19.3 / 6;   // ≈ 3.217%
@@ -89,10 +103,11 @@ Deno.serve(async (req: Request) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // ── 1. SKOR 잔액 + 보유 캐릭터 병렬 조회 ───────────────────────
-    const [{ data: skorData }, { data: owned }] = await Promise.all([
+    // ── 1. SKOR 잔액 + 보유 캐릭터 + 보유 배경화면 병렬 조회 ────────
+    const [{ data: skorData }, { data: owned }, { data: ownedWp }] = await Promise.all([
       supabaseAdmin.from('user_skor').select('balance').eq('user_id', user.id).single(),
       supabaseAdmin.from('user_characters').select('character_id').eq('user_id', user.id),
+      supabaseAdmin.from('user_wallpapers').select('wallpaper_id').eq('user_id', user.id),
     ]);
 
     const balance = skorData?.balance ?? 0;
@@ -103,16 +118,31 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // ── 2. 캐릭터 결정 ────────────────────────────────────────────────
-    const pulls = Array.from({ length: count }, () => pullOne());
-
+    // ── 2. 슬롯별 결정: 각 슬롯은 배경화면 또는 캐릭터 중 하나
+    //       총합 = count, 추가 드롭 없음 ────────────────────────────────
     const ownedSet = new Set((owned ?? []).map((r: { character_id: string }) => r.character_id));
+    const ownedWpSet = new Set((ownedWp ?? []).map((r: { wallpaper_id: string }) => r.wallpaper_id));
 
-    const characters = pulls.map(p => ({
-      id: p.id,
-      grade: p.grade,
-      isNew: !ownedSet.has(p.id),
-    }));
+    const characters: { id: string; grade: string; isNew: boolean }[] = [];
+    const wallpapers: { id: string; isNew: boolean }[] = [];
+
+    for (let i = 0; i < count; i++) {
+      if (Math.random() < WP_DROP_CHANCE) {
+        // 이 슬롯은 배경화면
+        const wp = pullWallpaper();
+        wallpapers.push({ id: wp.id, isNew: !ownedWpSet.has(wp.id) });
+        ownedWpSet.add(wp.id); // 같은 pull 내 중복 isNew 방지
+      } else {
+        // 이 슬롯은 캐릭터
+        const char = pullOne();
+        characters.push({ id: char.id, grade: char.grade, isNew: !ownedSet.has(char.id) });
+      }
+    }
+
+    // ── 3. 신규 배경화면 등록 ────────────────────────────────────────────
+    const newWps = wallpapers
+      .filter(w => w.isNew)
+      .map(w => ({ user_id: user.id, wallpaper_id: w.id }));
 
     // ── 4. 신규 캐릭터 등록 + 중복 카운트 증가 + SKOR 차감 병렬 처리 ─────
     // 같은 캐릭터가 10연차에서 중복 등장할 수 있으므로 횟수 집계 후 처리
@@ -129,7 +159,7 @@ Deno.serve(async (req: Request) => {
     });
 
     const newBalance = balance - cost;
-    const [charResult, , skorResult] = await Promise.all([
+    const [charResult, , , skorResult] = await Promise.all([
       newChars.length > 0
         ? supabaseAdmin.from('user_characters').upsert(newChars, { onConflict: 'user_id,character_id' })
         : Promise.resolve({ error: null }),
@@ -143,6 +173,10 @@ Deno.serve(async (req: Request) => {
             })
           ))
         : Promise.resolve(null),
+      // 신규 배경화면 등록
+      newWps.length > 0
+        ? supabaseAdmin.from('user_wallpapers').upsert(newWps, { onConflict: 'user_id,wallpaper_id' })
+        : Promise.resolve({ error: null }),
       supabaseAdmin.from('user_skor').upsert(
         { user_id: user.id, balance: newBalance, updated_at: new Date().toISOString() },
         { onConflict: 'user_id' }
@@ -168,6 +202,7 @@ Deno.serve(async (req: Request) => {
         success: true,
         video: hasUR ? 'red' : 'green',
         characters,
+        wallpapers,
         remainingSkor: Math.floor(newBalance),
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

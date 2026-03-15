@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { setOwnedCharacters, getOwnedCharacters, setDuplicateCount } from './character';
+import { setOwnedWallpapers, getOwnedWallpapers } from './wallpaper';
 
 export interface PulledCharacter {
   id: string;
@@ -7,10 +8,16 @@ export interface PulledCharacter {
   isNew: boolean;
 }
 
+export interface PulledWallpaper {
+  id: string;
+  isNew: boolean;
+}
+
 export interface GachaPullResult {
   success: boolean;
   video: 'green' | 'red';
   characters: PulledCharacter[];
+  wallpapers: PulledWallpaper[];  // 없으면 빈 배열
   remainingSkor: number;
 }
 
@@ -34,6 +41,28 @@ export async function gachaPull(pullType: 'single' | 'multi'): Promise<GachaPull
   }
 
   return data as GachaPullResult;
+}
+
+/**
+ * 서버 DB의 보유 배경화면 목록을 가져와 localStorage에 동기화
+ */
+export async function syncOwnedWallpapers(): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('user_wallpapers')
+    .select('wallpaper_id');
+
+  if (error || !data) {
+    console.error('[syncOwnedWallpapers] 조회 실패:', error);
+    return getOwnedWallpapers();
+  }
+
+  const rows = data as { wallpaper_id: string }[];
+  const serverIds = rows.map(r => r.wallpaper_id);
+  const localIds = getOwnedWallpapers();
+  const merged = [...new Set([...serverIds, ...localIds])];
+
+  setOwnedWallpapers(merged);
+  return merged;
 }
 
 /**

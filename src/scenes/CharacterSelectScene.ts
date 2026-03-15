@@ -8,19 +8,43 @@ import {
   getAwakeningLevel,
   type CharacterDef,
 } from '../utils/character';
-import { syncOwnedCharacters } from '../utils/gacha';
+import {
+  WALLPAPERS,
+  DEFAULT_WP_IDS,
+  getOwnedWallpapers,
+  getSelectedWallpaper,
+  setSelectedWallpaper,
+  WP_ACCENT_INT,
+  WP_ACCENT_HEX,
+  type BackgroundDef,
+} from '../utils/wallpaper';
+import { syncOwnedCharacters, syncOwnedWallpapers } from '../utils/gacha';
 
-// 그리드 설정
+// ── 캐릭터 그리드 설정 ──────────────────────────────────────────────────────
 const COLS = 3;
 const CARD_W = 100;
 const CARD_H = 120;
 const GAP_X = 15;
 const GAP_Y = 10;
 const GRID_LEFT = (400 - (COLS * CARD_W + (COLS - 1) * GAP_X)) / 2; // 35px
-const GRID_TOP = 145;
+const GRID_TOP = 105;
 
-// 스크롤 영역 (헤더 아래 ~ 하단 버튼 위)
-const SCROLL_TOP = 128;
+// ── 배경화면 그리드 설정 (세로 카드 3열) ────────────────────────────────────
+const WP_COLS = 3;
+const WP_CARD_W = 110;
+const WP_CARD_H = 165;  // bgKey 비율(400×600) 반영 세로 카드
+const WP_GAP_X = 15;
+const WP_GAP_Y = 15;
+const WP_GRID_LEFT = (400 - (WP_COLS * WP_CARD_W + (WP_COLS - 1) * WP_GAP_X)) / 2; // 20px
+const WP_GRID_TOP = 105;
+
+// 현재 가챠에서 획득 가능한 배경화면 (가챠 전용)
+const GACHA_WP_IDS = ['wp_hanok', 'wp_lake', 'wp_maehwa'];
+// 표시할 전체 배경화면 = 기본 제공 3종 + 가챠 3종 (총 6종, 2행 3열)
+const AVAILABLE_WP_IDS = [...DEFAULT_WP_IDS, ...GACHA_WP_IDS];
+
+// ── 스크롤 영역 (헤더 아래 ~ 하단 버튼 위) ─────────────────────────────────
+const SCROLL_TOP = 95;
 const SCROLL_BOTTOM = 548;
 
 // 각성 코어 비주얼 상수
@@ -36,6 +60,18 @@ export default class CharacterSelectScene extends Phaser.Scene {
   private ownedIds: string[] = [];
   private _preSyncDupCounts: Map<string, number> = new Map();
   private cardHighlights: Map<string, Phaser.GameObjects.Rectangle> = new Map();
+
+  // 탭 시스템
+  private activeTab: 'character' | 'wallpaper' = 'character';
+  private ownedWpIds: string[] = [];
+  private selectedWpId: string | null = null;
+  private charTabBtnBg!: Phaser.GameObjects.Rectangle;
+  private wpTabBtnBg!: Phaser.GameObjects.Rectangle;
+  private charTabLabel!: Phaser.GameObjects.Text;
+  private wpTabLabel!: Phaser.GameObjects.Text;
+
+  // 배경화면 선택 하이라이트
+  private wpHighlights: Map<string, Phaser.GameObjects.Rectangle> = new Map();
 
   // 스크롤
   private cardsContainer!: Phaser.GameObjects.Container;
@@ -76,15 +112,25 @@ export default class CharacterSelectScene extends Phaser.Scene {
         this.load.video(char.videoKey, char.videoPath);
       }
     }
+    // 배경화면 bgKey(세로 이미지) 사전 로드 — 표시 대상 3종만
+    for (const wp of WALLPAPERS.filter(w => AVAILABLE_WP_IDS.includes(w.id))) {
+      if (!this.textures.exists(wp.bgKey)) {
+        this.load.image(wp.bgKey, wp.bgPath);
+      }
+    }
   }
 
   create() {
     this.selectedId = getSelectedCharacter();
     this.ownedIds = getOwnedCharacters();
+    this.ownedWpIds = getOwnedWallpapers();
+    this.selectedWpId = getSelectedWallpaper();
+    this.activeTab = 'character';
     this.scrollOffset = 0;
     this.hasDragged = false;
     this.hasPointerDownInScene = false;
     this.cardHighlights.clear();
+    this.wpHighlights.clear();
 
     // 동기화 전 각성 수치 스냅샷 (동기화 후 변화 감지용)
     this._preSyncDupCounts = new Map(
@@ -98,12 +144,19 @@ export default class CharacterSelectScene extends Phaser.Scene {
       if (!this.scene.isActive()) return;
       const ownedChanged = synced.length !== this.ownedIds.length ||
         synced.some(id => !this.ownedIds.includes(id));
-      // 각성 수치 변화 여부: 동기화 후 localStorage의 duplicate_count가 달라졌으면 재시작
       const awakeChanged = CHARACTERS.some(c =>
         synced.includes(c.id) && c.grade !== '등급외' &&
         getDuplicateCount(c.id) !== this._preSyncDupCounts.get(c.id)
       );
       if (ownedChanged || awakeChanged) this.scene.restart();
+    }).catch(() => { /* 네트워크 오류 시 로컬 상태 유지 */ });
+
+    // 배경화면 동기화 (비동기, UI 갱신 없이 진행 — 다음 방문 시 반영)
+    syncOwnedWallpapers().then(synced => {
+      if (!this.scene.isActive()) return;
+      const wpChanged = synced.length !== this.ownedWpIds.length ||
+        synced.some(id => !this.ownedWpIds.includes(id));
+      if (wpChanged && this.activeTab === 'wallpaper') this.rebuildGrid();
     }).catch(() => { /* 네트워크 오류 시 로컬 상태 유지 */ });
 
     const selectedDef = CHARACTERS.find(c => c.id === this.selectedId) ?? CHARACTERS[0];
@@ -113,41 +166,59 @@ export default class CharacterSelectScene extends Phaser.Scene {
     this.bgImage.setDisplaySize(400, 600);
 
     // ── 헤더 (고정) ─────────────────────────────────────────────────────
-    this.add.text(200, 40, '캐릭터 선택', {
-      fontSize: '26px',
+    this.add.text(200, 30, '수집', {
+      fontSize: '22px',
       color: '#ffffff',
       fontStyle: 'bold',
       stroke: '#000',
       strokeThickness: 4,
     }).setOrigin(0.5);
 
-    this.headerNameText = this.add.text(200, 80, `현재: ${selectedDef.name}`, {
-      fontSize: '16px',
+    // ── 탭 버튼 ────────────────────────────────────────────────────────
+    const TAB_Y = 60;
+    const TAB_W = 160;
+    const TAB_H = 30;
+
+    this.charTabBtnBg = this.add.rectangle(110, TAB_Y, TAB_W, TAB_H, 0x1144bb)
+      .setStrokeStyle(1.5, 0x4488ff)
+      .setInteractive({ useHandCursor: true });
+    this.charTabLabel = this.add.text(110, TAB_Y, '캐릭터', {
+      fontSize: '14px', color: '#ffffff', fontStyle: 'bold',
+    }).setOrigin(0.5);
+
+    this.wpTabBtnBg = this.add.rectangle(290, TAB_Y, TAB_W, TAB_H, 0x222222)
+      .setStrokeStyle(1.5, 0x555555)
+      .setInteractive({ useHandCursor: true });
+    this.wpTabLabel = this.add.text(290, TAB_Y, '배경화면', {
+      fontSize: '14px', color: '#888888', fontStyle: 'bold',
+    }).setOrigin(0.5);
+
+    this.charTabBtnBg.on('pointerup', () => {
+      if (this.detailPanel) return;
+      this.switchTab('character');
+    });
+    this.wpTabBtnBg.on('pointerup', () => {
+      if (this.detailPanel) return;
+      this.switchTab('wallpaper');
+    });
+
+    // 구분선
+    this.add.rectangle(200, 80, 380, 1, 0x444444);
+
+    // 현재 선택 상태 표시
+    this.headerNameText = this.add.text(200, 88, `현재: ${selectedDef.name}`, {
+      fontSize: '13px',
       color: selectedDef.gradeColor,
       stroke: '#000',
       strokeThickness: 3,
     }).setOrigin(0.5);
 
-    this.add.text(200, 108, '수집한 캐릭터를 선택하세요', {
-      fontSize: '13px',
-      color: '#888888',
-    }).setOrigin(0.5);
-
     // ── 스크롤 가능한 카드 컨테이너 ─────────────────────────────────────
     this.cardsContainer = this.add.container(0, 0);
 
-    // 각성 코어 전용 단일 Graphics (카드당 1개 생성하던 것을 통합)
-    this.coresGfx = this.add.graphics();
-    CHARACTERS.forEach((char, index) => {
-      const col = index % COLS;
-      const row = Math.floor(index / COLS);
-      const x = GRID_LEFT + col * (CARD_W + GAP_X) + CARD_W / 2;
-      const y = GRID_TOP + row * (CARD_H + GAP_Y) + CARD_H / 2;
-      this.createCharacterCard(char, x, y);
-    });
-    this.cardsContainer.add(this.coresGfx);
+    this.buildCharacterGrid();
 
-    // 스크롤 최대 범위 계산
+    // 스크롤 최대 범위 계산 (buildCharacterGrid 내부에서도 설정되지만 여기서도 초기화)
     const totalRows = Math.ceil(CHARACTERS.length / COLS);
     const contentBottom = GRID_TOP + (totalRows - 1) * (CARD_H + GAP_Y) + CARD_H + 10;
     this.maxScrollOffset = Math.max(0, contentBottom - SCROLL_BOTTOM);
@@ -212,6 +283,311 @@ export default class CharacterSelectScene extends Phaser.Scene {
 
     // maskGfx는 display list 외부에 있으므로 씬 종료 시 직접 정리
     this.events.once('shutdown', () => { this.maskGfx.destroy(); });
+  }
+
+  // ── 그리드 빌더 ─────────────────────────────────────────────────────────
+
+  private buildCharacterGrid() {
+    this.cardHighlights.clear();
+    this.coresGfx = this.add.graphics();
+    CHARACTERS.forEach((char, index) => {
+      const col = index % COLS;
+      const row = Math.floor(index / COLS);
+      const x = GRID_LEFT + col * (CARD_W + GAP_X) + CARD_W / 2;
+      const y = GRID_TOP + row * (CARD_H + GAP_Y) + CARD_H / 2;
+      this.createCharacterCard(char, x, y);
+    });
+    this.cardsContainer.add(this.coresGfx);
+
+    const totalRows = Math.ceil(CHARACTERS.length / COLS);
+    const contentBottom = GRID_TOP + (totalRows - 1) * (CARD_H + GAP_Y) + CARD_H + 10;
+    this.maxScrollOffset = Math.max(0, contentBottom - SCROLL_BOTTOM);
+  }
+
+  private buildWallpaperGrid() {
+    this.wpHighlights.clear();
+    this.ownedWpIds = getOwnedWallpapers();
+    this.selectedWpId = getSelectedWallpaper();
+
+    const availableWps = WALLPAPERS.filter(w => AVAILABLE_WP_IDS.includes(w.id));
+    availableWps.forEach((wp, index) => {
+      const col = index % WP_COLS;
+      const row = Math.floor(index / WP_COLS);
+      const x = WP_GRID_LEFT + col * (WP_CARD_W + WP_GAP_X) + WP_CARD_W / 2;
+      const y = WP_GRID_TOP + row * (WP_CARD_H + WP_GAP_Y) + WP_CARD_H / 2;
+      this.createWallpaperCard(wp, x, y);
+    });
+
+    const totalRows = Math.ceil(availableWps.length / WP_COLS);
+    const contentBottom = WP_GRID_TOP + (totalRows - 1) * (WP_CARD_H + WP_GAP_Y) + WP_CARD_H + 10;
+    this.maxScrollOffset = Math.max(0, contentBottom - SCROLL_BOTTOM);
+  }
+
+  private switchTab(tab: 'character' | 'wallpaper') {
+    if (this.activeTab === tab) return;
+    this.activeTab = tab;
+    this.scrollOffset = 0;
+    this.hasDragged = false;
+    this.cardsContainer.setY(0);
+    this.updateBgForTab();
+
+    // 컨테이너 내 카드 오브젝트 전부 제거
+    this.cardsContainer.removeAll(true);
+    this.cardHighlights.clear();
+    this.wpHighlights.clear();
+
+    // 탭 버튼 스타일 갱신
+    if (tab === 'character') {
+      this.charTabBtnBg.setFillStyle(0x1144bb).setStrokeStyle(1.5, 0x4488ff);
+      this.charTabLabel.setColor('#ffffff');
+      this.wpTabBtnBg.setFillStyle(0x222222).setStrokeStyle(1.5, 0x555555);
+      this.wpTabLabel.setColor('#888888');
+
+      this.buildCharacterGrid();
+
+      // 헤더 텍스트 갱신
+      const def = CHARACTERS.find(c => c.id === this.selectedId) ?? CHARACTERS[0];
+      this.headerNameText.setText(`현재: ${def.name}`).setColor(def.gradeColor);
+    } else {
+      this.wpTabBtnBg.setFillStyle(0x1144bb).setStrokeStyle(1.5, 0x4488ff);
+      this.wpTabLabel.setColor('#ffffff');
+      this.charTabBtnBg.setFillStyle(0x222222).setStrokeStyle(1.5, 0x555555);
+      this.charTabLabel.setColor('#888888');
+
+      this.buildWallpaperGrid();
+
+      // 헤더 텍스트 갱신
+      const selWpDef = this.selectedWpId
+        ? WALLPAPERS.find(w => w.id === this.selectedWpId)
+        : null;
+      this.headerNameText
+        .setText(`배경: ${selWpDef?.name ?? '기본'}`)
+        .setColor(this.selectedWpId ? WP_ACCENT_HEX : '#888888');
+    }
+  }
+
+  /** 현재 탭에 맞게 배경 이미지 업데이트 */
+  private updateBgForTab() {
+    if (this.activeTab === 'character') {
+      const def = CHARACTERS.find(c => c.id === this.selectedId) ?? CHARACTERS[0];
+      this.bgImage.setTexture(def.illustKey).setDisplaySize(400, 600).setAlpha(1).clearTint();
+    } else {
+      const wpDef = this.selectedWpId
+        ? WALLPAPERS.find(w => w.id === this.selectedWpId)
+        : null;
+      if (wpDef && this.textures.exists(wpDef.bgKey)) {
+        this.bgImage.setTexture(wpDef.bgKey).setDisplaySize(400, 600).setAlpha(1).clearTint();
+      } else {
+        // 선택 배경 없음 → 캐릭터 일러스트를 어둡게 처리
+        const def = CHARACTERS.find(c => c.id === this.selectedId) ?? CHARACTERS[0];
+        this.bgImage.setTexture(def.illustKey).setDisplaySize(400, 600).setAlpha(0.2);
+      }
+    }
+  }
+
+  /** 서버 동기화 후 현재 탭을 내용 갱신 */
+  private rebuildGrid() {
+    this.cardsContainer.removeAll(true);
+    this.cardHighlights.clear();
+    this.wpHighlights.clear();
+    if (this.activeTab === 'character') {
+      this.buildCharacterGrid();
+    } else {
+      this.buildWallpaperGrid();
+    }
+  }
+
+  // ── 배경화면 카드 ────────────────────────────────────────────────────────
+
+  private createWallpaperCard(wp: BackgroundDef, x: number, y: number) {
+    const isOwned = this.ownedWpIds.includes(wp.id);
+    const isSelected = this.selectedWpId === wp.id;
+
+    // 카드 배경
+    const cardBg = this.add.rectangle(x, y, WP_CARD_W, WP_CARD_H, 0x1a1a2e);
+    cardBg.setStrokeStyle(2, isOwned ? WP_ACCENT_INT : 0x333333);
+    this.cardsContainer.add(cardBg);
+
+    // 선택 하이라이트 (흰 테두리)
+    const highlight = this.add.rectangle(x, y, WP_CARD_W, WP_CARD_H, 0, 0);
+    highlight.setStrokeStyle(3, 0xffffff);
+    highlight.setVisible(isSelected);
+    this.wpHighlights.set(wp.id, highlight);
+    this.cardsContainer.add(highlight);
+
+    // 세로 이미지 (bgKey) — 카드 상단을 채우는 portrait 썸네일
+    if (this.textures.exists(wp.bgKey)) {
+      const thumb = this.add.image(x, y - 11, wp.bgKey)
+        .setDisplaySize(WP_CARD_W - 4, WP_CARD_H - 22);
+      if (!isOwned) { thumb.setTint(0x000000); thumb.setAlpha(0.5); }
+      this.cardsContainer.add(thumb);
+    }
+
+    // 미보유 자물쇠
+    if (!isOwned) {
+      const lock = this.add.text(x, y - 8, '🔒', { fontSize: '20px' }).setOrigin(0.5);
+      this.cardsContainer.add(lock);
+    }
+
+    // WP 배지 (우상단) — 기본 배경은 '기본', 가챠 배경은 'WP'
+    const isDefault = (DEFAULT_WP_IDS as readonly string[]).includes(wp.id);
+    const badgeText  = isDefault ? '기본' : 'WP';
+    const badgeColor = isDefault ? '#aaaaaa' : WP_ACCENT_HEX;
+    const badge = this.add.text(x + WP_CARD_W / 2 - 2, y - WP_CARD_H / 2 + 2, badgeText, {
+      fontSize: '9px', color: badgeColor, fontStyle: 'bold',
+      backgroundColor: '#000000cc', padding: { x: 3, y: 1 },
+    }).setOrigin(1, 0);
+    this.cardsContainer.add(badge);
+
+    // 하단 반투명 바 + 이름
+    const barY = y + WP_CARD_H / 2 - 11;
+    const bar = this.add.rectangle(x, barY, WP_CARD_W, 22, 0x000000, 0.75);
+    this.cardsContainer.add(bar);
+    const nameText = this.add.text(x, barY, wp.name, {
+      fontSize: '11px',
+      color: isOwned ? WP_ACCENT_HEX : '#444444',
+      fontStyle: 'bold',
+    }).setOrigin(0.5);
+    this.cardsContainer.add(nameText);
+
+    // 클릭 이벤트
+    cardBg.setInteractive({ useHandCursor: isOwned });
+    if (isOwned) {
+      cardBg.on('pointerover', () => cardBg.setFillStyle(0x252540));
+      cardBg.on('pointerout',  () => cardBg.setFillStyle(0x1a1a2e));
+    }
+    cardBg.on('pointerup', () => {
+      if (!this.hasDragged && this.hasPointerDownInScene) this.showWallpaperDetail(wp);
+    });
+  }
+
+  // ── 배경화면 상세 오버레이 ──────────────────────────────────────────────
+
+  private showWallpaperDetail(def: BackgroundDef): void {
+    this.hideCharacterDetail();
+
+    const isOwned = this.ownedWpIds.includes(def.id);
+    const isSelected = this.selectedWpId === def.id;
+
+    const panel = this.add.container(0, 0).setDepth(300);
+    this.detailPanel = panel;
+
+    // 클릭 차단
+    const blocker = this.add.rectangle(200, 300, 400, 600, 0x000000, 0).setInteractive();
+    panel.add(blocker);
+
+    // 배경화면 전체화면 미리보기
+    if (this.textures.exists(def.bgKey)) {
+      const bg = this.add.image(200, 300, def.bgKey).setDisplaySize(400, 600);
+      panel.add(bg);
+    } else {
+      const fallback = this.add.rectangle(200, 300, 400, 600, 0x050515);
+      const hint = this.add.text(200, 300, '이미지 없음\n(에셋 추가 필요)', {
+        fontSize: '16px', color: '#666666', align: 'center',
+      }).setOrigin(0.5);
+      panel.add(fallback);
+      panel.add(hint);
+    }
+
+    // 하단 그라디언트 오버레이
+    const grad = this.add.graphics();
+    grad.fillGradientStyle(0x000000, 0x000000, 0x000000, 0x000000, 0, 0, 0.8, 0.8);
+    grad.fillRect(0, 380, 400, 220);
+    panel.add(grad);
+
+    // ✕ 닫기 버튼
+    const closeBg = this.add.circle(372, 38, 22, 0x000000, 0.55)
+      .setInteractive({ useHandCursor: true });
+    const closeBtn = this.add.text(372, 38, '✕', { fontSize: '18px', color: '#cccccc' }).setOrigin(0.5);
+    closeBg.on('pointerover', () => { closeBg.setFillStyle(0x333333, 0.8); closeBtn.setColor('#ffffff'); });
+    closeBg.on('pointerout',  () => { closeBg.setFillStyle(0x000000, 0.55); closeBtn.setColor('#cccccc'); });
+    closeBg.on('pointerup',   () => this.hideCharacterDetail());
+    panel.add(closeBg);
+    panel.add(closeBtn);
+
+    // 이름
+    panel.add(this.add.text(24, 450, def.name, {
+      fontSize: '26px', color: '#ffffff', fontStyle: 'bold',
+      stroke: '#000000', strokeThickness: 5,
+    }));
+    panel.add(this.add.text(24, 494, def.description, {
+      fontSize: '12px', color: '#aaaaaa',
+      stroke: '#000000', strokeThickness: 3,
+      wordWrap: { width: 350 },
+    }));
+
+    // ── 버튼 2개 ──
+    const BTN_Y = 562;
+    const BTN_W = 168;
+    const BTN_H = 42;
+
+    if (isOwned) {
+      if (!isSelected) {
+        // [적용하기]
+        const applyBg = this.add.rectangle(108, BTN_Y, BTN_W, BTN_H, 0x115511)
+          .setStrokeStyle(2, WP_ACCENT_INT)
+          .setInteractive({ useHandCursor: true });
+        applyBg.on('pointerover', () => applyBg.setFillStyle(0x226622));
+        applyBg.on('pointerout',  () => applyBg.setFillStyle(0x115511));
+        applyBg.on('pointerup',   () => this.applyWallpaper(def.id));
+        panel.add(applyBg);
+        panel.add(this.add.text(108, BTN_Y, '✔  적용하기', {
+          fontSize: '14px', color: '#88ff88', fontStyle: 'bold',
+        }).setOrigin(0.5));
+      } else {
+        // [해제]
+        const removeBg = this.add.rectangle(108, BTN_Y, BTN_W, BTN_H, 0x331111)
+          .setStrokeStyle(2, 0x884444)
+          .setInteractive({ useHandCursor: true });
+        removeBg.on('pointerover', () => removeBg.setFillStyle(0x442222));
+        removeBg.on('pointerout',  () => removeBg.setFillStyle(0x331111));
+        removeBg.on('pointerup',   () => this.applyWallpaper(null));
+        panel.add(removeBg);
+        panel.add(this.add.text(108, BTN_Y, '✕  해제', {
+          fontSize: '14px', color: '#ff8888', fontStyle: 'bold',
+        }).setOrigin(0.5));
+      }
+    } else {
+      const lockBg = this.add.rectangle(108, BTN_Y, BTN_W, BTN_H, 0x1a1a1a)
+        .setStrokeStyle(1.5, 0x444444);
+      panel.add(lockBg);
+      panel.add(this.add.text(108, BTN_Y, '🔒  미보유', {
+        fontSize: '14px', color: '#555555',
+      }).setOrigin(0.5));
+    }
+
+    // [닫기] 버튼 (우측)
+    const closeBtnBg = this.add.rectangle(292, BTN_Y, BTN_W, BTN_H, 0x1a1a1a)
+      .setStrokeStyle(1.5, 0x555555)
+      .setInteractive({ useHandCursor: true });
+    closeBtnBg.on('pointerover', () => closeBtnBg.setFillStyle(0x2e2e2e));
+    closeBtnBg.on('pointerout',  () => closeBtnBg.setFillStyle(0x1a1a1a));
+    closeBtnBg.on('pointerup',   () => this.hideCharacterDetail());
+    panel.add(closeBtnBg);
+    panel.add(this.add.text(292, BTN_Y, '닫기', {
+      fontSize: '14px', color: '#cccccc', fontStyle: 'bold',
+    }).setOrigin(0.5));
+  }
+
+  private applyWallpaper(id: string | null) {
+    setSelectedWallpaper(id);
+    this.selectedWpId = id;
+
+    // 하이라이트 갱신
+    this.wpHighlights.forEach((rect, wpId) => {
+      rect.setVisible(wpId === id);
+    });
+
+    // 헤더 텍스트 갱신
+    const def = id ? WALLPAPERS.find(w => w.id === id) : null;
+    this.headerNameText
+      .setText(`배경: ${def?.name ?? '기본'}`)
+      .setColor(id ? WP_ACCENT_HEX : '#888888');
+
+    // 배경 이미지 즉시 반영
+    this.updateBgForTab();
+
+    this.hideCharacterDetail();
   }
 
   private createCharacterCard(char: CharacterDef, x: number, y: number) {

@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { Difficulty, GameMode, DIFFICULTIES, type DifficultyConfig } from '../types/GameMode';
 import { isChristmasSeason } from '../utils/seasonChecker';
+import { getSafeSelectedWallpaper, getWallpaperDef } from '../utils/wallpaper';
 
 interface ButtonCardConfig {
   color: number;
@@ -27,6 +28,13 @@ export default class DifficultySelectScene extends Phaser.Scene {
   }
 
   preload() {
+    // 선택된 배경화면 미리 로딩 (GameScene 진입 전 캐싱)
+    const wpId = getSafeSelectedWallpaper();
+    const wpDef = wpId ? getWallpaperDef(wpId) : null;
+    if (wpDef && !this.textures.exists(wpDef.bgKey)) {
+      this.load.image(wpDef.bgKey, wpDef.bgPath);
+    }
+
     // 난이도 선택 화면 배경
     if (!this.textures.exists('background')) {
       this.load.image('background', 'assets/backgrounds/background.webp');

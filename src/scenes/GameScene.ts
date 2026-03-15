@@ -16,6 +16,7 @@ import { getHighScore, updateHighScore } from '../utils/localStorage';
 import { submitScore, getUserInitials, setUserInitials, startGameSession } from '../utils/leaderboard';
 import { submitSkor, type SkorSubmitResponse } from '../utils/skor';
 import { getSafeSelectedCharacter, getCharacterDef, getDuplicateCount, getAwakeningLevel } from '../utils/character';
+import { getSafeSelectedWallpaper, getWallpaperDef } from '../utils/wallpaper';
 import { isChristmasSeason } from '../utils/seasonChecker';
 import type { CharacterAbility, GameSceneAPI } from '../abilities/types';
 import { getCharacterAbility } from '../abilities/index';
@@ -78,6 +79,7 @@ export default class GameScene extends Phaser.Scene {
   private selectedCharId: string = 'chibi'; // 선택된 캐릭터 ID
   private selectedCharGrade: string = '등급외'; // 선택된 캐릭터 등급
   private charAwakeLevel: number = 0; // 각성 단계 (init에서 계산, create에서 사용)
+  private selectedWpId: string | null = null; // 선택된 배경화면 ID (null = 기본)
   // 서버 세션 (게임 시작 시 비동기 생성, 점수 제출 시 await)
   private sessionPromise: Promise<string | null> | null = null;
   // ── 캐릭터 능력 시스템 ────────────────────────────────────────────────
@@ -113,8 +115,9 @@ export default class GameScene extends Phaser.Scene {
     this.isFeverTime = false;
     this.feverTimeRemaining = 0;
     this.lastFeverTimeScore = 0;
-    // 캐릭터 선택 화면에서 저장한 캐릭터를 사용
+    // 캐릭터 선택 화면에서 저장한 캐릭터 & 배경화면 사용
     this.selectedCharId = getSafeSelectedCharacter();
+    this.selectedWpId = getSafeSelectedWallpaper();
     const charDef        = getCharacterDef(this.selectedCharId);
     const dupCount       = getDuplicateCount(this.selectedCharId);
     const awakeLevel     = getAwakeningLevel(charDef.grade, dupCount);
@@ -145,6 +148,12 @@ export default class GameScene extends Phaser.Scene {
   }
 
   preload() {
+    // 선택된 배경화면 조건부 로딩 (DifficultySelectScene에서 미리 로드 안 된 경우 fallback)
+    const wpDef = this.selectedWpId ? getWallpaperDef(this.selectedWpId) : null;
+    if (wpDef && !this.textures.exists(wpDef.bgKey)) {
+      this.load.image(wpDef.bgKey, wpDef.bgPath);
+    }
+
     // DifficultySelectScene에서 미리 로딩됨. 캐시에 없을 경우에만 fallback 로딩.
 
     if (this.difficulty === Difficulty.NORMAL && !this.textures.exists('background3')) {
@@ -198,6 +207,14 @@ export default class GameScene extends Phaser.Scene {
     }
   }
 
+  private getDefaultBackgroundKey(): string {
+    if (this.difficulty === Difficulty.NORMAL) return 'background3';
+    if (this.difficulty === Difficulty.EXTREME) {
+      return isChristmasSeason() ? 'xmas_background' : 'background2';
+    }
+    return 'background'; // EASY / HARD
+  }
+
   create() {
     // 키보드 이벤트 수신을 위해 캔버스 포커스 설정
     const canvas = this.game.canvas;
@@ -212,22 +229,12 @@ export default class GameScene extends Phaser.Scene {
     // 난이도별 최고 점수 로드
     this.highScore = getHighScore(this.scoreDifficulty);
 
-    // 난이도별 배경 이미지 선택
-    let backgroundKey = 'background';
-    if (this.difficulty === Difficulty.NORMAL) {
-      backgroundKey = 'background3';
-    } else if (this.difficulty === Difficulty.HARD) {
-      backgroundKey = 'background';
-    } else if (this.difficulty === Difficulty.EXTREME) {
-      // EXTREME 난이도: 크리스마스 시즌(12/1 ~ 1/31)이면 특별 배경
-      if (isChristmasSeason()) {
-        backgroundKey = 'xmas_background';
-      } else {
-        backgroundKey = 'background2';
-      }
-    }
+    // 배경 이미지: 선택된 배경화면 우선, 없으면 난이도별 기본
+    const wpDefForBg = this.selectedWpId ? getWallpaperDef(this.selectedWpId) : null;
+    const backgroundKey = (wpDefForBg && this.textures.exists(wpDefForBg.bgKey))
+      ? wpDefForBg.bgKey
+      : this.getDefaultBackgroundKey();
 
-    // 배경 이미지 추가
     const background = this.add.image(200, 300, backgroundKey);
     background.setDisplaySize(400, 600);
 
