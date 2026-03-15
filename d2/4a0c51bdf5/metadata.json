@@ -1,0 +1,40 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "d24a0c51bdf5",
+  "strategy": "manual-commit",
+  "branch": "dev",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "public/assets/wallpapers/hanok_bg.webp",
+    "public/assets/wallpapers/hanok_thumb.webp",
+    "public/assets/wallpapers/lake_bg.webp",
+    "public/assets/wallpapers/lake_thumb.webp",
+    "public/assets/wallpapers/maehwa_bg.webp",
+    "public/assets/wallpapers/maehwa_thumb.webp",
+    "src/data/releaseNotes.ts",
+    "src/scenes/CharacterSelectScene.ts",
+    "src/scenes/DifficultySelectScene.ts",
+    "src/scenes/GachaScene.ts",
+    "src/scenes/GameScene.ts",
+    "src/utils/gacha.ts",
+    "src/utils/wallpaper.ts",
+    "supabase/functions/gacha-pull/index.ts",
+    "supabase/migrations/20260315_user_wallpapers.sql"
+  ],
+  "sessions": [
+    {
+      "metadata": "/d2/4a0c51bdf5/0/metadata.json",
+      "transcript": "/d2/4a0c51bdf5/0/full.jsonl",
+      "context": "/d2/4a0c51bdf5/0/context.md",
+      "content_hash": "/d2/4a0c51bdf5/0/content_hash.txt",
+      "prompt": "/d2/4a0c51bdf5/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 224,
+    "cache_creation_tokens": 455618,
+    "cache_read_tokens": 15546285,
+    "output_tokens": 72580,
+    "api_call_count": 174
+  }
+}
