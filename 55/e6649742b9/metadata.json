@@ -3,7 +3,7 @@
   "checkpoint_id": "55e6649742b9",
   "strategy": "manual-commit",
   "branch": "dev",
-  "checkpoints_count": 2,
+  "checkpoints_count": 3,
   "files_touched": [
     "src/scenes/BaseScene.ts",
     "src/scenes/CharacterSelectScene.ts",
@@ -28,13 +28,20 @@
       "context": "/55/e6649742b9/1/context.md",
       "content_hash": "/55/e6649742b9/1/content_hash.txt",
       "prompt": "/55/e6649742b9/1/prompt.txt"
+    },
+    {
+      "metadata": "/55/e6649742b9/2/metadata.json",
+      "transcript": "/55/e6649742b9/2/full.jsonl",
+      "context": "/55/e6649742b9/2/context.md",
+      "content_hash": "/55/e6649742b9/2/content_hash.txt",
+      "prompt": "/55/e6649742b9/2/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 3178,
-    "cache_creation_tokens": 668316,
-    "cache_read_tokens": 13000301,
-    "output_tokens": 73149,
-    "api_call_count": 166
+    "input_tokens": 3229,
+    "cache_creation_tokens": 775827,
+    "cache_read_tokens": 14435137,
+    "output_tokens": 82221,
+    "api_call_count": 200
   }
 }
