@@ -1,0 +1,39 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "55e6649742b9",
+  "session_id": "157856ed-d09e-4f38-bf12-287f5883a551",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-17T11:43:40.563977Z",
+  "branch": "dev",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src/scenes/BaseScene.ts",
+    "src/scenes/CharacterSelectScene.ts",
+    "src/scenes/DifficultySelectScene.ts",
+    "src/scenes/GachaScene.ts",
+    "src/scenes/GameScene.ts",
+    "src/scenes/LeaderboardScene.ts",
+    "src/scenes/ModeSelectScene.ts",
+    "src/scenes/ReleaseNotesScene.ts"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "c948a6c831d2",
+  "transcript_identifier_at_start": "79a96e3b-aeee-4d17-aa09-d32037350d3b",
+  "token_usage": {
+    "input_tokens": 3023,
+    "cache_creation_tokens": 177028,
+    "cache_read_tokens": 3466433,
+    "output_tokens": 21403,
+    "api_call_count": 56
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-17T11:43:39.903733Z",
+    "agent_lines": 0,
+    "human_added": 29,
+    "human_modified": 80,
+    "human_removed": 0,
+    "total_committed": 31,
+    "agent_percentage": 0
+  },
+  "transcript_path": ".claude/projects/-Users-johyunduk-Projects-ddong-avoid-game/157856ed-d09e-4f38-bf12-287f5883a551.jsonl"
+}
