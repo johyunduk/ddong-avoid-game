@@ -1,0 +1,33 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "e0f6df72a515",
+  "strategy": "manual-commit",
+  "branch": "dev",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "src/abilities/GlitchAbility.ts",
+    "src/abilities/HackerAbility.ts",
+    "src/abilities/LegacyAbility.ts",
+    "src/abilities/MaehwaAbility.ts",
+    "src/abilities/SentinelAbility.ts",
+    "src/objects/PoolablePoopBase.ts",
+    "src/objects/Poop.ts",
+    "src/scenes/GameScene.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/e0/f6df72a515/0/metadata.json",
+      "transcript": "/e0/f6df72a515/0/full.jsonl",
+      "context": "/e0/f6df72a515/0/context.md",
+      "content_hash": "/e0/f6df72a515/0/content_hash.txt",
+      "prompt": "/e0/f6df72a515/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 69,
+    "cache_creation_tokens": 156702,
+    "cache_read_tokens": 5989977,
+    "output_tokens": 31947,
+    "api_call_count": 58
+  }
+}
