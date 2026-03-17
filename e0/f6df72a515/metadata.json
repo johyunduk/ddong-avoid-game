@@ -3,7 +3,7 @@
   "checkpoint_id": "e0f6df72a515",
   "strategy": "manual-commit",
   "branch": "dev",
-  "checkpoints_count": 3,
+  "checkpoints_count": 4,
   "files_touched": [
     "src/abilities/GlitchAbility.ts",
     "src/abilities/HackerAbility.ts",
@@ -28,13 +28,20 @@
       "context": "/e0/f6df72a515/1/context.md",
       "content_hash": "/e0/f6df72a515/1/content_hash.txt",
       "prompt": "/e0/f6df72a515/1/prompt.txt"
+    },
+    {
+      "metadata": "/e0/f6df72a515/2/metadata.json",
+      "transcript": "/e0/f6df72a515/2/full.jsonl",
+      "context": "/e0/f6df72a515/2/context.md",
+      "content_hash": "/e0/f6df72a515/2/content_hash.txt",
+      "prompt": "/e0/f6df72a515/2/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 224,
-    "cache_creation_tokens": 647990,
-    "cache_read_tokens": 15523845,
-    "output_tokens": 83693,
-    "api_call_count": 168
+    "input_tokens": 275,
+    "cache_creation_tokens": 755501,
+    "cache_read_tokens": 16958681,
+    "output_tokens": 92765,
+    "api_call_count": 202
   }
 }
