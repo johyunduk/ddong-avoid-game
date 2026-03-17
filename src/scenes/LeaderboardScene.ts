@@ -1,8 +1,9 @@
-import Phaser from 'phaser';
+import type Phaser from 'phaser';
 import { Difficulty, Difficulty as DifficultyEnum } from '../types/GameMode';
 import { getLeaderboard, type LeaderboardEntry } from '../utils/leaderboard';
+import BaseScene from './BaseScene';
 
-export default class LeaderboardScene extends Phaser.Scene {
+export default class LeaderboardScene extends BaseScene {
   private selectedDifficulty: Difficulty = DifficultyEnum.NORMAL;
   private leaderboardData: LeaderboardEntry[] = [];
   private leaderboardTexts: Phaser.GameObjects.Text[] = [];
@@ -30,6 +31,8 @@ export default class LeaderboardScene extends Phaser.Scene {
   }
 
   create() {
+    super.create();
+
     // 배경 이미지 추가
     const background = this.add.image(200, 300, 'background2');
     background.setDisplaySize(400, 600);

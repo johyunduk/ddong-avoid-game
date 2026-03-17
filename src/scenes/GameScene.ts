@@ -23,8 +23,11 @@ import type { CharacterAbility, GameSceneAPI } from '../abilities/types';
 import { getCharacterAbility } from '../abilities/index';
 import { BaseAbility } from '../abilities/BaseAbility';
 import { realNow } from '../utils/realTime';
+import BaseScene from './BaseScene';
 
-export default class GameScene extends Phaser.Scene {
+export default class GameScene extends BaseScene {
+  protected inputGuardMs = 0; // 게임플레이 씬은 즉시 입력 허용
+
   private player!: Player;
   private poops!: Phaser.Physics.Arcade.Group;
   private goldPoops!: Phaser.Physics.Arcade.Group;
@@ -219,6 +222,8 @@ export default class GameScene extends Phaser.Scene {
   }
 
   create() {
+    super.create();
+
     // 키보드 이벤트 수신을 위해 캔버스 포커스 설정
     const canvas = this.game.canvas;
     canvas.setAttribute('tabindex', '0');

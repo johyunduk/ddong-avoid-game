@@ -3,6 +3,7 @@ import { gachaPull, syncOwnedCharacters, syncOwnedWallpapers, type PulledCharact
 import { CHARACTERS, getCharacterDef, addOwnedCharacter, getDuplicateCount, setDuplicateCount, type CharacterDef } from '../utils/character';
 import { WALLPAPERS, getWallpaperDef, addOwnedWallpaper, WP_ACCENT_INT, WP_ACCENT_HEX, type BackgroundDef } from '../utils/wallpaper';
 import { getSkorBalance, getCachedSkorBalance, cacheSkorBalance } from '../utils/skor';
+import BaseScene from './BaseScene';
 
 // vids/ 디렉토리에 개인 영상이 존재하는 캐릭터 목록
 const CHARS_WITH_VIDS = new Set([
@@ -26,7 +27,7 @@ const CURRENT_BANNER = {
 // 로비 슬라이드쇼 순서: UR 우선(sentinel → legacy), 이후 SR 순
 const SLIDESHOW_IDS = ['sentinel', 'legacy', 'hacker', 'miner', 'maehwa', 'archieve', 'glitch', 'noise'];
 
-export default class GachaScene extends Phaser.Scene {
+export default class GachaScene extends BaseScene {
   private skorBalance = 0;
   private remainingSkor = 0;
   private pullResults: PulledCharacter[] = [];
@@ -76,6 +77,8 @@ export default class GachaScene extends Phaser.Scene {
   }
 
   create() {
+    super.create();
+
     this.pullResults = [];
     this.revealItems = [];
     this.revealItemIndex = 0;

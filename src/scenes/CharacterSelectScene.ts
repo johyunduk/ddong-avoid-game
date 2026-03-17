@@ -20,6 +20,7 @@ import {
   type BackgroundDef,
 } from '../utils/wallpaper';
 import { syncOwnedCharacters, syncOwnedWallpapers } from '../utils/gacha';
+import BaseScene from './BaseScene';
 
 // ── 캐릭터 그리드 설정 ──────────────────────────────────────────────────────
 const COLS = 3;
@@ -54,7 +55,7 @@ const CORE_GLOW_RADIUS  = 5.5;   // 충전된 코어 외곽 글로우 반지름
 const CORE_INNER_RADIUS = 3.5;   // 코어 내부 원 반지름
 const CORE_HIGHLIGHT_R  = 1.2;   // 하이라이트 스팟 반지름
 
-export default class CharacterSelectScene extends Phaser.Scene {
+export default class CharacterSelectScene extends BaseScene {
   private selectedId: string = 'chibi';
   private ownedIds: string[] = [];
   private _preSyncDupCounts: Map<string, number> = new Map();
@@ -120,6 +121,8 @@ export default class CharacterSelectScene extends Phaser.Scene {
   }
 
   create() {
+    super.create();
+
     this.selectedId = getSelectedCharacter();
     this.ownedIds = getOwnedCharacters();
     this.ownedWpIds = getOwnedWallpapers();

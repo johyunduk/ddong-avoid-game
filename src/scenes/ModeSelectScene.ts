@@ -1,8 +1,9 @@
-import Phaser from 'phaser';
+import type Phaser from 'phaser';
 import { GameMode, GAME_MODES, type GameModeConfig } from '../types/GameMode';
 import { getSkorBalance, getCachedSkorBalance, cacheSkorBalance } from '../utils/skor';
+import BaseScene from './BaseScene';
 
-export default class ModeSelectScene extends Phaser.Scene {
+export default class ModeSelectScene extends BaseScene {
   private skorText!: Phaser.GameObjects.Text;
 
   constructor() {
@@ -19,6 +20,8 @@ export default class ModeSelectScene extends Phaser.Scene {
   }
 
   create() {
+    super.create();
+
     const background = this.add.image(200, 300, 'background2');
     background.setDisplaySize(400, 600);
 
@@ -180,12 +183,10 @@ export default class ModeSelectScene extends Phaser.Scene {
       strokeThickness: 3,
     }).setOrigin(0.5);
 
-    this.time.delayedCall(200, () => {
-      text.setInteractive({ useHandCursor: true });
-      text.on('pointerover', () => text.setColor('#FFD700'));
-      text.on('pointerout',  () => text.setColor('#cccccc'));
-      text.on('pointerdown', () => this.scene.start('ReleaseNotesScene'));
-    });
+    text.setInteractive({ useHandCursor: true });
+    text.on('pointerover', () => text.setColor('#FFD700'));
+    text.on('pointerout',  () => text.setColor('#cccccc'));
+    text.on('pointerdown', () => this.scene.start('ReleaseNotesScene'));
   }
 
   private startGame(mode: GameMode) {

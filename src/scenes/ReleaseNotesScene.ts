@@ -1,7 +1,8 @@
 import Phaser from 'phaser';
 import { RELEASE_NOTES } from '../data/releaseNotes';
+import BaseScene from './BaseScene';
 
-export default class ReleaseNotesScene extends Phaser.Scene {
+export default class ReleaseNotesScene extends BaseScene {
   private scrollContainer!: Phaser.GameObjects.Container;
   private maskShape!: Phaser.GameObjects.Graphics;
   private scrollY: number = 0;
@@ -21,6 +22,8 @@ export default class ReleaseNotesScene extends Phaser.Scene {
   }
 
   create() {
+    super.create();
+
     this.scrollY = 0;
 
     // 배경
@@ -184,23 +187,20 @@ export default class ReleaseNotesScene extends Phaser.Scene {
       fontStyle: 'bold',
     }).setOrigin(0.5).setDepth(10);
 
-    // 씬 전환 직후 포인터 상태가 남아있어 즉시 pointerdown이 발생하는 것을 방지
-    this.time.delayedCall(200, () => {
-      button.setInteractive({ useHandCursor: true });
-      text.setInteractive({ useHandCursor: true });
+    button.setInteractive({ useHandCursor: true });
+    text.setInteractive({ useHandCursor: true });
 
-      [button, text].forEach((element) => {
-        element.on('pointerover', () => {
-          button.setFillStyle(0xffff99);
-        });
+    [button, text].forEach((element) => {
+      element.on('pointerover', () => {
+        button.setFillStyle(0xffff99);
+      });
 
-        element.on('pointerout', () => {
-          button.setFillStyle(0xffffff);
-        });
+      element.on('pointerout', () => {
+        button.setFillStyle(0xffffff);
+      });
 
-        element.on('pointerdown', () => {
-          this.scene.start('ModeSelectScene');
-        });
+      element.on('pointerdown', () => {
+        this.scene.start('ModeSelectScene');
       });
     });
   }
