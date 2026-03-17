@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { BaseAbility } from './BaseAbility';
 import type { GameSceneAPI } from './types';
+import type PoolablePoopBase from '../objects/PoolablePoopBase';
 import { HACKER_PARAMS } from '../config/abilityParams';
 
 /**
@@ -28,9 +29,8 @@ export class HackerAbility extends BaseAbility {
 
     active.sort(() => Math.random() - 0.5);
     active.slice(0, count).forEach(p => {
-      (p.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
       this.playTerminalEffect(p.x, p.y, api);
-      p.destroy();
+      (p as PoolablePoopBase).recycle();
     });
   }
 
@@ -54,7 +54,7 @@ export class HackerAbility extends BaseAbility {
       onComplete: () => box.destroy(),
     });
 
-    const PIXEL_COUNT = 10;
+    const PIXEL_COUNT = 6;
     const GREEN = 0x00ff41;
 
     for (let i = 0; i < PIXEL_COUNT; i++) {

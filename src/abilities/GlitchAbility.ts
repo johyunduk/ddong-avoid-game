@@ -90,6 +90,9 @@ export class GlitchAbility extends BaseAbility {
 
       const timer = api.scene.time.delayedCall(1000, () => {
         attackGhost.destroy();
+        // 완료된 타이머를 배열에서 제거 (메모리 누적 방지)
+        const idx = this.attackTimers.indexOf(timer);
+        if (idx !== -1) this.attackTimers.splice(idx, 1);
         if (!target.active) return;
         if (api.goldPoops.contains(target))         api.collectGoldPoop(target);
         else if (api.diamondPoops.contains(target)) api.collectDiamondPoop(target);

@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { type Difficulty, Difficulty as DifficultyEnum } from '../types/GameMode';
 import { isChristmasSeason, CHRISTMAS_POOP_KEYS, REGULAR_POOP_KEYS } from '../utils/seasonChecker';
 import { POOP_CONFIG } from '../config/poop';
+import PoolablePoopBase from './PoolablePoopBase';
 
 // 세션 시작 시 한 번만 평가 — 스폰마다 배열 생성 및 Date() 호출 방지
 const AVAILABLE_TEXTURES: string[] = isChristmasSeason()
@@ -11,7 +12,7 @@ const AVAILABLE_TEXTURES: string[] = isChristmasSeason()
 // 크기를 크게 설정하는 크리스마스 똥 목록
 const SPECIAL_CHRISTMAS_TEXTURES = ['xmas_poop_nose', 'xmas_poop_ribbon', 'xmas_poop_santa', 'xmas_poop_beard'];
 
-export default class Poop extends Phaser.Physics.Arcade.Sprite {
+export default class Poop extends PoolablePoopBase {
   private _displaySize: number = 0;
   private _hitboxSize: number = 0;
 
@@ -46,7 +47,7 @@ export default class Poop extends Phaser.Physics.Arcade.Sprite {
   /**
    * 풀에서 꺼내 사용할 때 호출 — 텍스처·크기·위치를 재설정하고 활성화
    */
-  reinit(x: number, y: number, difficulty: Difficulty) {
+  override reinit(x: number, y: number, difficulty?: Difficulty) {
     const randomTexture = AVAILABLE_TEXTURES[
       Math.floor(Math.random() * AVAILABLE_TEXTURES.length)
     ];
@@ -79,15 +80,5 @@ export default class Poop extends Phaser.Physics.Arcade.Sprite {
     // 속도는 호출자(GameScene)가 설정
   }
 
-  update() {
-    // 화면 밖으로 나가면 풀에 반환 (destroy 대신 비활성화)
-    if (this.y > this.scene.cameras.main.height + POOP_CONFIG.destroyOffset) {
-      this.setActive(false).setVisible(false);
-      const body = this.body as Phaser.Physics.Arcade.Body;
-      if (body) {
-        body.setVelocity(0, 0);
-        body.setEnable(false);
-      }
-    }
-  }
+  // recycle() / update() — PoolablePoopBase에서 상속
 }

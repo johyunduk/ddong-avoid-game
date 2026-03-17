@@ -19,14 +19,20 @@ export default class PoolablePoopBase extends Phaser.Physics.Arcade.Sprite {
     // 속도는 호출자(GameScene)가 설정
   }
 
+  /** 풀에 반환 (destroy 대신 비활성화) */
+  recycle() {
+    this.setActive(false).setVisible(false);
+    const body = this.body as Phaser.Physics.Arcade.Body;
+    if (body) {
+      body.setVelocity(0, 0);
+      body.setEnable(false);
+    }
+  }
+
   update() {
+    if (!this.active) return;
     if (this.y > this.scene.cameras.main.height + POOP_CONFIG.destroyOffset) {
-      this.setActive(false).setVisible(false);
-      const body = this.body as Phaser.Physics.Arcade.Body;
-      if (body) {
-        body.setVelocity(0, 0);
-        body.setEnable(false);
-      }
+      this.recycle();
     }
   }
 }

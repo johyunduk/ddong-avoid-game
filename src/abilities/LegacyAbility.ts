@@ -1,5 +1,6 @@
 import { BaseAbility } from './BaseAbility';
 import type { GameSceneAPI } from './types';
+import type PoolablePoopBase from '../objects/PoolablePoopBase';
 import { LEGACY_PARAMS } from '../config/abilityParams';
 
 /**
@@ -250,9 +251,9 @@ export class LegacyAbility extends BaseAbility {
       });
     }
 
-    // ─ 화면 전체 불꽃 폭발 (20개) ────────────────────────────────
+    // ─ 화면 전체 불꽃 폭발 ────────────────────────────────
     const BURST_COLS = [0xff2200, 0xff6600, 0xffaa00, 0xffdd00, 0xffff88];
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < 12; i++) {
       const gfx = scene.add.graphics();
       const w   = Phaser.Math.Between(4, 10);
       const h   = Phaser.Math.Between(10, 22);
@@ -397,7 +398,7 @@ export class LegacyAbility extends BaseAbility {
     for (const poop of targets) {
       if (!poop.active) continue;
       this.playBurnEffect(api.scene, poop.x, poop.y);
-      poop.destroy();
+      (poop as PoolablePoopBase).recycle();
       api.updateScore(10);
     }
   }
@@ -430,7 +431,7 @@ export class LegacyAbility extends BaseAbility {
       onComplete: () => { flash.destroy(); },
     });
 
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 6; i++) {
       const gfx = scene.add.graphics();
       const w   = Phaser.Math.Between(5, 11);
       const h   = Phaser.Math.Between(14, 27);
@@ -463,7 +464,7 @@ export class LegacyAbility extends BaseAbility {
     }
 
     const EMBER_COLS = [0xff5500, 0xff8800, 0xffbb00];
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < 5; i++) {
       const gfx = scene.add.graphics();
       const s   = Phaser.Math.Between(2, 5);
       const col = Phaser.Utils.Array.GetRandom(EMBER_COLS) as number;
@@ -494,7 +495,7 @@ export class LegacyAbility extends BaseAbility {
       });
     }
 
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 2; i++) {
       const gfx = scene.add.graphics();
       gfx.fillStyle(0x331100, 0.28);
       gfx.fillCircle(0, 0, Phaser.Math.Between(6, 13));

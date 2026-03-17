@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { BaseAbility } from './BaseAbility';
 import type { GameSceneAPI } from './types';
+import type PoolablePoopBase from '../objects/PoolablePoopBase';
 import { SENTINEL_PARAMS } from '../config/abilityParams';
 
 /**
@@ -204,9 +205,8 @@ export class SentinelAbility extends BaseAbility {
 
     if (targets.length === 0) return;
 
-    // 위치 저장 후 일괄 제거
     const positions = targets.map(p => ({ x: p.x, y: p.y }));
-    targets.forEach(p => p.destroy());
+    targets.forEach(p => (p as PoolablePoopBase).recycle());
 
     // 단일 Graphics에 모든 위치 그리기 → 3회 redraw로 지글 효과
     const zapG = api.scene.add.graphics().setDepth(155);

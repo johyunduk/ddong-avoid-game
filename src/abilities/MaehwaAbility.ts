@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { BaseAbility } from './BaseAbility';
 import type { GameSceneAPI } from './types';
+import type PoolablePoopBase from '../objects/PoolablePoopBase';
 import { MAEHWA_PARAMS } from '../config/abilityParams';
 
 /**
@@ -43,7 +44,7 @@ export class MaehwaAbility extends BaseAbility {
     active.slice(0, count).forEach(poop => {
       this.drawSlashEffect(poop.x, poop.y, api);
       this.spawnPetals(poop.x, poop.y, api);
-      poop.destroy();
+      (poop as PoolablePoopBase).recycle();
     });
   }
 

@@ -5,6 +5,7 @@ import Player from '../objects/Player';
 const _origOverlap     = Phaser.Physics.Arcade.World.prototype.overlap;
 const _origIntersects  = Phaser.Physics.Arcade.World.prototype.intersects;
 import Poop from '../objects/Poop';
+import PoolablePoopBase from '../objects/PoolablePoopBase';
 import GoldPoop from '../objects/GoldPoop';
 import DiamondPoop from '../objects/DiamondPoop';
 import TopazPoop from '../objects/TopazPoop';
@@ -750,7 +751,7 @@ export default class GameScene extends BaseScene {
     counterIncrement: () => void,
   ) {
     if (this.gameOver) return;
-    poop.destroy();
+    (poop as PoolablePoopBase).recycle();
     counterIncrement();
     const bonus = this.ability.onCollectSpecial(type) + (this.activeSynergy?.collectBonus ?? 0);
     const total = baseScore + bonus;
@@ -906,9 +907,7 @@ export default class GameScene extends BaseScene {
         const body = poopSprite.body as Phaser.Physics.Arcade.Body;
         if (!body) return;
         poopPositions.push({ x: poopSprite.x, y: poopSprite.y, velocity: body.velocity.y });
-        poopSprite.setActive(false).setVisible(false);
-        body.setVelocity(0, 0);
-        body.setEnable(false);
+        poopSprite.recycle();
       });
 
       // 같은 위치에 금똥/다이아똥 생성 (50:50 확률)
@@ -1138,9 +1137,9 @@ export default class GameScene extends BaseScene {
     if (this.gameOver) return;
     if (this.player.getIsInvincible()) return;
 
-    // 센티넬: 보호막이 있으면 게임오버 대신 보호막 소모 + 똥 제거
+    // 센티넬: 보호막이 있으면 게임오버 대신 보호막 소모 + 똥 반환
     if (this.ability.onHitPoop(this.abilityAPI)) {
-      (poop as Phaser.Physics.Arcade.Sprite).destroy();
+      (poop as unknown as PoolablePoopBase).recycle();
       return;
     }
 
