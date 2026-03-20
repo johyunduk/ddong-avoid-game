@@ -1,0 +1,411 @@
+Implement the following plan:
+
+# 배경화면-캐릭터 시너지 시스템
+
+## Context
+배경화면마다 특정 캐릭터 조합 시 추가 능력치를 부여하는 시너지 시스템 구현.
+- 보너스 고정값: 이동 속도 +5px/s, 특수 똥 수집 시 +2점
+- 치비 캐릭터는 모든 배경화면에서 시너지 발동 (적응력 컨셉)
+- 시너지 발동 시 게임 상단에 뱃지 표시
+
+## 수정 파일
+
+| 파일 | 역할 |
+|------|------|
+| `src/config/synergyMap.ts` | **신규** — 시너지 매핑 정의 |
+| `src/scenes/GameScene.ts` | 시너지 읽기/적용 + UI 표시 |
+
+## Phase 1: `src/config/synergyMap.ts` 생성
+
+```typescript
+export interface WallpaperSynergy {
+  label: string;        // UI 뱃지 텍스트 (예: '황금 광산 × 광부')
+  speedBonus: number;   // 이동 속도 추가 (px/s)
+  collectBonus: number; // 특수 똥 수집마다 추가 점수
+}
+
+// 'wallpaperId:characterId' → WallpaperSynergy
+export const SYNERGY_MAP: Record<string, WallpaperSynergy> = {
+  'wp_gold_mine:miner': { label: '황금 광산 × 광부', speedBonus: 5, collectBonus: 2 },
+  'wp_hanok:maehwa':    { label: '한옥 × 매화',      speedBonus: 5, collectBonus: 2 },
+  'wp_lake:archieve':   { label: '호수 × 아카이브',  speedBonus: 5, collectBonus: 2 },
+  'wp_maehwa:maehwa':   { label: '매화 × 매화',      speedBonus: 5, collectBonus: 2 },
+  // 추후 새 배경화면 추가 시 여기에만 추가
+};
+
+// 치비: 배경화면 미상관, wallpaper가 null이 아닌 경우 모두 발동
+const CHIBI_SYNERGY: WallpaperSynergy = {
+  label: '치비의 적응력',
+  speedBonus: 5,
+  collectBonus: 2,
+};
+
+export function getSynergy(wpId: string | null, characterId: string): WallpaperSynergy | null {
+  if (!wpId) return null;
+  if (characterId === 'chibi') return CHIBI_SYNERGY;
+  return SYNERGY_MAP[`${wpId}:${characterId}`] ?? null;
+}
+```
+
+> 새 배경화면 추가 → 이 파일에만 항목 추가하면 됨
+
+## Phase 2: `GameScene.ts` 수정
+
+### 2-1. 필드 추가 (클래스 상단)
+```typescript
+private activeSynergy: WallpaperSynergy | null = null;
+```
+
+### 2-2. `init()` — 시너지 계산
+```typescript
+// 기존 selectedWpId, selectedCharId 읽은 직후
+this.activeSynergy = getSynergy(this.selectedWpId, this.selectedCharId);
+```
+
+### 2-3. `create()` — Player 생성 시 속도 반영
+```typescript
+// 기존
+const speedBonus = this.ability.getPlayerSpeedBonus();
+this.player = new Player(this, 200, 520,
+  this.difficultyConfig.playerSpeed + speedBonus + gradeAwakeSpeed, ...);
+
+// 변경
+const speedBonus = this.ability.getPlayerSpeedBonus()
+                 + (this.activeSynergy?.speedBonus ?? 0);
+```
+
+### 2-4. 특수 똥 수집 핸들러 — collectBonus 반영
+`handleGoldCollected`, `handleDiamondCollected`, `handleTopazCollected`, `handleRainbowCollected` 각각 내부의 `updateScore()` 호출 시:
+```typescript
+// 기존
+const total = baseScore + this.ability.onCollectSpecial(type);
+
+// 변경
+const total = baseScore
+            + this.ability.onCollectSpecial(type)
+            + (this.activeSynergy?.collectBonus ?? 0);
+```
+
+### 2-5. `create()` — 시너지 UI 뱃지
+```typescript
+if (this.activeSynergy) {
+  const badge = this.add.text(200, 15, `✦ ${this.activeSynergy.label}`, {
+    fontSize: '12px',
+    color: '#FFD700',
+    stroke: '#000',
+    strokeThickness: 3,
+  }).setOrigin(0.5, 0).setDepth(10).setAlpha(0);
+
+  // 페이드인 → 3초 유지 → 페이드아웃
+  this.tweens.add({
+    targets: badge,
+    alpha: { from: 0, to: 1 },
+    duration: 400,
+    onComplete: () => {
+      this.time.delayedCall(3000, () => {
+        this.tweens.add({ targets: badge, alpha: 0, duration: 600 });
+      });
+    }
+  });
+}
+```
+
+## 주의사항
+- `init()`에서 `activeSynergy`를 초기화해야 씬 재시작 시 이전 값이 남지 않음
+- `collectBonus`는 `onCollectSpecial()` 반환값에 추가하는 방식으로, 기존 ability 구조를 건드리지 않음
+- 치비 시너지는 wallpaper가 있을 때만 발동 (`wpId !== null`)
+
+## 검증
+1. 황금 광산 배경 + 광부 캐릭터로 게임 시작 → 상단 뱃지 확인
+2. 금똥 수집 시 기존 점수(+20) + collectBonus(+2) = +22 확인
+3. 치비 + 임의 배경 → 뱃지 표시 확인
+4. 치비 + 배경 없음 → 시너지 미발동 확인
+5. `npx tsc --noEmit` 통과 확인
+
+
+If you need specific details from before exiting plan mode (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/johyunduk/.REDACTED.jsonl
+
+---
+
+그런데 피지컬 모드에서는 이런게 적용이 되면 안돼
+
+---
+
+배경과 캐릭터가 매핑은 어디서 처리되나?
+
+---
+
+이렇게 깃 푸시 해줘
+
+---
+
+[Request interrupted by user]
+
+---
+
+# Simplify: Code Review and Cleanup
+
+Review all changed files for reuse, quality, and efficiency. Fix any issues found.
+
+## Phase 1: Identify Changes
+
+Run `git diff` (or `git diff HEAD` if there are staged changes) to see what changed. If there are no git changes, review the most recently modified files that the user mentioned or that you edited earlier in this conversation.
+
+## Phase 2: Launch Three Review Agents in Parallel
+
+Use the Agent tool to launch all three agents concurrently in a single message. Pass each agent the full diff so it has the complete context.
+
+### Agent 1: Code Reuse Review
+
+For each change:
+
+1. **Search for existing utilities and helpers** that could replace newly written code. Look for similar patterns elsewhere in the codebase — common locations are utility directories, shared modules, and files adjacent to the changed ones.
+2. **Flag any new function that duplicates existing functionality.** Suggest the existing function to use instead.
+3. **Flag any inline logic that could use an existing utility** — hand-rolled string manipulation, manual path handling, custom environment checks, ad-hoc type guards, and similar patterns are common candidates.
+
+### Agent 2: Code Quality Review
+
+Review the same changes for hacky patterns:
+
+1. **Redundant state**: state that duplicates existing state, cached values that could be derived, observers/effects that could be direct calls
+2. **Parameter sprawl**: adding new parameters to a function instead of generalizing or restructuring existing ones
+3. **Copy-paste with slight variation**: near-duplicate code blocks that should be unified with a shared abstraction
+4. **Leaky abstractions**: exposing internal details that should be encapsulated, or breaking existing abstraction boundaries
+5. **Stringly-typed code**: using raw strings where constants, enums (string unions), or branded types already exist in the codebase
+6. **Unnecessary JSX nesting**: wrapper Boxes/elements that add no layout value — check if inner component props (flexShrink, alignItems, etc.) already provide the needed behavior
+
+### Agent 3: Efficiency Review
+
+Review the same changes for efficiency:
+
+1. **Unnecessary work**: redundant computations, repeated file reads, duplicate network/API calls, N+1 patterns
+2. **Missed concurrency**: independent operations run sequentially when they could run in parallel
+3. **Hot-path bloat**: new blocking work added to startup or per-request/per-render hot paths
+4. **Recurring no-op updates**: state/store updates inside polling loops, intervals, or event handlers that fire unconditionally — add a change-detection guard so downstream consumers aren't notified when nothing changed. Also: if a wrapper function takes an updater/reducer callback, verify it honors same-reference returns (or whatever the "no change" signal is) — otherwise callers' early-return no-ops are silently defeated
+5. **Unnecessary existence checks**: pre-checking file/resource existence before operating (TOCTOU anti-pattern) — operate directly and handle the error
+6. **Memory**: unbounded data structures, missing cleanup, event listener leaks
+7. **Overly broad operations**: reading entire files when only a portion is needed, loading all items when filtering for one
+
+## Phase 3: Fix Issues
+
+Wait for all three agents to complete. Aggregate their findings and fix each issue directly. If a finding is a false positive or not worth addressing, note it and move on — do not argue with the finding, just skip it.
+
+When done, briefly summarize what was fixed (or confirm the code was already clean).
+
+---
+
+<task-notification>
+<task-id>a4001ac3e8d694f63</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>REDACTED.output</output-file>
+<status>completed</status>
+<summary>Agent "Code quality review" completed</summary>
+<result>## Code Quality Review: synergyMap.ts Diff
+
+**Findings:**
+
+1. **Redundant State Values**: All synergy entries define identical `speedBonus: 5` and `collectBonus: 2`. These are duplicated 5 times (4 in SYNERGY_MAP + 1 in CHIBI_SYNERGY). Consider extracting to a constant:
+   ```typescript
+   const DEFAULT_SYNERGY_BONUSES = { speedBonus: 5, collectBonus: 2 };
+   ```
+
+2. **Stringly-Typed Character ID**: The code uses `characterId === 'chibi'` as a raw string. There is **no exported constant** in `src/utils/character.ts` for this ID. The string appears hardcoded in 5 places:
+   - Line 25: `if (characterId === 'chibi')`
+   - character.ts line 385, 395, 401, 422, 436 (various functions)
+   
+   This should be extracted to a shared constant (e.g., `export const CHIBI_CHARACTER_ID = 'chibi'` in character.ts).
+
+3. **Composite Key Pattern in Map**: The synergy map uses string concatenation (`'${wpId}:${characterId}'`) as a key. This is not inherently bad, but consider using a typed key function or object-based lookup to reduce stringly-typed code later.
+
+4. **Clean Aspects**:
+   - Interface is well-defined with clear field semantics
+   - `getSynergy()` function properly handles null wallpaper
+   - Integration into GameScene (lines 131, 280, 433, 749) is clean with nullish coalescing
+   - No parameter sprawl or copy-paste patterns detected
+
+**Recommendations:**
+- Extract magic value `5, 2` to a constant
+- Create `CHIBI_CHARACTER_ID` constant in character.ts and use it throughout the codebase</result>
+<usage><total_tokens>30294</total_tokens><tool_uses>7</tool_uses><duration_ms>28278</duration_ms></usage>
+</task-notification>
+Full transcript available at: REDACTED.output
+
+---
+
+<task-notification>
+<task-id>a58eb3fc4f2329f97</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>REDACTED.output</output-file>
+<status>completed</status>
+<summary>Agent "Efficiency review" completed</summary>
+<result>Perfect. Now I have all the information I need to provide a comprehensive analysis. Let me compile the findings:
+
+## Efficiency Review: Synergy Badge & Collection Bonus
+
+### Findings:
+
+1. **Badge Text Cleanup — POTENTIAL ISSUE (Minor)**
+   - The badge text object (line 434) is created and tweened but **never explicitly destroyed**
+   - The fade-out tween happens (line 447) but doesn't call `destroy()`
+   - **However**: Phaser automatically destroys all display objects on scene shutdown, so this is not a memory leak
+   - **Concern**: The alpha=0 tween completes but the text object persists in memory until scene ends (waste of ~1KB per synergy triggered)
+   - **Recommendation**: Add `.onComplete` callback to the fade-out tween to call `badge.destroy()` explicitly
+
+2. **Delayed Call Timer — CLEAN**
+   - The `delayedCall(3000, ...)` at line 446 is not stored in a reference variable
+   - Since it's wrapped in a tween's `onComplete` callback, it's not a dangling timer
+   - On game over or scene shutdown, Phaser's timer system automatically cancels all timers
+   - **Status**: Safe, no timer leak
+
+3. **Synergy Caching — CLEAN**
+   - `getSynergy()` is called once in `init()` (line 131) and cached in `this.activeSynergy`
+   - Since `init()` is called on scene start/restart, the synergy is always recalculated with current character/wallpaper selection
+   - `getSynergy()` is a pure function with no side effects (reads from static SYNERGY_MAP)
+   - The badge is recreated each game, so no stale data risk
+   - **Status**: Correct pattern, no stale synergy concern
+
+4. **Hot-Path Calculation — CLEAN**
+   - `(this.activeSynergy?.collectBonus ?? 0)` is in `handleSpecialCollected()` (line 749)
+   - `handleSpecialCollected()` is only called from collision handlers: `collectGoldPoop`, `collectDiamondPoop`, `collectTopazPoop`, `collectRainbowPoop`
+   - These collision handlers are registered **once** during `create()` (lines 347, 356, 365, 374)
+   - Collision handlers fire on **overlap event only**, not per-frame
+   - The `??` operator is lazy evaluation (negligible cost)
+   - **Status**: Not in hot path, no bloat
+
+### Summary:
+
+**One minor inefficiency, otherwise clean:**
+- Badge text should call `.destroy()` in fade-out tween's `onComplete` to avoid keeping dead alpha=0 text in memory until scene shutdown
+- All other concerns (timer leaks, stale cache, hot-path bloat) are non-issues due to proper Phaser lifecycle management</result>
+<usage><total_tokens>31374</total_tokens><tool_uses>16</tool_uses><duration_ms>45446</duration_ms></usage>
+</task-notification>
+Full transcript available at: REDACTED.output
+
+---
+
+<task-notification>
+<task-id>a9aa4262705ed2215</task-id>
+<tool-use-id>toolu_01Cbi4pDeMgkcnumhuPDfSnD</tool-use-id>
+<output-file>REDACTED.output</output-file>
+<status>completed</status>
+<summary>Agent "Code reuse review" completed</summary>
+<result>Excellent. Now I have enough information to provide a comprehensive report. Let me summarize my findings:
+
+## Code Reuse Review: Synergy System Implementation
+
+### Summary: **MOSTLY CLEAN** — Few opportunities found, minor patterns to note
+
+---
+
+### 1. **`Record<string, ...>` Composite Key Pattern**
+
+**Finding**: The `id:id` key pattern in `synergyMap.ts` is **not duplicated elsewhere**.
+
+- `synergyMap.ts` uses: `SYNERGY_MAP: Record<string, WallpaperSynergy>` with keys like `'wp_gold_mine:miner'`
+- Other files use `Record<string, ...>` but with simple string keys (not composite):
+  - `GachaScene.ts` - `GRADE_COLORS: Record<string, number>`
+  - `GameScene.ts` - `questLabels: Record<string, string>`
+  - `character.ts`, `storyProgress.ts` - localStorage maps with simple string keys
+
+**Reuse Status**: Clean — no duplication. The composite key pattern is new and specific to synergy lookup.
+
+---
+
+### 2. **Badge Display Pattern (Fade-in/Hold/Fade-out)**
+
+**Finding**: **EXACT MATCH** in `GameScene.ts` itself, slightly different from synergy implementation.
+
+**Existing Badge Pattern** (lines 407-415):
+```typescript
+// Hint text badge - DIFFERENT APPROACH
+const hintText = this.add.text(...).setAlpha(0.85);
+this.time.delayedCall(2500, () => {
+  this.tweens.add({ targets: hintText, alpha: 0, duration: 700 });
+});
+```
+
+**New Synergy Badge** (lines 433-450):
+```typescript
+// Synergy badge - MORE COMPLEX TWEEN
+const badge = this.add.text(...).setAlpha(0);
+this.tweens.add({
+  targets: badge,
+  alpha: { from: 0, to: 1 },
+  duration: 400,
+  onComplete: () => {
+    this.time.delayedCall(3000, () => {
+      this.tweens.add({ targets: badge, alpha: 0, duration: 600 });
+    });
+  }
+});
+```
+
+**Observation**: Both use the same pattern (delayedCall → tween fade), but synergy implements a more complete "fade-in → hold → fade-out" sequence. This is **not a reuse opportunity** — the patterns are purposefully different (one is simpler, one is more complex).
+
+---
+
+### 3. **Text Style Patterns**
+
+**Finding**: Badge text styles are **similar but not identical** across the codebase.
+
+| Component | Style | Location |
+|-----------|-------|----------|
+| Synergy Badge | `fontSize: '12px'`, `color: '#FFD700'`, `stroke: '#000'`, `strokeThickness: 3` | GameScene:434-438 |
+| WP Badge | `fontSize: '9px'`, `color: badgeColor`, `fontStyle: 'bold'`, `backgroundColor: '#000000cc'` | CharacterSelectScene:438-440 |
+| Grade Badge | `fontSize: '9px'`, `color: gradeColor`, `fontStyle: 'bold'`, `stroke: '#000'`, `strokeThickness: 3` | CharacterSelectScene:625-628 |
+| Hint Text | `fontSize: '14px'`, `color: '#ffffff'`, `stroke: '#000'`, `strokeThickness: 3` | GameScene:408-411 |
+
+**Observation**: No standardized badge utility exists. Styles vary by context (size, stroke vs background). **Not a reuse opportunity** — variations are intentional per UI context.
+
+---
+
+### 4. **Configuration Structure Pattern**
+
+**Finding**: The `SYNERGY_MAP` structure pattern **matches existing config standards**.
+
+Synergy pattern:
+```typescript
+export const SYNERGY_MAP: Record<string, WallpaperSynergy> = {
+  'key': { label: '', speedBonus: n, collectBonus: n },
+};
+```
+
+Matches existing patterns in:
+- `abilityParams.ts` — Multiple `PARAMS` and `DESC` objects with `as const`
+- `poop.ts` — Config objects with typed fields
+- `feverTime.ts` — Centralized configuration
+
+**Observation**: Clean adherence to project config patterns. **No duplication.**
+
+---
+
+### 5. **Speed/Collectible Bonus System**
+
+**Finding**: Synergy bonuses are applied in the **correct, non-duplicated locations**.
+
+- **Speed bonus**: Applied at Player creation (line 280) — same place as ability bonuses
+- **Collect bonus**: Applied in `collectSpecial()` (line 749) — same place as ability bonuses
+- **Composite formula**: `base + ability.bonus + (synergy?.bonus ?? 0)` — follows existing pattern
+
+**Observation**: Well-integrated, no duplicate bonus logic. **Clean.**
+
+---
+
+### Final Assessment
+
+| Category | Status | Details |
+|----------|--------|---------|
+| Composite key pattern (`id:id`) | ✓ Clean | No existing duplicates |
+| Badge/notification tween system | ⚠️ Similar | Fade pattern exists but intentionally simplified elsewhere; not a blocker |
+| Text style definitions | ✓ Clean | Context-specific variations, not unified; acceptable |
+| Configuration file organization | ✓ Clean | Follows `src/config/` pattern (poop.ts, feverTime.ts) |
+| Bonus application logic | ✓ Clean | Properly integrated, no duplicates |
+
+**Recommendation**: No refactoring required. The synergy system is well-implemented and orthogonal to existing patterns. The badge display complexity is appropriate for its use case (startup notification) versus simpler hint text elsewhere.</result>
+<usage><total_tokens>34950</total_tokens><tool_uses>21</tool_uses><duration_ms>58407</duration_ms></usage>
+</task-notification>
+Full transcript available at: REDACTED.output
+
+---
+
+깃 푸시해줘
