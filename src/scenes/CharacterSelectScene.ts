@@ -471,6 +471,10 @@ export default class CharacterSelectScene extends BaseScene {
   private showWallpaperDetail(def: BackgroundDef): void {
     this.hideCharacterDetail();
 
+    // 패널 열기 직후 고스트 mouseup 방지
+    this.input.enabled = false;
+    this.time.delayedCall(150, () => { this.input.enabled = true; });
+
     const isOwned = this.ownedWpIds.includes(def.id);
     const isSelected = this.selectedWpId === def.id;
 
@@ -706,6 +710,10 @@ export default class CharacterSelectScene extends BaseScene {
   private showCharacterDetail(id: string): void {
     this.hideCharacterDetail();
 
+    // 패널 열기 직후 고스트 mouseup 방지 (터치 → 마우스 에뮬레이션 bleed-through)
+    this.input.enabled = false;
+    this.time.delayedCall(150, () => { this.input.enabled = true; });
+
     const def = CHARACTERS.find(c => c.id === id) ?? CHARACTERS[0];
     const isOwned = this.ownedIds.includes(id);
     const gradeColorInt = parseInt(def.gradeColor.replace('#', ''), 16);
@@ -889,6 +897,10 @@ export default class CharacterSelectScene extends BaseScene {
 
   private showInfoPanel(def: CharacterDef): void {
     this.hideInfoPanel();
+
+    // 패널 열기 직후 고스트 mouseup 방지
+    this.input.enabled = false;
+    this.time.delayedCall(150, () => { this.input.enabled = true; });
 
     const gradeColorInt = parseInt(def.gradeColor.replace('#', ''), 16);
     const panel = this.add.container(0, 0).setDepth(400);
