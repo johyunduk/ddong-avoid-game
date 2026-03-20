@@ -1,0 +1,32 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "0076ff2074eb",
+  "session_id": "157856ed-d09e-4f38-bf12-287f5883a551",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-20T12:35:25.331307Z",
+  "branch": "dev",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "src/scenes/CharacterSelectScene.ts"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "66687cd3fbd5",
+  "transcript_identifier_at_start": "f8a4f2d2-fd84-4605-ab4b-8b3375eae541",
+  "token_usage": {
+    "input_tokens": 3104,
+    "cache_creation_tokens": 473734,
+    "cache_read_tokens": 10187020,
+    "output_tokens": 54599,
+    "api_call_count": 123
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-20T12:35:23.571559Z",
+    "agent_lines": 4,
+    "human_added": 8,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 12,
+    "agent_percentage": 33.33333333333333
+  },
+  "transcript_path": ".claude/projects/-Users-johyunduk-Projects-ddong-avoid-game/157856ed-d09e-4f38-bf12-287f5883a551.jsonl"
+}

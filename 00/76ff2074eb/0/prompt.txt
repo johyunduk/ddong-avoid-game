@@ -1,0 +1,287 @@
+지금 보면 어떤 버튼 눌렀을 때 뜨는 화면의 버튼이 바로 눌리는거 막기 위한 조치들 몇개 한것들이 있을텐데 모든 버튼마다 그렇게 할 순 없지 않니? 화면단이나 좀 상위 단에서  
+  처리할 수 있는 방법은 없나?
+
+---
+
+[Request interrupted by user for tool use]
+
+---
+
+# Simplify: Code Review and Cleanup
+
+Review all changed files for reuse, quality, and efficiency. Fix any issues found.
+
+## Phase 1: Identify Changes
+
+Run `git diff` (or `git diff HEAD` if there are staged changes) to see what changed. If there are no git changes, review the most recently modified files that the user mentioned or that you edited earlier in this conversation.
+
+## Phase 2: Launch Three Review Agents in Parallel
+
+Use the Agent tool to launch all three agents concurrently in a single message. Pass each agent the full diff so it has the complete context.
+
+### Agent 1: Code Reuse Review
+
+For each change:
+
+1. **Search for existing utilities and helpers** that could replace newly written code. Look for similar patterns elsewhere in the codebase — common locations are utility directories, shared modules, and files adjacent to the changed ones.
+2. **Flag any new function that duplicates existing functionality.** Suggest the existing function to use instead.
+3. **Flag any inline logic that could use an existing utility** — hand-rolled string manipulation, manual path handling, custom environment checks, ad-hoc type guards, and similar patterns are common candidates.
+
+### Agent 2: Code Quality Review
+
+Review the same changes for hacky patterns:
+
+1. **Redundant state**: state that duplicates existing state, cached values that could be derived, observers/effects that could be direct calls
+2. **Parameter sprawl**: adding new parameters to a function instead of generalizing or restructuring existing ones
+3. **Copy-paste with slight variation**: near-duplicate code blocks that should be unified with a shared abstraction
+4. **Leaky abstractions**: exposing internal details that should be encapsulated, or breaking existing abstraction boundaries
+5. **Stringly-typed code**: using raw strings where constants, enums (string unions), or branded types already exist in the codebase
+6. **Unnecessary JSX nesting**: wrapper Boxes/elements that add no layout value — check if inner component props (flexShrink, alignItems, etc.) already provide the needed behavior
+
+### Agent 3: Efficiency Review
+
+Review the same changes for efficiency:
+
+1. **Unnecessary work**: redundant computations, repeated file reads, duplicate network/API calls, N+1 patterns
+2. **Missed concurrency**: independent operations run sequentially when they could run in parallel
+3. **Hot-path bloat**: new blocking work added to startup or per-request/per-render hot paths
+4. **Recurring no-op updates**: state/store updates inside polling loops, intervals, or event handlers that fire unconditionally — add a change-detection guard so downstream consumers aren't notified when nothing changed. Also: if a wrapper function takes an updater/reducer callback, verify it honors same-reference returns (or whatever the "no change" signal is) — otherwise callers' early-return no-ops are silently defeated
+5. **Unnecessary existence checks**: pre-checking file/resource existence before operating (TOCTOU anti-pattern) — operate directly and handle the error
+6. **Memory**: unbounded data structures, missing cleanup, event listener leaks
+7. **Overly broad operations**: reading entire files when only a portion is needed, loading all items when filtering for one
+
+## Phase 3: Fix Issues
+
+Wait for all three agents to complete. Aggregate their findings and fix each issue directly. If a finding is a false positive or not worth addressing, note it and move on — do not argue with the finding, just skip it.
+
+When done, briefly summarize what was fixed (or confirm the code was already clean).
+
+---
+
+깃 푸시해줘
+
+---
+
+메모리 효율이나 성능 부분을 체크해서 게임이 버벅이지 않게 해줘. 게임 시작하고 좀 지나면 버벅임이 생기는거 같아
+
+---
+
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+Summary:
+1. Primary Request and Intent:
+   - **Request 1**: The user asked for a higher-level approach to prevent button double-click/immediate-press bugs during scene transitions, instead of wrapping every button individually with `time.delayedCall(200)`. They wanted a scene-level or architectural solution.
+   - **Request 2**: After pushing the BaseScene changes, the user asked to check memory efficiency and performance issues, noting that the game stutters after playing for a while ("게임 시작하고 좀 지나면 버벅임이 생기는거 같아").
+
+2. Key Technical Concepts:
+   - **Phaser 3 `this.input.enabled`**: Scene-level input toggle that blocks all pointer events while keeping keyboard input functional (KeyboardPlugin is separate)
+   - **BaseScene pattern**: Central inheritance class to handle cross-cutting concerns like input guarding
+   - **Object Pooling in Phaser**: Using `group.get()` with `maxSize` to reuse sprites. `destroy()` removes from pool permanently; `setActive(false).setVisible(false)` + `body.setEnable(false)` returns to pool for reuse.
+   - **`verbatimModuleSyntax = true`**: TypeScript config requiring `import type` for type-only imports
+   - **`erasableSyntaxOnly = true`**: No enums, namespaces, etc. — must use `as const`
+   - **GC pressure from short-lived objects**: Destroying and recreating pool objects causes garbage collection pauses leading to frame drops
+   - **Tween/Graphics lifecycle**: Each Tween created by `scene.tweens.add()` is iterated every frame by TweenManager; excessive concurrent tweens cause per-frame overhead
+
+3. Files and Code Sections:
+   - **`src/scenes/BaseScene.ts`** (NEW)
+     - Central base class for all scenes, handles input guard on scene transition
+     ```typescript
+     import Phaser from 'phaser';
+     export default class BaseScene extends Phaser.Scene {
+       protected inputGuardMs = 200;
+       create() {
+         if (this.inputGuardMs > 0) {
+           this.input.enabled = false;
+           this.time.delayedCall(this.inputGuardMs, () => {
+             this.input.enabled = true;
+           });
+         }
+       }
+     }
+     ```
+
+   - **`src/scenes/DifficultySelectScene.ts`** (MODIFIED)
+     - Changed `extends Phaser.Scene` → `extends BaseScene`, removed `import Phaser`
+     - Added `super.create()` at start of `create()`
+     - Removed 2 `delayedCall(200)` wrappers (back button + difficulty card buttons), flattened the code to use immediate `setInteractive()`
+
+   - **`src/scenes/ReleaseNotesScene.ts`** (MODIFIED)
+     - Changed to extend `BaseScene`, kept `import Phaser` (uses `Phaser.Math.Clamp` at runtime)
+     - Removed 1 `delayedCall(200)` wrapper from `createBackButton()`
+
+   - **`src/scenes/ModeSelectScene.ts`** (MODIFIED)
+     - Changed to extend `BaseScene`, changed to `import type Phaser` (type-only usage)
+     - Removed 1 `delayedCall(200)` wrapper from `createReleaseNotesLink()`
+
+   - **`src/scenes/CharacterSelectScene.ts`** (MODIFIED)
+     - Changed to extend `BaseScene`, added `import Phaser` and `import BaseScene`
+     - Added `super.create()`
+
+   - **`src/scenes/LeaderboardScene.ts`** (MODIFIED)
+     - Changed to extend `BaseScene`, changed to `import type Phaser`
+     - Added `super.create()`
+
+   - **`src/scenes/GachaScene.ts`** (MODIFIED)
+     - Changed to extend `BaseScene`, kept `import Phaser` (uses `Phaser.Loader.Events`)
+     - Added `super.create()`
+
+   - **`src/scenes/GameScene.ts`** (MODIFIED)
+     - Changed to extend `BaseScene`, kept `import Phaser` (anti-cheat module-level code)
+     - Added `protected inputGuardMs = 0;` (gameplay scene needs immediate input)
+     - Added `super.create()`
+     - Changed `handleSpecialCollected`: `poop.destroy()` → `(poop as unknown as { recycle(): void }).recycle()`
+     - Changed sentinel absorb in `hitPoop`: `destroy()` → `recycle()`
+
+   - **`src/objects/Poop.ts`** (MODIFIED)
+     - Added public `recycle()` method extracting deactivation logic from `update()`
+     ```typescript
+     recycle() {
+       this.setActive(false).setVisible(false);
+       const body = this.body as Phaser.Physics.Arcade.Body;
+       if (body) {
+         body.setVelocity(0, 0);
+         body.setEnable(false);
+       }
+     }
+     update() {
+       if (this.y > this.scene.cameras.main.height + POOP_CONFIG.destroyOffset) {
+         this.recycle();
+       }
+     }
+     ```
+
+   - **`src/objects/PoolablePoopBase.ts`** (MODIFIED)
+     - Same `recycle()` method added, `update()` refactored to call `recycle()`
+
+   - **`src/abilities/SentinelAbility.ts`** (MODIFIED)
+     - `zapNearbyPoops`: Changed `targets.forEach(p => p.destroy())` to inline deactivation pattern
+     ```typescript
+     targets.forEach(p => {
+       p.setActive(false).setVisible(false);
+       const body = p.body as Phaser.Physics.Arcade.Body;
+       if (body) { body.setVelocity(0, 0); body.setEnable(false); }
+     });
+     ```
+
+   - **`src/abilities/LegacyAbility.ts`** (MODIFIED)
+     - `burnRandomPoops`: Changed `poop.destroy()` to inline deactivation
+     - Reduced particle counts in `playBurnEffect`: flames 10→6, embers 8→5, smoke 4→2
+     - Reduced `activateLegacyMode` burst: 20→12
+
+   - **`src/abilities/GlitchAbility.ts`** (MODIFIED)
+     - Added timer self-cleanup in `collectSpecialWithGhost`:
+     ```typescript
+     const timer = api.scene.time.delayedCall(1000, () => {
+       attackGhost.destroy();
+       const idx = this.attackTimers.indexOf(timer);
+       if (idx !== -1) this.attackTimers.splice(idx, 1);
+       // ... rest of callback
+     });
+     ```
+
+   - **`src/abilities/HackerAbility.ts`** (MODIFIED)
+     - Reduced `PIXEL_COUNT` from 10 to 6
+
+4. Errors and fixes:
+   - **Import error after removing `import Phaser`**: Several scenes referenced `Phaser.` for types (e.g., `Phaser.GameObjects.Text`) or runtime values (e.g., `Phaser.Math.Clamp`). After removing `import Phaser from 'phaser'` when switching to BaseScene, had to add back either `import Phaser from 'phaser'` (runtime usage) or `import type Phaser from 'phaser'` (type-only, required by `verbatimModuleSyntax`).
+   - **GameScene `import Phaser` accidentally removed**: GameScene uses `Phaser.Physics.Arcade.World.prototype.overlap` at module level for anti-cheat. Immediately restored the import.
+   - **GameScene 200ms input block**: The /simplify review identified that GameScene (gameplay scene) would block touch input for 200ms, preventing player movement while poops are falling. Fixed by adding `protected inputGuardMs = 0`.
+
+5. Problem Solving:
+   - **Scene transition button bleed-through** (solved): Centralized with `BaseScene.create()` disabling `this.input.enabled` for 200ms, eliminating per-button `delayedCall` wrappers
+   - **Game stuttering after prolonged play** (fixes applied, not yet tested):
+     - Root cause 1: Pooled objects destroyed instead of recycled → constant create/destroy cycle → GC pressure
+     - Root cause 2: Excessive concurrent Graphics/Tweens from ability effects (LegacyAbility especially)
+     - Root cause 3: GlitchAbility timer array growing indefinitely
+
+6. All user messages:
+   - "지금 보면 어떤 버튼 눌렀을 때 뜨는 화면의 버튼이 바로 눌리는거 막기 위한 조치들 몇개 한것들이 있을텐데 모든 버튼마다 그렇게 할 순 없지 않니? 화면단이나 좀 상위 단에서 처리할 수 있는 방법은 없나?"
+   - [User interrupted `npm run build` tool call]
+   - `/simplify` (invoked simplify skill for code review)
+   - "깃 푸시해줘"
+   - "메모리 효율이나 성능 부분을 체크해서 게임이 버벅이지 않게 해줘. 게임 시작하고 좀 지나면 버벅임이 생기는거 같아"
+
+7. Pending Tasks:
+   - The performance fixes (pool recycling, particle reduction, timer cleanup) have been implemented and TypeScript-checked, but have NOT been committed or pushed yet.
+   - The user has not yet been shown the final summary of changes or asked to test.
+
+8. Current Work:
+   Immediately before this summary, I was implementing performance fixes for game stuttering. All 7 fixes were applied across 7 files:
+   - `src/objects/Poop.ts` — added `recycle()` method
+   - `src/objects/PoolablePoopBase.ts` — added `recycle()` method
+   - `src/scenes/GameScene.ts` — changed `destroy()` calls to `recycle()` in `handleSpecialCollected` and `hitPoop`
+   - `src/abilities/SentinelAbility.ts` — inline deactivation in `zapNearbyPoops`
+   - `src/abilities/LegacyAbility.ts` — inline deactivation in `burnRandomPoops` + reduced particle counts
+   - `src/abilities/GlitchAbility.ts` — timer self-cleanup from array
+   - `src/abilities/HackerAbility.ts` — reduced pixel count
+   
+   TypeScript check (`npx tsc --noEmit`) passed. `git diff --stat HEAD` shows 7 files changed, 46 insertions, 25 deletions. Changes are uncommitted.
+
+9. Optional Next Step:
+   Commit and push the performance fixes, since the user previously asked "깃 푸시해줘" for the prior changes and will likely want these committed too. However, should confirm with the user first since they haven't explicitly asked to commit these yet. The user may want to test the game first to verify the stuttering is resolved.
+
+If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/johyunduk/.REDACTED.jsonl
+Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.
+
+---
+
+# Simplify: Code Review and Cleanup
+
+Review all changed files for reuse, quality, and efficiency. Fix any issues found.
+
+## Phase 1: Identify Changes
+
+Run `git diff` (or `git diff HEAD` if there are staged changes) to see what changed. If there are no git changes, review the most recently modified files that the user mentioned or that you edited earlier in this conversation.
+
+## Phase 2: Launch Three Review Agents in Parallel
+
+Use the Agent tool to launch all three agents concurrently in a single message. Pass each agent the full diff so it has the complete context.
+
+### Agent 1: Code Reuse Review
+
+For each change:
+
+1. **Search for existing utilities and helpers** that could replace newly written code. Look for similar patterns elsewhere in the codebase — common locations are utility directories, shared modules, and files adjacent to the changed ones.
+2. **Flag any new function that duplicates existing functionality.** Suggest the existing function to use instead.
+3. **Flag any inline logic that could use an existing utility** — hand-rolled string manipulation, manual path handling, custom environment checks, ad-hoc type guards, and similar patterns are common candidates.
+
+### Agent 2: Code Quality Review
+
+Review the same changes for hacky patterns:
+
+1. **Redundant state**: state that duplicates existing state, cached values that could be derived, observers/effects that could be direct calls
+2. **Parameter sprawl**: adding new parameters to a function instead of generalizing or restructuring existing ones
+3. **Copy-paste with slight variation**: near-duplicate code blocks that should be unified with a shared abstraction
+4. **Leaky abstractions**: exposing internal details that should be encapsulated, or breaking existing abstraction boundaries
+5. **Stringly-typed code**: using raw strings where constants, enums (string unions), or branded types already exist in the codebase
+6. **Unnecessary JSX nesting**: wrapper Boxes/elements that add no layout value — check if inner component props (flexShrink, alignItems, etc.) already provide the needed behavior
+
+### Agent 3: Efficiency Review
+
+Review the same changes for efficiency:
+
+1. **Unnecessary work**: redundant computations, repeated file reads, duplicate network/API calls, N+1 patterns
+2. **Missed concurrency**: independent operations run sequentially when they could run in parallel
+3. **Hot-path bloat**: new blocking work added to startup or per-request/per-render hot paths
+4. **Recurring no-op updates**: state/store updates inside polling loops, intervals, or event handlers that fire unconditionally — add a change-detection guard so downstream consumers aren't notified when nothing changed. Also: if a wrapper function takes an updater/reducer callback, verify it honors same-reference returns (or whatever the "no change" signal is) — otherwise callers' early-return no-ops are silently defeated
+5. **Unnecessary existence checks**: pre-checking file/resource existence before operating (TOCTOU anti-pattern) — operate directly and handle the error
+6. **Memory**: unbounded data structures, missing cleanup, event listener leaks
+7. **Overly broad operations**: reading entire files when only a portion is needed, loading all items when filtering for one
+
+## Phase 3: Fix Issues
+
+Wait for all three agents to complete. Aggregate their findings and fix each issue directly. If a finding is a false positive or not worth addressing, note it and move on — do not argue with the finding, just skip it.
+
+When done, briefly summarize what was fixed (or confirm the code was already clean).
+
+---
+
+깃 푸시해줘
+
+---
+
+캐릭터 상세 화면에서는 여전히 바로 클릭되는 문제가 있는데? 바로 영상이 틀어지거나 정보보기를 눌러도 바로 닫히는 그런 문제가 있어
+
+---
+
+이어서 해줘
