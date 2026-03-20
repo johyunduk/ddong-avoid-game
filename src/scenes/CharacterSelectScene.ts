@@ -170,14 +170,14 @@ export default class CharacterSelectScene extends BaseScene {
     this.bgImage = this.add.image(200, 300, selectedDef.illustKey);
     this.bgImage.setDisplaySize(400, 600);
 
-    // ── 헤더 (고정) ─────────────────────────────────────────────────────
+    // ── 헤더 (고정, depth 10 — 스크롤 카드보다 위) ──────────────────────
     this.add.text(200, 30, '수집', {
       fontSize: '22px',
       color: '#ffffff',
       fontStyle: 'bold',
       stroke: '#000',
       strokeThickness: 4,
-    }).setOrigin(0.5);
+    }).setOrigin(0.5).setDepth(10);
 
     // ── 탭 버튼 ────────────────────────────────────────────────────────
     const TAB_Y = 60;
@@ -186,17 +186,19 @@ export default class CharacterSelectScene extends BaseScene {
 
     this.charTabBtnBg = this.add.rectangle(110, TAB_Y, TAB_W, TAB_H, 0x1144bb)
       .setStrokeStyle(1.5, 0x4488ff)
+      .setDepth(10)
       .setInteractive({ useHandCursor: true });
     this.charTabLabel = this.add.text(110, TAB_Y, '캐릭터', {
       fontSize: '14px', color: '#ffffff', fontStyle: 'bold',
-    }).setOrigin(0.5);
+    }).setOrigin(0.5).setDepth(10);
 
     this.wpTabBtnBg = this.add.rectangle(290, TAB_Y, TAB_W, TAB_H, 0x222222)
       .setStrokeStyle(1.5, 0x555555)
+      .setDepth(10)
       .setInteractive({ useHandCursor: true });
     this.wpTabLabel = this.add.text(290, TAB_Y, '배경화면', {
       fontSize: '14px', color: '#888888', fontStyle: 'bold',
-    }).setOrigin(0.5);
+    }).setOrigin(0.5).setDepth(10);
 
     this.charTabBtnBg.on('pointerup', () => {
       if (this.detailPanel) return;
@@ -208,7 +210,7 @@ export default class CharacterSelectScene extends BaseScene {
     });
 
     // 구분선
-    this.add.rectangle(200, 80, 380, 1, 0x444444);
+    this.add.rectangle(200, 80, 380, 1, 0x444444).setDepth(10);
 
     // 현재 선택 상태 표시
     this.headerNameText = this.add.text(200, 88, `현재: ${selectedDef.name}`, {
@@ -216,7 +218,7 @@ export default class CharacterSelectScene extends BaseScene {
       color: selectedDef.gradeColor,
       stroke: '#000',
       strokeThickness: 3,
-    }).setOrigin(0.5);
+    }).setOrigin(0.5).setDepth(10);
 
     // ── 스크롤 가능한 카드 컨테이너 ─────────────────────────────────────
     this.cardsContainer = this.add.container(0, 0);
@@ -1032,14 +1034,14 @@ export default class CharacterSelectScene extends BaseScene {
   }
 
   private createBackButton() {
-    const btn = this.add.rectangle(200, 573, 200, 50, 0x333333);
+    const btn = this.add.rectangle(200, 573, 200, 50, 0x333333).setDepth(10);
     btn.setStrokeStyle(2, 0x888888);
 
     this.add.text(200, 573, '← 돌아가기', {
       fontSize: '18px',
       color: '#ffffff',
       fontStyle: 'bold',
-    }).setOrigin(0.5);
+    }).setOrigin(0.5).setDepth(10);
 
     btn.setInteractive({ useHandCursor: true });
     btn.on('pointerover', () => btn.setFillStyle(0x555555));
