@@ -1,0 +1,38 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "53938d2ab922",
+  "session_id": "d5b82f13-5970-41d4-b99e-2952744a5e36",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-21T04:45:49.720022Z",
+  "branch": "dev",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src/main.ts",
+    "src/scenes/BattleLeaderboardScene.ts",
+    "src/scenes/BattleMatchScene.ts",
+    "src/scenes/BattleResultScene.ts",
+    "src/utils/battleLeaderboard.ts",
+    "supabase/functions/battle-leaderboard-top/index.ts",
+    "supabase/functions/battle-result-submit/index.ts",
+    "supabase/migrations/20260321_battle_records.sql"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "52b105606037",
+  "token_usage": {
+    "input_tokens": 53,
+    "cache_creation_tokens": 89793,
+    "cache_read_tokens": 2053566,
+    "output_tokens": 30497,
+    "api_call_count": 33
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-21T04:45:49.525212Z",
+    "agent_lines": 817,
+    "human_added": 165,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 982,
+    "agent_percentage": 83.19755600814665
+  },
+  "transcript_path": ".claude/projects/-Users-johyunduk-Projects-ddong-avoid-game/d5b82f13-5970-41d4-b99e-2952744a5e36.jsonl"
+}
