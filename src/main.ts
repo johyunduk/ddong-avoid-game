@@ -6,6 +6,9 @@ import LeaderboardScene from './scenes/LeaderboardScene';
 import ReleaseNotesScene from './scenes/ReleaseNotesScene';
 import CharacterSelectScene from './scenes/CharacterSelectScene';
 import GachaScene from './scenes/GachaScene';
+import BattleMatchScene from './scenes/BattleMatchScene';
+import BattleGameScene from './scenes/BattleGameScene';
+import BattleResultScene from './scenes/BattleResultScene';
 import { ensureLoggedIn } from './utils/auth';
 import './style.css';
 
@@ -28,7 +31,7 @@ const config: Phaser.Types.Core.GameConfig = {
       capture: false // CSS touch-action: none이 스크롤 방지 → preventDefault 불필요, 컴포지터 블로킹 제거
     }
   },
-  scene: [ModeSelectScene, DifficultySelectScene, GameScene, LeaderboardScene, ReleaseNotesScene, CharacterSelectScene, GachaScene],
+  scene: [ModeSelectScene, DifficultySelectScene, GameScene, LeaderboardScene, ReleaseNotesScene, CharacterSelectScene, GachaScene, BattleMatchScene, BattleGameScene, BattleResultScene],
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH

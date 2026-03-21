@@ -29,27 +29,27 @@ import BaseScene from './BaseScene';
 export default class GameScene extends BaseScene {
   protected inputGuardMs = 0; // 게임플레이 씬은 즉시 입력 허용
 
-  private player!: Player;
-  private poops!: Phaser.Physics.Arcade.Group;
+  protected player!: Player;
+  protected poops!: Phaser.Physics.Arcade.Group;
   private goldPoops!: Phaser.Physics.Arcade.Group;
   private diamondPoops!: Phaser.Physics.Arcade.Group;
   private topazPoops!: Phaser.Physics.Arcade.Group;
   private rainbowPoops!: Phaser.Physics.Arcade.Group;
-  private score: number = 0;
-  private scoreText!: Phaser.GameObjects.Text;
+  protected score: number = 0;
+  protected scoreText!: Phaser.GameObjects.Text;
   private highScore: number = 0;
-  private highScoreText!: Phaser.GameObjects.Text;
-  private gameOver: boolean = false;
+  protected highScoreText!: Phaser.GameObjects.Text;
+  protected gameOver: boolean = false;
   private spawnTimer!: Phaser.Time.TimerEvent;
-  private difficultyLevel: number = 2;
+  protected difficultyLevel: number = 2;
   private bgMusic!: Phaser.Sound.BaseSound;
-  private gameMode: GameMode = GameMode.CLASSIC;
-  private difficulty: Difficulty = Difficulty.HARD;  // 게임플레이 파라미터 기준
+  protected gameMode: GameMode = GameMode.CLASSIC;
+  protected difficulty: Difficulty = Difficulty.HARD;  // 게임플레이 파라미터 기준
   private purePhysical: boolean = false;
   private get scoreDifficulty(): Difficulty {         // 점수/리더보드 저장 키
     return this.purePhysical ? Difficulty.PHYSICAL : this.difficulty;
   }
-  private difficultyConfig!: DifficultyConfig;
+  protected difficultyConfig!: DifficultyConfig;
   private lastGoldPoopScore: number = 0;
   private lastDiamondPoopScore: number = 0;
   private lastTopazPoopScore: number = 0;
@@ -65,7 +65,7 @@ export default class GameScene extends BaseScene {
   private topazCollected: number = 0;
   private rainbowCollected: number = 0;
   // 피버 타임 관련
-  private isFeverTime: boolean = false; // 피버 타임 활성화 여부
+  protected isFeverTime: boolean = false; // 피버 타임 활성화 여부
   private feverTimeRemaining: number = 0; // 피버 타임 남은 시간 (ms)
   private feverTimeTimer?: Phaser.Time.TimerEvent; // 피버 타임 카운트다운 타이머
   private feverTimeUITexts: Phaser.GameObjects.Text[] = []; // 피버 타임 UI 텍스트 (각 글자별)
@@ -89,13 +89,13 @@ export default class GameScene extends BaseScene {
   // 서버 세션 (게임 시작 시 비동기 생성, 점수 제출 시 await)
   private sessionPromise: Promise<string | null> | null = null;
   // ── 캐릭터 능력 시스템 ────────────────────────────────────────────────
-  private ability!: CharacterAbility;
-  private abilityAPI!: GameSceneAPI;
+  protected ability!: CharacterAbility;
+  protected abilityAPI!: GameSceneAPI;
   // [디버그] 수동 충돌 영역 시각화
   private manualHitboxDebug?: Phaser.GameObjects.Graphics;
 
-  constructor() {
-    super('GameScene');
+  constructor(key: string = 'GameScene') {
+    super(key);
   }
 
   init(data: { gameMode?: GameMode; difficulty?: Difficulty; purePhysical?: boolean }) {
@@ -648,7 +648,7 @@ export default class GameScene extends BaseScene {
     });
   }
 
-  private spawnPoop() {
+  protected spawnPoop() {
     if (this.gameOver) return;
     if (this.ability.isSpawnBlocked()) return;                    // 노이즈 차단
     if (this.ability.overrideSpawnPoop(this.abilityAPI)) return;  // 레거시 금똥 피버
@@ -742,7 +742,7 @@ export default class GameScene extends BaseScene {
     }
   }
 
-  private handleSpecialCollected(
+  protected handleSpecialCollected(
     poop: Phaser.Physics.Arcade.Sprite,
     type: import('../abilities/types').SpecialPoopType,
     baseScore: number,
@@ -792,7 +792,7 @@ export default class GameScene extends BaseScene {
    * 점수를 증가시키고 보너스 아이템 생성을 체크합니다.
    * @param amount 증가할 점수 (기본값: 1)
    */
-  private updateScore(amount: number = 1) {
+  protected updateScore(amount: number = 1) {
     if (!this.gameOver) {
       const oldScore = this.score;
       this.score += amount;
@@ -1130,7 +1130,7 @@ export default class GameScene extends BaseScene {
     this.ability.onAfterSpawnPoop(this.abilityAPI);
   }
 
-  private hitPoop(
+  protected hitPoop(
     _player: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile,
     poop: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile
   ) {
@@ -1205,7 +1205,7 @@ export default class GameScene extends BaseScene {
   /**
    * 게임 오버 UI 표시 및 랭킹 시스템 연동
    */
-  private async showGameOverUI(isNewRecord: boolean) {
+  protected async showGameOverUI(isNewRecord: boolean) {
     // 반투명 검정 배경 추가 (가독성 향상)
     this.add.rectangle(200, 300, 400, 600, 0x000000, 0.7).setDepth(200);
 
