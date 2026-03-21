@@ -6,6 +6,17 @@ import { POOP_CONFIG } from '../config/poop';
 import type Poop from '../objects/Poop';
 import GameScene from './GameScene';
 
+/** 생존 시간(ms)을 "12.3초" 또는 "1:05.0" 형식으로 변환 */
+function formatSurvivalTime(ms: number): string {
+  const totalSec = ms / 1000;
+  if (totalSec < 60) {
+    return `${totalSec.toFixed(1)}초`;
+  }
+  const min = Math.floor(totalSec / 60);
+  const sec = (totalSec % 60).toFixed(1).padStart(4, '0');
+  return `${min}:${sec}`;
+}
+
 interface BattleInitData {
   gameMode?: string;
   difficulty?: string;
@@ -31,6 +42,9 @@ export default class BattleGameScene extends GameScene {
   private scoreUpdateTimer!: Phaser.Time.TimerEvent;
   private disconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private battleFinished: boolean = false;
+  private survivalMs: number = 0;
+  private survivalTimerEvent!: Phaser.Time.TimerEvent;
+  private survivalText!: Phaser.GameObjects.Text;
 
   constructor() {
     super('BattleGameScene');
@@ -41,6 +55,7 @@ export default class BattleGameScene extends GameScene {
     this.battleUserId = data.userId ?? '';
     this.opponentId = data.opponentId ?? '';
     this.opponentScore = 0;
+    this.survivalMs = 0;
     this.battleFinished = false;
     this.channelReady = false;
 
@@ -55,17 +70,41 @@ export default class BattleGameScene extends GameScene {
   create() {
     super.create();
 
-    // 대전 모드에서는 최고 기록 표시 불필요
+    // 대전 모드에서는 점수 / 최고 기록 표시 불필요 → 생존 시간으로 대체
+    if (this.scoreText) this.scoreText.setVisible(false);
     if (this.highScoreText) this.highScoreText.setVisible(false);
 
-    // 상대 점수 UI (HUD 바 내부, 중앙 상단)
-    this.opponentScoreText = this.add.text(200, 3, '상대: 0', {
+    // 내 생존 시간 (좌상단)
+    this.survivalText = this.add.text(10, 3, '⏱ 0.0초', {
+      fontSize: '14px',
+      color: '#ffffff',
+      fontStyle: 'bold',
+      stroke: '#000000',
+      strokeThickness: 3,
+    }).setOrigin(0, 0).setDepth(10);
+
+    // 상대 생존 시간 (우상단)
+    this.opponentScoreText = this.add.text(390, 3, '상대: --', {
       fontSize: '14px',
       color: '#ff6666',
       fontStyle: 'bold',
       stroke: '#000000',
       strokeThickness: 3,
-    }).setOrigin(0.5, 0).setDepth(10);
+    }).setOrigin(1, 0).setDepth(10);
+
+    // 생존 타이머 (100ms 주기)
+    this.survivalTimerEvent = this.time.addEvent({
+      delay: 100,
+      callback: () => {
+        if (!this.gameOver) {
+          this.survivalMs += 100;
+          if (this.survivalText?.active) {
+            this.survivalText.setText(`⏱ ${formatSurvivalTime(this.survivalMs)}`);
+          }
+        }
+      },
+      loop: true,
+    });
 
     // 연결 상태 표시
     const connectingText = this.add.text(200, 55, '⏳ 상대와 연결 중...', {
@@ -110,7 +149,7 @@ export default class BattleGameScene extends GameScene {
       delay: 1000,
       callback: () => {
         if (!this.gameOver && this.battleChannel && this.channelReady) {
-          this.battleChannel.sendScoreUpdate(this.score);
+          this.battleChannel.sendScoreUpdate(this.survivalMs);
         }
       },
       loop: true,
@@ -127,11 +166,11 @@ export default class BattleGameScene extends GameScene {
       }
     });
 
-    // 상대 점수 갱신
+    // 상대 생존 시간 갱신
     this.battleChannel.onEvent(BattleEvent.SCORE_UPDATE, (payload) => {
       this.opponentScore = payload.score;
       if (this.opponentScoreText?.active) {
-        this.opponentScoreText.setText(`상대: ${this.opponentScore}`);
+        this.opponentScoreText.setText(`상대: ${formatSurvivalTime(this.opponentScore)}`);
       }
     });
 
@@ -139,9 +178,9 @@ export default class BattleGameScene extends GameScene {
     this.battleChannel.onEvent(BattleEvent.GAME_OVER, (payload) => {
       if (!this.battleFinished) {
         this.opponentScore = payload.finalScore;
-        // 패배 측이 최종 점수를 표시할 수 있도록 현재 점수를 한 번 더 전송
+        // 패배 측이 최종 생존 시간을 표시할 수 있도록 현재 값을 한 번 더 전송
         if (this.channelReady && this.battleChannel) {
-          this.battleChannel.sendScoreUpdate(this.score);
+          this.battleChannel.sendScoreUpdate(this.survivalMs);
         }
         this.endBattle(BattleResult.WIN);
       }
@@ -214,7 +253,7 @@ export default class BattleGameScene extends GameScene {
     super.hitPoop(player, poop);
 
     if (!wasGameOver && this.gameOver && this.battleChannel && this.channelReady) {
-      this.battleChannel.sendGameOver(this.score);
+      this.battleChannel.sendGameOver(this.survivalMs);
       if (!this.battleFinished) {
         this.endBattle(BattleResult.LOSE);
       }
@@ -316,6 +355,7 @@ export default class BattleGameScene extends GameScene {
 
     // 모든 결과에서 타이머 정리 (LOSE 시에도 불필요한 콜백 방지)
     if (this.scoreUpdateTimer) this.scoreUpdateTimer.remove();
+    if (this.survivalTimerEvent) this.survivalTimerEvent.remove();
 
     if (result === BattleResult.WIN || result === BattleResult.DISCONNECT) {
       this.gameOver = true;
@@ -326,9 +366,8 @@ export default class BattleGameScene extends GameScene {
     this.time.delayedCall(1000, () => {
       this.scene.start('BattleResultScene', {
         result,
-        myScore: this.score,
-        opponentScore: this.opponentScore,
         roomCode: this.roomCode,
+        userId: this.battleUserId,
         opponentId: this.opponentId,
       });
     });
@@ -336,6 +375,7 @@ export default class BattleGameScene extends GameScene {
 
   shutdown() {
     if (this.scoreUpdateTimer) this.scoreUpdateTimer.remove();
+    if (this.survivalTimerEvent) this.survivalTimerEvent.remove();
     if (this.disconnectTimer) {
       clearTimeout(this.disconnectTimer);
       this.disconnectTimer = null;

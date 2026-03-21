@@ -7,6 +7,8 @@ import {
   type SendPoopPayload,
   type ScoreUpdatePayload,
   type GameOverPayload,
+  type RematchRequestPayload,
+  type ResultLeavePayload,
 } from '../types/BattleTypes';
 
 type BattlePayloadMap = {
@@ -15,6 +17,8 @@ type BattlePayloadMap = {
   [BattleEvent.SEND_POOP]: SendPoopPayload;
   [BattleEvent.SCORE_UPDATE]: ScoreUpdatePayload;
   [BattleEvent.GAME_OVER]: GameOverPayload;
+  [BattleEvent.REMATCH_REQUEST]: RematchRequestPayload;
+  [BattleEvent.RESULT_LEAVE]: ResultLeavePayload;
 };
 
 /**
@@ -39,29 +43,27 @@ export class BattleChannel {
   }
 
   /** 방 생성 (호스트) — 채널만 생성, subscribe는 별도 호출 */
-  createRoom(code: string, userId: string): void {
-    this.roomCode = code;
-    this.userId = userId;
-    this.createChannel('battle-room');
-  }
+  createRoom(code: string, userId: string): void { this.initRoom(code, userId, 'battle-room'); }
 
   /** 방 참가 (게스트) — 채널만 생성, subscribe는 별도 호출 */
-  joinRoom(code: string, userId: string): void {
-    this.roomCode = code;
-    this.userId = userId;
-    this.createChannel('battle-room');
-  }
+  joinRoom(code: string, userId: string): void { this.initRoom(code, userId, 'battle-room'); }
 
   /**
    * 게임 채널 참가 (BattleGameScene 전용)
    * 매칭 채널(battle-room:)과 다른 토픽을 사용하여 Presence 이벤트 혼선 방지
-   * — BattleMatchScene 채널 제거 시 발생하는 spurious presence leave가
-   *   BattleGameScene에 전달되지 않도록 격리
    */
-  joinGame(code: string, userId: string): void {
+  joinGame(code: string, userId: string): void { this.initRoom(code, userId, 'battle-game'); }
+
+  /**
+   * 결과 채널 참가 (BattleResultScene 전용)
+   * 재도전 신호 교환에 사용 (battle-result: 토픽으로 격리)
+   */
+  joinResult(code: string, userId: string): void { this.initRoom(code, userId, 'battle-result'); }
+
+  private initRoom(code: string, userId: string, topicPrefix: string): void {
     this.roomCode = code;
     this.userId = userId;
-    this.createChannel('battle-game');
+    this.createChannel(topicPrefix);
   }
 
   /** 채널 객체만 생성 (구독하지 않음) */
@@ -165,6 +167,14 @@ export class BattleChannel {
 
   sendGameOver(finalScore: number): void {
     this.broadcast(BattleEvent.GAME_OVER, { userId: this.userId, finalScore });
+  }
+
+  sendRematchRequest(): void {
+    this.broadcast(BattleEvent.REMATCH_REQUEST, { userId: this.userId });
+  }
+
+  sendResultLeave(): void {
+    this.broadcast(BattleEvent.RESULT_LEAVE, { userId: this.userId });
   }
 
   private broadcast<E extends BattleEvent>(event: E, payload: BattlePayloadMap[E]): void {

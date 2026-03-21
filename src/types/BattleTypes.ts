@@ -34,6 +34,14 @@ export interface GameOverPayload {
   finalScore: number;
 }
 
+/** userId만 포함하는 공통 payload (REMATCH_REQUEST, RESULT_LEAVE 공유) */
+export interface UserIdPayload {
+  userId: string;
+}
+
+export type RematchRequestPayload = UserIdPayload;
+export type ResultLeavePayload = UserIdPayload;
+
 // Broadcast 이벤트 이름
 export const BattleEvent = {
   READY: 'ready',
@@ -41,5 +49,7 @@ export const BattleEvent = {
   SEND_POOP: 'send-poop',
   SCORE_UPDATE: 'score-update',
   GAME_OVER: 'game-over',
+  REMATCH_REQUEST: 'rematch-request',
+  RESULT_LEAVE: 'result-leave',
 } as const;
 export type BattleEvent = typeof BattleEvent[keyof typeof BattleEvent];

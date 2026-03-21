@@ -1,14 +1,19 @@
 import Phaser from 'phaser';
 import { BattleChannel } from '../utils/battleChannel';
 import { BattleEvent, type ReadyPayload } from '../types/BattleTypes';
-import { getSafeSelectedCharacter } from '../utils/character';
+import {
+  getSafeSelectedCharacter,
+  getOwnedCharacters,
+  getCharacterDef,
+  setSelectedCharacter,
+} from '../utils/character';
 import { supabase } from '../utils/supabase';
 import BaseScene from './BaseScene';
 
 /**
  * 대전 매칭 씬 — 상태별 UI 전환
  *
- * 상태: MENU → CREATE_WAITING / JOIN_INPUT → JOIN_WAITING → COUNTDOWN → BATTLE
+ * 상태: MENU → CREATE_WAITING / JOIN_INPUT → READY_BUTTON → COUNTDOWN → BATTLE
  */
 export default class BattleMatchScene extends BaseScene {
   private battleChannel: BattleChannel | null = null;
@@ -17,9 +22,13 @@ export default class BattleMatchScene extends BaseScene {
   private myReady: boolean = false;
   private opponentReady: boolean = false;
   private countdownStarted: boolean = false;
+  private readyButtonShown: boolean = false;
+  private ownedChars: string[] = [];
+  private charPickIdx: number = 0;
   private readyRetryTimer: ReturnType<typeof setInterval> | null = null;
   private userId: string = '';
   private opponentUserId: string = '';
+  private autoRematch: { code: string; isHost: boolean; userId: string } | null = null;
 
   // 상태별 UI 요소를 그룹으로 관리 → 상태 전환 시 일괄 파괴
   private uiGroup: Phaser.GameObjects.GameObject[] = [];
@@ -29,9 +38,20 @@ export default class BattleMatchScene extends BaseScene {
     super('BattleMatchScene');
   }
 
+  init(data: { autoRematch?: { code: string; isHost: boolean; userId: string } }) {
+    this.autoRematch = data.autoRematch ?? null;
+  }
+
   preload() {
     if (!this.textures.exists('background2')) {
       this.load.image('background2', 'assets/backgrounds/background2.webp');
+    }
+    // 보유 캐릭터 front 이미지 사전 로드 (Phaser 캐시에 있으면 중복 로드 없음)
+    for (const id of getOwnedCharacters()) {
+      const def = getCharacterDef(id);
+      if (!this.textures.exists(def.imageKey)) {
+        this.load.image(def.imageKey, def.imagePath);
+      }
     }
   }
 
@@ -70,15 +90,22 @@ export default class BattleMatchScene extends BaseScene {
     backBtn.on('pointerout', () => backBtn.setColor('#aaaaaa'));
     backBtn.on('pointerdown', () => this.goBack());
 
-    // 유저 ID: 즉시 임시값 사용 → 백그라운드에서 실제 ID로 교체
-    // (Phaser는 async create()를 await하지 않으므로 동기 처리)
-    this.userId = `anon-${Date.now()}`;
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user?.id) this.userId = data.user.id;
-    });
+    // 유저 ID: 재도전이면 전달받은 ID 사용, 아니면 비동기 조회
+    if (this.autoRematch?.userId) {
+      this.userId = this.autoRematch.userId;
+    } else {
+      this.userId = `anon-${Date.now()}`;
+      supabase.auth.getUser().then(({ data }) => {
+        if (data.user?.id) this.userId = data.user.id;
+      });
+    }
 
-    // 초기 상태: 메뉴
-    this.showMenu();
+    // 초기 상태: 재도전이면 자동 참가, 아니면 메뉴
+    if (this.autoRematch) {
+      this.handleAutoRematch(this.autoRematch.code, this.autoRematch.isHost);
+    } else {
+      this.showMenu();
+    }
   }
 
   /** 현재 상태의 UI 요소 일괄 파괴 */
@@ -138,14 +165,51 @@ export default class BattleMatchScene extends BaseScene {
     rankLink.on('pointerdown', () => this.scene.start('BattleLeaderboardScene'));
   }
 
+  // ─── 공통 상태 리셋 ──────────────────────────────────────────
+
+  /** handleCreateRoom / doJoin / handleAutoRematch 공통 초기화 */
+  private resetMatchState(asHost: boolean) {
+    this.isHost = asHost;
+    this.myReady = false;
+    this.opponentReady = false;
+    this.countdownStarted = false;
+    this.readyButtonShown = false;
+    this.ownedChars = [];
+    this.charPickIdx = 0;
+  }
+
+  // ─── 재도전 자동 입장 ─────────────────────────────────────────
+
+  private async handleAutoRematch(code: string, isHost: boolean) {
+    if (this.battleChannel) return;
+    this.resetMatchState(isHost);
+
+    // 재도전 중 안내 UI
+    this.clearUI();
+    this.ui(this.add.text(200, 290, '🔄 재도전 연결 중...', {
+      fontSize: '20px', color: '#00ff88', fontStyle: 'bold',
+      stroke: '#000', strokeThickness: 4,
+    }).setOrigin(0.5));
+
+    this.battleChannel = new BattleChannel();
+    if (isHost) {
+      this.battleChannel.createRoom(code, this.userId);
+    } else {
+      this.battleChannel.joinRoom(code, this.userId);
+    }
+
+    this.setupChannelListeners();
+    await this.battleChannel.subscribe();
+
+    // 구독 완료 → 준비 버튼 바로 표시
+    this.showReadyButton();
+  }
+
   // ─── 상태 2a: 방 생성 대기 ─────────────────────────────────────
 
   private async handleCreateRoom() {
     if (this.battleChannel) return;
-    this.isHost = true;
-    this.myReady = false;
-    this.opponentReady = false;
-    this.countdownStarted = false;
+    this.resetMatchState(true);
 
     const code = BattleChannel.generateRoomCode();
     this.battleChannel = new BattleChannel();
@@ -264,16 +328,13 @@ export default class BattleMatchScene extends BaseScene {
       }
 
       errorText.setText('');
-      this.isHost = false;
-      this.myReady = false;
-      this.opponentReady = false;
-      this.countdownStarted = false;
+      this.resetMatchState(false);
       this.battleChannel = new BattleChannel();
       this.battleChannel.joinRoom(code, this.userId);
       this.setupChannelListeners();
       await this.battleChannel.subscribe();
 
-      this.showJoinWaiting(code);
+      this.showReadyButton();
     };
 
     joinBtn.on('pointerdown', doJoin);
@@ -291,11 +352,87 @@ export default class BattleMatchScene extends BaseScene {
     backText.on('pointerdown', () => this.showMenu());
   }
 
-  // ─── 상태 3: 참가 후 대기 ──────────────────────────────────────
+  // ─── 상태 3: 준비완료 버튼 ──────────────────────────────────────
 
-  private showJoinWaiting(_code: string) {
-    // 구독 완료 → 즉시 ready 전송
-    this.doSendReady();
+  private showReadyButton() {
+    if (this.readyButtonShown) return;
+    this.readyButtonShown = true;
+    this.clearUI();
+
+    // 보유 캐릭터 목록 및 현재 선택 동기화
+    // pickCharacter()에서 재호출 시에는 charPickIdx가 이미 갱신된 상태이므로
+    // indexOf로 재계산하면 정확히 선택된 캐릭터를 가리킴
+    this.ownedChars = getOwnedCharacters();
+    const currentId = getSafeSelectedCharacter();
+    this.charPickIdx = Math.max(0, this.ownedChars.indexOf(currentId));
+
+    const def = getCharacterDef(this.ownedChars[this.charPickIdx]);
+
+    this.ui(this.add.text(200, 155, '상대방과 연결되었습니다!', {
+      fontSize: '18px', color: '#00ff88',
+      stroke: '#000', strokeThickness: 3,
+    }).setOrigin(0.5));
+
+    // 캐릭터 초상화 배경
+    this.ui(this.add.rectangle(200, 248, 130, 128, 0x000000, 0.5)
+      .setStrokeStyle(2, 0x555555));
+
+    // 캐릭터 front 이미지
+    if (this.textures.exists(def.imageKey)) {
+      this.ui(this.add.image(200, 248, def.imageKey).setDisplaySize(72, 100));
+    }
+
+    // 좌우 화살표 (보유 캐릭터 2개 이상일 때)
+    if (this.ownedChars.length > 1) {
+      const leftBtn = this.ui(this.add.text(108, 248, '◀', {
+        fontSize: '26px', color: '#ffffff',
+        stroke: '#000', strokeThickness: 3,
+      }).setOrigin(0.5).setInteractive({ useHandCursor: true }));
+      leftBtn.on('pointerover', () => leftBtn.setColor('#FFD700'));
+      leftBtn.on('pointerout', () => leftBtn.setColor('#ffffff'));
+      leftBtn.on('pointerdown', () => this.pickCharacter(-1));
+
+      const rightBtn = this.ui(this.add.text(292, 248, '▶', {
+        fontSize: '26px', color: '#ffffff',
+        stroke: '#000', strokeThickness: 3,
+      }).setOrigin(0.5).setInteractive({ useHandCursor: true }));
+      rightBtn.on('pointerover', () => rightBtn.setColor('#FFD700'));
+      rightBtn.on('pointerout', () => rightBtn.setColor('#ffffff'));
+      rightBtn.on('pointerdown', () => this.pickCharacter(1));
+    }
+
+    // 캐릭터 이름 + 등급
+    this.ui(this.add.text(200, 320, def.name, {
+      fontSize: '20px', color: '#ffffff', fontStyle: 'bold',
+      stroke: '#000', strokeThickness: 3,
+    }).setOrigin(0.5));
+    this.ui(this.add.text(200, 344, def.grade, {
+      fontSize: '13px', color: def.gradeColor,
+      stroke: '#000', strokeThickness: 2,
+    }).setOrigin(0.5));
+
+    this.ui(this.add.text(200, 378, '준비가 되면 버튼을 눌러주세요', {
+      fontSize: '13px', color: '#cccccc',
+      stroke: '#000', strokeThickness: 2,
+    }).setOrigin(0.5));
+
+    const readyBtn = this.ui(this.add.rectangle(200, 425, 260, 65, 0x27ae60));
+    readyBtn.setStrokeStyle(3, 0xffffff);
+    this.ui(this.add.text(200, 425, '✅ 준비완료', {
+      fontSize: '24px', color: '#ffffff', fontStyle: 'bold',
+    }).setOrigin(0.5));
+    readyBtn.setInteractive({ useHandCursor: true });
+    readyBtn.on('pointerover', () => readyBtn.setAlpha(0.8));
+    readyBtn.on('pointerout', () => readyBtn.setAlpha(1));
+    readyBtn.on('pointerdown', () => this.doSendReady());
+  }
+
+  /** 보유 캐릭터 순환 선택 */
+  private pickCharacter(delta: number) {
+    this.charPickIdx = (this.charPickIdx + delta + this.ownedChars.length) % this.ownedChars.length;
+    setSelectedCharacter(this.ownedChars[this.charPickIdx]);
+    this.readyButtonShown = false;
+    this.showReadyButton();
   }
 
   // ─── 채널 이벤트 ───────────────────────────────────────────────
@@ -303,11 +440,10 @@ export default class BattleMatchScene extends BaseScene {
   private setupChannelListeners() {
     if (!this.battleChannel) return;
 
-    // Presence join — 호스트일 때 상대 입장 UI 갱신 + 즉시 ready 전송
+    // Presence join — 호스트일 때 상대 입장 감지 → 준비완료 버튼 표시
+    // (readyButtonShown 가드로 중복 렌더링 방지)
     this.battleChannel.onPresenceJoin(() => {
-      if (this.isHost && !this.myReady) {
-        this.doSendReady();
-      }
+      if (this.isHost) this.showReadyButton();
     });
 
     this.battleChannel.onPresenceLeave(() => {
@@ -318,15 +454,12 @@ export default class BattleMatchScene extends BaseScene {
       }).setOrigin(0.5));
     });
 
-    // READY 수신 = 상대가 확실히 존재 + 준비 완료
-    // Presence join보다 READY가 먼저 올 수 있으므로, 여기서도 자신의 ready를 보냄
+    // READY 수신 = 상대 준비 완료
+    // 호스트가 presence join보다 READY를 먼저 받는 경우(레이스) → ready 버튼을 보여줘야 진행 가능
     this.battleChannel.onEvent(BattleEvent.READY, (payload: ReadyPayload) => {
       this.opponentReady = true;
       if (payload.userId) this.opponentUserId = payload.userId;
-      // 아직 내 ready를 안 보냈으면 즉시 보냄 (Presence 이벤트 누락 대비)
-      if (!this.myReady) {
-        this.doSendReady();
-      }
+      if (this.isHost) this.showReadyButton();
       this.checkBothReady();
     });
 
@@ -338,14 +471,14 @@ export default class BattleMatchScene extends BaseScene {
     });
   }
 
-  /** ready 전송 (UI 상태와 분리 — 어디서든 호출 가능) */
+  /** ready 전송 (준비완료 버튼에서 호출) */
   private doSendReady() {
     if (!this.battleChannel || this.myReady) return;
     this.myReady = true;
     const charId = getSafeSelectedCharacter();
     this.battleChannel.sendReady(charId);
 
-    // UI 갱신: 현재 화면 정리 → 대기 화면
+    // UI 갱신: 상대 대기 화면
     this.clearUI();
     this.ui(this.add.text(200, 270, '✅ 준비 완료!', {
       fontSize: '24px', color: '#00ff00', fontStyle: 'bold',
