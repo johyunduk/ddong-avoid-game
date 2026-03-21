@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "b49531b30e2c",
+  "strategy": "manual-commit",
+  "branch": "dev",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src/scenes/ModeSelectScene.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/b4/9531b30e2c/0/metadata.json",
+      "transcript": "/b4/9531b30e2c/0/full.jsonl",
+      "context": "/b4/9531b30e2c/0/context.md",
+      "content_hash": "/b4/9531b30e2c/0/content_hash.txt",
+      "prompt": "/b4/9531b30e2c/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 3114,
+    "cache_creation_tokens": 480925,
+    "cache_read_tokens": 11174560,
+    "output_tokens": 60407,
+    "api_call_count": 131
+  }
+}
