@@ -1,0 +1,603 @@
+Implement the following plan:
+
+# 1대1 대전 모드 구현 계획
+
+## Context
+
+현재 게임에는 솔로 플레이(클래식 모드)만 존재한다. 친구끼리 경쟁할 수 있는 **1대1 실시간 대전 모드**를 추가하여 게임의 리플레이 가치를 높인다. Supabase Realtime Broadcast를 활용해 각자 자기 화면에서 EXTREME 난이도로 플레이하며, 특수 똥 수집 시 상대 화면에 일반 똥을 보내는 방해 메커니즘을 구현한다.
+
+## 핵심 설계 결정
+
+- **매칭**: 방 코드 방식 (4자리 코드 공유)
+- **승패**: 상대가 먼저 죽으면 즉시 승리
+- **상대 점수**: 게임 중 실시간 표시
+- **난이도**: EXTREME 고정
+- **능력**: 캐릭터 능력 정상 작동
+- **방해 메커니즘**: 특수 똥(금/다이아/토파즈/무지개) 수집 → 상대에게 일반 똥 1개 전송
+
+## 통신 구조 (Supabase Realtime Broadcast)
+
+채널: `battle-room:{4자리코드}`
+
+| 이벤트 | payload | 설명 |
+|--------|---------|------|
+| `ready` | `{ userId, characterId }` | 게임 시작 준비 완료 |
+| `game-start` | `{ timestamp }` | 호스트가 발신, 동시 시작 |
+| `send-poop` | `{ count: 1 }` | 특수 똥 수집 시 상대에게 일반 똥 전송 |
+| `score-update` | `{ score: number }` | 1초마다 점수 동기화 |
+| `game-over` | `{ userId, finalScore }` | 사망 알림 → 상대 즉시 승리 |
+
+Presence로 상대 접속/이탈 감지 (연결 끊김 → 5초 대기 → 남은 쪽 승리).
+
+## 구현 순서
+
+### Phase 1: 기반 타입 + 통신 래퍼
+
+#### 1-1. `src/types/BattleTypes.ts` (새 파일)
+- `BattleState`: `'waiting' | 'ready' | 'countdown' | 'playing' | 'finished'` (as const)
+- `BattleResult`: `'win' | 'lose' | 'disconnect'` (as const)
+- Broadcast 이벤트 payload 타입들
+
+#### 1-2. `src/types/GameMode.ts` (수정)
+- `GameMode` 객체에 `BATTLE: 'battle'` 추가
+
+#### 1-3. `src/utils/battleChannel.ts` (새 파일)
+- `BattleChannel` 클래스: Supabase Realtime 채널 캡슐화
+- `supabase` import from `src/utils/supabase.ts`
+- 메서드:
+  - `createRoom(code)` → 채널 생성 + Presence 진입
+  - `joinRoom(code)` → 채널 참가 + Presence 진입
+  - `sendReady(userId, characterId)` / `sendGameStart(timestamp)`
+  - `sendPoop(count)` / `sendScoreUpdate(score)` / `sendGameOver(userId, finalScore)`
+  - `onEvent(event, callback)` → 이벤트 리스너 등록
+  - `onPresenceLeave(callback)` → 상대 이탈 감지
+  - `destroy()` → unsubscribe + removeChannel
+
+### Phase 2: GameScene 접근성 확보
+
+#### 2-1. `src/scenes/GameScene.ts` (수정 — private → protected)
+변경할 멤버 (최소 범위):
+- 프로퍼티: `player`, `poops`, `score`, `gameOver`, `difficultyConfig`, `difficultyLevel`, `ability`, `abilityAPI`, `isFeverTime`, `gameMode`, `difficulty`
+- 메서드: `handleSpecialCollected()`, `hitPoop()`, `showGameOverUI()`, `spawnPoop()` (또는 상대 똥 생성에 필요한 fallSpeed 계산 로직)
+- `init()` 데이터 타입에 `battleChannel?`, `isHost?`, `opponentId?` 추가 (또는 BattleGameScene에서 별도 처리)
+
+### Phase 3: 대전 씬 구현
+
+#### 3-1. `src/scenes/BattleMatchScene.ts` (새 파일)
+- UI: "방 만들기" 버튼, "방 참가" 버튼 + 코드 입력 (HTML input 오버레이)
+- 방 만들기: 4자리 코드 생성 → `BattleChannel.createRoom(code)` → 코드 표시 + 대기 화면
+- 방 참가: 코드 입력 → `BattleChannel.joinRoom(code)` → 대기 화면
+- Presence로 상대 입장 감지 → 양쪽 `ready` 교환 → 3초 카운트다운 → `BattleGameScene` 전환
+- 뒤로가기 버튼 → 채널 정리 + ModeSelectScene 복귀
+
+#### 3-2. `src/scenes/BattleGameScene.ts` (새 파일 — GameScene 상속)
+- `extends GameScene`
+- `init()` 오버라이드: battleChannel, 상대 정보 수신 + 부모 init 호출 (difficulty=EXTREME 고정)
+- `create()` 오버라이드:
+  - 부모 create 호출
+  - 상대 점수 UI 추가 (화면 상단, 작은 텍스트)
+  - battleChannel 이벤트 리스너 등록:
+    - `send-poop` → `onReceivePoop()`: 일반 똥 1개를 랜덤 위치에 즉시 생성 + 빨간 깜빡임 경고
+    - `score-update` → 상대 점수 텍스트 갱신
+    - `game-over` → 즉시 승리 처리
+    - Presence leave → 5초 대기 → 부전승
+  - 1초마다 점수 broadcast 타이머
+- `handleSpecialCollected()` 오버라이드: 부모 호출 후 `battleChannel.sendPoop(1)` 추가
+- `hitPoop()` 오버라이드: 부모 호출 후 `battleChannel.sendGameOver()` 추가
+- `showGameOverUI()` 오버라이드: 대전 결과 화면으로 전환 (BattleResultScene)
+- `onReceivePoop()`: `this.poops.get()` → `reinit()` → fallSpeed 설정 + 빨간 tint 깜빡임
+- 리더보드/SKOR 제출 비활성화 (대전 모드에서는 불필요)
+- `shutdown()` 오버라이드: battleChannel 이벤트 해제
+
+#### 3-3. `src/scenes/BattleResultScene.ts` (새 파일)
+- data: `{ result: 'win'|'lose'|'disconnect', myScore, opponentScore, roomCode }`
+- UI: 결과 텍스트 (승리!/패배...), 내 점수 vs 상대 점수, 재대전 버튼, 메인메뉴 버튼
+- 재대전: 같은 방 코드로 BattleMatchScene 재진입
+- 메인메뉴: battleChannel.destroy() → ModeSelectScene
+
+### Phase 4: 통합
+
+#### 4-1. `src/main.ts` (수정)
+- 새 씬 3개 import 및 scene 배열에 추가: BattleMatchScene, BattleGameScene, BattleResultScene
+
+#### 4-2. `src/scenes/ModeSelectScene.ts` (수정)
+- "대전 모드" 버튼 추가 (클래식 모드 버튼 아래, 뽑기 버튼 위)
+- 클릭 → `this.scene.start('BattleMatchScene')`
+- 버튼 색상: 빨간 계열 (0xe74c3c) — 대전 느낌
+
+### Phase 5: 타입 체크 + 테스트
+
+- `npx tsc --noEmit` 실행하여 전체 타입 검사
+- 브라우저 2개 탭에서 방 코드 매칭 테스트
+- 테스트 항목:
+  - 방 생성/참가/카운트다운/게임 시작 흐름
+  - 특수 똥 수집 → 상대 화면에 똥 출현 확인
+  - 상대 점수 실시간 갱신 확인
+  - 한 쪽 사망 → 상대 즉시 승리 확인
+  - 탭 닫기 → 상대 부전승 확인
+  - 캐릭터 능력 정상 작동 확인
+
+## 핵심 파일 참조
+
+| 파일 | 역할 |
+|------|------|
+| `src/scenes/GameScene.ts` | 상속 대상, private→protected 변경 |
+| `src/types/GameMode.ts` | BATTLE 모드 상수 추가 |
+| `src/utils/supabase.ts` | Supabase 클라이언트 (battleChannel에서 import) |
+| `src/abilities/types.ts` | GameSceneAPI — BattleGameScene 호환 확인 |
+| `src/objects/Poop.ts` | 상대 똥 생성 시 reinit() 패턴 참고 |
+| `src/objects/PoolablePoopBase.ts` | recycle() 패턴 참고 |
+| `src/config/poop.ts` | POOP_CONFIG — fallSpeed 계산 참고 |
+| `src/scenes/ModeSelectScene.ts` | 대전 버튼 추가 위치 |
+
+## 주의사항
+
+- TypeScript: `type` import, enum 금지, `as const` 사용
+- Object Pool 패턴 유지: 상대 똥도 `this.poops.get()` + `reinit()` 사용
+- 채널 정리: 씬 전환 시 `battleChannel.destroy()` 호출 필수
+- DB 마이그레이션: MVP에서는 생략 (대전 전적 저장은 추후 확장)
+
+
+If you need specific details from before exiting plan mode (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/johyunduk/.REDACTED.jsonl
+
+---
+
+[Request interrupted by user for tool use]
+
+---
+
+홈 화면에서 버튼 끼리의 공간이 다르고 대전 모드 선택하고 방만들기를 했을 때 초대코드가 가려져서 안보여
+
+---
+
+다른 브라우저에서 초대코드를 입력해 준비완료 상대방 기다리는중이 떴는데 원래 브라우저는 변경이 없는데?
+
+---
+
+이어서 해줘
+
+---
+
+화면마다 점수가 다르게 나오는데?
+
+---
+
+아 그리고 여전히 방 참가 눌렀을 때 부터의 UI 너무 별로야. 뭐가 막 겹쳐보이고 좀 이상해
+
+---
+
+준비 완료 상태에서 진행이 안되는데
+
+---
+
+3은 뜨는데 게임 진행까지는 안가는데?
+
+---
+
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+Summary:
+1. Primary Request and Intent:
+   The user requested implementation of a 1v1 real-time battle mode for a Phaser 3 "똥 피하기" (dodge poop) game. The detailed plan specified:
+   - Room code matching (4-digit code sharing)
+   - EXTREME difficulty fixed
+   - Supabase Realtime Broadcast for communication
+   - Special poop collection sends normal poop to opponent
+   - First to die loses, opponent wins immediately
+   - Real-time opponent score display
+   - Character abilities work normally
+   - Channel: `battle-room:{4-digit-code}` with events: ready, game-start, send-poop, score-update, game-over
+
+2. Key Technical Concepts:
+   - Supabase Realtime Broadcast (channel-based, serverless WebSocket)
+   - **Critical**: Supabase Realtime requires `.on()` listeners registered BEFORE `.subscribe()` — otherwise events are missed
+   - Phaser 3 scene inheritance (BattleGameScene extends GameScene)
+   - `private` → `protected` access modifier changes for inheritance
+   - TypeScript `as const` pattern (no enums due to `erasableSyntaxOnly`)
+   - `type` keyword required for type-only imports (`verbatimModuleSyntax`)
+   - Object Pool pattern with `reinit()`/`recycle()` for poop objects
+   - UI state management via `uiGroup` array pattern (register UI elements, bulk destroy on state transition)
+   - Scene data passing via `this.scene.start('SceneName', data)`
+   - Channel ownership transfer between scenes (destroy old, create new in next scene)
+
+3. Files and Code Sections:
+
+   - **`src/types/BattleTypes.ts`** (NEW)
+     - Defines BattleState, BattleResult as const objects, and broadcast event payload types
+     ```typescript
+     export const BattleState = { WAITING: 'waiting', READY: 'ready', COUNTDOWN: 'countdown', PLAYING: 'playing', FINISHED: 'finished' } as const;
+     export const BattleResult = { WIN: 'win', LOSE: 'lose', DISCONNECT: 'disconnect' } as const;
+     export const BattleEvent = { READY: 'ready', GAME_START: 'game-start', SEND_POOP: 'send-poop', SCORE_UPDATE: 'score-update', GAME_OVER: 'game-over' } as const;
+     ```
+
+   - **`src/types/GameMode.ts`** (MODIFIED)
+     - Added `BATTLE: 'battle'` to GameMode const object
+
+   - **`src/utils/battleChannel.ts`** (NEW - rewritten once)
+     - Key design: `createRoom()`/`joinRoom()` are sync (create channel only), `subscribe()` is separate async
+     - `onEvent()`, `onPresenceJoin()`, `onPresenceLeave()` must be called before `subscribe()`
+     - `subscribe()` returns a Promise that resolves after 'SUBSCRIBED' status + track
+     - Send methods: `sendReady()`, `sendGameStart()`, `sendPoop()`, `sendScoreUpdate()`, `sendGameOver()`
+     - `destroy()` does untrack + removeChannel
+
+   - **`src/scenes/GameScene.ts`** (MODIFIED)
+     - Changed `private` → `protected` for: `player`, `poops`, `score`, `scoreText`, `gameOver`, `difficultyLevel`, `gameMode`, `difficulty`, `difficultyConfig`, `isFeverTime`, `ability`, `abilityAPI`
+     - Changed methods to `protected`: `handleSpecialCollected`, `hitPoop`, `showGameOverUI`, `spawnPoop`, `updateScore`
+     - Changed constructor: `constructor(key: string = 'GameScene')`
+
+   - **`src/scenes/BattleMatchScene.ts`** (NEW - fully rewritten twice)
+     - State-based UI management with `uiGroup` pattern
+     - States: showMenu → handleCreateRoom/showJoinInput → showJoinWaiting → showCountdown → goToBattle
+     - `clearUI()` destroys all uiGroup elements + removes HTML input
+     - `doSendReady()` separated from UI - sends ready and updates screen
+     - READY event handler also triggers `doSendReady()` if not already sent (Presence join fallback)
+     - `goToBattle()` destroys channel, passes `{ roomCode, userId }` to BattleGameScene
+
+   - **`src/scenes/BattleGameScene.ts`** (NEW - rewritten once)
+     - Extends GameScene with `super('BattleGameScene')`
+     - Creates its OWN BattleChannel in `initBattleChannel()` (doesn't receive from BattleMatchScene)
+     - `channelReady` guard prevents sending before subscription completes
+     - Score timer starts only after subscribe completes
+     - Overrides: `handleSpecialCollected` (adds sendPoop), `hitPoop` (adds sendGameOver), `showGameOverUI` (no-op, endBattle handles transition)
+     - `onReceivePoop()`: spawns poop with red tint + screen border flash
+     - `endBattle()`: transitions to BattleResultScene after 1s delay
+     - Connection status UI: "⏳ 상대와 연결 중..." → "✅ 연결 완료!"
+
+   - **`src/scenes/BattleResultScene.ts`** (NEW - simplified once)
+     - Shows win/lose/disconnect with score comparison
+     - Rematch → BattleMatchScene, Main menu → ModeSelectScene
+     - No channel management (BattleGameScene destroys its own channel)
+
+   - **`src/main.ts`** (MODIFIED)
+     - Added imports for BattleMatchScene, BattleGameScene, BattleResultScene
+     - Added to scene array
+
+   - **`src/scenes/ModeSelectScene.ts`** (MODIFIED)
+     - Added `createBattleButton()` method (red, 0xe74c3c)
+     - Adjusted layout: 클래식 y=242, 대전 y=330, 뽑기 y=420, 캐릭터/랭킹 y=505, 릴리즈노트 y=560
+     - Reduced button heights: 클래식 70, 뽑기 75, 캐릭터/랭킹 50
+
+4. Errors and Fixes:
+   - **TS6133 unused variables**: Removed `isHost`, `opponentId` from BattleGameScene; `roomCode` from BattleResultScene; `opponentId` from BattleMatchScene
+   - **Supabase Realtime listener order**: `.on()` was called AFTER `.subscribe()` → events never received. Fixed by splitting channel creation from subscription.
+   - **Channel transfer between scenes**: Passing already-subscribed channel to BattleGameScene meant new listeners couldn't be added. Fixed by destroying channel in BattleMatchScene and creating new one in BattleGameScene.
+   - **Score desync**: `initBattleChannel()` async but not awaited in `create()`, score timer started before channel subscribed. Fixed by starting timer only after subscribe resolves + `channelReady` guard.
+   - **UI overlap in BattleMatchScene**: `clearMainUI()` used overlay rectangle hack. Fixed with complete rewrite using `uiGroup` bulk-destroy pattern.
+   - **UI overlap - code text hidden**: codeText (depth 0) covered by later overlay (depth 0). Fixed with depth 10 for text, depth 5 for overlay.
+   - **Stuck at "준비 완료"**: Host relied on Presence join event which could be missed (sync vs join). Fixed by making READY event handler also trigger `doSendReady()`.
+   - **Countdown shows 3 but doesn't progress**: CURRENT BUG — `checkBothReady()` called twice from same READY handler (once inside `doSendReady()`, once after), causing `showCountdown()` to run twice, creating duplicate timers with destroyed text references.
+
+5. Problem Solving:
+   - Solved Supabase Realtime event ordering requirement
+   - Solved channel lifecycle across scene transitions
+   - Solved race conditions in ready exchange (Presence vs Broadcast timing)
+   - CURRENTLY DEBUGGING: countdown timer duplication causing freeze at "3"
+
+6. All user messages:
+   - "Implement the following plan: # 1대1 대전 모드 구현 계획 [detailed plan]"
+   - "홈 화면에서 버튼 끼리의 공간이 다르고 대전 모드 선택하고 방만들기를 했을 때 초대코드가 가려져서 안보여"
+   - "다른 브라우저에서 초대코드를 입력해 준비완료 상대방 기다리는중이 떴는데 원래 브라우저는 변경이 없는데?"
+   - "이어서 해줘"
+   - "화면마다 점수가 다르게 나오는데?"
+   - "아 그리고 여전히 방 참가 눌렀을 때 부터의 UI 너무 별로야. 뭐가 막 겹쳐보이고 좀 이상해"
+   - "준비 완료 상태에서 진행이 안되는데"
+   - "3은 뜨는데 게임 진행까지는 안가는데?"
+
+7. Pending Tasks:
+   - Fix countdown timer duplication bug (3 shows but doesn't progress to 2→1→GO)
+   - After fix, full end-to-end testing needed:
+     - Room create/join/countdown/game start flow
+     - Special poop collection → opponent poop spawn
+     - Real-time opponent score sync
+     - One side dies → other wins immediately
+     - Tab close → opponent wins by default
+     - Character abilities work in battle mode
+
+8. Current Work:
+   The user reported "3은 뜨는데 게임 진행까지는 안가는데?" — countdown shows 3 but doesn't progress to the game.
+
+   Root cause identified: In `BattleMatchScene.setupChannelListeners()`, the READY event handler calls `doSendReady()` which internally calls `checkBothReady()`, AND then the handler itself calls `checkBothReady()` again:
+
+   ```typescript
+   this.battleChannel.onEvent(BattleEvent.READY, () => {
+     this.opponentReady = true;
+     if (!this.myReady) {
+       this.doSendReady();  // calls checkBothReady() inside
+     }
+     this.checkBothReady();  // called AGAIN
+   });
+   ```
+
+   This causes `showCountdown()` to be called twice, creating two timer events. The second call's `clearUI()` destroys the first call's `countText`, so the first timer operates on a destroyed text object, causing the countdown to malfunction.
+
+   The fix was identified but NOT yet applied when the summary was requested.
+
+9. Optional Next Step:
+   Fix the countdown duplication bug. Add a `countdownStarted` guard to prevent `showCountdown()` or `checkBothReady()` from running twice:
+
+   ```typescript
+   private checkBothReady() {
+     if (this.myReady && this.opponentReady && this.isHost && !this.countdownStarted) {
+       this.countdownStarted = true;
+       this.battleChannel?.sendGameStart(Date.now());
+       this.showCountdown();
+     }
+   }
+   ```
+
+   This directly addresses the user's last message: "3은 뜨는데 게임 진행까지는 안가는데?"
+
+If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/johyunduk/.REDACTED.jsonl
+Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.
+
+---
+
+게임이 한쪽만 실행되는데? 아까 점수 다르다고 하기전까지는 게임은 실행이 됐었는데 점수다르다고 한 후 부터 좀 이상해진듯
+
+---
+
+아니 참가한 쪽만 게임이 실행된다고. 방 만든쪽은 시작을 안하고
+
+---
+
+방 만든쪽은 준비완료에서 멈춰있는데
+
+---
+
+아니 여전히 방을 만든쪽은 실행이 안돼. 방 만든쪽에 콘솔에 phaser.js?v=f1de974d:121381 Uncaught TypeError: Cannot read properties of null (reading 'drawImage')
+    at TimerEvent2.callback 이게 뜨네
+
+---
+
+이제 양쪽 다 실행은 돼. 근데 여전히 점수 차이가 나는데? 한쪽은 39 vs 39 인데 한쪽은 39 vs 36 이야
+
+---
+
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+Summary:
+1. Primary Request and Intent:
+   This session continued from a previous conversation that implemented a 1v1 real-time battle mode for a Phaser 3 "ddong avoid game." The user's requests in this session were:
+   - Fix the countdown bug: "3이 뜨는데 게임 진행까지는 안가는데?" (3 shows but countdown doesn't progress)
+   - Fix: "게임이 한쪽만 실행되는데? 아까 점수 다르다고 하기전까지는 게임은 실행이 됐었는데" (game only runs on one side)
+   - Fix: "참가한 쪽만 게임이 실행된다고. 방 만든쪽은 시작을 안하고" (only joiner runs game, host doesn't start)
+   - Fix: "방 만든쪽은 준비완료에서 멈춰있는데" (host stuck at "준비완료" screen)
+   - Fix: "39 vs 39 인데 한쪽은 39 vs 36" (score discrepancy between screens)
+
+2. Key Technical Concepts:
+   - Phaser 3 scene lifecycle and TimerEvent management
+   - Supabase Realtime Broadcast channel (singleton per topic name — `supabase.channel()` returns existing channel if same name exists)
+   - `broadcast: { self: false }` works at WebSocket connection level, not userId level
+   - Phaser `TimerEvent` does NOT have an `active` property like `GameObject` → must be tracked separately
+   - `setInterval` vs Phaser `time.addEvent`: `setInterval` fires even in background tabs; Phaser timers require the game loop (rAF) to fire
+   - State guard pattern with `countdownStarted` boolean flag
+   - `uiGroup` bulk-destroy pattern for UI state management
+
+3. Files and Code Sections:
+
+   - **`src/scenes/BattleMatchScene.ts`** (primary file modified)
+     - Added `countdownStarted: boolean = false` property to prevent double countdown
+     - Added `readyRetryTimer: ReturnType<typeof setInterval> | null = null` for READY retry mechanism
+     - Added `uiTimers: Phaser.Time.TimerEvent[] = []` for proper TimerEvent cleanup
+     - Modified `clearUI()` to also call `timer.remove()` on all `uiTimers`
+     - Modified `showCreateWaiting()` to use `this.uiTimers.push(...)` instead of casting timer to GameObject
+     - Added `countdownStarted` reset in `handleCreateRoom()` and `doJoin()`
+     - Modified `checkBothReady()` to check `!this.countdownStarted` guard
+     - Modified `GAME_START` event handler to also check `!this.countdownStarted` guard
+     - Modified `doSendReady()` to start `setInterval` retry of READY every 1500ms
+     - Added `clearReadyRetry()` helper method
+     - Changed `goToBattle()` from async (await destroy) to sync using `destroyImmediate()`
+     - Added `clearReadyRetry()` calls in `goToBattle()`, `goBack()`, and `shutdown()`
+
+     Key current state of critical methods:
+     ```typescript
+     private countdownStarted: boolean = false;
+     private readyRetryTimer: ReturnType<typeof setInterval> | null = null;
+     private uiTimers: Phaser.Time.TimerEvent[] = [];
+
+     private clearUI() {
+       this.removeInput();
+       for (const obj of this.uiGroup) {
+         if (obj.active) obj.destroy();
+       }
+       this.uiGroup = [];
+       for (const timer of this.uiTimers) {
+         timer.remove();
+       }
+       this.uiTimers = [];
+     }
+
+     private checkBothReady() {
+       if (this.myReady && this.opponentReady && this.isHost && !this.countdownStarted) {
+         this.countdownStarted = true;
+         this.battleChannel?.sendGameStart(Date.now());
+         this.showCountdown();
+       }
+     }
+
+     // In setupChannelListeners():
+     this.battleChannel.onEvent(BattleEvent.GAME_START, () => {
+       if (!this.countdownStarted) {
+         this.countdownStarted = true;
+         this.showCountdown();
+       }
+     });
+
+     private doSendReady() {
+       if (!this.battleChannel || this.myReady) return;
+       this.myReady = true;
+       const charId = getSafeSelectedCharacter();
+       this.battleChannel.sendReady(charId);
+       this.clearUI();
+       // ... show UI ...
+       this.clearReadyRetry();
+       this.readyRetryTimer = setInterval(() => {
+         if (this.countdownStarted || !this.battleChannel) {
+           this.clearReadyRetry();
+           return;
+         }
+         this.battleChannel.sendReady(charId);
+       }, 1500);
+       this.checkBothReady();
+     }
+
+     private goToBattle() {
+       this.clearReadyRetry();
+       const roomCode = this.battleChannel?.code ?? '';
+       const userId = this.userId;
+       if (this.battleChannel) {
+         this.battleChannel.destroyImmediate();
+         this.battleChannel = null;
+       }
+       this.scene.start('BattleGameScene', { roomCode, userId });
+     }
+
+     // showCreateWaiting dots timer (fixed):
+     this.uiTimers.push(
+       this.time.addEvent({
+         delay: 500,
+         loop: true,
+         callback: () => {
+           dotCount = (dotCount + 1) % 4;
+           if (dots.active) dots.setText('대기 중' + '.'.repeat(dotCount));
+         },
+       })
+     );
+     ```
+
+   - **`src/utils/battleChannel.ts`** (modified)
+     - Added `destroyImmediate()` synchronous method that calls `supabase.removeChannel()` without awaiting `untrack()`
+     - This is needed because `supabase.channel()` is a singleton — it returns an existing channel by same topic name. Must remove before BattleGameScene creates a new one with the same name.
+     ```typescript
+     destroyImmediate(): void {
+       if (this.channel) {
+         supabase.removeChannel(this.channel);
+         this.channel = null;
+       }
+     }
+     ```
+
+   - **`src/scenes/BattleGameScene.ts`** (modified)
+     - Added final `sendScoreUpdate(this.score)` in the GAME_OVER handler before calling `endBattle(WIN)`, so the loser receives the winner's most current score
+     ```typescript
+     this.battleChannel.onEvent(BattleEvent.GAME_OVER, (payload) => {
+       if (!this.battleFinished) {
+         this.opponentScore = payload.finalScore;
+         // Send final score to loser before ending
+         if (this.channelReady && this.battleChannel) {
+           this.battleChannel.sendScoreUpdate(this.score);
+         }
+         this.endBattle(BattleResult.WIN);
+       }
+     });
+     ```
+
+4. Errors and Fixes:
+   - **Countdown freezes at "3"**: `checkBothReady()` called twice from READY handler (once inside `doSendReady()`, once at end of handler). Second `showCountdown()` call's `clearUI()` destroyed the first call's `countText`. Fix: `countdownStarted` guard flag in `checkBothReady()`.
+   - **Only one side starts game (singleton channel bug)**: Verified via Supabase source code (`node_modules/@supabase/realtime-js/dist/module/RealtimeClient.js` line 276) that `supabase.channel()` returns existing channel if same topic exists. Fire-and-forget async `destroy()` meant `removeChannel()` hadn't run when BattleGameScene tried to create new channel — got stale channel. Fix: `destroyImmediate()` synchronous method.
+   - **Host stuck at "준비완료" / `drawImage on null` crash**: Dots animation `TimerEvent` in `showCreateWaiting()` was stored in `uiGroup` via `as unknown as Phaser.GameObjects.GameObject`. Since `TimerEvent` has no `active` property, `clearUI()`'s `if (obj.active) obj.destroy()` skipped it. Timer kept firing → called `setText()` on destroyed `dots` text → Phaser crash → host scene broken. Fix: Added separate `uiTimers` array with `timer.remove()` in `clearUI()`.
+   - **Score discrepancy (39 vs 39 on one side, 39 vs 36 on other)**: Winner stopped sending score updates immediately after receiving GAME_OVER. Loser displayed the last received score before death (slightly stale). Fix: Winner sends one final `sendScoreUpdate(this.score)` in GAME_OVER handler before transitioning.
+
+5. Problem Solving:
+   - Identified that Supabase `channel()` is singleton by inspecting `node_modules/@supabase/realtime-js/dist/module/RealtimeClient.js`
+   - Discovered `broadcast: { self: false }` is connection-based, not userId-based — confirmed via Supabase source
+   - Identified `TimerEvent` vs `GameObject` casting issue as true root cause of host crash
+   - Score sync issue solved by sending final score update when GAME_OVER is received
+
+6. All user messages:
+   - (Continuation from previous context summary — session starts mid-conversation)
+   - "게임이 한쪽만 실행되는데? 아까 점수 다르다고 하기전까지는 게임은 실행이 됐었는데 점수다르다고 한 후 부터 좀 이상해진듯"
+   - "아니 참가한 쪽만 게임이 실행된다고. 방 만든쪽은 시작을 안하고"
+   - "방 만든쪽은 준비완료에서 멈춰있는데"
+   - "/usage" (slash command)
+   - "/model" (model switch to Sonnet 4.6)
+   - "아니 여전히 방을 만든쪽은 실행이 안돼. 방 만든쪽에 콘솔에 phaser.js?v=f1de974d:121381 Uncaught TypeError: Cannot read properties of null (reading 'drawImage') at TimerEvent2.callback 이게 뜨네"
+   - "이제 양쪽 다 실행은 돼. 근데 여전히 점수 차이가 나는데? 한쪽은 39 vs 39 인데 한쪽은 39 vs 36 이야"
+
+7. Pending Tasks:
+   - The score fix was just applied (winner sends final `sendScoreUpdate` on GAME_OVER reception). User has not confirmed if this resolved the issue yet.
+   - Need to verify the loser's transition delay (currently 1000ms in `endBattle`) is sufficient to receive the winner's final score update. May need to extend to 1500ms.
+
+8. Current Work:
+   Immediately before this summary, fixing the score discrepancy between the two result screens. One side showed 39 vs 39, the other showed 39 vs 36. The fix was applied to `BattleGameScene.ts`: when the winner receives `GAME_OVER`, they now send a final `sendScoreUpdate(this.score)` before calling `endBattle(BattleResult.WIN)`.
+
+   The change in `src/scenes/BattleGameScene.ts`:
+   ```typescript
+   this.battleChannel.onEvent(BattleEvent.GAME_OVER, (payload) => {
+     if (!this.battleFinished) {
+       this.opponentScore = payload.finalScore;
+       // 패배 측이 최종 점수를 표시할 수 있도록 현재 점수를 한 번 더 전송
+       if (this.channelReady && this.battleChannel) {
+         this.battleChannel.sendScoreUpdate(this.score);
+       }
+       this.endBattle(BattleResult.WIN);
+     }
+   });
+   ```
+
+9. Optional Next Step:
+   The score fix was just applied. If the loser's 1000ms delay in `endBattle(LOSE)` isn't enough time to receive the winner's final `sendScoreUpdate`, extend it to 1500ms. The current `endBattle` method uses a fixed 1000ms `delayedCall` for all results. The next step would be to verify the fix resolves the discrepancy, and if not, extend the LOSE transition delay:
+
+   From user's last message: "한쪽은 39 vs 39 인데 한쪽은 39 vs 36 이야" — the loser side shows a stale opponent score (36 instead of 39). The winner now sends a final score update, but if 1000ms isn't enough for it to arrive, the loser's `endBattle` delay should be extended.
+
+If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/johyunduk/.REDACTED.jsonl
+Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.
+
+---
+
+근데 대전모드에서는 최고기록이 안나와도 될 거 같은데
+
+---
+
+# Simplify: Code Review and Cleanup
+
+Review all changed files for reuse, quality, and efficiency. Fix any issues found.
+
+## Phase 1: Identify Changes
+
+Run `git diff` (or `git diff HEAD` if there are staged changes) to see what changed. If there are no git changes, review the most recently modified files that the user mentioned or that you edited earlier in this conversation.
+
+## Phase 2: Launch Three Review Agents in Parallel
+
+Use the Agent tool to launch all three agents concurrently in a single message. Pass each agent the full diff so it has the complete context.
+
+### Agent 1: Code Reuse Review
+
+For each change:
+
+1. **Search for existing utilities and helpers** that could replace newly written code. Look for similar patterns elsewhere in the codebase — common locations are utility directories, shared modules, and files adjacent to the changed ones.
+2. **Flag any new function that duplicates existing functionality.** Suggest the existing function to use instead.
+3. **Flag any inline logic that could use an existing utility** — hand-rolled string manipulation, manual path handling, custom environment checks, ad-hoc type guards, and similar patterns are common candidates.
+
+### Agent 2: Code Quality Review
+
+Review the same changes for hacky patterns:
+
+1. **Redundant state**: state that duplicates existing state, cached values that could be derived, observers/effects that could be direct calls
+2. **Parameter sprawl**: adding new parameters to a function instead of generalizing or restructuring existing ones
+3. **Copy-paste with slight variation**: near-duplicate code blocks that should be unified with a shared abstraction
+4. **Leaky abstractions**: exposing internal details that should be encapsulated, or breaking existing abstraction boundaries
+5. **Stringly-typed code**: using raw strings where constants, enums (string unions), or branded types already exist in the codebase
+6. **Unnecessary JSX nesting**: wrapper Boxes/elements that add no layout value — check if inner component props (flexShrink, alignItems, etc.) already provide the needed behavior
+
+### Agent 3: Efficiency Review
+
+Review the same changes for efficiency:
+
+1. **Unnecessary work**: redundant computations, repeated file reads, duplicate network/API calls, N+1 patterns
+2. **Missed concurrency**: independent operations run sequentially when they could run in parallel
+3. **Hot-path bloat**: new blocking work added to startup or per-request/per-render hot paths
+4. **Recurring no-op updates**: state/store updates inside polling loops, intervals, or event handlers that fire unconditionally — add a change-detection guard so downstream consumers aren't notified when nothing changed. Also: if a wrapper function takes an updater/reducer callback, verify it honors same-reference returns (or whatever the "no change" signal is) — otherwise callers' early-return no-ops are silently defeated
+5. **Unnecessary existence checks**: pre-checking file/resource existence before operating (TOCTOU anti-pattern) — operate directly and handle the error
+6. **Memory**: unbounded data structures, missing cleanup, event listener leaks
+7. **Overly broad operations**: reading entire files when only a portion is needed, loading all items when filtering for one
+
+## Phase 3: Fix Issues
+
+Wait for all three agents to complete. Aggregate their findings and fix each issue directly. If a finding is a false positive or not worth addressing, note it and move on — do not argue with the finding, just skip it.
+
+When done, briefly summarize what was fixed (or confirm the code was already clean).
+
+---
+
+깃 푸시해줘
