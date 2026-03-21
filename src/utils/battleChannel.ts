@@ -42,19 +42,31 @@ export class BattleChannel {
   createRoom(code: string, userId: string): void {
     this.roomCode = code;
     this.userId = userId;
-    this.createChannel();
+    this.createChannel('battle-room');
   }
 
   /** 방 참가 (게스트) — 채널만 생성, subscribe는 별도 호출 */
   joinRoom(code: string, userId: string): void {
     this.roomCode = code;
     this.userId = userId;
-    this.createChannel();
+    this.createChannel('battle-room');
+  }
+
+  /**
+   * 게임 채널 참가 (BattleGameScene 전용)
+   * 매칭 채널(battle-room:)과 다른 토픽을 사용하여 Presence 이벤트 혼선 방지
+   * — BattleMatchScene 채널 제거 시 발생하는 spurious presence leave가
+   *   BattleGameScene에 전달되지 않도록 격리
+   */
+  joinGame(code: string, userId: string): void {
+    this.roomCode = code;
+    this.userId = userId;
+    this.createChannel('battle-game');
   }
 
   /** 채널 객체만 생성 (구독하지 않음) */
-  private createChannel(): void {
-    this.channel = supabase.channel(`battle-room:${this.roomCode}`, {
+  private createChannel(topicPrefix: string): void {
+    this.channel = supabase.channel(`${topicPrefix}:${this.roomCode}`, {
       config: {
         broadcast: { self: false },
         presence: { key: this.userId },
@@ -69,10 +81,21 @@ export class BattleChannel {
   async subscribe(): Promise<void> {
     if (!this.channel) return;
     return new Promise((resolve) => {
+      // 10초 타임아웃 — SUBSCRIBED가 오지 않아도 진행 (채널 불안정 시 stuck 방지)
+      const timeout = setTimeout(() => {
+        console.warn('[BattleChannel] subscribe timeout — forcing channelReady');
+        resolve();
+      }, 10000);
+
       this.channel!.subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
+          clearTimeout(timeout);
           await this.channel!.track({ userId: this.userId, joinedAt: Date.now() });
           resolve();
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          console.warn('[BattleChannel] subscribe failed with status:', status);
+          clearTimeout(timeout);
+          resolve(); // 에러여도 강제 진행 (무한 대기 방지)
         }
       });
     });
