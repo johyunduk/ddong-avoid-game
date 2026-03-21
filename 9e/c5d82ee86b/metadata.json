@@ -1,0 +1,30 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "9ec5d82ee86b",
+  "strategy": "manual-commit",
+  "branch": "dev",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src/scenes/BattleGameScene.ts",
+    "src/scenes/BattleMatchScene.ts",
+    "src/scenes/BattleResultScene.ts",
+    "src/types/BattleTypes.ts",
+    "src/utils/battleChannel.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/9e/c5d82ee86b/0/metadata.json",
+      "transcript": "/9e/c5d82ee86b/0/full.jsonl",
+      "context": "/9e/c5d82ee86b/0/context.md",
+      "content_hash": "/9e/c5d82ee86b/0/content_hash.txt",
+      "prompt": "/9e/c5d82ee86b/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 3114,
+    "cache_creation_tokens": 480925,
+    "cache_read_tokens": 11174560,
+    "output_tokens": 60407,
+    "api_call_count": 131
+  }
+}
