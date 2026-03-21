@@ -12,6 +12,7 @@ interface BattleInitData {
   purePhysical?: boolean;
   roomCode?: string;
   userId?: string;
+  opponentId?: string;
 }
 
 /**
@@ -24,6 +25,7 @@ export default class BattleGameScene extends GameScene {
   private battleChannel: BattleChannel | null = null;
   private roomCode: string = '';
   private battleUserId: string = '';
+  private opponentId: string = '';
   private opponentScore: number = 0;
   private opponentScoreText!: Phaser.GameObjects.Text;
   private scoreUpdateTimer!: Phaser.Time.TimerEvent;
@@ -37,6 +39,7 @@ export default class BattleGameScene extends GameScene {
   init(data: BattleInitData) {
     this.roomCode = data.roomCode ?? '';
     this.battleUserId = data.userId ?? '';
+    this.opponentId = data.opponentId ?? '';
     this.opponentScore = 0;
     this.battleFinished = false;
     this.channelReady = false;
@@ -326,6 +329,7 @@ export default class BattleGameScene extends GameScene {
         myScore: this.score,
         opponentScore: this.opponentScore,
         roomCode: this.roomCode,
+        opponentId: this.opponentId,
       });
     });
   }

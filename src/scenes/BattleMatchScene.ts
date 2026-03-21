@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { BattleChannel } from '../utils/battleChannel';
-import { BattleEvent } from '../types/BattleTypes';
+import { BattleEvent, type ReadyPayload } from '../types/BattleTypes';
 import { getSafeSelectedCharacter } from '../utils/character';
 import { supabase } from '../utils/supabase';
 import BaseScene from './BaseScene';
@@ -19,6 +19,7 @@ export default class BattleMatchScene extends BaseScene {
   private countdownStarted: boolean = false;
   private readyRetryTimer: ReturnType<typeof setInterval> | null = null;
   private userId: string = '';
+  private opponentUserId: string = '';
 
   // 상태별 UI 요소를 그룹으로 관리 → 상태 전환 시 일괄 파괴
   private uiGroup: Phaser.GameObjects.GameObject[] = [];
@@ -126,6 +127,15 @@ export default class BattleMatchScene extends BaseScene {
     joinBtn.on('pointerover', () => joinBtn.setAlpha(0.8));
     joinBtn.on('pointerout', () => joinBtn.setAlpha(1));
     joinBtn.on('pointerdown', () => this.showJoinInput());
+
+    // 전적 보기 링크
+    const rankLink = this.ui(this.add.text(200, 450, '🏆 전적 보기', {
+      fontSize: '16px', color: '#aaaaaa',
+      stroke: '#000', strokeThickness: 3,
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true }));
+    rankLink.on('pointerover', () => (rankLink as Phaser.GameObjects.Text).setColor('#FFD700'));
+    rankLink.on('pointerout', () => (rankLink as Phaser.GameObjects.Text).setColor('#aaaaaa'));
+    rankLink.on('pointerdown', () => this.scene.start('BattleLeaderboardScene'));
   }
 
   // ─── 상태 2a: 방 생성 대기 ─────────────────────────────────────
@@ -310,8 +320,9 @@ export default class BattleMatchScene extends BaseScene {
 
     // READY 수신 = 상대가 확실히 존재 + 준비 완료
     // Presence join보다 READY가 먼저 올 수 있으므로, 여기서도 자신의 ready를 보냄
-    this.battleChannel.onEvent(BattleEvent.READY, () => {
+    this.battleChannel.onEvent(BattleEvent.READY, (payload: ReadyPayload) => {
       this.opponentReady = true;
+      if (payload.userId) this.opponentUserId = payload.userId;
       // 아직 내 ready를 안 보냈으면 즉시 보냄 (Presence 이벤트 누락 대비)
       if (!this.myReady) {
         this.doSendReady();
@@ -416,7 +427,7 @@ export default class BattleMatchScene extends BaseScene {
       this.battleChannel = null;
     }
 
-    this.scene.start('BattleGameScene', { roomCode, userId });
+    this.scene.start('BattleGameScene', { roomCode, userId, opponentId: this.opponentUserId });
   }
 
   private removeInput() {
