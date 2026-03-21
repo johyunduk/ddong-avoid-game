@@ -5,6 +5,7 @@
   "branch": "dev",
   "checkpoints_count": 1,
   "files_touched": [
+    "src/main.ts",
     "src/scenes/ModeSelectScene.ts"
   ],
   "sessions": [
@@ -14,13 +15,20 @@
       "context": "/b4/9531b30e2c/0/context.md",
       "content_hash": "/b4/9531b30e2c/0/content_hash.txt",
       "prompt": "/b4/9531b30e2c/0/prompt.txt"
+    },
+    {
+      "metadata": "/b4/9531b30e2c/1/metadata.json",
+      "transcript": "/b4/9531b30e2c/1/full.jsonl",
+      "context": "/b4/9531b30e2c/1/context.md",
+      "content_hash": "/b4/9531b30e2c/1/content_hash.txt",
+      "prompt": "/b4/9531b30e2c/1/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 3114,
-    "cache_creation_tokens": 480925,
-    "cache_read_tokens": 11174560,
-    "output_tokens": 60407,
-    "api_call_count": 131
+    "input_tokens": 3269,
+    "cache_creation_tokens": 972213,
+    "cache_read_tokens": 20708428,
+    "output_tokens": 112153,
+    "api_call_count": 241
   }
 }
