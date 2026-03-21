@@ -3,7 +3,7 @@
   "checkpoint_id": "9b5be13893ac",
   "strategy": "manual-commit",
   "branch": "dev",
-  "checkpoints_count": 2,
+  "checkpoints_count": 3,
   "files_touched": [
     "src/utils/battleChannel.ts"
   ],
@@ -28,13 +28,20 @@
       "context": "/9b/5be13893ac/2/context.md",
       "content_hash": "/9b/5be13893ac/2/content_hash.txt",
       "prompt": "/9b/5be13893ac/2/prompt.txt"
+    },
+    {
+      "metadata": "/9b/5be13893ac/3/metadata.json",
+      "transcript": "/9b/5be13893ac/3/full.jsonl",
+      "context": "/9b/5be13893ac/3/context.md",
+      "content_hash": "/9b/5be13893ac/3/content_hash.txt",
+      "prompt": "/9b/5be13893ac/3/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 3294,
-    "cache_creation_tokens": 1008462,
-    "cache_read_tokens": 23443140,
-    "output_tokens": 138227,
-    "api_call_count": 260
+    "input_tokens": 3345,
+    "cache_creation_tokens": 1115973,
+    "cache_read_tokens": 24877976,
+    "output_tokens": 147299,
+    "api_call_count": 294
   }
 }
