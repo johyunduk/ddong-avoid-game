@@ -82,6 +82,12 @@ export function setCachedMyRating(rp: number, rank: number | null): void {
   localStorage.setItem(_CACHE_SIG_KEY, _signCache(cache));
 }
 
+/** 캐시 삭제 (전적 없음 확정 시). */
+export function clearCachedMyRating(): void {
+  localStorage.removeItem(_CACHE_KEY);
+  localStorage.removeItem(_CACHE_SIG_KEY);
+}
+
 /** 세션 취득 공통 헬퍼 — 없으면 익명 로그인 후 반환 */
 async function getOrCreateSession() {
   let { data: { session } } = await supabase.auth.getSession();

@@ -17,7 +17,7 @@ import {
   type MatchResult,
 } from '../utils/matchmaking';
 import { getBattleTier, preloadTierImages } from '../utils/battleTier';
-import { getMyRating, getCachedMyRating, setCachedMyRating } from '../utils/battleLeaderboard';
+import { getMyRating, getCachedMyRating, setCachedMyRating, clearCachedMyRating } from '../utils/battleLeaderboard';
 import BaseScene from './BaseScene';
 
 /**
@@ -317,11 +317,14 @@ export default class BattleMatchScene extends BaseScene {
         setCachedMyRating(stats.ratingPoints, stats.rank);
         this.updateRankBadge(stats.ratingPoints, stats.rank);
       } else {
-        // 전적 없음: 시작 RP
-        this.cachedMyRp = 1000;
+        // 전적 없음: 캐시 삭제 + 배지 숨김
+        clearCachedMyRating();
+        this.cachedMyRp = null;
         this.cachedMyRank = null;
-        setCachedMyRating(1000, null);
-        this.updateRankBadge(1000, null);
+        this.rankBadgeImg?.setAlpha(0);
+        this.rankBadgeNameTxt?.setText('---').setColor('#aaaaaa');
+        this.rankBadgeRpTxt?.setText('첫 게임 도전!').setColor('#aaaaaa');
+        this.rankBadgeRankTxt?.setText('');
       }
     } catch {
       // 비크리티컬 — 캐시값 그대로 유지
