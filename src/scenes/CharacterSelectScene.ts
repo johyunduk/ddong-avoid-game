@@ -617,7 +617,7 @@ export default class CharacterSelectScene extends BaseScene {
     const gradeColorInt = parseInt(char.gradeColor.replace('#', ''), 16);
 
     // 카드 배경
-    const cardBg = this.add.rectangle(x, y, CARD_W, CARD_H, 0x222222);
+    const cardBg = this.add.rectangle(x, y, CARD_W, CARD_H, 0x222222, 0.8);
     cardBg.setStrokeStyle(2, isOwned ? gradeColorInt : 0x444444);
     this.cardsContainer.add(cardBg);
 
@@ -687,10 +687,10 @@ export default class CharacterSelectScene extends BaseScene {
 
     if (isOwned) {
       cardBg.on('pointerover', () => {
-        if (this.selectedId !== char.id) cardBg.setFillStyle(0x333333);
+        if (this.selectedId !== char.id) cardBg.setFillStyle(0x333333, 0.8);
       });
       cardBg.on('pointerout', () => {
-        if (this.selectedId !== char.id) cardBg.setFillStyle(0x222222);
+        if (this.selectedId !== char.id) cardBg.setFillStyle(0x222222, 0.8);
       });
     }
     // pointerup으로 상세 패널 열기 (드래그 스크롤과 구분, 이전 씬 bleed-through 방지)
