@@ -61,13 +61,20 @@
       "context": "/dc/ceb8025d76/5/context.md",
       "content_hash": "/dc/ceb8025d76/5/content_hash.txt",
       "prompt": "/dc/ceb8025d76/5/prompt.txt"
+    },
+    {
+      "metadata": "/dc/ceb8025d76/6/metadata.json",
+      "transcript": "/dc/ceb8025d76/6/full.jsonl",
+      "context": "/dc/ceb8025d76/6/context.md",
+      "content_hash": "/dc/ceb8025d76/6/content_hash.txt",
+      "prompt": "/dc/ceb8025d76/6/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 4167,
-    "cache_creation_tokens": 3324137,
-    "cache_read_tokens": 82099831,
-    "output_tokens": 648765,
-    "api_call_count": 870
+    "input_tokens": 4220,
+    "cache_creation_tokens": 3413930,
+    "cache_read_tokens": 84153397,
+    "output_tokens": 679262,
+    "api_call_count": 903
   }
 }
