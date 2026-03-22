@@ -6,6 +6,14 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: 'v2.3.0',
+    date: '2026-03-22',
+    changes: [
+      '1대1 실시간 대전 모드 추가',
+      '랭크 매칭 시스템 추가',
+    ],
+  },
+  {
     version: 'v2.2.0',
     date: '2026-03-15',
     changes: [

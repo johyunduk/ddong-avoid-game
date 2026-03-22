@@ -56,6 +56,7 @@ const CORE_INNER_RADIUS = 3.5;   // 코어 내부 원 반지름
 const CORE_HIGHLIGHT_R  = 1.2;   // 하이라이트 스팟 반지름
 
 export default class CharacterSelectScene extends BaseScene {
+  private returnScene: string = 'ModeSelectScene';
   private selectedId: string = 'chibi';
   private ownedIds: string[] = [];
   private _preSyncDupCounts: Map<string, number> = new Map();
@@ -98,6 +99,10 @@ export default class CharacterSelectScene extends BaseScene {
 
   constructor() {
     super('CharacterSelectScene');
+  }
+
+  init(data: { returnScene?: string }) {
+    this.returnScene = data.returnScene ?? 'ModeSelectScene';
   }
 
   preload() {
@@ -1046,6 +1051,6 @@ export default class CharacterSelectScene extends BaseScene {
     btn.setInteractive({ useHandCursor: true });
     btn.on('pointerover', () => btn.setFillStyle(0x555555));
     btn.on('pointerout',  () => btn.setFillStyle(0x333333));
-    btn.on('pointerdown', () => this.scene.start('ModeSelectScene'));
+    btn.on('pointerdown', () => this.scene.start(this.returnScene));
   }
 }

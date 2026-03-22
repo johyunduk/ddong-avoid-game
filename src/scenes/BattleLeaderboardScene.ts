@@ -1,7 +1,7 @@
 import type Phaser from 'phaser';
 import { supabase } from '../utils/supabase';
 import { getBattleLeaderboard, type BattleRecordEntry } from '../utils/battleLeaderboard';
-import { getBattleTier } from '../utils/battleTier';
+import { getBattleTier, preloadTierImages } from '../utils/battleTier';
 import BaseScene from './BaseScene';
 
 export default class BattleLeaderboardScene extends BaseScene {
@@ -27,6 +27,7 @@ export default class BattleLeaderboardScene extends BaseScene {
     if (!this.textures.exists('background2')) {
       this.load.image('background2', 'assets/backgrounds/background2.webp');
     }
+    preloadTierImages(this);
   }
 
   create() {
@@ -103,11 +104,24 @@ export default class BattleLeaderboardScene extends BaseScene {
   }
 
   private displayLeaderboard() {
-    // 기존 텍스트 제거
+    // 기존 객체 제거
     for (const obj of this.leaderboardTexts) {
       if (obj.active) obj.destroy();
     }
     this.leaderboardTexts = [];
+
+    // 컬럼 X 위치 (캔버스 400px 기준)
+    const COL_RANK   = 28;   // right-align
+    const COL_NAME   = 44;   // left-align
+    const COL_TIER_IMG  = 148;  // image center
+    const COL_TIER_NAME = 162;  // left-align
+    const COL_RP     = 258;  // right-align
+    const COL_RATE   = 362;  // right-align
+
+    const txtStyle = (color: string) => ({
+      fontSize: '13px', color, fontFamily: 'monospace',
+      stroke: '#000', strokeThickness: 3,
+    });
 
     // 내 전적 요약
     if (this.currentUserRank) {
@@ -118,10 +132,14 @@ export default class BattleLeaderboardScene extends BaseScene {
       const disconnects = myEntry?.disconnects ?? 0;
       const myTier = getBattleTier(ratingPoints);
 
+      // 티어 이미지 (좌측 소형)
+      const myTierImg = this.add.image(13, 78, myTier.imgKey).setDisplaySize(20, 20);
+      this.leaderboardTexts.push(myTierImg);
+
       // 랭크 전적
       const rankSummary = this.add.text(
         200, 78,
-        `${myTier.icon} ${myTier.name} | ${ratingPoints} RP | 랭크: ${wins}승 ${disconnects}부 ${losses}패 | ${winRate}% (${rank}위)`,
+        `${myTier.name} | ${ratingPoints} RP | 랭크: ${wins}승 ${disconnects}부 ${losses}패 | ${winRate}% (${rank}위)`,
         { fontSize: '11px', color: '#FFD700', stroke: '#000', strokeThickness: 3 },
       ).setOrigin(0.5);
       this.leaderboardTexts.push(rankSummary);
@@ -143,23 +161,16 @@ export default class BattleLeaderboardScene extends BaseScene {
     this.leaderboardTexts.push(divider);
 
     // 헤더
-    const header = this.add.text(200, 133, '순위  이름   티어      RP    승률', {
-      fontSize: '13px',
-      color: '#ffff00',
-      fontStyle: 'bold',
-      fontFamily: 'monospace',
-      stroke: '#000',
-      strokeThickness: 3,
-    }).setOrigin(0.5);
-    this.leaderboardTexts.push(header);
+    const headerStyle = { fontSize: '13px', color: '#ffff00', fontStyle: 'bold', fontFamily: 'monospace', stroke: '#000', strokeThickness: 3 };
+    this.leaderboardTexts.push(this.add.text(COL_RANK,      133, '순위', headerStyle).setOrigin(1, 0.5));
+    this.leaderboardTexts.push(this.add.text(COL_NAME,      133, '이름', headerStyle).setOrigin(0, 0.5));
+    this.leaderboardTexts.push(this.add.text(COL_TIER_IMG,  133, '티어', headerStyle).setOrigin(0.5, 0.5));
+    this.leaderboardTexts.push(this.add.text(COL_RP,        133, 'RP',   headerStyle).setOrigin(1, 0.5));
+    this.leaderboardTexts.push(this.add.text(COL_RATE,      133, '승률', headerStyle).setOrigin(1, 0.5));
 
     if (this.leaderboardEntries.length === 0) {
       const noData = this.add.text(200, 300, '아직 대전 기록이 없습니다\n첫 번째 플레이어가 되어보세요!', {
-        fontSize: '16px',
-        color: '#cccccc',
-        stroke: '#000',
-        strokeThickness: 3,
-        align: 'center',
+        fontSize: '16px', color: '#cccccc', stroke: '#000', strokeThickness: 3, align: 'center',
       }).setOrigin(0.5);
       this.leaderboardTexts.push(noData);
       return;
@@ -175,8 +186,7 @@ export default class BattleLeaderboardScene extends BaseScene {
 
       // 현재 유저 행 하이라이트
       if (isMe) {
-        const highlight = this.add.rectangle(200, y, 380, 28, 0x8B6914, 0.5);
-        this.leaderboardTexts.push(highlight);
+        this.leaderboardTexts.push(this.add.rectangle(200, y, 380, 28, 0x8B6914, 0.5));
       }
 
       // 순위 색상
@@ -186,24 +196,25 @@ export default class BattleLeaderboardScene extends BaseScene {
       else if (entry.rank === 3) color = '#CD7F32';
       else if (isMe) color = '#FFD700';
 
-      const rankStr = `${entry.rank}`.padStart(2, ' ');
-      const nameStr = entry.userName.padEnd(5, ' ');
-      const tierStr = `${tier.icon}${tier.name}`.padEnd(7, ' ');
-      const rpStr = `${entry.ratingPoints}`.padStart(4, ' ');
-      const rateStr = `${entry.winRate}%`.padStart(5, ' ');
-
-      const text = this.add.text(
-        200, y,
-        `${rankStr}  ${nameStr}  ${tierStr}  ${rpStr}  ${rateStr}`,
-        {
-          fontSize: '13px',
-          color,
-          fontFamily: 'monospace',
-          stroke: '#000',
-          strokeThickness: 3,
-        },
-      ).setOrigin(0.5);
-      this.leaderboardTexts.push(text);
+      this.leaderboardTexts.push(
+        this.add.text(COL_RANK, y, `${entry.rank}`, txtStyle(color)).setOrigin(1, 0.5),
+      );
+      this.leaderboardTexts.push(
+        this.add.text(COL_NAME, y, entry.userName, txtStyle(color)).setOrigin(0, 0.5),
+      );
+      // 티어 이미지
+      this.leaderboardTexts.push(
+        this.add.image(COL_TIER_IMG, y, tier.imgKey).setDisplaySize(20, 20),
+      );
+      this.leaderboardTexts.push(
+        this.add.text(COL_TIER_NAME, y, tier.name, txtStyle(tier.color)).setOrigin(0, 0.5),
+      );
+      this.leaderboardTexts.push(
+        this.add.text(COL_RP, y, `${entry.ratingPoints}`, txtStyle(color)).setOrigin(1, 0.5),
+      );
+      this.leaderboardTexts.push(
+        this.add.text(COL_RATE, y, `${entry.winRate}%`, txtStyle(color)).setOrigin(1, 0.5),
+      );
     });
   }
 }

@@ -1,6 +1,6 @@
 import { BattleResult, BattleEvent } from '../types/BattleTypes';
-import { submitBattleResult, type SubmitBattleResultResponse } from '../utils/battleLeaderboard';
-import { getBattleTier, getTierIndex } from '../utils/battleTier';
+import { submitBattleResult, setCachedMyRating, type SubmitBattleResultResponse } from '../utils/battleLeaderboard';
+import { getBattleTier, getTierIndex, preloadTierImages } from '../utils/battleTier';
 import { BattleChannel } from '../utils/battleChannel';
 import BaseScene from './BaseScene';
 
@@ -31,6 +31,9 @@ export default class BattleResultScene extends BaseScene {
   private tierText?: Phaser.GameObjects.Text;
   private rpDeltaText?: Phaser.GameObjects.Text;
   private currentRpText?: Phaser.GameObjects.Text;
+  private tierIconImg?: Phaser.GameObjects.Image;
+  private tierUpgradeOldImg?: Phaser.GameObjects.Image;
+  private tierArrowText?: Phaser.GameObjects.Text;
 
   // 재도전 채널
   private rematchChannel: BattleChannel | null = null;
@@ -65,6 +68,7 @@ export default class BattleResultScene extends BaseScene {
     if (!this.textures.exists('background2')) {
       this.load.image('background2', 'assets/backgrounds/background2.webp');
     }
+    preloadTierImages(this);
   }
 
   create() {
@@ -92,22 +96,22 @@ export default class BattleResultScene extends BaseScene {
 
     // 티어/RP 영역
     if (this.isRanked) {
-      // 랭크전: 전적 제출 후 채워짐
-      this.tierText = this.add.text(200, 130, '전적 기록 중...', {
+      // 랭크전: 전적 제출 후 채워짐 (y=120 영역에 티어 이미지가 들어올 자리 확보)
+      this.tierText = this.add.text(200, 162, '전적 기록 중...', {
         fontSize: '15px',
         color: '#aaaaaa',
         stroke: '#000',
         strokeThickness: 3,
       }).setOrigin(0.5);
 
-      this.rpDeltaText = this.add.text(200, 155, '', {
+      this.rpDeltaText = this.add.text(200, 183, '', {
         fontSize: '18px',
         fontStyle: 'bold',
         stroke: '#000',
         strokeThickness: 4,
       }).setOrigin(0.5);
 
-      this.currentRpText = this.add.text(200, 183, '', {
+      this.currentRpText = this.add.text(200, 205, '', {
         fontSize: '13px',
         color: '#888888',
         stroke: '#000',
@@ -196,7 +200,11 @@ export default class BattleResultScene extends BaseScene {
     if (!this.resultSubmitted) {
       this.resultSubmitted = true;
       submitBattleResult(this.result, this.opponentId, this.isRanked)
-        .then((res) => { if (this.isRanked) this.showRpResult(res); })
+        .then((res) => {
+          // 랭크 캐시 갱신 (BattleMatchScene에서 즉시 표시용)
+          setCachedMyRating(res.ratingPoints, res.rank);
+          if (this.isRanked) this.showRpResult(res);
+        })
         .catch((err) => {
           console.warn('Battle result submit failed:', err);
           if (this.tierText?.active) this.tierText.setText('전적 기록 실패');
@@ -217,12 +225,28 @@ export default class BattleResultScene extends BaseScene {
     const newTierIdx = getTierIndex(res.ratingPoints);
     const newTier = getBattleTier(res.ratingPoints);
 
+    // 기존 티어 이미지 정리
+    this.tierIconImg?.destroy();
+    this.tierIconImg = undefined;
+    this.tierUpgradeOldImg?.destroy();
+    this.tierUpgradeOldImg = undefined;
+    this.tierArrowText?.destroy();
+    this.tierArrowText = undefined;
+
     if (newTierIdx > oldTierIdx) {
       const oldTier = getBattleTier(res.previousRp);
-      this.tierText.setText(`${oldTier.icon} ${oldTier.name}  →  ${newTier.icon} ${newTier.name}`);
+      // 티어 승급: 구 티어(작게) → 신 티어(크게) 나란히 표시
+      this.tierUpgradeOldImg = this.add.image(145, 126, oldTier.imgKey).setDisplaySize(32, 32);
+      this.tierArrowText = this.add.text(200, 126, '→', {
+        fontSize: '22px', color: '#FFD700', fontStyle: 'bold',
+        stroke: '#000', strokeThickness: 4,
+      }).setOrigin(0.5);
+      this.tierIconImg = this.add.image(255, 126, newTier.imgKey).setDisplaySize(40, 40);
+      this.tierText.setText(`${oldTier.name}  →  ${newTier.name}`);
       this.tierText.setColor('#FFD700');
     } else {
-      this.tierText.setText(`${newTier.icon} ${newTier.name}  |  ${res.ratingPoints} RP`);
+      this.tierIconImg = this.add.image(200, 124, newTier.imgKey).setDisplaySize(48, 48);
+      this.tierText.setText(`${newTier.name}  |  ${res.ratingPoints} RP`);
       this.tierText.setColor('#cccccc');
     }
 

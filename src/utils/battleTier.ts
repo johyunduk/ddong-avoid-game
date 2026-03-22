@@ -1,3 +1,5 @@
+import type Phaser from 'phaser';
+
 /**
  * ⚠️ BATTLE_TIERS / TIER_NAMES / TIER_ICONS 수정 시
  * 아래 두 Edge Function에도 동일하게 반영해야 함 (Deno 환경에서 로컬 TS 공유 불가):
@@ -7,6 +9,7 @@
 export interface BattleTierDef {
   name: string;
   icon: string;
+  imgKey: string; // Phaser 텍스처 키 (랭크 이미지)
   minRp: number;
   maxRp: number;
   color: string; // hex 색상 (UI 표시용)
@@ -17,12 +20,22 @@ export interface BattleTierDef {
  * 신규 유저 시작 RP: 1000 (🟡 레거시 구간 하단)
  */
 export const BATTLE_TIERS: readonly BattleTierDef[] = [
-  { name: '알파',   icon: '🔴', minRp: 0,    maxRp: 499,      color: '#CC3333' },
-  { name: '베타',   icon: '🟠', minRp: 500,  maxRp: 999,      color: '#CC7700' },
-  { name: '레거시', icon: '🟡', minRp: 1000, maxRp: 1499,     color: '#CCCC00' },
-  { name: '마스터', icon: '💎', minRp: 1500, maxRp: 1999,     color: '#00BFFF' },
-  { name: '갓',     icon: '👑', minRp: 2000, maxRp: Infinity, color: '#FF4500' },
+  { name: '알파',   icon: '🔴', imgKey: 'rank_alpha',  minRp: 0,    maxRp: 499,      color: '#CC3333' },
+  { name: '베타',   icon: '🟠', imgKey: 'rank_beta',   minRp: 500,  maxRp: 999,      color: '#CC7700' },
+  { name: '레거시', icon: '🟡', imgKey: 'rank_legacy', minRp: 1000, maxRp: 1499,     color: '#CCCC00' },
+  { name: '마스터', icon: '💎', imgKey: 'rank_master', minRp: 1500, maxRp: 1999,     color: '#00BFFF' },
+  { name: '갓',     icon: '👑', imgKey: 'rank_god',    minRp: 2000, maxRp: Infinity, color: '#FF4500' },
 ] as const;
+
+/** 모든 티어 랭크 이미지를 프리로드 */
+export function preloadTierImages(scene: Phaser.Scene): void {
+  for (const tier of BATTLE_TIERS) {
+    if (!scene.textures.exists(tier.imgKey)) {
+      const tierId = tier.imgKey.replace('rank_', '');
+      scene.load.image(tier.imgKey, `assets/rank/${tierId}_rank.png`);
+    }
+  }
+}
 
 /** RP로 티어 인덱스 반환 (0~5) */
 export function getTierIndex(rp: number): number {

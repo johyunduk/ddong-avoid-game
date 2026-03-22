@@ -5,7 +5,6 @@ import {
   getSafeSelectedCharacter,
   getOwnedCharacters,
   getCharacterDef,
-  setSelectedCharacter,
   type CharacterDef,
 } from '../utils/character';
 import { supabase } from '../utils/supabase';
@@ -16,6 +15,8 @@ import {
   cancelMatchmaking,
   type MatchResult,
 } from '../utils/matchmaking';
+import { getBattleTier, preloadTierImages } from '../utils/battleTier';
+import { getMyRating, getCachedMyRating, setCachedMyRating } from '../utils/battleLeaderboard';
 import BaseScene from './BaseScene';
 
 /**
@@ -31,13 +32,10 @@ export default class BattleMatchScene extends BaseScene {
   private opponentReady: boolean = false;
   private countdownStarted: boolean = false;
   private readyButtonShown: boolean = false;
-  private ownedChars: string[] = [];
-  private charPickIdx: number = 0;
   private readyRetryTimer: ReturnType<typeof setInterval> | null = null;
   private userId: string = '';
   private opponentUserId: string = '';
   private autoRematch: { code: string; isHost: boolean; userId: string } | null = null;
-  private lastPickTime: number = 0;
 
   // 랭크 매칭
   private isRanked: boolean = false;
@@ -51,14 +49,17 @@ export default class BattleMatchScene extends BaseScene {
   private opponentCharGradeTxt: Phaser.GameObjects.Text | null = null;
   private opponentCharPlaceholder: Phaser.GameObjects.Text | null = null;
 
-  // 메뉴 캐릭터 선택 UI refs (화살표 누를 때 직접 업데이트)
-  private menuCharImg: Phaser.GameObjects.Image | null = null;
-  private menuCharNameTxt: Phaser.GameObjects.Text | null = null;
-  private menuCharGradeTxt: Phaser.GameObjects.Text | null = null;
-
   // 상태별 UI 요소를 그룹으로 관리 → 상태 전환 시 일괄 파괴
   private uiGroup: Phaser.GameObjects.GameObject[] = [];
   private uiTimers: Phaser.Time.TimerEvent[] = [];
+
+  // 내 랭크 뱃지 (showMenu 안에서 생성 → uiGroup에 포함)
+  private cachedMyRp: number | null = null;
+  private cachedMyRank: number | null = null;
+  private rankBadgeImg: Phaser.GameObjects.Image | null = null;
+  private rankBadgeNameTxt: Phaser.GameObjects.Text | null = null;
+  private rankBadgeRpTxt: Phaser.GameObjects.Text | null = null;
+  private rankBadgeRankTxt: Phaser.GameObjects.Text | null = null;
 
   constructor() {
     super('BattleMatchScene');
@@ -73,9 +74,6 @@ export default class BattleMatchScene extends BaseScene {
     this.opponentCharNameTxt = null;
     this.opponentCharGradeTxt = null;
     this.opponentCharPlaceholder = null;
-    this.menuCharImg = null;
-    this.menuCharNameTxt = null;
-    this.menuCharGradeTxt = null;
   }
 
   preload() {
@@ -89,6 +87,7 @@ export default class BattleMatchScene extends BaseScene {
         this.load.image(def.imageKey, def.imagePath);
       }
     }
+    preloadTierImages(this);
   }
 
   create() {
@@ -116,7 +115,7 @@ export default class BattleMatchScene extends BaseScene {
     }).setOrigin(0.5);
 
     // 뒤로가기 (모든 상태에서 유지)
-    const backBtn = this.add.text(200, 558, '← 메인 메뉴', {
+    const backBtn = this.add.text(200, 562, '← 메인 메뉴', {
       fontSize: '18px',
       color: '#aaaaaa',
       stroke: '#000',
@@ -135,6 +134,9 @@ export default class BattleMatchScene extends BaseScene {
         if (data.user?.id) this.userId = data.user.id;
       });
     }
+
+    // 내 랭크 비동기 조회 (비크리티컬 — 실패해도 무시)
+    this.fetchMyRating();
 
     // 초기 상태: 재도전이면 자동 참가, 아니면 메뉴
     if (this.autoRematch) {
@@ -169,59 +171,91 @@ export default class BattleMatchScene extends BaseScene {
   private showMenu() {
     this.clearUI();
 
-    // ── 캐릭터 선택 섹션 ──────────────────────────────────────────
-    this.ownedChars = getOwnedCharacters();
-    const currentId = getSafeSelectedCharacter();
-    this.charPickIdx = Math.max(0, this.ownedChars.indexOf(currentId));
-    const def = getCharacterDef(this.ownedChars[this.charPickIdx]);
+    // ── 정보 카드 (캐릭터 좌측 | 랭크 우측) ──────────────────────
+    const def = getCharacterDef(getSafeSelectedCharacter());
+    const stars = def.grade === 'UR' ? '★★★'
+      : def.grade === 'SR' ? '★★'
+      : def.grade === 'R'  ? '★'
+      : def.grade;
 
-    this.ui(this.add.text(200, 110, '출전 캐릭터', {
-      fontSize: '13px', color: '#999999',
-      stroke: '#000', strokeThickness: 2,
-    }).setOrigin(0.5));
+    this.ui(this.add.rectangle(200, 200, 374, 190, 0x0d1b2a, 0.9)
+      .setStrokeStyle(1, 0x334466));
 
-    // 초상화 박스
-    this.ui(this.add.rectangle(200, 170, 92, 96, 0x000000, 0.55)
-      .setStrokeStyle(2, 0x666666));
+    // 구분선
+    const divGfx = this.add.graphics();
+    divGfx.lineStyle(1, 0x334466, 0.8);
+    divGfx.lineBetween(203, 110, 203, 290);
+    this.ui(divGfx);
 
     // 캐릭터 이미지
     if (this.textures.exists(def.imageKey)) {
-      this.menuCharImg = this.ui(this.add.image(200, 170, def.imageKey).setDisplaySize(60, 84));
-    } else {
-      this.menuCharImg = null;
+      this.ui(this.add.image(62, 200, def.imageKey).setDisplaySize(68, 96));
+    }
+    this.ui(this.add.text(95, 162, def.name, {
+      fontSize: '16px', color: '#ffffff', fontStyle: 'bold',
+      stroke: '#000', strokeThickness: 3,
+    }).setOrigin(0, 0.5));
+    this.ui(this.add.text(95, 190, stars, {
+      fontSize: '15px', color: def.gradeColor,
+      stroke: '#000', strokeThickness: 2,
+    }).setOrigin(0, 0.5));
+    this.ui(this.add.text(95, 215, def.grade !== '등급외' ? def.grade : '등급외', {
+      fontSize: '12px', color: '#bbbbbb',
+      stroke: '#000', strokeThickness: 2,
+    }).setOrigin(0, 0.5));
+
+    // 랭크 뱃지 (우측)
+    this.ui(this.add.text(295, 117, '내 랭크', {
+      fontSize: '12px', color: '#aaaaaa', stroke: '#000', strokeThickness: 2,
+    }).setOrigin(0.5));
+    this.rankBadgeImg = this.ui(
+      this.add.image(248, 200, 'rank_alpha').setDisplaySize(74, 74).setAlpha(0),
+    );
+    this.rankBadgeNameTxt = this.ui(this.add.text(288, 162, '---', {
+      fontSize: '15px', color: '#aaaaaa', stroke: '#000', strokeThickness: 2,
+    }).setOrigin(0, 0.5));
+    this.rankBadgeRpTxt = this.ui(this.add.text(288, 184, '···', {
+      fontSize: '14px', color: '#bbbbbb', stroke: '#000', strokeThickness: 2,
+    }).setOrigin(0, 0.5));
+    this.rankBadgeRankTxt = this.ui(this.add.text(288, 207, '', {
+      fontSize: '13px', color: '#999999', stroke: '#000', strokeThickness: 2,
+    }).setOrigin(0, 0.5));
+
+    // 캐시된 데이터가 있으면 즉시 반영
+    if (this.cachedMyRp !== null) {
+      this.updateRankBadge(this.cachedMyRp, this.cachedMyRank);
     }
 
-    // 좌우 화살표
-    if (this.ownedChars.length > 1) {
-      const leftArrow = this.ui(this.add.text(135, 170, '◀', {
-        fontSize: '26px', color: '#ffffff', stroke: '#000', strokeThickness: 4,
-      }).setOrigin(0.5).setInteractive({ useHandCursor: true }));
-      leftArrow.on('pointerover', () => (leftArrow as Phaser.GameObjects.Text).setColor('#FFD700'));
-      leftArrow.on('pointerout', () => (leftArrow as Phaser.GameObjects.Text).setColor('#ffffff'));
-      leftArrow.on('pointerdown', () => this.pickMenuCharacter(-1));
-
-      const rightArrow = this.ui(this.add.text(265, 170, '▶', {
-        fontSize: '26px', color: '#ffffff', stroke: '#000', strokeThickness: 4,
-      }).setOrigin(0.5).setInteractive({ useHandCursor: true }));
-      rightArrow.on('pointerover', () => (rightArrow as Phaser.GameObjects.Text).setColor('#FFD700'));
-      rightArrow.on('pointerout', () => (rightArrow as Phaser.GameObjects.Text).setColor('#ffffff'));
-      rightArrow.on('pointerdown', () => this.pickMenuCharacter(1));
-    }
-
-    this.menuCharNameTxt = this.ui(this.add.text(200, 230, def.name, {
-      fontSize: '18px', color: '#ffffff', fontStyle: 'bold',
+    // ── 1행: 캐릭터 선택 | 전적 보기 (좌우 나란히) ──────────────
+    const charBtn = this.ui(this.add.rectangle(100, 328, 175, 48, 0x1a3a5c));
+    charBtn.setStrokeStyle(2, 0x4499dd);
+    this.ui(this.add.text(100, 328, '👤 캐릭터 선택', {
+      fontSize: '15px', color: '#aaddff', fontStyle: 'bold',
       stroke: '#000', strokeThickness: 3,
     }).setOrigin(0.5));
-    this.menuCharGradeTxt = this.ui(this.add.text(200, 252, def.grade, {
-      fontSize: '13px', color: def.gradeColor,
+    charBtn.setInteractive({ useHandCursor: true });
+    charBtn.on('pointerover', () => charBtn.setFillStyle(0x254d70));
+    charBtn.on('pointerout', () => charBtn.setFillStyle(0x1a3a5c));
+    charBtn.on('pointerdown', () => {
+      this.scene.start('CharacterSelectScene', { returnScene: 'BattleMatchScene' });
+    });
+
+    const recordBtn = this.ui(this.add.rectangle(300, 328, 175, 48, 0x1a2a1a));
+    recordBtn.setStrokeStyle(2, 0x44aa44);
+    this.ui(this.add.text(300, 328, '🏆 전적 보기', {
+      fontSize: '15px', color: '#88ee88', fontStyle: 'bold',
       stroke: '#000', strokeThickness: 3,
     }).setOrigin(0.5));
+    recordBtn.setInteractive({ useHandCursor: true });
+    recordBtn.on('pointerover', () => recordBtn.setFillStyle(0x254d25));
+    recordBtn.on('pointerout', () => recordBtn.setFillStyle(0x1a2a1a));
+    recordBtn.on('pointerdown', () => this.scene.start('BattleLeaderboardScene'));
 
-    // ── 랭크 매칭 버튼 ───────────────────────────────────────────
-    const rankedBtn = this.ui(this.add.rectangle(200, 305, 300, 60, 0x7a5c00));
-    rankedBtn.setStrokeStyle(3, 0xFFD700);
-    this.ui(this.add.text(200, 305, '🎖️ 랭크 매칭', {
-      fontSize: '24px', color: '#FFD700', fontStyle: 'bold',
+    // ── 2행: 랭크 매칭 (전체 너비) ───────────────────────────────
+    const rankedBtn = this.ui(this.add.rectangle(200, 392, 374, 56, 0x7a5c00));
+    rankedBtn.setStrokeStyle(2, 0xFFD700);
+    this.ui(this.add.text(200, 392, '🎖️ 랭크 매칭', {
+      fontSize: '22px', color: '#FFD700', fontStyle: 'bold',
       stroke: '#000', strokeThickness: 4,
     }).setOrigin(0.5));
     rankedBtn.setInteractive({ useHandCursor: true });
@@ -230,14 +264,14 @@ export default class BattleMatchScene extends BaseScene {
     rankedBtn.on('pointerdown', () => this.startRankedMatchmaking());
 
     // ── 친선전 버튼 (좌우 나란히) ─────────────────────────────────
-    this.ui(this.add.text(200, 370, '─── 친선전 (RP 없음) ───', {
-      fontSize: '13px', color: '#888888',
-      stroke: '#000', strokeThickness: 2,
+    this.ui(this.add.text(200, 462, '─── 친선전 (RP 없음) ───', {
+      fontSize: '15px', color: '#cccccc',
+      stroke: '#000', strokeThickness: 3,
     }).setOrigin(0.5));
 
-    const createBtn = this.ui(this.add.rectangle(100, 415, 175, 52, 0xc0392b));
+    const createBtn = this.ui(this.add.rectangle(100, 500, 175, 48, 0xc0392b));
     createBtn.setStrokeStyle(2, 0xffffff);
-    this.ui(this.add.text(100, 415, '🏠 방 만들기', {
+    this.ui(this.add.text(100, 500, '🏠 방 만들기', {
       fontSize: '17px', color: '#ffffff', fontStyle: 'bold',
       stroke: '#000', strokeThickness: 3,
     }).setOrigin(0.5));
@@ -246,9 +280,9 @@ export default class BattleMatchScene extends BaseScene {
     createBtn.on('pointerout', () => createBtn.setFillStyle(0xc0392b));
     createBtn.on('pointerdown', () => this.handleCreateRoom());
 
-    const joinBtn = this.ui(this.add.rectangle(300, 415, 175, 52, 0x2471a3));
+    const joinBtn = this.ui(this.add.rectangle(300, 500, 175, 48, 0x2471a3));
     joinBtn.setStrokeStyle(2, 0xffffff);
-    this.ui(this.add.text(300, 415, '🔗 방 참가', {
+    this.ui(this.add.text(300, 500, '🔗 방 참가', {
       fontSize: '17px', color: '#ffffff', fontStyle: 'bold',
       stroke: '#000', strokeThickness: 3,
     }).setOrigin(0.5));
@@ -256,33 +290,52 @@ export default class BattleMatchScene extends BaseScene {
     joinBtn.on('pointerover', () => joinBtn.setFillStyle(0x3498db));
     joinBtn.on('pointerout', () => joinBtn.setFillStyle(0x2471a3));
     joinBtn.on('pointerdown', () => this.showJoinInput());
-
-    const rankLink = this.ui(this.add.text(200, 483, '🏆 전적 보기', {
-      fontSize: '16px', color: '#bbbbbb',
-      stroke: '#000', strokeThickness: 3,
-    }).setOrigin(0.5).setInteractive({ useHandCursor: true }));
-    rankLink.on('pointerover', () => (rankLink as Phaser.GameObjects.Text).setColor('#FFD700'));
-    rankLink.on('pointerout', () => (rankLink as Phaser.GameObjects.Text).setColor('#bbbbbb'));
-    rankLink.on('pointerdown', () => this.scene.start('BattleLeaderboardScene'));
   }
 
-  /** 메뉴에서 캐릭터 순환 선택 (UI를 재빌드하지 않고 직접 업데이트) */
-  private pickMenuCharacter(delta: number) {
-    const now = Date.now();
-    if (now - this.lastPickTime < 250) return;
-    this.lastPickTime = now;
-    this.charPickIdx = (this.charPickIdx + delta + this.ownedChars.length) % this.ownedChars.length;
-    setSelectedCharacter(this.ownedChars[this.charPickIdx]);
-    const def = getCharacterDef(this.ownedChars[this.charPickIdx]);
-
-    if (this.menuCharImg?.active) {
-      if (this.textures.exists(def.imageKey)) {
-        this.menuCharImg.setTexture(def.imageKey).setDisplaySize(60, 84);
-      }
+  /** 내 RP/티어 조회 — localStorage 캐시로 즉시 표시 후 API 응답으로 갱신 */
+  private async fetchMyRating() {
+    // 1) 캐시 즉시 반영
+    const cached = getCachedMyRating();
+    if (cached) {
+      this.cachedMyRp = cached.rp;
+      this.cachedMyRank = cached.rank;
+      this.updateRankBadge(cached.rp, cached.rank);
     }
-    if (this.menuCharNameTxt?.active) this.menuCharNameTxt.setText(def.name);
-    if (this.menuCharGradeTxt?.active) {
-      this.menuCharGradeTxt.setText(def.grade).setColor(def.gradeColor);
+
+    // 2) API 호출 후 캐시 갱신 + UI 업데이트
+    try {
+      const stats = await getMyRating();
+      if (stats) {
+        this.cachedMyRp = stats.ratingPoints;
+        this.cachedMyRank = stats.rank;
+        setCachedMyRating(stats.ratingPoints, stats.rank);
+        this.updateRankBadge(stats.ratingPoints, stats.rank);
+      } else {
+        // 전적 없음: 시작 RP
+        this.cachedMyRp = 1000;
+        this.cachedMyRank = null;
+        setCachedMyRating(1000, null);
+        this.updateRankBadge(1000, null);
+      }
+    } catch {
+      // 비크리티컬 — 캐시값 그대로 유지
+    }
+  }
+
+  /** 메뉴 내 랭크 뱃지 UI 갱신 */
+  private updateRankBadge(rp: number, rank: number | null) {
+    const tier = getBattleTier(rp);
+    if (this.rankBadgeImg?.active) {
+      this.rankBadgeImg.setTexture(tier.imgKey).setDisplaySize(74, 74).setAlpha(1);
+    }
+    if (this.rankBadgeNameTxt?.active) {
+      this.rankBadgeNameTxt.setText(tier.name).setColor(tier.color);
+    }
+    if (this.rankBadgeRpTxt?.active) {
+      this.rankBadgeRpTxt.setText(`${rp} RP`).setColor('#dddddd');
+    }
+    if (this.rankBadgeRankTxt?.active) {
+      this.rankBadgeRankTxt.setText(rank !== null ? `(${rank}위)` : '첫 게임 도전!').setColor('#aaaaaa');
     }
   }
 
@@ -338,7 +391,7 @@ export default class BattleMatchScene extends BaseScene {
       stroke: '#000', strokeThickness: 5,
     }).setOrigin(0.5));
 
-    this.ui(this.add.text(200, 278, '상대를 찾고 있습니다', {
+    const subText = this.ui(this.add.text(200, 278, '상대를 찾고 있습니다', {
       fontSize: '16px', color: '#cccccc',
       stroke: '#000', strokeThickness: 3,
     }).setOrigin(0.5));
@@ -358,6 +411,14 @@ export default class BattleMatchScene extends BaseScene {
         const s = elapsed % 60;
         const timeStr = m > 0 ? `${m}:${s.toString().padStart(2, '0')}` : `${s}초`;
         (elapsedText as Phaser.GameObjects.Text).setText(`${timeStr} 경과`);
+
+        // 1분 초과 시 안내 메시지
+        if (elapsed === 60 && subText.active) {
+          (subText as Phaser.GameObjects.Text)
+            .setText('현재 대기 중인 상대가 없습니다\n계속 기다리거나 취소해주세요')
+            .setColor('#ff9944')
+            .setAlign('center');
+        }
       },
     }));
 
@@ -423,8 +484,6 @@ export default class BattleMatchScene extends BaseScene {
     this.opponentReady = false;
     this.countdownStarted = false;
     this.readyButtonShown = false;
-    this.ownedChars = [];
-    this.charPickIdx = 0;
   }
 
   /** 채널 생성 → 리스너 등록 → 구독 → 캐릭터 알림 (4곳 공통 흐름) */
