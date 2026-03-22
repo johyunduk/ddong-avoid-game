@@ -3,9 +3,15 @@
   "checkpoint_id": "ee00f42584de",
   "strategy": "manual-commit",
   "branch": "dev",
-  "checkpoints_count": 1,
+  "checkpoints_count": 8,
   "files_touched": [
-    "src/scenes/GachaScene.ts"
+    "public/assets/character_ranks/r.png",
+    "public/assets/character_ranks/sr.png",
+    "public/assets/character_ranks/ur.png",
+    "src/scenes/BattleMatchScene.ts",
+    "src/scenes/CharacterSelectScene.ts",
+    "src/scenes/GachaScene.ts",
+    "src/utils/character.ts"
   ],
   "sessions": [
     {
@@ -14,13 +20,20 @@
       "context": "/ee/00f42584de/0/context.md",
       "content_hash": "/ee/00f42584de/0/content_hash.txt",
       "prompt": "/ee/00f42584de/0/prompt.txt"
+    },
+    {
+      "metadata": "/ee/00f42584de/1/metadata.json",
+      "transcript": "/ee/00f42584de/1/full.jsonl",
+      "context": "/ee/00f42584de/1/context.md",
+      "content_hash": "/ee/00f42584de/1/content_hash.txt",
+      "prompt": "/ee/00f42584de/1/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 3114,
-    "cache_creation_tokens": 480925,
-    "cache_read_tokens": 11174560,
-    "output_tokens": 60407,
-    "api_call_count": 131
+    "input_tokens": 3214,
+    "cache_creation_tokens": 556290,
+    "cache_read_tokens": 16180760,
+    "output_tokens": 84060,
+    "api_call_count": 213
   }
 }
