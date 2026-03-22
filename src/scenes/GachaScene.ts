@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { gachaPull, syncOwnedCharacters, syncOwnedWallpapers, type PulledCharacter, type PulledWallpaper } from '../utils/gacha';
-import { CHARACTERS, getCharacterDef, addOwnedCharacter, getDuplicateCount, setDuplicateCount, type CharacterDef } from '../utils/character';
+import { CHARACTERS, getCharacterDef, addOwnedCharacter, getDuplicateCount, setDuplicateCount, getGradeImgKey, type CharacterDef } from '../utils/character';
 import { WALLPAPERS, getWallpaperDef, addOwnedWallpaper, WP_ACCENT_INT, WP_ACCENT_HEX, type BackgroundDef } from '../utils/wallpaper';
 import { getSkorBalance, getCachedSkorBalance, cacheSkorBalance } from '../utils/skor';
 import BaseScene from './BaseScene';
@@ -42,7 +42,7 @@ export default class GachaScene extends BaseScene {
   private slideshowIsA = true; // true → bgA가 현재 레이어
   private slideshowBgA: Phaser.GameObjects.Image | null = null;
   private slideshowBgB: Phaser.GameObjects.Image | null = null;
-  private slideshowGradeText: Phaser.GameObjects.Text | null = null;
+  private slideshowGradeImg: Phaser.GameObjects.Image | null = null;
   private slideshowNameText: Phaser.GameObjects.Text | null = null;
   private slideshowBadgeBox: Phaser.GameObjects.Rectangle | null = null;
   private slideshowBadgeTxt: Phaser.GameObjects.Text | null = null;
@@ -74,6 +74,10 @@ export default class GachaScene extends BaseScene {
     if (!this.textures.exists('gacha_background')) {
       this.load.image('gacha_background', 'assets/backgrounds/gacha_background.webp');
     }
+    // 등급 이미지
+    if (!this.textures.exists('grade_r'))  this.load.image('grade_r',  'assets/character_ranks/r.png');
+    if (!this.textures.exists('grade_sr')) this.load.image('grade_sr', 'assets/character_ranks/sr.png');
+    if (!this.textures.exists('grade_ur')) this.load.image('grade_ur', 'assets/character_ranks/ur.png');
   }
 
   create() {
@@ -122,10 +126,10 @@ export default class GachaScene extends BaseScene {
     // grade(13px ≈ 16px high) y=344 → 336~352
     // name (28px ≈ 34px high) y=374 → 357~391
     // SKOR(15px)              y=408 → 399~417  (gap ≈ 8px)
-    this.slideshowGradeText = this.add.text(200, 344, currentDef.grade, {
-      fontSize: '13px', color: currentDef.gradeColor, fontStyle: 'bold',
-      letterSpacing: 6, stroke: '#000000', strokeThickness: 5,
-    }).setOrigin(0.5);
+    const initGradeKey = getGradeImgKey(currentDef.grade);
+    this.slideshowGradeImg = initGradeKey
+      ? this.add.image(200, 344, initGradeKey).setDisplaySize(40, 40).setOrigin(0.5)
+      : null;
 
     this.slideshowNameText = this.add.text(200, 374, currentDef.name, {
       fontSize: '28px', color: '#ffffff', fontStyle: 'bold',
@@ -191,10 +195,15 @@ export default class GachaScene extends BaseScene {
     this.slideshowBadgeBox?.setStrokeStyle(1.5, gradeColorInt);
     this.slideshowBadgeTxt?.setColor(def.gradeColor);
 
-    // 등급·이름: 즉시 텍스트 교체 후 짧게 fade-in (150ms)
-    if (this.slideshowGradeText?.active) {
-      this.slideshowGradeText.setText(def.grade).setColor(def.gradeColor).setAlpha(0);
-      this.tweens.add({ targets: this.slideshowGradeText, alpha: 1, duration: 150 });
+    // 등급 이미지: 기존 이미지 교체 후 짧게 fade-in (150ms)
+    if (this.slideshowGradeImg?.active) {
+      this.slideshowGradeImg.destroy();
+      this.slideshowGradeImg = null;
+    }
+    const gradeKey = getGradeImgKey(def.grade);
+    if (gradeKey) {
+      this.slideshowGradeImg = this.add.image(200, 344, gradeKey).setDisplaySize(40, 40).setOrigin(0.5).setAlpha(0);
+      this.tweens.add({ targets: this.slideshowGradeImg, alpha: 1, duration: 150 });
     }
     if (this.slideshowNameText?.active) {
       this.slideshowNameText.setText(def.name).setAlpha(0);
@@ -662,11 +671,11 @@ export default class GachaScene extends BaseScene {
     });
 
     // 등급 라벨
-    const gradeText = this.add.text(200, 388, pulled.grade, {
-      fontSize: '18px', color: def.gradeColor, fontStyle: 'bold',
-      stroke: '#000', strokeThickness: 4, fontFamily: 'monospace',
-    }).setOrigin(0.5).setAlpha(0);
-    this.tweens.add({ targets: gradeText, alpha: 1, duration: 300, delay: 400 });
+    const revealGradeKey = getGradeImgKey(pulled.grade);
+    if (revealGradeKey) {
+      const gradeImg = this.add.image(200, 388, revealGradeKey).setDisplaySize(52, 52).setOrigin(0.5).setAlpha(0);
+      this.tweens.add({ targets: gradeImg, alpha: 1, duration: 300, delay: 400 });
+    }
 
     // 캐릭터 이름
     const nameText = this.add.text(200, 424, def.name, {
@@ -883,7 +892,7 @@ export default class GachaScene extends BaseScene {
     this.slideshowActive = false;
     this.slideshowBgA = null;
     this.slideshowBgB = null;
-    this.slideshowGradeText = null;
+    this.slideshowGradeImg = null;
     this.slideshowNameText = null;
     this.slideshowBadgeBox = null;
     this.slideshowBadgeTxt = null;

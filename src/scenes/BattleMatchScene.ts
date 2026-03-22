@@ -5,6 +5,7 @@ import {
   getSafeSelectedCharacter,
   getOwnedCharacters,
   getCharacterDef,
+  getGradeImgKey,
   type CharacterDef,
 } from '../utils/character';
 import { supabase } from '../utils/supabase';
@@ -47,6 +48,7 @@ export default class BattleMatchScene extends BaseScene {
   private opponentCharImg: Phaser.GameObjects.Image | null = null;
   private opponentCharNameTxt: Phaser.GameObjects.Text | null = null;
   private opponentCharGradeTxt: Phaser.GameObjects.Text | null = null;
+  private opponentCharGradeImg: Phaser.GameObjects.Image | null = null;
   private opponentCharPlaceholder: Phaser.GameObjects.Text | null = null;
 
   // 상태별 UI 요소를 그룹으로 관리 → 상태 전환 시 일괄 파괴
@@ -73,6 +75,7 @@ export default class BattleMatchScene extends BaseScene {
     this.opponentCharImg = null;
     this.opponentCharNameTxt = null;
     this.opponentCharGradeTxt = null;
+    this.opponentCharGradeImg = null;
     this.opponentCharPlaceholder = null;
   }
 
@@ -88,6 +91,9 @@ export default class BattleMatchScene extends BaseScene {
       }
     }
     preloadTierImages(this);
+    if (!this.textures.exists('grade_r'))  this.load.image('grade_r',  'assets/character_ranks/r.png');
+    if (!this.textures.exists('grade_sr')) this.load.image('grade_sr', 'assets/character_ranks/sr.png');
+    if (!this.textures.exists('grade_ur')) this.load.image('grade_ur', 'assets/character_ranks/ur.png');
   }
 
   create() {
@@ -199,10 +205,10 @@ export default class BattleMatchScene extends BaseScene {
       fontSize: '15px', color: def.gradeColor,
       stroke: '#000', strokeThickness: 2,
     }).setOrigin(0, 0.5));
-    this.ui(this.add.text(95, 215, def.grade !== '등급외' ? def.grade : '등급외', {
-      fontSize: '12px', color: '#bbbbbb',
-      stroke: '#000', strokeThickness: 2,
-    }).setOrigin(0, 0.5));
+    const menuGradeKey = getGradeImgKey(def.grade);
+    if (menuGradeKey) {
+      this.ui(this.add.image(95, 215, menuGradeKey).setDisplaySize(30, 30).setOrigin(0, 0.5));
+    }
 
     // 랭크 뱃지 (우측)
     this.ui(this.add.text(295, 117, '내 랭크', {
@@ -700,9 +706,10 @@ export default class BattleMatchScene extends BaseScene {
       fontSize: '14px', color: '#ffffff', fontStyle: 'bold',
       stroke: '#000', strokeThickness: 3,
     }).setOrigin(0.5));
-    this.ui(this.add.text(96, 362, myDef.grade, {
-      fontSize: '13px', color: myDef.gradeColor, stroke: '#000', strokeThickness: 2,
-    }).setOrigin(0.5));
+    const myGradeKey = getGradeImgKey(myDef.grade);
+    if (myGradeKey) {
+      this.ui(this.add.image(96, 362, myGradeKey).setDisplaySize(28, 28).setOrigin(0.5));
+    }
 
     // ── 상대 캐릭터 (오른쪽) ─────────────────────────────────────
     this.ui(this.add.rectangle(304, 280, 92, 104, 0x330000, 0.7)
@@ -718,6 +725,7 @@ export default class BattleMatchScene extends BaseScene {
     this.opponentCharGradeTxt = this.ui(this.add.text(304, 362, '', {
       fontSize: '13px', color: '#666666',
     }).setOrigin(0.5));
+    // grade image will be set in updateOpponentCharDisplay
 
     // 이미 캐릭터를 알고 있으면 즉시 표시
     if (this.opponentCharId) {
@@ -775,8 +783,16 @@ export default class BattleMatchScene extends BaseScene {
     }
     // 이름 / 등급
     if (this.opponentCharNameTxt?.active) this.opponentCharNameTxt.setText(def.name).setColor('#ffffff');
-    if (this.opponentCharGradeTxt?.active) {
-      this.opponentCharGradeTxt.setText(def.grade).setColor(def.gradeColor);
+    if (this.opponentCharGradeTxt?.active) this.opponentCharGradeTxt.setText('');
+    // 등급 이미지 — 기존 이미지 교체
+    if (this.opponentCharGradeImg?.active) {
+      this.opponentCharGradeImg.destroy();
+      this.opponentCharGradeImg = null;
+    }
+    const oppGradeKey = getGradeImgKey(def.grade);
+    if (oppGradeKey && this.opponentCharNameTxt?.active) {
+      this.opponentCharGradeImg = this.add.image(304, 362, oppGradeKey).setDisplaySize(28, 28).setOrigin(0.5);
+      this.uiGroup.push(this.opponentCharGradeImg);
     }
   }
 

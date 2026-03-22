@@ -19,12 +19,18 @@ export interface CharacterDef {
   specialAbility: string; // 특수 능력 설명 (없으면 '없음')
 }
 
+/** 등급 이미지 텍스처 키 반환. 등급외 → null */
+export function getGradeImgKey(grade: string): string | null {
+  if (grade === '등급외') return null;
+  return `grade_${grade.toLowerCase()}`; // grade_r, grade_sr, grade_ur
+}
+
 export const CHARACTERS: CharacterDef[] = [
   {
     id: 'chibi',
     name: '치비',
-    grade: '등급외',
-    gradeColor: '#aaaaaa',
+    grade: 'R',
+    gradeColor: '#44cc88',
     imageKey: 'chibi_front',
     imagePath: 'assets/players/chibi_front.webp',
     illustKey: 'illust_chibi',
@@ -34,6 +40,36 @@ export const CHARACTERS: CharacterDef[] = [
     basicEffect: '없음',
     specialAbility: '없음',
   },
+  // ── UR등급 ─────────────────────────────────────────────────────────────
+  {
+    id: 'sentinel',
+    name: '센티넬',
+    grade: 'UR',
+    gradeColor: '#ffaa00',
+    imageKey: 'sentinel_front',
+    imagePath: 'assets/players/sentinel_front.webp',
+    illustKey: 'illust_sentinel',
+    illustPath: 'assets/illustrations/sentinel.webp',
+    videoKey: 'vid_sentinel',
+    videoPath: 'assets/vids/sentinel.mp4',
+    basicEffect: SENTINEL_DESC.basicEffect,
+    specialAbility: SENTINEL_DESC.specialAbility,
+  },
+  {
+    id: 'legacy',
+    name: '레거시',
+    grade: 'UR',
+    gradeColor: '#ffaa00',
+    imageKey: 'legacy_front',
+    imagePath: 'assets/players/legacy_front.webp',
+    illustKey: 'illust_legacy',
+    illustPath: 'assets/illustrations/legacy.webp',
+    videoKey: 'vid_legacy',
+    videoPath: 'assets/vids/legacy.mp4',
+    basicEffect: LEGACY_DESC.basicEffect,
+    specialAbility: LEGACY_DESC.specialAbility,
+  },
+  // ── SR등급 ─────────────────────────────────────────────────────────────
   {
     id: 'hacker',
     name: '루트',
@@ -238,35 +274,6 @@ export const CHARACTERS: CharacterDef[] = [
     illustPath: 'assets/illustrations/index.webp',
     basicEffect: '특수 똥 수집 시 +1점 추가',
     specialAbility: '없음',
-  },
-  // ── UR등급 ─────────────────────────────────────────────────────────────
-  {
-    id: 'sentinel',
-    name: '센티넬',
-    grade: 'UR',
-    gradeColor: '#ffaa00',
-    imageKey: 'sentinel_front',
-    imagePath: 'assets/players/sentinel_front.webp',
-    illustKey: 'illust_sentinel',
-    illustPath: 'assets/illustrations/sentinel.webp',
-    videoKey: 'vid_sentinel',
-    videoPath: 'assets/vids/sentinel.mp4',
-    basicEffect: SENTINEL_DESC.basicEffect,
-    specialAbility: SENTINEL_DESC.specialAbility,
-  },
-  {
-    id: 'legacy',
-    name: '레거시',
-    grade: 'UR',
-    gradeColor: '#ffaa00',
-    imageKey: 'legacy_front',
-    imagePath: 'assets/players/legacy_front.webp',
-    illustKey: 'illust_legacy',
-    illustPath: 'assets/illustrations/legacy.webp',
-    videoKey: 'vid_legacy',
-    videoPath: 'assets/vids/legacy.mp4',
-    basicEffect: LEGACY_DESC.basicEffect,
-    specialAbility: LEGACY_DESC.specialAbility,
   },
 ];
 

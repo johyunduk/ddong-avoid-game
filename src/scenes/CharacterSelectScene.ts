@@ -6,6 +6,7 @@ import {
   setSelectedCharacter,
   getDuplicateCount,
   getAwakeningLevel,
+  getGradeImgKey,
   type CharacterDef,
 } from '../utils/character';
 import {
@@ -123,6 +124,10 @@ export default class CharacterSelectScene extends BaseScene {
         this.load.image(wp.bgKey, wp.bgPath);
       }
     }
+    // 등급 이미지
+    if (!this.textures.exists('grade_r'))  this.load.image('grade_r',  'assets/character_ranks/r.png');
+    if (!this.textures.exists('grade_sr')) this.load.image('grade_sr', 'assets/character_ranks/sr.png');
+    if (!this.textures.exists('grade_ur')) this.load.image('grade_ur', 'assets/character_ranks/ur.png');
   }
 
   create() {
@@ -636,14 +641,12 @@ export default class CharacterSelectScene extends BaseScene {
     }
 
     // 등급 배지
-    const badge = this.add.text(x + CARD_W / 2 - 2, y - CARD_H / 2 + 2, char.grade, {
-      fontSize: '9px',
-      color: char.gradeColor,
-      fontStyle: 'bold',
-      backgroundColor: '#000000cc',
-      padding: { x: 3, y: 1 },
-    }).setOrigin(1, 0);
-    this.cardsContainer.add(badge);
+    const gradeImgKey = getGradeImgKey(char.grade);
+    if (gradeImgKey) {
+      const badge = this.add.image(x - CARD_W / 2 + 2, y - CARD_H / 2 + 2, gradeImgKey)
+        .setDisplaySize(26, 26).setOrigin(0, 0).setDepth(5);
+      this.cardsContainer.add(badge);
+    }
 
     // 각성 코어 (등급외 제외, 보유 캐릭터만) — 공유 coresGfx에 직접 그림
     if (isOwned && char.grade !== '등급외') {
@@ -772,11 +775,11 @@ export default class CharacterSelectScene extends BaseScene {
     panel.add(sprite);
 
     // 등급 배지
-    const gradeBadge = this.add.text(74, 492, def.grade, {
-      fontSize: '12px', color: def.gradeColor, fontStyle: 'bold',
-      stroke: '#000000', strokeThickness: 4,
-    });
-    panel.add(gradeBadge);
+    const gradeImgKey2 = getGradeImgKey(def.grade);
+    if (gradeImgKey2) {
+      const gradeBadge = this.add.image(74, 492, gradeImgKey2).setDisplaySize(28, 28).setOrigin(0.5);
+      panel.add(gradeBadge);
+    }
 
     // 캐릭터 이름 (크게)
     const nameText = this.add.text(74, 510, def.name, {
@@ -967,11 +970,11 @@ export default class CharacterSelectScene extends BaseScene {
     const sprite = this.add.image(52, cardTop + 24, def.imageKey).setDisplaySize(38, 52);
     panel.add(sprite);
 
-    const badge = this.add.text(82, cardTop + 8, def.grade, {
-      fontSize: '11px', color: def.gradeColor, fontStyle: 'bold',
-      stroke: '#000000', strokeThickness: 3,
-    });
-    panel.add(badge);
+    const gradeImgKey3 = getGradeImgKey(def.grade);
+    if (gradeImgKey3) {
+      const badge = this.add.image(82, cardTop + 8, gradeImgKey3).setDisplaySize(24, 24).setOrigin(0.5, 0);
+      panel.add(badge);
+    }
 
     const name = this.add.text(82, cardTop + 24, def.name, {
       fontSize: '17px', color: '#ffffff', fontStyle: 'bold',
