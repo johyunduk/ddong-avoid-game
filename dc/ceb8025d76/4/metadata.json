@@ -1,0 +1,45 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "dcceb8025d76",
+  "session_id": "55a7a05c-d94f-4e3b-9c6d-e5974fb49a57",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-22T07:42:40.160663Z",
+  "branch": "dev",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "src/utils/matchmaking.ts",
+    "supabase/functions/battle-leaderboard-top/index.ts",
+    "supabase/migrations/20260322_matchmaking_queue.sql",
+    "src/scenes/BattleGameScene.ts",
+    "src/scenes/BattleLeaderboardScene.ts",
+    "src/scenes/BattleMatchScene.ts",
+    "src/types/BattleTypes.ts",
+    "src/utils/battleChannel.ts",
+    "src/utils/battleLeaderboard.ts",
+    "supabase/functions/battle-result-submit/index.ts",
+    "supabase/migrations/20260322_friendly_records.sql",
+    "src/scenes/BattleResultScene.ts",
+    "src/scenes/ModeSelectScene.ts"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "aa7da447413c",
+  "checkpoint_transcript_start": 170,
+  "transcript_lines_at_start": 170,
+  "token_usage": {
+    "input_tokens": 51,
+    "cache_creation_tokens": 107511,
+    "cache_read_tokens": 1434836,
+    "output_tokens": 9072,
+    "api_call_count": 34
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-22T07:42:39.689464Z",
+    "agent_lines": 881,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 881,
+    "agent_percentage": 100
+  },
+  "transcript_path": ".claude/projects/-Users-johyunduk-Projects-ddong-avoid-game/55a7a05c-d94f-4e3b-9c6d-e5974fb49a57.jsonl"
+}
