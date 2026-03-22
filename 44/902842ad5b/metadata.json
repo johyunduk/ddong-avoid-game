@@ -1,0 +1,29 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "44902842ad5b",
+  "strategy": "manual-commit",
+  "branch": "dev",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src/utils/battleTier.ts",
+    "supabase/functions/battle-leaderboard-top/index.ts",
+    "supabase/functions/battle-result-submit/index.ts",
+    "supabase/migrations/20260322_battle_rating_start_zero.sql"
+  ],
+  "sessions": [
+    {
+      "metadata": "/44/902842ad5b/0/metadata.json",
+      "transcript": "/44/902842ad5b/0/full.jsonl",
+      "context": "/44/902842ad5b/0/context.md",
+      "content_hash": "/44/902842ad5b/0/content_hash.txt",
+      "prompt": "/44/902842ad5b/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 3114,
+    "cache_creation_tokens": 480925,
+    "cache_read_tokens": 11174560,
+    "output_tokens": 60407,
+    "api_call_count": 131
+  }
+}
