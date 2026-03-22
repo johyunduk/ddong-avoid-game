@@ -11,6 +11,7 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     changes: [
       '1대1 실시간 대전 모드 추가',
       '랭크 매칭 시스템 추가',
+      '피버 타임 주기 변경',
     ],
   },
   {

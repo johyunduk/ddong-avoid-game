@@ -8,8 +8,12 @@
 export interface FeverTimeConfig {
   /** 첫 피버 타임 발동 점수 */
   firstTriggerScore: number;
-  /** 반복 간격 (점수 단위) */
-  repeatInterval: number;
+  /** 기본 반복 간격 (점수 단위) */
+  baseInterval: number;
+  /** 간격 증가량 (점수 단위) */
+  intervalIncrement: number;
+  /** 몇 회마다 간격 증가 */
+  intervalIncreaseEvery: number;
   /** 지속 시간 (밀리초) */
   duration: number;
   /** 피버 타임 중 일반 똥 생성 개수 */
@@ -33,15 +37,18 @@ export interface FeverTimeConfig {
  * 피버 타임 기본 설정
  *
  * @example
- * // 300점에서 첫 피버 타임 발동
- * // 이후 1600, 2900, 4200점... (1300점 간격)
+ * // 250점에서 첫 피버 타임 발동
+ * // 이후 간격: 1200, 1200, 1300, 1300, 1400, 1400... (2회마다 100씩 증가)
+ * // → 250, 1450, 2650, 3950, 5250, 6650, 8050...
  * // 4.5초간 지속
  * // 일반 똥 2개 + 금똥/다이아똥 8개 생성
  * // 낙하 속도 1.2배 빠름
  */
 export const FEVER_TIME_CONFIG: FeverTimeConfig = {
-  firstTriggerScore: 300,
-  repeatInterval: 1300,
+  firstTriggerScore: 250,
+  baseInterval: 1200,
+  intervalIncrement: 100,
+  intervalIncreaseEvery: 3,
   duration: 4500,
   normalPoopCount: 2,
   bonusPoopCount: 8,

@@ -873,20 +873,22 @@ export default class GameScene extends BaseScene {
   private checkFeverTime(score: number) {
     if (score < FEVER_TIME_CONFIG.firstTriggerScore) return;
 
-    // 첫 피버 타임 또는 반복 간격 체크
-    let nextFeverScore: number;
-    const secondTrigger = FEVER_TIME_CONFIG.firstTriggerScore + FEVER_TIME_CONFIG.repeatInterval;
-
-    if (score < secondTrigger) {
-      nextFeverScore = FEVER_TIME_CONFIG.firstTriggerScore;
-    } else {
-      const feverIndex = Math.floor((score - FEVER_TIME_CONFIG.firstTriggerScore) / FEVER_TIME_CONFIG.repeatInterval);
-      nextFeverScore = FEVER_TIME_CONFIG.firstTriggerScore + feverIndex * FEVER_TIME_CONFIG.repeatInterval;
+    // 가변 간격으로 피버 트리거 점수 누산
+    // gap(k) = baseInterval + floor((k-1) / intervalIncreaseEvery) * intervalIncrement
+    const { firstTriggerScore, baseInterval, intervalIncrement, intervalIncreaseEvery } = FEVER_TIME_CONFIG;
+    let feverScore = firstTriggerScore;
+    let lastFeverScore = feverScore;
+    let k = 1;
+    while (feverScore <= score) {
+      lastFeverScore = feverScore;
+      const gap = baseInterval + Math.floor((k - 1) / intervalIncreaseEvery) * intervalIncrement;
+      feverScore += gap;
+      k++;
     }
 
-    if (score >= nextFeverScore && this.lastFeverTimeScore < nextFeverScore) {
+    if (this.lastFeverTimeScore < lastFeverScore) {
       this.startFeverTime();
-      this.lastFeverTimeScore = nextFeverScore;
+      this.lastFeverTimeScore = lastFeverScore;
     }
   }
 
