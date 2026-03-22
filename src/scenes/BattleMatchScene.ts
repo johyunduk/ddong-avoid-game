@@ -6,8 +6,16 @@ import {
   getOwnedCharacters,
   getCharacterDef,
   setSelectedCharacter,
+  type CharacterDef,
 } from '../utils/character';
 import { supabase } from '../utils/supabase';
+import {
+  getAuthUserId,
+  findOrCreateMatch,
+  pollMatchStatus,
+  cancelMatchmaking,
+  type MatchResult,
+} from '../utils/matchmaking';
 import BaseScene from './BaseScene';
 
 /**
@@ -29,6 +37,24 @@ export default class BattleMatchScene extends BaseScene {
   private userId: string = '';
   private opponentUserId: string = '';
   private autoRematch: { code: string; isHost: boolean; userId: string } | null = null;
+  private lastPickTime: number = 0;
+
+  // 랭크 매칭
+  private isRanked: boolean = false;
+  private isMatchmaking: boolean = false;
+  private rankMatchPollTimer: ReturnType<typeof setInterval> | null = null;
+
+  // 상대 캐릭터 (READY 수신 후 채워짐)
+  private opponentCharId: string = '';
+  private opponentCharImg: Phaser.GameObjects.Image | null = null;
+  private opponentCharNameTxt: Phaser.GameObjects.Text | null = null;
+  private opponentCharGradeTxt: Phaser.GameObjects.Text | null = null;
+  private opponentCharPlaceholder: Phaser.GameObjects.Text | null = null;
+
+  // 메뉴 캐릭터 선택 UI refs (화살표 누를 때 직접 업데이트)
+  private menuCharImg: Phaser.GameObjects.Image | null = null;
+  private menuCharNameTxt: Phaser.GameObjects.Text | null = null;
+  private menuCharGradeTxt: Phaser.GameObjects.Text | null = null;
 
   // 상태별 UI 요소를 그룹으로 관리 → 상태 전환 시 일괄 파괴
   private uiGroup: Phaser.GameObjects.GameObject[] = [];
@@ -40,6 +66,16 @@ export default class BattleMatchScene extends BaseScene {
 
   init(data: { autoRematch?: { code: string; isHost: boolean; userId: string } }) {
     this.autoRematch = data.autoRematch ?? null;
+    this.isRanked = false;
+    this.isMatchmaking = false;
+    this.opponentCharId = '';
+    this.opponentCharImg = null;
+    this.opponentCharNameTxt = null;
+    this.opponentCharGradeTxt = null;
+    this.opponentCharPlaceholder = null;
+    this.menuCharImg = null;
+    this.menuCharNameTxt = null;
+    this.menuCharGradeTxt = null;
   }
 
   preload() {
@@ -64,23 +100,23 @@ export default class BattleMatchScene extends BaseScene {
     this.add.rectangle(200, 300, 400, 600, 0x000000, 0.6);
 
     // 타이틀 (모든 상태에서 유지)
-    this.add.text(200, 60, '⚔️ 대전 모드', {
-      fontSize: '32px',
+    this.add.text(200, 45, '⚔️ 대전 모드', {
+      fontSize: '34px',
       color: '#ff4444',
       fontStyle: 'bold',
       stroke: '#000',
-      strokeThickness: 5,
+      strokeThickness: 6,
     }).setOrigin(0.5);
 
-    this.add.text(200, 105, 'EXTREME 난이도로 1대1 대전!', {
-      fontSize: '14px',
-      color: '#cccccc',
+    this.add.text(200, 85, 'EXTREME 난이도로 1대1 대전!', {
+      fontSize: '15px',
+      color: '#dddddd',
       stroke: '#000',
       strokeThickness: 3,
     }).setOrigin(0.5);
 
     // 뒤로가기 (모든 상태에서 유지)
-    const backBtn = this.add.text(200, 560, '← 메인 메뉴', {
+    const backBtn = this.add.text(200, 558, '← 메인 메뉴', {
       fontSize: '18px',
       color: '#aaaaaa',
       stroke: '#000',
@@ -133,39 +169,252 @@ export default class BattleMatchScene extends BaseScene {
   private showMenu() {
     this.clearUI();
 
-    // 방 만들기 버튼
-    const createBtn = this.ui(this.add.rectangle(200, 250, 260, 70, 0xe74c3c));
-    createBtn.setStrokeStyle(3, 0xffffff);
-    this.ui(this.add.text(200, 250, '🏠 방 만들기', {
-      fontSize: '22px', color: '#ffffff', fontStyle: 'bold',
+    // ── 캐릭터 선택 섹션 ──────────────────────────────────────────
+    this.ownedChars = getOwnedCharacters();
+    const currentId = getSafeSelectedCharacter();
+    this.charPickIdx = Math.max(0, this.ownedChars.indexOf(currentId));
+    const def = getCharacterDef(this.ownedChars[this.charPickIdx]);
+
+    this.ui(this.add.text(200, 110, '출전 캐릭터', {
+      fontSize: '13px', color: '#999999',
+      stroke: '#000', strokeThickness: 2,
+    }).setOrigin(0.5));
+
+    // 초상화 박스
+    this.ui(this.add.rectangle(200, 170, 92, 96, 0x000000, 0.55)
+      .setStrokeStyle(2, 0x666666));
+
+    // 캐릭터 이미지
+    if (this.textures.exists(def.imageKey)) {
+      this.menuCharImg = this.ui(this.add.image(200, 170, def.imageKey).setDisplaySize(60, 84));
+    } else {
+      this.menuCharImg = null;
+    }
+
+    // 좌우 화살표
+    if (this.ownedChars.length > 1) {
+      const leftArrow = this.ui(this.add.text(135, 170, '◀', {
+        fontSize: '26px', color: '#ffffff', stroke: '#000', strokeThickness: 4,
+      }).setOrigin(0.5).setInteractive({ useHandCursor: true }));
+      leftArrow.on('pointerover', () => (leftArrow as Phaser.GameObjects.Text).setColor('#FFD700'));
+      leftArrow.on('pointerout', () => (leftArrow as Phaser.GameObjects.Text).setColor('#ffffff'));
+      leftArrow.on('pointerdown', () => this.pickMenuCharacter(-1));
+
+      const rightArrow = this.ui(this.add.text(265, 170, '▶', {
+        fontSize: '26px', color: '#ffffff', stroke: '#000', strokeThickness: 4,
+      }).setOrigin(0.5).setInteractive({ useHandCursor: true }));
+      rightArrow.on('pointerover', () => (rightArrow as Phaser.GameObjects.Text).setColor('#FFD700'));
+      rightArrow.on('pointerout', () => (rightArrow as Phaser.GameObjects.Text).setColor('#ffffff'));
+      rightArrow.on('pointerdown', () => this.pickMenuCharacter(1));
+    }
+
+    this.menuCharNameTxt = this.ui(this.add.text(200, 230, def.name, {
+      fontSize: '18px', color: '#ffffff', fontStyle: 'bold',
+      stroke: '#000', strokeThickness: 3,
+    }).setOrigin(0.5));
+    this.menuCharGradeTxt = this.ui(this.add.text(200, 252, def.grade, {
+      fontSize: '13px', color: def.gradeColor,
+      stroke: '#000', strokeThickness: 3,
+    }).setOrigin(0.5));
+
+    // ── 랭크 매칭 버튼 ───────────────────────────────────────────
+    const rankedBtn = this.ui(this.add.rectangle(200, 305, 300, 60, 0x7a5c00));
+    rankedBtn.setStrokeStyle(3, 0xFFD700);
+    this.ui(this.add.text(200, 305, '🎖️ 랭크 매칭', {
+      fontSize: '24px', color: '#FFD700', fontStyle: 'bold',
+      stroke: '#000', strokeThickness: 4,
+    }).setOrigin(0.5));
+    rankedBtn.setInteractive({ useHandCursor: true });
+    rankedBtn.on('pointerover', () => rankedBtn.setFillStyle(0xa07a00));
+    rankedBtn.on('pointerout', () => rankedBtn.setFillStyle(0x7a5c00));
+    rankedBtn.on('pointerdown', () => this.startRankedMatchmaking());
+
+    // ── 친선전 버튼 (좌우 나란히) ─────────────────────────────────
+    this.ui(this.add.text(200, 370, '─── 친선전 (RP 없음) ───', {
+      fontSize: '13px', color: '#888888',
+      stroke: '#000', strokeThickness: 2,
+    }).setOrigin(0.5));
+
+    const createBtn = this.ui(this.add.rectangle(100, 415, 175, 52, 0xc0392b));
+    createBtn.setStrokeStyle(2, 0xffffff);
+    this.ui(this.add.text(100, 415, '🏠 방 만들기', {
+      fontSize: '17px', color: '#ffffff', fontStyle: 'bold',
+      stroke: '#000', strokeThickness: 3,
     }).setOrigin(0.5));
     createBtn.setInteractive({ useHandCursor: true });
-    createBtn.on('pointerover', () => createBtn.setAlpha(0.8));
-    createBtn.on('pointerout', () => createBtn.setAlpha(1));
+    createBtn.on('pointerover', () => createBtn.setFillStyle(0xe74c3c));
+    createBtn.on('pointerout', () => createBtn.setFillStyle(0xc0392b));
     createBtn.on('pointerdown', () => this.handleCreateRoom());
 
-    // 방 참가 버튼
-    const joinBtn = this.ui(this.add.rectangle(200, 350, 260, 70, 0x3498db));
-    joinBtn.setStrokeStyle(3, 0xffffff);
-    this.ui(this.add.text(200, 350, '🔗 방 참가', {
-      fontSize: '22px', color: '#ffffff', fontStyle: 'bold',
+    const joinBtn = this.ui(this.add.rectangle(300, 415, 175, 52, 0x2471a3));
+    joinBtn.setStrokeStyle(2, 0xffffff);
+    this.ui(this.add.text(300, 415, '🔗 방 참가', {
+      fontSize: '17px', color: '#ffffff', fontStyle: 'bold',
+      stroke: '#000', strokeThickness: 3,
     }).setOrigin(0.5));
     joinBtn.setInteractive({ useHandCursor: true });
-    joinBtn.on('pointerover', () => joinBtn.setAlpha(0.8));
-    joinBtn.on('pointerout', () => joinBtn.setAlpha(1));
+    joinBtn.on('pointerover', () => joinBtn.setFillStyle(0x3498db));
+    joinBtn.on('pointerout', () => joinBtn.setFillStyle(0x2471a3));
     joinBtn.on('pointerdown', () => this.showJoinInput());
 
-    // 전적 보기 링크
-    const rankLink = this.ui(this.add.text(200, 450, '🏆 전적 보기', {
-      fontSize: '16px', color: '#aaaaaa',
+    const rankLink = this.ui(this.add.text(200, 483, '🏆 전적 보기', {
+      fontSize: '16px', color: '#bbbbbb',
       stroke: '#000', strokeThickness: 3,
     }).setOrigin(0.5).setInteractive({ useHandCursor: true }));
     rankLink.on('pointerover', () => (rankLink as Phaser.GameObjects.Text).setColor('#FFD700'));
-    rankLink.on('pointerout', () => (rankLink as Phaser.GameObjects.Text).setColor('#aaaaaa'));
+    rankLink.on('pointerout', () => (rankLink as Phaser.GameObjects.Text).setColor('#bbbbbb'));
     rankLink.on('pointerdown', () => this.scene.start('BattleLeaderboardScene'));
   }
 
-  // ─── 공통 상태 리셋 ──────────────────────────────────────────
+  /** 메뉴에서 캐릭터 순환 선택 (UI를 재빌드하지 않고 직접 업데이트) */
+  private pickMenuCharacter(delta: number) {
+    const now = Date.now();
+    if (now - this.lastPickTime < 250) return;
+    this.lastPickTime = now;
+    this.charPickIdx = (this.charPickIdx + delta + this.ownedChars.length) % this.ownedChars.length;
+    setSelectedCharacter(this.ownedChars[this.charPickIdx]);
+    const def = getCharacterDef(this.ownedChars[this.charPickIdx]);
+
+    if (this.menuCharImg?.active) {
+      if (this.textures.exists(def.imageKey)) {
+        this.menuCharImg.setTexture(def.imageKey).setDisplaySize(60, 84);
+      }
+    }
+    if (this.menuCharNameTxt?.active) this.menuCharNameTxt.setText(def.name);
+    if (this.menuCharGradeTxt?.active) {
+      this.menuCharGradeTxt.setText(def.grade).setColor(def.gradeColor);
+    }
+  }
+
+  // ─── 랭크 매칭 ─────────────────────────────────────────────────
+
+  private async startRankedMatchmaking() {
+    if (this.isMatchmaking || this.battleChannel) return;
+    this.isMatchmaking = true;
+
+    try {
+      // 인증 보장 (익명 로그인 포함)
+      this.userId = await getAuthUserId();
+    } catch {
+      this.isMatchmaking = false;
+      return;
+    }
+
+    this.showRankedWaiting();
+
+    let result: MatchResult;
+    try {
+      result = await findOrCreateMatch(this.userId);
+    } catch {
+      this.isMatchmaking = false;
+      this.showMenu();
+      return;
+    }
+
+    if (result.status === 'matched') {
+      this.onRankedMatchFound(result);
+      return;
+    }
+
+    // 대기 중 — 2초마다 폴링
+    this.rankMatchPollTimer = setInterval(async () => {
+      try {
+        const poll = await pollMatchStatus(this.userId);
+        if (poll?.status === 'matched') {
+          this.clearRankedPoll();
+          this.onRankedMatchFound(poll);
+        }
+      } catch {
+        // 네트워크 오류 시 계속 재시도
+      }
+    }, 2000);
+  }
+
+  private showRankedWaiting() {
+    this.clearUI();
+
+    this.ui(this.add.text(200, 225, '🎖️ 랭크 매칭 중...', {
+      fontSize: '26px', color: '#FFD700', fontStyle: 'bold',
+      stroke: '#000', strokeThickness: 5,
+    }).setOrigin(0.5));
+
+    this.ui(this.add.text(200, 278, '상대를 찾고 있습니다', {
+      fontSize: '16px', color: '#cccccc',
+      stroke: '#000', strokeThickness: 3,
+    }).setOrigin(0.5));
+
+    let elapsed = 0;
+    const elapsedText = this.ui(this.add.text(200, 315, '0초 경과', {
+      fontSize: '15px', color: '#999999',
+      stroke: '#000', strokeThickness: 3,
+    }).setOrigin(0.5));
+
+    this.uiTimers.push(this.time.addEvent({
+      delay: 1000, loop: true,
+      callback: () => {
+        elapsed++;
+        if (!elapsedText.active) return;
+        const m = Math.floor(elapsed / 60);
+        const s = elapsed % 60;
+        const timeStr = m > 0 ? `${m}:${s.toString().padStart(2, '0')}` : `${s}초`;
+        (elapsedText as Phaser.GameObjects.Text).setText(`${timeStr} 경과`);
+      },
+    }));
+
+    // 취소 버튼
+    const cancelBtn = this.ui(this.add.rectangle(200, 410, 220, 54, 0x444444));
+    cancelBtn.setStrokeStyle(2, 0xaaaaaa);
+    this.ui(this.add.text(200, 410, '취소', {
+      fontSize: '20px', color: '#ffffff',
+      stroke: '#000', strokeThickness: 3,
+    }).setOrigin(0.5));
+    cancelBtn.setInteractive({ useHandCursor: true });
+    cancelBtn.on('pointerover', () => cancelBtn.setFillStyle(0x666666));
+    cancelBtn.on('pointerout', () => cancelBtn.setFillStyle(0x444444));
+    cancelBtn.on('pointerdown', () => this.cancelRankedMatchmaking());
+  }
+
+  private async cancelRankedMatchmaking() {
+    this.clearRankedPoll();
+    this.isMatchmaking = false;
+    await cancelMatchmaking(this.userId).catch(() => {});
+    this.showMenu();
+  }
+
+  private clearRankedPoll() {
+    if (this.rankMatchPollTimer) {
+      clearInterval(this.rankMatchPollTimer);
+      this.rankMatchPollTimer = null;
+    }
+  }
+
+  private async onRankedMatchFound(match: MatchResult) {
+    if (!match.roomCode || match.isHost === null || !match.opponentId) return;
+    this.isRanked = true;
+    this.isMatchmaking = false;
+
+    // 대기열에서 제거 (fire-and-forget)
+    cancelMatchmaking(this.userId).catch(() => {});
+
+    await this.handleRankedJoin(match.roomCode, match.isHost, match.opponentId);
+  }
+
+  private async handleRankedJoin(roomCode: string, asHost: boolean, opponentId: string) {
+    if (this.battleChannel) return;
+    this.opponentUserId = opponentId;
+    this.resetMatchState(asHost);
+
+    this.clearUI();
+    this.ui(this.add.text(200, 290, '✅ 매칭 완료!', {
+      fontSize: '24px', color: '#00ff88', fontStyle: 'bold',
+      stroke: '#000', strokeThickness: 4,
+    }).setOrigin(0.5));
+
+    await this.initChannel(roomCode, asHost);
+    this.time.delayedCall(800, () => this.showReadyButton());
+  }
+
+  // ─── 공통 상태 리셋 + 채널 초기화 ──────────────────────────────
 
   /** handleCreateRoom / doJoin / handleAutoRematch 공통 초기화 */
   private resetMatchState(asHost: boolean) {
@@ -176,6 +425,19 @@ export default class BattleMatchScene extends BaseScene {
     this.readyButtonShown = false;
     this.ownedChars = [];
     this.charPickIdx = 0;
+  }
+
+  /** 채널 생성 → 리스너 등록 → 구독 → 캐릭터 알림 (4곳 공통 흐름) */
+  private async initChannel(code: string, asHost: boolean): Promise<void> {
+    this.battleChannel = new BattleChannel();
+    if (asHost) {
+      this.battleChannel.createRoom(code, this.userId);
+    } else {
+      this.battleChannel.joinRoom(code, this.userId);
+    }
+    this.setupChannelListeners();
+    await this.battleChannel.subscribe();
+    this.battleChannel.sendCharAnnounce(getSafeSelectedCharacter());
   }
 
   // ─── 재도전 자동 입장 ─────────────────────────────────────────
@@ -191,17 +453,7 @@ export default class BattleMatchScene extends BaseScene {
       stroke: '#000', strokeThickness: 4,
     }).setOrigin(0.5));
 
-    this.battleChannel = new BattleChannel();
-    if (isHost) {
-      this.battleChannel.createRoom(code, this.userId);
-    } else {
-      this.battleChannel.joinRoom(code, this.userId);
-    }
-
-    this.setupChannelListeners();
-    await this.battleChannel.subscribe();
-
-    // 구독 완료 → 준비 버튼 바로 표시
+    await this.initChannel(code, isHost);
     this.showReadyButton();
   }
 
@@ -212,11 +464,7 @@ export default class BattleMatchScene extends BaseScene {
     this.resetMatchState(true);
 
     const code = BattleChannel.generateRoomCode();
-    this.battleChannel = new BattleChannel();
-    this.battleChannel.createRoom(code, this.userId);
-    this.setupChannelListeners();
-    await this.battleChannel.subscribe();
-
+    await this.initChannel(code, true);
     this.showCreateWaiting(code);
   }
 
@@ -311,10 +559,11 @@ export default class BattleMatchScene extends BaseScene {
     }).setOrigin(0.5));
 
     // 참가 버튼
-    const joinBtn = this.ui(this.add.rectangle(200, 390, 200, 55, 0x27ae60));
+    const joinBtn = this.ui(this.add.rectangle(200, 390, 220, 55, 0x1e8449));
     joinBtn.setStrokeStyle(3, 0xffffff);
-    this.ui(this.add.text(200, 390, '참가', {
+    this.ui(this.add.text(200, 390, '참가하기', {
       fontSize: '22px', color: '#ffffff', fontStyle: 'bold',
+      stroke: '#000', strokeThickness: 3,
     }).setOrigin(0.5));
     joinBtn.setInteractive({ useHandCursor: true });
     joinBtn.on('pointerover', () => joinBtn.setAlpha(0.8));
@@ -329,11 +578,7 @@ export default class BattleMatchScene extends BaseScene {
 
       errorText.setText('');
       this.resetMatchState(false);
-      this.battleChannel = new BattleChannel();
-      this.battleChannel.joinRoom(code, this.userId);
-      this.setupChannelListeners();
-      await this.battleChannel.subscribe();
-
+      await this.initChannel(code, false);
       this.showReadyButton();
     };
 
@@ -344,11 +589,11 @@ export default class BattleMatchScene extends BaseScene {
 
     // 뒤로 (메뉴로)
     const backText = this.ui(this.add.text(200, 470, '← 돌아가기', {
-      fontSize: '16px', color: '#888888',
+      fontSize: '16px', color: '#aaaaaa',
       stroke: '#000', strokeThickness: 3,
     }).setOrigin(0.5).setInteractive({ useHandCursor: true }));
-    backText.on('pointerover', () => backText.setColor('#ffffff'));
-    backText.on('pointerout', () => backText.setColor('#888888'));
+    backText.on('pointerover', () => (backText as Phaser.GameObjects.Text).setColor('#ffffff'));
+    backText.on('pointerout', () => (backText as Phaser.GameObjects.Text).setColor('#aaaaaa'));
     backText.on('pointerdown', () => this.showMenu());
   }
 
@@ -359,80 +604,121 @@ export default class BattleMatchScene extends BaseScene {
     this.readyButtonShown = true;
     this.clearUI();
 
-    // 보유 캐릭터 목록 및 현재 선택 동기화
-    // pickCharacter()에서 재호출 시에는 charPickIdx가 이미 갱신된 상태이므로
-    // indexOf로 재계산하면 정확히 선택된 캐릭터를 가리킴
-    this.ownedChars = getOwnedCharacters();
-    const currentId = getSafeSelectedCharacter();
-    this.charPickIdx = Math.max(0, this.ownedChars.indexOf(currentId));
+    const myDef = getCharacterDef(getSafeSelectedCharacter());
 
-    const def = getCharacterDef(this.ownedChars[this.charPickIdx]);
-
-    this.ui(this.add.text(200, 155, '상대방과 연결되었습니다!', {
-      fontSize: '18px', color: '#00ff88',
+    // 모드 배지
+    const modeLabel = this.isRanked ? '🎖️ 랭크 매칭' : '🏠 친선전';
+    const modeLabelColor = this.isRanked ? '#FFD700' : '#aaaaaa';
+    this.ui(this.add.text(200, 155, modeLabel, {
+      fontSize: '14px', color: modeLabelColor,
       stroke: '#000', strokeThickness: 3,
     }).setOrigin(0.5));
 
-    // 캐릭터 초상화 배경
-    this.ui(this.add.rectangle(200, 248, 130, 128, 0x000000, 0.5)
-      .setStrokeStyle(2, 0x555555));
-
-    // 캐릭터 front 이미지
-    if (this.textures.exists(def.imageKey)) {
-      this.ui(this.add.image(200, 248, def.imageKey).setDisplaySize(72, 100));
-    }
-
-    // 좌우 화살표 (보유 캐릭터 2개 이상일 때)
-    if (this.ownedChars.length > 1) {
-      const leftBtn = this.ui(this.add.text(108, 248, '◀', {
-        fontSize: '26px', color: '#ffffff',
-        stroke: '#000', strokeThickness: 3,
-      }).setOrigin(0.5).setInteractive({ useHandCursor: true }));
-      leftBtn.on('pointerover', () => leftBtn.setColor('#FFD700'));
-      leftBtn.on('pointerout', () => leftBtn.setColor('#ffffff'));
-      leftBtn.on('pointerdown', () => this.pickCharacter(-1));
-
-      const rightBtn = this.ui(this.add.text(292, 248, '▶', {
-        fontSize: '26px', color: '#ffffff',
-        stroke: '#000', strokeThickness: 3,
-      }).setOrigin(0.5).setInteractive({ useHandCursor: true }));
-      rightBtn.on('pointerover', () => rightBtn.setColor('#FFD700'));
-      rightBtn.on('pointerout', () => rightBtn.setColor('#ffffff'));
-      rightBtn.on('pointerdown', () => this.pickCharacter(1));
-    }
-
-    // 캐릭터 이름 + 등급
-    this.ui(this.add.text(200, 320, def.name, {
-      fontSize: '20px', color: '#ffffff', fontStyle: 'bold',
+    this.ui(this.add.text(200, 180, '상대방과 연결되었습니다!', {
+      fontSize: '18px', color: '#00ff88', fontStyle: 'bold',
       stroke: '#000', strokeThickness: 3,
     }).setOrigin(0.5));
-    this.ui(this.add.text(200, 344, def.grade, {
-      fontSize: '13px', color: def.gradeColor,
-      stroke: '#000', strokeThickness: 2,
+
+    // ── VS 레이블 ─────────────────────────────────────────────────
+    this.ui(this.add.text(96, 215, '나', {
+      fontSize: '15px', color: '#aaaaaa', stroke: '#000', strokeThickness: 3,
+    }).setOrigin(0.5));
+    this.ui(this.add.text(200, 213, 'VS', {
+      fontSize: '22px', color: '#ff4444', fontStyle: 'bold',
+      stroke: '#000', strokeThickness: 5,
+    }).setOrigin(0.5));
+    this.ui(this.add.text(304, 215, '상대', {
+      fontSize: '15px', color: '#aaaaaa', stroke: '#000', strokeThickness: 3,
     }).setOrigin(0.5));
 
-    this.ui(this.add.text(200, 378, '준비가 되면 버튼을 눌러주세요', {
-      fontSize: '13px', color: '#cccccc',
-      stroke: '#000', strokeThickness: 2,
+    // ── 내 캐릭터 (왼쪽) ─────────────────────────────────────────
+    this.ui(this.add.rectangle(96, 280, 92, 104, 0x000033, 0.7)
+      .setStrokeStyle(2, 0x4466ff));
+    if (this.textures.exists(myDef.imageKey)) {
+      this.ui(this.add.image(96, 280, myDef.imageKey).setDisplaySize(60, 86));
+    }
+    this.ui(this.add.text(96, 342, myDef.name, {
+      fontSize: '14px', color: '#ffffff', fontStyle: 'bold',
+      stroke: '#000', strokeThickness: 3,
+    }).setOrigin(0.5));
+    this.ui(this.add.text(96, 362, myDef.grade, {
+      fontSize: '13px', color: myDef.gradeColor, stroke: '#000', strokeThickness: 2,
     }).setOrigin(0.5));
 
-    const readyBtn = this.ui(this.add.rectangle(200, 425, 260, 65, 0x27ae60));
+    // ── 상대 캐릭터 (오른쪽) ─────────────────────────────────────
+    this.ui(this.add.rectangle(304, 280, 92, 104, 0x330000, 0.7)
+      .setStrokeStyle(2, 0xff4444));
+
+    // 항상 플레이스홀더 먼저 생성 — updateOpponentCharDisplay가 이 객체를 기준으로 업데이트
+    this.opponentCharPlaceholder = this.ui(this.add.text(304, 280, '?', {
+      fontSize: '42px', color: '#555555', stroke: '#000', strokeThickness: 3,
+    }).setOrigin(0.5));
+    this.opponentCharNameTxt = this.ui(this.add.text(304, 342, '대기 중...', {
+      fontSize: '14px', color: '#666666', stroke: '#000', strokeThickness: 2,
+    }).setOrigin(0.5));
+    this.opponentCharGradeTxt = this.ui(this.add.text(304, 362, '', {
+      fontSize: '13px', color: '#666666',
+    }).setOrigin(0.5));
+
+    // 이미 캐릭터를 알고 있으면 즉시 표시
+    if (this.opponentCharId) {
+      this.showOpponentCharacter(this.opponentCharId);
+    }
+
+    // ── 준비 버튼 ─────────────────────────────────────────────────
+    this.ui(this.add.text(200, 400, '캐릭터를 확인하고 준비하세요', {
+      fontSize: '13px', color: '#bbbbbb', stroke: '#000', strokeThickness: 2,
+    }).setOrigin(0.5));
+
+    const readyBtn = this.ui(this.add.rectangle(200, 440, 270, 64, 0x1e8449));
     readyBtn.setStrokeStyle(3, 0xffffff);
-    this.ui(this.add.text(200, 425, '✅ 준비완료', {
+    this.ui(this.add.text(200, 440, '✅ 준비완료', {
       fontSize: '24px', color: '#ffffff', fontStyle: 'bold',
+      stroke: '#000', strokeThickness: 4,
     }).setOrigin(0.5));
     readyBtn.setInteractive({ useHandCursor: true });
-    readyBtn.on('pointerover', () => readyBtn.setAlpha(0.8));
-    readyBtn.on('pointerout', () => readyBtn.setAlpha(1));
+    readyBtn.on('pointerover', () => readyBtn.setFillStyle(0x27ae60));
+    readyBtn.on('pointerout', () => readyBtn.setFillStyle(0x1e8449));
     readyBtn.on('pointerdown', () => this.doSendReady());
   }
 
-  /** 보유 캐릭터 순환 선택 */
-  private pickCharacter(delta: number) {
-    this.charPickIdx = (this.charPickIdx + delta + this.ownedChars.length) % this.ownedChars.length;
-    setSelectedCharacter(this.ownedChars[this.charPickIdx]);
-    this.readyButtonShown = false;
-    this.showReadyButton();
+  /** 상대 캐릭터 정보 표시 (READY 수신 시 또는 ready 화면 진입 시 호출) */
+  private showOpponentCharacter(charId: string) {
+    try {
+      const def = getCharacterDef(charId);
+      if (this.textures.exists(def.imageKey)) {
+        this.updateOpponentCharDisplay(def);
+      } else {
+        this.load.image(def.imageKey, def.imagePath);
+        this.load.once('complete', () => {
+          if (this.scene.isActive()) this.updateOpponentCharDisplay(def);
+        });
+        this.load.start();
+      }
+    } catch {
+      // 알 수 없는 캐릭터 ID 무시
+    }
+  }
+
+  private updateOpponentCharDisplay(def: CharacterDef) {
+    // 플레이스홀더 제거
+    if (this.opponentCharPlaceholder?.active) {
+      this.opponentCharPlaceholder.destroy();
+      this.opponentCharPlaceholder = null;
+    }
+    // 이미지
+    if (this.opponentCharImg?.active) {
+      this.opponentCharImg.setTexture(def.imageKey).setDisplaySize(58, 82);
+    } else if (this.opponentCharNameTxt?.active) {
+      // 아직 이미지가 없고 UI는 살아있음 → 새로 생성
+      this.opponentCharImg = this.add.image(304, 280, def.imageKey).setDisplaySize(58, 82);
+      this.uiGroup.push(this.opponentCharImg);
+    }
+    // 이름 / 등급
+    if (this.opponentCharNameTxt?.active) this.opponentCharNameTxt.setText(def.name).setColor('#ffffff');
+    if (this.opponentCharGradeTxt?.active) {
+      this.opponentCharGradeTxt.setText(def.grade).setColor(def.gradeColor);
+    }
   }
 
   // ─── 채널 이벤트 ───────────────────────────────────────────────
@@ -440,9 +726,10 @@ export default class BattleMatchScene extends BaseScene {
   private setupChannelListeners() {
     if (!this.battleChannel) return;
 
-    // Presence join — 호스트일 때 상대 입장 감지 → 준비완료 버튼 표시
-    // (readyButtonShown 가드로 중복 렌더링 방지)
+    // Presence join — 상대 입장 감지 → 내 캐릭터 재알림 + 호스트는 준비 버튼 표시
     this.battleChannel.onPresenceJoin(() => {
+      // 늦게 접속한 상대가 내 캐릭터를 모를 수 있으므로 재전송
+      this.battleChannel?.sendCharAnnounce(getSafeSelectedCharacter());
       if (this.isHost) this.showReadyButton();
     });
 
@@ -454,11 +741,22 @@ export default class BattleMatchScene extends BaseScene {
       }).setOrigin(0.5));
     });
 
-    // READY 수신 = 상대 준비 완료
-    // 호스트가 presence join보다 READY를 먼저 받는 경우(레이스) → ready 버튼을 보여줘야 진행 가능
+    // CHAR_ANNOUNCE: 채널 연결 직후 상대 캐릭터 자동 수신
+    this.battleChannel.onEvent(BattleEvent.CHAR_ANNOUNCE, (payload) => {
+      if (payload.characterId && payload.characterId !== this.opponentCharId) {
+        this.opponentCharId = payload.characterId;
+        if (this.readyButtonShown) this.showOpponentCharacter(payload.characterId);
+      }
+    });
+
+    // READY 수신 = 상대 준비 완료 + 캐릭터 정보
     this.battleChannel.onEvent(BattleEvent.READY, (payload: ReadyPayload) => {
       this.opponentReady = true;
       if (payload.userId) this.opponentUserId = payload.userId;
+      if (payload.characterId) {
+        this.opponentCharId = payload.characterId;
+        if (this.readyButtonShown) this.showOpponentCharacter(payload.characterId);
+      }
       if (this.isHost) this.showReadyButton();
       this.checkBothReady();
     });
@@ -560,7 +858,7 @@ export default class BattleMatchScene extends BaseScene {
       this.battleChannel = null;
     }
 
-    this.scene.start('BattleGameScene', { roomCode, userId, opponentId: this.opponentUserId });
+    this.scene.start('BattleGameScene', { roomCode, userId, opponentId: this.opponentUserId, isRanked: this.isRanked });
   }
 
   private removeInput() {
@@ -572,7 +870,12 @@ export default class BattleMatchScene extends BaseScene {
 
   private async goBack() {
     this.clearReadyRetry();
+    this.clearRankedPoll();
     this.removeInput();
+    if (this.isMatchmaking) {
+      this.isMatchmaking = false;
+      cancelMatchmaking(this.userId).catch(() => {});
+    }
     if (this.battleChannel) {
       await this.battleChannel.destroy();
       this.battleChannel = null;
@@ -582,7 +885,12 @@ export default class BattleMatchScene extends BaseScene {
 
   shutdown() {
     this.clearReadyRetry();
+    this.clearRankedPoll();
     this.removeInput();
+    if (this.isMatchmaking) {
+      this.isMatchmaking = false;
+      cancelMatchmaking(this.userId).catch(() => {});
+    }
     if (this.battleChannel) {
       this.battleChannel.destroyImmediate();
       this.battleChannel = null;

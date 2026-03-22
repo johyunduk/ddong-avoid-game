@@ -2,6 +2,7 @@ import { type RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 import {
   BattleEvent,
+  type CharAnnouncePayload,
   type ReadyPayload,
   type GameStartPayload,
   type SendPoopPayload,
@@ -12,6 +13,7 @@ import {
 } from '../types/BattleTypes';
 
 type BattlePayloadMap = {
+  [BattleEvent.CHAR_ANNOUNCE]: CharAnnouncePayload;
   [BattleEvent.READY]: ReadyPayload;
   [BattleEvent.GAME_START]: GameStartPayload;
   [BattleEvent.SEND_POOP]: SendPoopPayload;
@@ -148,6 +150,10 @@ export class BattleChannel {
   }
 
   // ── 이벤트 송신 메서드 ──
+
+  sendCharAnnounce(characterId: string): void {
+    this.broadcast(BattleEvent.CHAR_ANNOUNCE, { userId: this.userId, characterId });
+  }
 
   sendReady(characterId: string): void {
     this.broadcast(BattleEvent.READY, { userId: this.userId, characterId });

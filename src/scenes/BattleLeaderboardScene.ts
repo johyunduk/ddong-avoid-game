@@ -13,6 +13,9 @@ export default class BattleLeaderboardScene extends BaseScene {
     totalWins: number;
     winRate: number;
     ratingPoints: number;
+    friendlyWins: number;
+    friendlyLosses: number;
+    friendlyDisconnects: number;
   } | null = null;
   private currentUserId: string | null = null;
 
@@ -62,12 +65,13 @@ export default class BattleLeaderboardScene extends BaseScene {
     backBtn.on('pointerout', () => backBtn.setColor('#aaaaaa'));
     backBtn.on('pointerdown', () => this.scene.start('BattleMatchScene'));
 
-    // 유저 ID 백그라운드 조회
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user?.id) this.currentUserId = data.user.id;
-    });
-
-    this.loadLeaderboard();
+    // currentUserId를 먼저 확인한 뒤 리더보드 로드 (race condition 방지)
+    supabase.auth.getUser()
+      .then(({ data }) => {
+        if (data.user?.id) this.currentUserId = data.user.id;
+        return this.loadLeaderboard();
+      })
+      .catch(() => this.loadLeaderboard());
   }
 
   private async loadLeaderboard() {
@@ -107,32 +111,39 @@ export default class BattleLeaderboardScene extends BaseScene {
 
     // 내 전적 요약
     if (this.currentUserRank) {
+      const { winRate, rank, ratingPoints, friendlyWins, friendlyLosses, friendlyDisconnects } = this.currentUserRank;
       const myEntry = this.leaderboardEntries.find(e => e.userId === this.currentUserId);
       const wins = myEntry?.wins ?? 0;
       const losses = myEntry?.losses ?? 0;
       const disconnects = myEntry?.disconnects ?? 0;
-      const { winRate, rank, ratingPoints } = this.currentUserRank;
       const myTier = getBattleTier(ratingPoints);
 
-      const summaryText = this.add.text(
-        200, 85,
-        `${myTier.icon} ${myTier.name} | ${ratingPoints} RP | ${wins}승 ${disconnects}부 ${losses}패 | ${winRate}% (${rank}위)`,
-        {
-          fontSize: '12px',
-          color: '#FFD700',
-          stroke: '#000',
-          strokeThickness: 3,
-        },
+      // 랭크 전적
+      const rankSummary = this.add.text(
+        200, 78,
+        `${myTier.icon} ${myTier.name} | ${ratingPoints} RP | 랭크: ${wins}승 ${disconnects}부 ${losses}패 | ${winRate}% (${rank}위)`,
+        { fontSize: '11px', color: '#FFD700', stroke: '#000', strokeThickness: 3 },
       ).setOrigin(0.5);
-      this.leaderboardTexts.push(summaryText);
+      this.leaderboardTexts.push(rankSummary);
+
+      // 친선전 전적
+      const fw = friendlyWins ?? 0;
+      const fl = friendlyLosses ?? 0;
+      const fd = friendlyDisconnects ?? 0;
+      const friendlySummary = this.add.text(
+        200, 97,
+        `친선전: ${fw}승 ${fd}부 ${fl}패`,
+        { fontSize: '11px', color: '#88ccff', stroke: '#000', strokeThickness: 3 },
+      ).setOrigin(0.5);
+      this.leaderboardTexts.push(friendlySummary);
     }
 
     // 구분선
-    const divider = this.add.rectangle(200, 110, 360, 2, 0x555555);
+    const divider = this.add.rectangle(200, 115, 360, 2, 0x555555);
     this.leaderboardTexts.push(divider);
 
     // 헤더
-    const header = this.add.text(200, 128, '순위  이름   티어      RP    승률', {
+    const header = this.add.text(200, 133, '순위  이름   티어      RP    승률', {
       fontSize: '13px',
       color: '#ffff00',
       fontStyle: 'bold',
@@ -154,7 +165,7 @@ export default class BattleLeaderboardScene extends BaseScene {
       return;
     }
 
-    const startY = 155;
+    const startY = 160;
     const lineH = 31;
 
     this.leaderboardEntries.forEach((entry, index) => {

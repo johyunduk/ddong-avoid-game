@@ -27,28 +27,31 @@ Deno.serve(async (req: Request) => {
 
     // JWT에서 사용자 인증 (선택적 — 비로그인 시에도 랭킹 조회 가능)
     const authHeader = req.headers.get('Authorization');
-    let currentUserId: string | null = null;
-
-    if (authHeader) {
-      const supabaseUser = createClient(
-        Deno.env.get('SUPABASE_URL') ?? '',
-        Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-        { global: { headers: { Authorization: authHeader } } },
-      );
-      const { data: { user } } = await supabaseUser.auth.getUser();
-      currentUserId = user?.id ?? null;
-    }
 
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
     );
 
-    // 랭킹 뷰 조회 (rating_points DESC 정렬)
-    const { data: leaderboard, error: leaderboardError } = await supabaseAdmin
-      .from('battle_leaderboard_view')
-      .select('user_id, rating_points, wins, losses, disconnects, win_rate, initials')
-      .limit(safeLimit);
+    // auth 조회 + 랭킹 뷰 조회 병렬 실행
+    const authPromise = authHeader
+      ? createClient(
+          Deno.env.get('SUPABASE_URL') ?? '',
+          Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+          { global: { headers: { Authorization: authHeader } } },
+        ).auth.getUser()
+      : Promise.resolve({ data: { user: null } });
+
+    const [authResult, leaderboardResult] = await Promise.all([
+      authPromise,
+      supabaseAdmin
+        .from('battle_leaderboard_view')
+        .select('user_id, rating_points, wins, losses, disconnects, win_rate, initials')
+        .limit(safeLimit),
+    ]);
+
+    const currentUserId: string | null = authResult.data.user?.id ?? null;
+    const { data: leaderboard, error: leaderboardError } = leaderboardResult;
 
     if (leaderboardError) {
       console.error('Leaderboard query error:', leaderboardError);
@@ -83,48 +86,50 @@ Deno.serve(async (req: Request) => {
       totalWins: number;
       winRate: number;
       ratingPoints: number;
+      friendlyWins: number;
+      friendlyLosses: number;
+      friendlyDisconnects: number;
     } | null = null;
 
     if (currentUserId) {
-      const myInTop = entries.find(e => e.userId === currentUserId);
+      // 항상 battle_records 단건 조회 (친선전 컬럼 포함)
+      const { data: userRecord } = await supabaseAdmin
+        .from('battle_records')
+        .select('wins, losses, disconnects, rating_points, friendly_wins, friendly_losses, friendly_disconnects')
+        .eq('user_id', currentUserId)
+        .maybeSingle();
 
-      if (myInTop) {
-        // 상위 N명 안 → 뷰 데이터 재사용 (추가 DB 조회 불필요)
-        currentUserRank = {
-          rank: myInTop.rank,
-          totalWins: myInTop.totalWins,
-          winRate: myInTop.winRate,
-          ratingPoints: myInTop.ratingPoints,
-        };
-      } else {
-        // 상위 N명 밖 → battle_records 단건 조회 + RPC로 rank 계산
-        const { data: userRecord } = await supabaseAdmin
-          .from('battle_records')
-          .select('wins, losses, disconnects, rating_points')
-          .eq('user_id', currentUserId)
-          .maybeSingle();
+      if (userRecord) {
+        const rp: number = (userRecord as { rating_points: number }).rating_points ?? 0;
+        const totalWins = (userRecord.wins as number) + (userRecord.disconnects as number);
+        const myInTop = entries.find(e => e.userId === currentUserId);
+        let rank: number;
 
-        if (userRecord) {
-          const rp: number = (userRecord as { rating_points: number }).rating_points ?? 0;
-          const totalWins = (userRecord.wins as number) + (userRecord.disconnects as number);
+        if (myInTop) {
+          rank = myInTop.rank;
+        } else {
           const { data: rankResult } = await supabaseAdmin
             .rpc('get_battle_rank_by_rp', { p_rp: rp });
-
-          const totalGames =
-            (userRecord.wins as number) +
-            (userRecord.losses as number) +
-            (userRecord.disconnects as number);
-          const winRate = totalGames === 0
-            ? 0
-            : Math.round(totalWins / totalGames * 1000) / 10;
-
-          currentUserRank = {
-            rank: Number(rankResult ?? 0) + 1,
-            totalWins,
-            winRate,
-            ratingPoints: rp,
-          };
+          rank = Number(rankResult ?? 0) + 1;
         }
+
+        const totalGames =
+          (userRecord.wins as number) +
+          (userRecord.losses as number) +
+          (userRecord.disconnects as number);
+        const winRate = totalGames === 0
+          ? 0
+          : Math.round(totalWins / totalGames * 1000) / 10;
+
+        currentUserRank = {
+          rank,
+          totalWins,
+          winRate,
+          ratingPoints: rp,
+          friendlyWins: (userRecord.friendly_wins as number) ?? 0,
+          friendlyLosses: (userRecord.friendly_losses as number) ?? 0,
+          friendlyDisconnects: (userRecord.friendly_disconnects as number) ?? 0,
+        };
       }
     }
 

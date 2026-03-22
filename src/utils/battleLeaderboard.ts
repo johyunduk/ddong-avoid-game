@@ -23,6 +23,9 @@ export interface SubmitBattleResultResponse {
   wins: number;
   losses: number;
   disconnects: number;
+  friendlyWins: number;
+  friendlyLosses: number;
+  friendlyDisconnects: number;
   winRate: number;
   rank: number;
   tierName: string;
@@ -37,6 +40,9 @@ export interface BattleLeaderboardResponse {
     totalWins: number;
     winRate: number;
     ratingPoints: number;
+    friendlyWins: number;
+    friendlyLosses: number;
+    friendlyDisconnects: number;
   } | null;
 }
 
@@ -57,11 +63,12 @@ async function getOrCreateSession() {
 export async function submitBattleResult(
   result: BattleResult,
   opponentId?: string,
+  isRanked: boolean = true,
 ): Promise<SubmitBattleResultResponse> {
   const session = await getOrCreateSession();
 
   const { data, error } = await supabase.functions.invoke('battle-result-submit', {
-    body: { result, opponentId },
+    body: { result, opponentId, isRanked },
     headers: session?.access_token
       ? { Authorization: `Bearer ${session.access_token}` }
       : undefined,

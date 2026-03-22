@@ -24,6 +24,7 @@ interface BattleInitData {
   roomCode?: string;
   userId?: string;
   opponentId?: string;
+  isRanked?: boolean;
 }
 
 /**
@@ -37,6 +38,7 @@ export default class BattleGameScene extends GameScene {
   private roomCode: string = '';
   private battleUserId: string = '';
   private opponentId: string = '';
+  private isRanked: boolean = false;
   private opponentScore: number = 0;
   private opponentScoreText!: Phaser.GameObjects.Text;
   private scoreUpdateTimer!: Phaser.Time.TimerEvent;
@@ -54,6 +56,7 @@ export default class BattleGameScene extends GameScene {
     this.roomCode = data.roomCode ?? '';
     this.battleUserId = data.userId ?? '';
     this.opponentId = data.opponentId ?? '';
+    this.isRanked = data.isRanked ?? false;
     this.opponentScore = 0;
     this.survivalMs = 0;
     this.battleFinished = false;
@@ -369,6 +372,7 @@ export default class BattleGameScene extends GameScene {
         roomCode: this.roomCode,
         userId: this.battleUserId,
         opponentId: this.opponentId,
+        isRanked: this.isRanked,
       });
     });
   }

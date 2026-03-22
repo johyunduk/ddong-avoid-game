@@ -36,21 +36,16 @@ export default class ModeSelectScene extends BaseScene {
       strokeThickness: 4
     }).setOrigin(0.5);
 
-    // 게임 모드 버튼 (클래식만)
-    GAME_MODES.forEach((modeConfig: GameModeConfig, index: number) => {
-      const y = 242 + (index * 90);
-      this.createModeButton(modeConfig, 200, y);
-    });
-
-    // 대전 모드 버튼 (gap ≈ 18px)
-    this.createBattleButton(200, 330);
+    // 클래식 + 대전 모드 버튼 (같은 줄, 캐릭터/랭킹 버튼과 동일 크기)
+    this.createModeButton(GAME_MODES[0], 120, 250);
+    this.createBattleButton(280, 250);
 
     // 뽑기 버튼 (SKOR 잔액 포함)
-    this.createGachaButton(200, 420);
+    this.createGachaButton(200, 345);
 
     // 하단 버튼 행: 캐릭터 선택 + 랭킹
-    this.createCharacterButton(120, 505);
-    this.createLeaderboardButton(280, 505);
+    this.createCharacterButton(120, 435);
+    this.createLeaderboardButton(280, 435);
 
     // 릴리즈 노트 링크
     this.createReleaseNotesLink();
@@ -72,27 +67,19 @@ export default class ModeSelectScene extends BaseScene {
   }
 
   private createModeButton(modeConfig: GameModeConfig, x: number, y: number) {
-    const button = this.add.rectangle(x, y, 300, 70, 0xffffff, 1);
-    button.setStrokeStyle(4, 0x000000);
+    const button = this.add.rectangle(x, y, 140, 70, 0xffffff, 1);
+    button.setStrokeStyle(3, 0x000000);
 
-    const titleText = this.add.text(x, y - 12, modeConfig.name, {
-      fontSize: '24px',
+    const titleText = this.add.text(x, y, modeConfig.name, {
+      fontSize: '18px',
       color: '#000',
       fontStyle: 'bold'
     }).setOrigin(0.5);
 
-    const description = this.add.text(x, y + 18, modeConfig.description, {
-      fontSize: '14px',
-      color: '#333',
-      align: 'center'
-    }).setOrigin(0.5);
-
     button.setInteractive({ useHandCursor: true });
     titleText.setInteractive({ useHandCursor: true });
-    description.setInteractive({ useHandCursor: true });
 
-    const elements = [button, titleText, description];
-    elements.forEach(element => {
+    [button, titleText].forEach(element => {
       element.on('pointerover', () => button.setFillStyle(0xffff99));
       element.on('pointerout',  () => button.setFillStyle(0xffffff));
       element.on('pointerdown', () => this.startGame(modeConfig.mode));
@@ -100,26 +87,19 @@ export default class ModeSelectScene extends BaseScene {
   }
 
   private createBattleButton(x: number, y: number) {
-    const button = this.add.rectangle(x, y, 300, 70, 0xe74c3c, 1);
+    const button = this.add.rectangle(x, y, 140, 70, 0xe74c3c, 1);
     button.setStrokeStyle(3, 0xc0392b);
 
-    const titleText = this.add.text(x, y - 8, '⚔️ 대전 모드', {
-      fontSize: '22px',
+    const titleText = this.add.text(x, y, '⚔️ 대전 모드', {
+      fontSize: '18px',
       color: '#ffffff',
       fontStyle: 'bold',
     }).setOrigin(0.5);
 
-    const descText = this.add.text(x, y + 20, '친구와 1대1 실시간 대전!', {
-      fontSize: '12px',
-      color: '#ffcccc',
-    }).setOrigin(0.5);
-
     button.setInteractive({ useHandCursor: true });
     titleText.setInteractive({ useHandCursor: true });
-    descText.setInteractive({ useHandCursor: true });
 
-    const elements = [button, titleText, descText];
-    elements.forEach(el => {
+    [button, titleText].forEach(el => {
       el.on('pointerover', () => {
         button.setFillStyle(0xff6b6b);
         button.setStrokeStyle(3, 0xff4444);
@@ -175,7 +155,7 @@ export default class ModeSelectScene extends BaseScene {
   }
 
   private createCharacterButton(x: number, y: number) {
-    const button = this.add.rectangle(x, y, 140, 50, 0x2a2a2a, 1);
+    const button = this.add.rectangle(x, y, 140, 70, 0x2a2a2a, 1);
     button.setStrokeStyle(2, 0x888888);
 
     this.add.text(x, y, '🧬 캐릭터', {
@@ -194,7 +174,7 @@ export default class ModeSelectScene extends BaseScene {
   }
 
   private createLeaderboardButton(x: number, y: number) {
-    const button = this.add.rectangle(x, y, 140, 50, 0x4a90e2, 1);
+    const button = this.add.rectangle(x, y, 140, 70, 0x4a90e2, 1);
     button.setStrokeStyle(2, 0x2e5c8a);
 
     this.add.text(x, y, '🏆 랭킹', {
@@ -213,7 +193,7 @@ export default class ModeSelectScene extends BaseScene {
   }
 
   private createReleaseNotesLink() {
-    const text = this.add.text(200, 560, '📋 릴리즈 노트', {
+    const text = this.add.text(200, 520, '📋 릴리즈 노트', {
       fontSize: '15px',
       color: '#cccccc',
       stroke: '#000',

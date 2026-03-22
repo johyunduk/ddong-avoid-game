@@ -9,6 +9,7 @@ interface BattleResultData {
   roomCode: string;
   userId?: string;
   opponentId?: string;
+  isRanked?: boolean;
 }
 
 /**
@@ -23,6 +24,7 @@ export default class BattleResultScene extends BaseScene {
   private roomCode: string = '';
   private userId: string = '';
   private opponentId: string = '';
+  private isRanked: boolean = false;
   private resultSubmitted: boolean = false;
 
   // RP UI
@@ -51,6 +53,7 @@ export default class BattleResultScene extends BaseScene {
     this.roomCode = data.roomCode ?? '';
     this.userId = data.userId ?? '';
     this.opponentId = data.opponentId ?? '';
+    this.isRanked = data.isRanked ?? false;
     this.resultSubmitted = false;
     this.myRematchRequested = false;
     this.opponentRematchRequested = false;
@@ -87,52 +90,83 @@ export default class BattleResultScene extends BaseScene {
       strokeThickness: 6,
     }).setOrigin(0.5);
 
-    // 티어/RP 영역 (전적 제출 후 채워짐)
-    this.tierText = this.add.text(200, 130, '전적 기록 중...', {
-      fontSize: '15px',
-      color: '#aaaaaa',
-      stroke: '#000',
-      strokeThickness: 3,
-    }).setOrigin(0.5);
+    // 티어/RP 영역
+    if (this.isRanked) {
+      // 랭크전: 전적 제출 후 채워짐
+      this.tierText = this.add.text(200, 130, '전적 기록 중...', {
+        fontSize: '15px',
+        color: '#aaaaaa',
+        stroke: '#000',
+        strokeThickness: 3,
+      }).setOrigin(0.5);
 
-    this.rpDeltaText = this.add.text(200, 155, '', {
-      fontSize: '18px',
-      fontStyle: 'bold',
-      stroke: '#000',
-      strokeThickness: 4,
-    }).setOrigin(0.5);
+      this.rpDeltaText = this.add.text(200, 155, '', {
+        fontSize: '18px',
+        fontStyle: 'bold',
+        stroke: '#000',
+        strokeThickness: 4,
+      }).setOrigin(0.5);
 
-    this.currentRpText = this.add.text(200, 183, '', {
-      fontSize: '13px',
-      color: '#888888',
-      stroke: '#000',
-      strokeThickness: 3,
-    }).setOrigin(0.5);
+      this.currentRpText = this.add.text(200, 183, '', {
+        fontSize: '13px',
+        color: '#888888',
+        stroke: '#000',
+        strokeThickness: 3,
+      }).setOrigin(0.5);
+    } else {
+      // 친선전: RP 변동 없음 표시
+      this.add.text(200, 148, '친선전 — RP 변동 없음', {
+        fontSize: '14px',
+        color: '#666666',
+        stroke: '#000',
+        strokeThickness: 3,
+      }).setOrigin(0.5);
+    }
 
-    // 재도전 상태 텍스트 (상대 의사 / 이탈 알림)
-    this.rematchStatusText = this.add.text(200, 250, '', {
-      fontSize: '14px',
-      color: '#FFD700',
-      fontStyle: 'bold',
-      stroke: '#000',
-      strokeThickness: 3,
-      align: 'center',
-    }).setOrigin(0.5);
+    if (this.isRanked) {
+      // 랭크전: 재대전 없음 → 새 매칭 버튼
+      const newMatchBtn = this.add.rectangle(200, 310, 250, 50, 0x7a5c00);
+      newMatchBtn.setStrokeStyle(3, 0xFFD700);
+      this.add.text(200, 310, '🎖️ 새 랭크 매칭', {
+        fontSize: '20px',
+        color: '#FFD700',
+        fontStyle: 'bold',
+      }).setOrigin(0.5);
+      newMatchBtn.setInteractive({ useHandCursor: true });
+      newMatchBtn.on('pointerover', () => newMatchBtn.setAlpha(0.8));
+      newMatchBtn.on('pointerout', () => newMatchBtn.setAlpha(1));
+      newMatchBtn.on('pointerdown', () => {
+        if (this.rematchChannel) {
+          this.rematchChannel.destroyImmediate();
+          this.rematchChannel = null;
+        }
+        this.scene.start('BattleMatchScene');
+      });
+    } else {
+      // 친선전: 기존 재대전 버튼 유지
+      this.rematchStatusText = this.add.text(200, 250, '', {
+        fontSize: '14px',
+        color: '#FFD700',
+        fontStyle: 'bold',
+        stroke: '#000',
+        strokeThickness: 3,
+        align: 'center',
+      }).setOrigin(0.5);
 
-    // 재대전 버튼
-    this.rematchBtn = this.add.rectangle(200, 310, 250, 50, 0xe74c3c);
-    this.rematchBtn.setStrokeStyle(3, 0xffffff);
-    this.rematchBtnLabel = this.add.text(200, 310, '⚔️ 재대전', {
-      fontSize: '20px',
-      color: '#ffffff',
-      fontStyle: 'bold',
-    }).setOrigin(0.5);
-    this.rematchBtn.setInteractive({ useHandCursor: true });
-    this.rematchBtn.on('pointerover', () => {
-      if (!this.myRematchRequested) this.rematchBtn.setAlpha(0.8);
-    });
-    this.rematchBtn.on('pointerout', () => this.rematchBtn.setAlpha(1));
-    this.rematchBtn.on('pointerdown', () => this.handleRematchClick());
+      this.rematchBtn = this.add.rectangle(200, 310, 250, 50, 0xe74c3c);
+      this.rematchBtn.setStrokeStyle(3, 0xffffff);
+      this.rematchBtnLabel = this.add.text(200, 310, '⚔️ 재대전', {
+        fontSize: '20px',
+        color: '#ffffff',
+        fontStyle: 'bold',
+      }).setOrigin(0.5);
+      this.rematchBtn.setInteractive({ useHandCursor: true });
+      this.rematchBtn.on('pointerover', () => {
+        if (!this.myRematchRequested) this.rematchBtn.setAlpha(0.8);
+      });
+      this.rematchBtn.on('pointerout', () => this.rematchBtn.setAlpha(1));
+      this.rematchBtn.on('pointerdown', () => this.handleRematchClick());
+    }
 
     // 전적 보기 버튼
     const rankBtn = this.add.rectangle(200, 380, 250, 50, 0x27ae60);
@@ -158,19 +192,19 @@ export default class BattleResultScene extends BaseScene {
     menuLink.on('pointerout', () => menuLink.setColor('#aaaaaa'));
     menuLink.on('pointerdown', () => this.navigateAway('ModeSelectScene'));
 
-    // 전적 제출
+    // 전적 제출 (랭크전 + 친선전 모두)
     if (!this.resultSubmitted) {
       this.resultSubmitted = true;
-      submitBattleResult(this.result, this.opponentId)
-        .then((res) => this.showRpResult(res))
+      submitBattleResult(this.result, this.opponentId, this.isRanked)
+        .then((res) => { if (this.isRanked) this.showRpResult(res); })
         .catch((err) => {
           console.warn('Battle result submit failed:', err);
           if (this.tierText?.active) this.tierText.setText('전적 기록 실패');
         });
     }
 
-    // 재도전 채널 연결 (roomCode가 있을 때만)
-    if (this.roomCode) {
+    // 재도전 채널 연결 (친선전만 — 랭크전은 재대전 없음)
+    if (this.roomCode && !this.isRanked) {
       this.initRematchChannel();
     }
   }

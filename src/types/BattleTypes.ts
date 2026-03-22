@@ -34,6 +34,11 @@ export interface GameOverPayload {
   finalScore: number;
 }
 
+export interface CharAnnouncePayload {
+  userId: string;
+  characterId: string;
+}
+
 /** userId만 포함하는 공통 payload (REMATCH_REQUEST, RESULT_LEAVE 공유) */
 export interface UserIdPayload {
   userId: string;
@@ -44,6 +49,7 @@ export type ResultLeavePayload = UserIdPayload;
 
 // Broadcast 이벤트 이름
 export const BattleEvent = {
+  CHAR_ANNOUNCE: 'char-announce',
   READY: 'ready',
   GAME_START: 'game-start',
   SEND_POOP: 'send-poop',

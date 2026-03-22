@@ -65,7 +65,7 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { result, opponentId } = await req.json();
+    const { result, opponentId, isRanked = true } = await req.json();
 
     // 입력 검증
     if (!VALID_RESULTS.includes(result)) {
@@ -123,13 +123,15 @@ Deno.serve(async (req: Request) => {
     const myRp: number = (myResp.data as { rating_points: number } | null)?.rating_points ?? 0;
     const opponentRp: number = (oppResp.data as { rating_points: number } | null)?.rating_points ?? 0;
 
-    // RP 변동 계산
-    const pointDelta = calcPointDelta(result as BattleResultValue, myRp, opponentRp);
+    // RP 변동 계산 (친선전은 0 고정)
+    const pointDelta = isRanked
+      ? calcPointDelta(result as BattleResultValue, myRp, opponentRp)
+      : 0;
 
-    // 원자적 upsert + RP 갱신 (DB 함수)
+    // 원자적 upsert + 전적 갱신 (DB 함수)
     const { data: records, error: rpcError } = await supabaseAdmin.rpc(
       'submit_battle_record',
-      { p_user_id: user.id, p_result: result, p_point_delta: pointDelta },
+      { p_user_id: user.id, p_result: result, p_point_delta: pointDelta, p_is_ranked: isRanked },
     );
 
     if (rpcError || !records || records.length === 0) {
@@ -146,25 +148,28 @@ Deno.serve(async (req: Request) => {
     }
 
     const record = records[0];
-    const newRp: number = record.rating_points;
-    const totalGames = record.wins + record.losses + record.disconnects;
-    const winRate = totalGames === 0
+    const newRp: number = record.out_rating_points;
+    const totalRankedGames = record.out_wins + record.out_losses + record.out_disconnects;
+    const winRate = totalRankedGames === 0
       ? 0
-      : Math.round((record.wins + record.disconnects) / totalGames * 1000) / 10;
+      : Math.round((record.out_wins + record.out_disconnects) / totalRankedGames * 1000) / 10;
 
     const tierIdx = getTierIndex(newRp);
 
     return new Response(
       JSON.stringify({
         success: true,
-        previousRp: myRp,   // 클램핑 전 이전 RP (티어 변화 감지에 사용)
+        previousRp: myRp,
         ratingPoints: newRp,
         pointDelta,
-        wins: record.wins,
-        losses: record.losses,
-        disconnects: record.disconnects,
+        wins: record.out_wins,
+        losses: record.out_losses,
+        disconnects: record.out_disconnects,
+        friendlyWins: record.out_friendly_wins,
+        friendlyLosses: record.out_friendly_losses,
+        friendlyDisconnects: record.out_friendly_disconnects,
         winRate,
-        rank: Number(record.rank),
+        rank: Number(record.out_rank),
         tierName: TIER_NAMES[tierIdx],
         tierIcon: TIER_ICONS[tierIdx],
       }),
