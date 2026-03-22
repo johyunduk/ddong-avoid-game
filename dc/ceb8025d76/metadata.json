@@ -1,0 +1,38 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "dcceb8025d76",
+  "strategy": "manual-commit",
+  "branch": "dev",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src/scenes/BattleGameScene.ts",
+    "src/scenes/BattleLeaderboardScene.ts",
+    "src/scenes/BattleMatchScene.ts",
+    "src/scenes/BattleResultScene.ts",
+    "src/scenes/ModeSelectScene.ts",
+    "src/types/BattleTypes.ts",
+    "src/utils/battleChannel.ts",
+    "src/utils/battleLeaderboard.ts",
+    "src/utils/matchmaking.ts",
+    "supabase/functions/battle-leaderboard-top/index.ts",
+    "supabase/functions/battle-result-submit/index.ts",
+    "supabase/migrations/20260322_friendly_records.sql",
+    "supabase/migrations/20260322_matchmaking_queue.sql"
+  ],
+  "sessions": [
+    {
+      "metadata": "/dc/ceb8025d76/0/metadata.json",
+      "transcript": "/dc/ceb8025d76/0/full.jsonl",
+      "context": "/dc/ceb8025d76/0/context.md",
+      "content_hash": "/dc/ceb8025d76/0/content_hash.txt",
+      "prompt": "/dc/ceb8025d76/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 3114,
+    "cache_creation_tokens": 480925,
+    "cache_read_tokens": 11174560,
+    "output_tokens": 60407,
+    "api_call_count": 131
+  }
+}
