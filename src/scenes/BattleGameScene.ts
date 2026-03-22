@@ -47,10 +47,14 @@ export default class BattleGameScene extends GameScene {
   private survivalMs: number = 0;
   private survivalTimerEvent!: Phaser.Time.TimerEvent;
   private survivalText!: Phaser.GameObjects.Text;
+  private pendingPoopSends: number = 0; // 채널 준비 전 수집한 특수 똥 → 연결 후 전송
 
   constructor() {
     super('BattleGameScene');
   }
+
+  // 배틀 모드는 EXTREME 기준보다 똥 1개 적게 생성 (난이도 조정)
+  protected override extraPoopCountReduction(): number { return 1; }
 
   init(data: BattleInitData) {
     this.roomCode = data.roomCode ?? '';
@@ -61,6 +65,7 @@ export default class BattleGameScene extends GameScene {
     this.survivalMs = 0;
     this.battleFinished = false;
     this.channelReady = false;
+    this.pendingPoopSends = 0;
 
     // 부모 init 호출: EXTREME 난이도 고정, BATTLE 모드
     super.init({
@@ -137,6 +142,12 @@ export default class BattleGameScene extends GameScene {
     // 구독 시작
     await this.battleChannel.subscribe();
     this.channelReady = true;
+
+    // 채널 준비 전 수집된 특수 똥 → 지금 전송
+    if (this.pendingPoopSends > 0 && !this.gameOver) {
+      this.battleChannel.sendPoop(this.pendingPoopSends);
+      this.pendingPoopSends = 0;
+    }
 
     // 연결 완료 표시
     if (connectingText?.active) {
@@ -224,9 +235,14 @@ export default class BattleGameScene extends GameScene {
   ) {
     super.handleSpecialCollected(poop, type, baseScore, emoji, color, counterIncrement);
 
-    // 상대에게 일반 똥 1개 전송
-    if (this.battleChannel && this.channelReady && !this.gameOver) {
-      this.battleChannel.sendPoop(1);
+    // 상대에게 일반 똥 1개 전송 (채널 미준비 시 pending 큐에 저장 → 연결 후 플러시)
+    if (!this.gameOver) {
+      if (this.battleChannel && this.channelReady) {
+        this.battleChannel.sendPoop(1);
+      } else {
+        this.pendingPoopSends += 1;
+        return; // 채널 미준비 시 알림 생략
+      }
 
       const sendText = this.add.text(200, 150, '💩→ 상대에게 전송!', {
         fontSize: '16px',

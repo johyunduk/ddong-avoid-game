@@ -648,13 +648,16 @@ export default class GameScene extends BaseScene {
     });
   }
 
+  /** 서브클래스에서 오버라이드해 스폰 개수를 추가로 줄일 수 있음 */
+  protected extraPoopCountReduction(): number { return 0; }
+
   protected spawnPoop() {
     if (this.gameOver) return;
     if (this.ability.isSpawnBlocked()) return;                    // 노이즈 차단
     if (this.ability.overrideSpawnPoop(this.abilityAPI)) return;  // 레거시 금똥 피버
 
-    // 난이도에 따른 개수만큼 생성 (노이즈 특수 능력으로 일회성 감소 가능)
-    const reduction = this.ability.getSpawnCountReduction();
+    // 난이도에 따른 개수만큼 생성 (노이즈 특수 능력 + 서브클래스 추가 감소 가능)
+    const reduction = this.ability.getSpawnCountReduction() + this.extraPoopCountReduction();
     const poopCount = Math.max(1, this.difficultyConfig.poopCount - reduction);
     const fallSpeed = this.difficultyConfig.baseSpeed + (this.difficultyLevel * POOP_CONFIG.normal.speedIncrement);
     for (let i = 0; i < poopCount; i++) {
