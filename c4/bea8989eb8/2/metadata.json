@@ -1,0 +1,31 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "c4bea8989eb8",
+  "session_id": "2c63fd85-8f48-43e7-8325-19f71fba1318",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-22T10:03:40.769457Z",
+  "branch": "dev",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src/utils/battleTier.ts"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "ae31f40c4593",
+  "token_usage": {
+    "input_tokens": 436,
+    "cache_creation_tokens": 822107,
+    "cache_read_tokens": 27783720,
+    "output_tokens": 197083,
+    "api_call_count": 273
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-22T10:03:39.274637Z",
+    "agent_lines": 18,
+    "human_added": 281,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 299,
+    "agent_percentage": 6.0200668896321075
+  },
+  "transcript_path": ".claude/projects/-Users-johyunduk-Projects-ddong-avoid-game/2c63fd85-8f48-43e7-8325-19f71fba1318.jsonl"
+}
