@@ -14,15 +14,14 @@ export interface BattleTierDef {
 
 /**
  * 배틀 티어 구간 정의 (RP 오름차순)
- * 신규 유저 시작 RP: 1000 (⚡ 번개손 구간 하단)
+ * 신규 유저 시작 RP: 1000 (🟡 레거시 구간 하단)
  */
 export const BATTLE_TIERS: readonly BattleTierDef[] = [
-  { name: '똥뉴비',    icon: '💩', minRp: 0,    maxRp: 499,       color: '#8B4513' },
-  { name: '피하기꾼',  icon: '🟤', minRp: 500,  maxRp: 999,       color: '#CD7F32' },
-  { name: '번개손',    icon: '⚡', minRp: 1000, maxRp: 1499,      color: '#C0C0C0' },
-  { name: '금똥전사',  icon: '🥇', minRp: 1500, maxRp: 1999,      color: '#FFD700' },
-  { name: '다이아똥왕', icon: '💎', minRp: 2000, maxRp: 2499,     color: '#00BFFF' },
-  { name: '전설',      icon: '👑', minRp: 2500, maxRp: Infinity,  color: '#FF4500' },
+  { name: '알파',   icon: '🔴', minRp: 0,    maxRp: 499,      color: '#CC3333' },
+  { name: '베타',   icon: '🟠', minRp: 500,  maxRp: 999,      color: '#CC7700' },
+  { name: '레거시', icon: '🟡', minRp: 1000, maxRp: 1499,     color: '#CCCC00' },
+  { name: '마스터', icon: '💎', minRp: 1500, maxRp: 1999,     color: '#00BFFF' },
+  { name: '갓',     icon: '👑', minRp: 2000, maxRp: Infinity, color: '#FF4500' },
 ] as const;
 
 /** RP로 티어 인덱스 반환 (0~5) */

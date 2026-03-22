@@ -20,12 +20,11 @@ const TIERS: TierDef[] = [
   { minRp: 500,  maxRp: 999 },
   { minRp: 1000, maxRp: 1499 },
   { minRp: 1500, maxRp: 1999 },
-  { minRp: 2000, maxRp: 2499 },
-  { minRp: 2500, maxRp: Infinity },
+  { minRp: 2000, maxRp: Infinity },
 ];
 
-const TIER_NAMES = ['똥뉴비', '피하기꾼', '번개손', '금똥전사', '다이아똥왕', '전설'];
-const TIER_ICONS = ['💩', '🟤', '⚡', '🥇', '💎', '👑'];
+const TIER_NAMES = ['알파', '베타', '레거시', '마스터', '갓'];
+const TIER_ICONS = ['🔴', '🟠', '🟡', '💎', '👑'];
 
 function getTierIndex(rp: number): number {
   for (let i = TIERS.length - 1; i >= 0; i--) {
@@ -121,8 +120,8 @@ Deno.serve(async (req: Request) => {
         : Promise.resolve({ data: null }),
     ]);
 
-    const myRp: number = (myResp.data as { rating_points: number } | null)?.rating_points ?? 1000;
-    const opponentRp: number = (oppResp.data as { rating_points: number } | null)?.rating_points ?? 1000;
+    const myRp: number = (myResp.data as { rating_points: number } | null)?.rating_points ?? 0;
+    const opponentRp: number = (oppResp.data as { rating_points: number } | null)?.rating_points ?? 0;
 
     // RP 변동 계산
     const pointDelta = calcPointDelta(result as BattleResultValue, myRp, opponentRp);

@@ -5,9 +5,9 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const TIER_NAMES = ['똥뉴비', '피하기꾼', '번개손', '금똥전사', '다이아똥왕', '전설'];
-const TIER_ICONS = ['💩', '🟤', '⚡', '🥇', '💎', '👑'];
-const TIER_MINS  = [0, 500, 1000, 1500, 2000, 2500];
+const TIER_NAMES = ['알파', '베타', '레거시', '마스터', '갓'];
+const TIER_ICONS = ['🔴', '🟠', '🟡', '💎', '👑'];
+const TIER_MINS  = [0, 500, 1000, 1500, 2000];
 
 function getTierIndex(rp: number): number {
   for (let i = TIER_MINS.length - 1; i >= 0; i--) {
@@ -59,7 +59,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const entries = (leaderboard ?? []).map((entry, index) => {
-      const rp: number = (entry.rating_points as number) ?? 1000;
+      const rp: number = (entry.rating_points as number) ?? 0;
       const tierIdx = getTierIndex(rp);
       return {
         rank: index + 1,
@@ -105,7 +105,7 @@ Deno.serve(async (req: Request) => {
           .maybeSingle();
 
         if (userRecord) {
-          const rp: number = (userRecord as { rating_points: number }).rating_points ?? 1000;
+          const rp: number = (userRecord as { rating_points: number }).rating_points ?? 0;
           const totalWins = (userRecord.wins as number) + (userRecord.disconnects as number);
           const { data: rankResult } = await supabaseAdmin
             .rpc('get_battle_rank_by_rp', { p_rp: rp });
