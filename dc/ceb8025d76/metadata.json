@@ -40,13 +40,20 @@
       "context": "/dc/ceb8025d76/2/context.md",
       "content_hash": "/dc/ceb8025d76/2/content_hash.txt",
       "prompt": "/dc/ceb8025d76/2/prompt.txt"
+    },
+    {
+      "metadata": "/dc/ceb8025d76/3/metadata.json",
+      "transcript": "/dc/ceb8025d76/3/full.jsonl",
+      "context": "/dc/ceb8025d76/3/context.md",
+      "content_hash": "/dc/ceb8025d76/3/content_hash.txt",
+      "prompt": "/dc/ceb8025d76/3/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 3703,
-    "cache_creation_tokens": 1793397,
-    "cache_read_tokens": 48318256,
-    "output_tokens": 309045,
-    "api_call_count": 512
+    "input_tokens": 3886,
+    "cache_creation_tokens": 2484587,
+    "cache_read_tokens": 61102179,
+    "output_tokens": 464682,
+    "api_call_count": 650
   }
 }
