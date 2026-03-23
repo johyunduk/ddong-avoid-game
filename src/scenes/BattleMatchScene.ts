@@ -505,6 +505,8 @@ export default class BattleMatchScene extends BaseScene {
     }
     this.setupChannelListeners();
     await this.battleChannel.subscribe();
+    // subscribe 대기 중 뒤로 가기 / shutdown으로 채널이 해제됐을 수 있음
+    if (!this.battleChannel) return;
     this.battleChannel.sendCharAnnounce(getSafeSelectedCharacter());
   }
 
@@ -532,8 +534,11 @@ export default class BattleMatchScene extends BaseScene {
     this.resetMatchState(true);
 
     const code = BattleChannel.generateRoomCode();
-    await this.initChannel(code, true);
+    // showCreateWaiting을 먼저 호출해야 함:
+    // await initChannel 대기 중 onPresenceJoin이 발화해 showReadyButton()이 실행될 수 있는데,
+    // 그 뒤에 showCreateWaiting → clearUI()가 오면 ready UI가 파괴되고 호스트가 대기 화면에 stuck됨
     this.showCreateWaiting(code);
+    await this.initChannel(code, true);
   }
 
   private showCreateWaiting(code: string) {
@@ -638,15 +643,19 @@ export default class BattleMatchScene extends BaseScene {
     joinBtn.on('pointerout', () => joinBtn.setAlpha(1));
 
     const doJoin = async () => {
+      if (this.battleChannel) return; // 이미 연결 시도 중 (중복 클릭 방지)
+
       const code = input.value.trim().toUpperCase();
       if (code.length !== 4) {
         errorText.setText('4자리 코드를 입력하세요');
         return;
       }
 
-      errorText.setText('');
+      errorText.setColor('#00ff88').setText('⏳ 연결 중...');
+      joinBtn.disableInteractive();
       this.resetMatchState(false);
       await this.initChannel(code, false);
+      if (!this.battleChannel) return; // subscribe 대기 중 뒤로 가기
       this.showReadyButton();
     };
 
