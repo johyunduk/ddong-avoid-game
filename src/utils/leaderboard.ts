@@ -73,6 +73,7 @@ export interface ScoreVerificationData {
   diamondCollected: number;
   topazCollected: number;
   rainbowCollected: number;
+  collectBonusTotal?: number; // ability.onCollectSpecial + synergy.collectBonus 누계
 }
 
 /**

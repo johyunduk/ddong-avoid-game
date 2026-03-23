@@ -134,7 +134,7 @@ export default class BattleGameScene extends GameScene {
    */
   private async initBattleChannel(connectingText: Phaser.GameObjects.Text) {
     this.battleChannel = new BattleChannel();
-    this.battleChannel.joinRoom(this.roomCode, this.battleUserId);
+    this.battleChannel.joinGame(this.roomCode, this.battleUserId);
 
     // 리스너 등록 (subscribe 전 — Supabase Realtime 필수 패턴)
     this.setupBattleListeners();

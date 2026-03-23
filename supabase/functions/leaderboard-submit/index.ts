@@ -105,7 +105,9 @@ Deno.serve(async (req: Request) => {
       }
 
       // 서버 시각 기준 경과 시간으로 점수 타당성 검증
-      const elapsedMs = Date.now() - new Date(session.start_time).getTime();
+      const nowMs = Date.now();
+      const serverStartMs = new Date(session.start_time).getTime();
+      const elapsedMs = nowMs - serverStartMs;
       const elapsedSec = elapsedMs / 1000;
 
       // 세션 만료 체크 (2시간 초과)
@@ -117,17 +119,37 @@ Deno.serve(async (req: Request) => {
       }
 
       // 핵심 검증: 이 점수가 나오려면 최소 N초는 걸렸어야 함
-      // 보너스 아이템(금똥/다이아/토파즈/무지개)은 시간 없이도 점수를 올리므로 제외
+      // 보너스 아이템(금똥/다이아/토파즈/무지개) + ability/synergy collectBonus는 시간 없이도 점수를 올리므로 제외
       // 1점 = 100ms → timeBasedScore점 = timeBasedScore * 0.1초, 50% 여유 적용
+      const totalItemsCollected =
+        (verification?.goldCollected ?? 0) +
+        (verification?.diamondCollected ?? 0) +
+        (verification?.topazCollected ?? 0) +
+        (verification?.rainbowCollected ?? 0);
+      // collectBonusTotal은 클라이언트 신고값이므로 수집 아이템당 최대 10점으로 상한 적용 (tampering 방지)
+      const collectBonusTotal = Math.min(verification?.collectBonusTotal ?? 0, totalItemsCollected * 10);
       const bonusScore =
         (verification?.goldCollected ?? 0) * 20 +
         (verification?.diamondCollected ?? 0) * 40 +
         (verification?.topazCollected ?? 0) * 80 +
-        (verification?.rainbowCollected ?? 0) * 90;
+        (verification?.rainbowCollected ?? 0) * 90 +
+        collectBonusTotal;
       const timeBasedScore = Math.max(0, score - bonusScore);
       const minRequiredSec = timeBasedScore * 0.1 * 0.5;
-      if (elapsedSec < minRequiredSec) {
-        console.warn('Session time gate failed', { score, elapsedSec, minRequiredSec });
+
+      // Edge Function cold start 보정: 클라이언트 신고 시각 기준 경과를 추가 허용
+      // session.start_time이 실제 게임 시작보다 늦을 수 있음 (cold start)
+      // 클라이언트 신고 시각을 최대 20초 범위 내에서 신뢰 (tampering 방지용 상한)
+      const clientStartMs = verification?.gameStartTime ?? null;
+      const COLD_START_TOLERANCE_MS = 20_000;
+      let adjustedElapsedSec = elapsedSec;
+      if (clientStartMs && clientStartMs < serverStartMs) {
+        const effectiveStartMs = Math.max(clientStartMs, serverStartMs - COLD_START_TOLERANCE_MS);
+        adjustedElapsedSec = (nowMs - effectiveStartMs) / 1000;
+      }
+
+      if (adjustedElapsedSec < minRequiredSec) {
+        console.warn('Session time gate failed', { score, adjustedElapsedSec, minRequiredSec, elapsedSec });
         return new Response(
           JSON.stringify({ error: 'Score not achievable in elapsed time' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

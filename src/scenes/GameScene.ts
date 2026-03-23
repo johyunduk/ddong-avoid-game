@@ -64,6 +64,7 @@ export default class GameScene extends BaseScene {
   private diamondCollected: number = 0;
   private topazCollected: number = 0;
   private rainbowCollected: number = 0;
+  private collectBonusTotal: number = 0; // ability.onCollectSpecial + synergy.collectBonus 누계
   // 피버 타임 관련
   protected isFeverTime: boolean = false; // 피버 타임 활성화 여부
   private feverTimeRemaining: number = 0; // 피버 타임 남은 시간 (ms)
@@ -114,6 +115,7 @@ export default class GameScene extends BaseScene {
     this.diamondCollected = 0;
     this.topazCollected = 0;
     this.rainbowCollected = 0;
+    this.collectBonusTotal = 0;
     this.sessionPromise = null; // 재시작 시 이전 세션 프로미스 해제
     // 디버그 Graphics 참조 초기화 (씬 재시작 시 이전 객체는 Phaser가 파괴하므로 참조만 해제)
     this.manualHitboxDebug = undefined;
@@ -758,6 +760,7 @@ export default class GameScene extends BaseScene {
     counterIncrement();
     const bonus = this.ability.onCollectSpecial(type) + (this.activeSynergy?.collectBonus ?? 0);
     const total = baseScore + bonus;
+    this.collectBonusTotal += bonus;
     this.updateScore(total);
     if (!this.isFeverTime) {
       const suffix = bonus > 0 ? ` (+${bonus})` : '';
@@ -1434,6 +1437,7 @@ export default class GameScene extends BaseScene {
             diamondCollected: this.diamondCollected,
             topazCollected: this.topazCollected,
             rainbowCollected: this.rainbowCollected,
+            collectBonusTotal: this.collectBonusTotal,
           },
           characterType,
           sessionId
