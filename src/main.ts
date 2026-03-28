@@ -11,6 +11,7 @@ import BattleGameScene from './scenes/BattleGameScene';
 import BattleResultScene from './scenes/BattleResultScene';
 import BattleLeaderboardScene from './scenes/BattleLeaderboardScene';
 import { ensureLoggedIn } from './utils/auth';
+import { isBgmMuted } from './utils/settings';
 import './style.css';
 
 const config: Phaser.Types.Core.GameConfig = {
@@ -54,4 +55,46 @@ ensureLoggedIn().catch(error => {
 });
 
 // 게임 인스턴스는 동기적으로 즉시 생성 (키보드 입력 정상 동작 보장)
-new Phaser.Game(config);
+const game = new Phaser.Game(config);
+
+// 저장된 뮤트 설정 복원
+game.events.once('ready', () => {
+  if (isBgmMuted()) game.sound.mute = true;
+
+  // touchstart 직후 브라우저가 합성하는 mousedown을 Phaser보다 먼저 차단 (이중 pointerdown 방지)
+  const TOUCH_MOUSE_DEBOUNCE_MS = 350;
+  let lastTouchTime = 0;
+  const canvas = game.canvas;
+
+  canvas.addEventListener('touchstart', () => {
+    lastTouchTime = performance.now();
+  }, { passive: true });
+
+  canvas.addEventListener('mousedown', (e) => {
+    if (performance.now() - lastTouchTime < TOUCH_MOUSE_DEBOUNCE_MS) {
+      e.stopImmediatePropagation();
+      e.preventDefault();
+    }
+  }, true);
+});
+
+// 모바일 백그라운드 전환 시 BGM 일시정지/재개
+// visibilitychange: Android/데스크탑 표준
+// pagehide: iOS Safari가 visibilitychange를 놓치는 경우 대비
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    game.sound.pauseAll();
+  } else {
+    game.sound.resumeAll();
+  }
+});
+
+window.addEventListener('pagehide', () => {
+  game.sound.pauseAll();
+});
+
+window.addEventListener('pageshow', () => {
+  if (!document.hidden) {
+    game.sound.resumeAll();
+  }
+});

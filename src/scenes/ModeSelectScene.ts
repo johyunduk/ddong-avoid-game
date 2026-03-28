@@ -1,10 +1,12 @@
 import type Phaser from 'phaser';
 import { GameMode, GAME_MODES, type GameModeConfig } from '../types/GameMode';
 import { getSkorBalance, getCachedSkorBalance, cacheSkorBalance } from '../utils/skor';
+import { setBgmMuted } from '../utils/settings';
 import BaseScene from './BaseScene';
 
 export default class ModeSelectScene extends BaseScene {
   private skorText!: Phaser.GameObjects.Text;
+  private settingsPanel: Phaser.GameObjects.Container | null = null;
 
   constructor() {
     super('ModeSelectScene');
@@ -49,6 +51,9 @@ export default class ModeSelectScene extends BaseScene {
 
     // 릴리즈 노트 링크
     this.createReleaseNotesLink();
+
+    // 설정 버튼 (우상단)
+    this.createSettingsButton();
 
     // SKOR 잔액 비동기 로드
     this.loadSkorBalance();
@@ -204,6 +209,93 @@ export default class ModeSelectScene extends BaseScene {
     text.on('pointerover', () => text.setColor('#FFD700'));
     text.on('pointerout',  () => text.setColor('#cccccc'));
     text.on('pointerdown', () => this.scene.start('ReleaseNotesScene'));
+  }
+
+  private createSettingsButton() {
+    const btn = this.add.text(374, 574, '⚙️', {
+      fontSize: '34px',
+      padding: { x: 0, y: 0 },
+    }).setOrigin(0.5).setDepth(11).setInteractive({ useHandCursor: true });
+
+    // 이모지 바운딩 박스 중심에 원 정렬
+    const bg = this.add.circle(btn.x, btn.y - btn.height * 0.08, 22, 0x000000, 0.45).setDepth(10);
+
+    btn.on('pointerover', () => { btn.setScale(1.15); bg.setAlpha(0.65); });
+    btn.on('pointerout',  () => { btn.setScale(1);    bg.setAlpha(0.45); });
+    btn.on('pointerdown', () => this.showSettingsPanel());
+  }
+
+  private showSettingsPanel() {
+    if (this.settingsPanel) return;
+
+    const W = 280, H = 140;
+    const cx = 200, cy = 300;
+
+    // 반투명 배경 (터치 차단)
+    const overlay = this.add.rectangle(200, 300, 400, 600, 0x000000, 0.5)
+      .setDepth(50).setInteractive();
+
+    // 패널 카드
+    const card = this.add.rectangle(0, 0, W, H, 0x1e1e2e, 1);
+    card.setStrokeStyle(2, 0x888888);
+
+    // 제목
+    const title = this.add.text(0, -H / 2 + 22, '설정', {
+      fontSize: '18px', color: '#ffffff', fontStyle: 'bold',
+    }).setOrigin(0.5);
+
+    // 구분선
+    const line = this.add.rectangle(0, -H / 2 + 38, W - 20, 1, 0x555555);
+
+    // BGM 행 레이블
+    const label = this.add.text(-W / 2 + 20, 10, '🔊 BGM', {
+      fontSize: '16px', color: '#cccccc',
+    }).setOrigin(0, 0.5);
+
+    // 토글 버튼 — 런타임 상태를 단일 진실 원천으로 사용
+    const muted = this.sound.mute;
+    const toggleBg = this.add.rectangle(W / 2 - 36, 10, 54, 28, muted ? 0x555555 : 0x4caf50);
+    toggleBg.setStrokeStyle(1, 0x888888);
+    const toggleKnob = this.add.circle(muted ? W / 2 - 50 : W / 2 - 22, 10, 11, 0xffffff);
+    const toggleLabel = this.add.text(W / 2 - 36, 10, muted ? 'OFF' : 'ON', {
+      fontSize: '11px', color: muted ? '#aaaaaa' : '#ffffff', fontStyle: 'bold',
+    }).setOrigin(0.5);
+
+    const applyToggleVisual = (isMuted: boolean) => {
+      toggleBg.setFillStyle(isMuted ? 0x555555 : 0x4caf50);
+      toggleKnob.setX(isMuted ? W / 2 - 50 : W / 2 - 22);
+      toggleLabel.setText(isMuted ? 'OFF' : 'ON');
+      toggleLabel.setColor(isMuted ? '#aaaaaa' : '#ffffff');
+    };
+
+    const closePanel = () => {
+      overlay.destroy();
+      this.settingsPanel?.destroy();
+      this.settingsPanel = null;
+    };
+
+    toggleBg.setInteractive({ useHandCursor: true });
+    toggleBg.on('pointerdown', () => {
+      const nowMuted = !this.sound.mute;
+      this.sound.mute = nowMuted;
+      setBgmMuted(nowMuted);
+      applyToggleVisual(nowMuted);
+    });
+
+    // ✕ 닫기 버튼
+    const closeBtn = this.add.text(W / 2 - 14, -H / 2 + 14, '✕', {
+      fontSize: '16px', color: '#888888',
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+
+    closeBtn.on('pointerover', () => closeBtn.setColor('#ffffff'));
+    closeBtn.on('pointerout',  () => closeBtn.setColor('#888888'));
+    closeBtn.on('pointerdown', closePanel);
+
+    overlay.on('pointerdown', closePanel);
+
+    this.settingsPanel = this.add.container(cx, cy, [
+      card, title, line, label, toggleBg, toggleKnob, toggleLabel, closeBtn,
+    ]).setDepth(51);
   }
 
   private startGame(mode: GameMode) {
