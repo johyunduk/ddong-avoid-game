@@ -48,7 +48,8 @@ export default class LeaderboardScene extends BaseScene {
       color: '#fff',
       fontStyle: 'bold',
       stroke: '#000',
-      strokeThickness: 5
+      strokeThickness: 5,
+      padding: { top: 6 },
     }).setOrigin(0.5);
 
     // 난이도 선택 버튼들

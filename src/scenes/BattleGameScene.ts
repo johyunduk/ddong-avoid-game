@@ -89,6 +89,7 @@ export default class BattleGameScene extends GameScene {
       fontStyle: 'bold',
       stroke: '#000000',
       strokeThickness: 3,
+      padding: { top: 3 },
     }).setOrigin(0, 0).setDepth(10);
 
     // 상대 생존 시간 (우상단)
@@ -120,6 +121,7 @@ export default class BattleGameScene extends GameScene {
       color: '#ffaa00',
       stroke: '#000',
       strokeThickness: 3,
+      padding: { top: 3 },
     }).setOrigin(0.5).setDepth(10);
 
     // 새 채널 생성 → 리스너 등록 → subscribe → 점수 타이머 시작
@@ -250,6 +252,7 @@ export default class BattleGameScene extends GameScene {
         fontStyle: 'bold',
         stroke: '#000',
         strokeThickness: 3,
+        padding: { top: 3 },
       }).setOrigin(0.5).setDepth(200);
       this.tweens.add({
         targets: sendText,
@@ -332,6 +335,7 @@ export default class BattleGameScene extends GameScene {
       fontStyle: 'bold',
       stroke: '#000',
       strokeThickness: 4,
+      padding: { top: 4 },
     }).setOrigin(0.5).setDepth(200);
     this.tweens.add({
       targets: warningText,
@@ -353,6 +357,7 @@ export default class BattleGameScene extends GameScene {
       stroke: '#000',
       strokeThickness: 4,
       align: 'center',
+      padding: { top: 4 },
     }).setOrigin(0.5).setDepth(200);
   }
 

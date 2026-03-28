@@ -97,6 +97,7 @@ export default class BattleResultScene extends BaseScene {
       fontStyle: 'bold',
       stroke: '#000',
       strokeThickness: 6,
+      padding: { top: 6 },
     }).setOrigin(0.5);
 
     // 티어/RP 영역
@@ -140,6 +141,7 @@ export default class BattleResultScene extends BaseScene {
         fontSize: '20px',
         color: '#FFD700',
         fontStyle: 'bold',
+        padding: { top: 4 },
       }).setOrigin(0.5);
       newMatchBtn.setInteractive({ useHandCursor: true });
       newMatchBtn.on('pointerover', () => newMatchBtn.setAlpha(0.8));
@@ -168,6 +170,7 @@ export default class BattleResultScene extends BaseScene {
         fontSize: '20px',
         color: '#ffffff',
         fontStyle: 'bold',
+        padding: { top: 4 },
       }).setOrigin(0.5);
       this.rematchBtn.setInteractive({ useHandCursor: true });
       this.rematchBtn.on('pointerover', () => {
@@ -184,6 +187,7 @@ export default class BattleResultScene extends BaseScene {
       fontSize: '20px',
       color: '#ffffff',
       fontStyle: 'bold',
+      padding: { top: 4 },
     }).setOrigin(0.5);
     rankBtn.setInteractive({ useHandCursor: true });
     rankBtn.on('pointerover', () => rankBtn.setAlpha(0.8));

@@ -821,6 +821,7 @@ export default class CharacterSelectScene extends BaseScene {
     infoBg.on('pointerup',   () => this.showInfoPanel(def));
     const infoLabel = this.add.text(cx - 92, BTN_Y, '📋  정보 보기', {
       fontSize: '14px', color: '#cccccc', fontStyle: 'bold',
+      padding: { top: 3 },
     }).setOrigin(0.5);
     panel.add(infoBg);
     panel.add(infoLabel);

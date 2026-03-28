@@ -650,6 +650,7 @@ export default class GameScene extends BaseScene {
       stroke: '#000',
       strokeThickness: 4,
       align: 'center',
+      padding: { top: 4 },
     }).setOrigin(0.5).setDepth(501);
 
     // SceneManager.prototype.stop 변조 대비: 네이티브 setTimeout으로 강제 새로고침
@@ -779,6 +780,7 @@ export default class GameScene extends BaseScene {
       const t = this.add.text(this.scale.width / 2, 100, `${emoji} +${total}점!${suffix} ${emoji}`, {
         fontSize: '28px', color, fontStyle: 'bold',
         stroke: '#000', strokeThickness: 4,
+        padding: { top: 6 },
       }).setOrigin(0.5);
       this.time.delayedCall(1000, () => t.destroy());
     }
@@ -1270,7 +1272,8 @@ export default class GameScene extends BaseScene {
         color: '#FFD700',
         fontStyle: 'bold',
         stroke: '#000000',
-        strokeThickness: 4
+        strokeThickness: 4,
+        padding: { top: 6 },
       }).setOrigin(0.5).setDepth(200);
 
       // 이니셜 입력 UI 표시
@@ -1471,7 +1474,8 @@ export default class GameScene extends BaseScene {
             color: '#FFD700',
             fontStyle: 'bold',
             stroke: '#000',
-            strokeThickness: 3
+            strokeThickness: 3,
+            padding: { top: 4 },
           }).setOrigin(0.5).setDepth(200);
         }
 
@@ -1569,6 +1573,7 @@ export default class GameScene extends BaseScene {
           color: '#88ff88',
           stroke: '#000',
           strokeThickness: 2,
+          padding: { top: 3 },
         }).setOrigin(0.5).setDepth(200);
       }
     } catch {

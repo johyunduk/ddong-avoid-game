@@ -50,6 +50,7 @@ export default class BattleLeaderboardScene extends BaseScene {
       fontStyle: 'bold',
       stroke: '#000',
       strokeThickness: 5,
+      padding: { top: 6 },
     }).setOrigin(0.5);
 
     // 내 전적 영역 (로드 후 채워짐)

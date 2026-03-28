@@ -104,6 +104,7 @@ export default class ModeSelectScene extends BaseScene {
       fontSize: '18px',
       color: '#ffffff',
       fontStyle: 'bold',
+      padding: { top: 4 },
     }).setOrigin(0.5);
 
     button.setInteractive({ useHandCursor: true });
@@ -133,6 +134,7 @@ export default class ModeSelectScene extends BaseScene {
       fontSize: '22px',
       color: '#ffffff',
       fontStyle: 'bold',
+      padding: { top: 4 },
     }).setOrigin(0.5);
 
     // SKOR 잔액 — 캐시 값 즉시 표시
@@ -141,6 +143,7 @@ export default class ModeSelectScene extends BaseScene {
     this.skorText = this.add.text(x, y + 8, initialSkorLabel, {
       fontSize: '16px',
       color: '#c0a0ff',
+      padding: { top: 3 },
     }).setOrigin(0.5);
 
     // 비용 안내
@@ -172,6 +175,7 @@ export default class ModeSelectScene extends BaseScene {
       fontSize: '18px',
       color: '#ffffff',
       fontStyle: 'bold',
+      padding: { top: 4 },
     }).setOrigin(0.5);
 
     button.setInteractive({ useHandCursor: true });
@@ -191,6 +195,7 @@ export default class ModeSelectScene extends BaseScene {
       fontSize: '18px',
       color: '#fff',
       fontStyle: 'bold',
+      padding: { top: 4 },
     }).setOrigin(0.5);
 
     button.setInteractive({ useHandCursor: true });
@@ -208,6 +213,7 @@ export default class ModeSelectScene extends BaseScene {
       color: '#cccccc',
       stroke: '#000',
       strokeThickness: 3,
+      padding: { top: 3 },
     }).setOrigin(0.5);
 
     text.setInteractive({ useHandCursor: true });
@@ -219,7 +225,7 @@ export default class ModeSelectScene extends BaseScene {
   private createSettingsButton(x: number, y: number) {
     const btn = this.add.text(x, y, '⚙️', {
       fontSize: '34px',
-      padding: { x: 0, y: 0 },
+      padding: { top: 6 },
     }).setOrigin(0.5).setDepth(11).setInteractive({ useHandCursor: true });
 
     // 이모지 바운딩 박스 중심에 원 정렬

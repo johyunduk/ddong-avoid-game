@@ -264,6 +264,7 @@ export default class BattleMatchScene extends BaseScene {
     this.ui(this.add.text(cx + colBtnOff, 328 + yOff, '🏆 전적 보기', {
       fontSize: '15px', color: '#88ee88', fontStyle: 'bold',
       stroke: '#000', strokeThickness: 3,
+      padding: { top: 3 },
     }).setOrigin(0.5));
     recordBtn.setInteractive({ useHandCursor: true });
     recordBtn.on('pointerover', () => recordBtn.setFillStyle(0x254d25));
@@ -276,6 +277,7 @@ export default class BattleMatchScene extends BaseScene {
     this.ui(this.add.text(cx, 392 + yOff, '🎖️ 랭크 매칭', {
       fontSize: '22px', color: '#FFD700', fontStyle: 'bold',
       stroke: '#000', strokeThickness: 4,
+      padding: { top: 4 },
     }).setOrigin(0.5));
     rankedBtn.setInteractive({ useHandCursor: true });
     rankedBtn.on('pointerover', () => rankedBtn.setFillStyle(0xa07a00));
@@ -293,6 +295,7 @@ export default class BattleMatchScene extends BaseScene {
     this.ui(this.add.text(cx - colBtnOff, 500 + yOff, '🏠 방 만들기', {
       fontSize: '17px', color: '#ffffff', fontStyle: 'bold',
       stroke: '#000', strokeThickness: 3,
+      padding: { top: 4 },
     }).setOrigin(0.5));
     createBtn.setInteractive({ useHandCursor: true });
     createBtn.on('pointerover', () => createBtn.setFillStyle(0xe74c3c));
@@ -304,6 +307,7 @@ export default class BattleMatchScene extends BaseScene {
     this.ui(this.add.text(cx + colBtnOff, 500 + yOff, '🔗 방 참가', {
       fontSize: '17px', color: '#ffffff', fontStyle: 'bold',
       stroke: '#000', strokeThickness: 3,
+      padding: { top: 4 },
     }).setOrigin(0.5));
     joinBtn.setInteractive({ useHandCursor: true });
     joinBtn.on('pointerover', () => joinBtn.setFillStyle(0x3498db));
@@ -414,6 +418,7 @@ export default class BattleMatchScene extends BaseScene {
     this.ui(this.add.text(cx, 225 + yOff, '🎖️ 랭크 매칭 중...', {
       fontSize: '26px', color: '#FFD700', fontStyle: 'bold',
       stroke: '#000', strokeThickness: 5,
+      padding: { top: 6 },
     }).setOrigin(0.5));
 
     const subText = this.ui(this.add.text(cx, 278 + yOff, '상대를 찾고 있습니다', {
@@ -715,6 +720,7 @@ export default class BattleMatchScene extends BaseScene {
     this.ui(this.add.text(cx, 155 + yOff, modeLabel, {
       fontSize: '14px', color: modeLabelColor,
       stroke: '#000', strokeThickness: 3,
+      padding: { top: 3 },
     }).setOrigin(0.5));
 
     this.ui(this.add.text(cx, 180 + yOff, '상대방과 연결되었습니다!', {
@@ -855,6 +861,7 @@ export default class BattleMatchScene extends BaseScene {
       this.ui(this.add.text(this.scale.width / 2, 420 + (this.scale.height - 600) / 2, '⚠️ 상대방이 나갔습니다', {
         fontSize: '16px', color: '#ff4444',
         stroke: '#000', strokeThickness: 3,
+        padding: { top: 3 },
       }).setOrigin(0.5));
     });
 
