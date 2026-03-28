@@ -1,0 +1,170 @@
+그 점수 검증 하는 부분 다시 봐줘. 여전히 정상 플레이인데 점수 등록이 안되는 경우가 있어. JSON.stringify({ error: 'Score not achievable in elapsed time' }), 이 메세지를 최근에 본거 같아.
+
+---
+
+아 그리고 맵의 효과나 캐릭터 1성 2성 뭐 그런거에 대한 추가 점수 이런거 까지 고려가 되어야 하지 않나 싶은데
+
+---
+
+# Simplify: Code Review and Cleanup
+
+Review all changed files for reuse, quality, and efficiency. Fix any issues found.
+
+## Phase 1: Identify Changes
+
+Run `git diff` (or `git diff HEAD` if there are staged changes) to see what changed. If there are no git changes, review the most recently modified files that the user mentioned or that you edited earlier in this conversation.
+
+## Phase 2: Launch Three Review Agents in Parallel
+
+Use the Agent tool to launch all three agents concurrently in a single message. Pass each agent the full diff so it has the complete context.
+
+### Agent 1: Code Reuse Review
+
+For each change:
+
+1. **Search for existing utilities and helpers** that could replace newly written code. Look for similar patterns elsewhere in the codebase — common locations are utility directories, shared modules, and files adjacent to the changed ones.
+2. **Flag any new function that duplicates existing functionality.** Suggest the existing function to use instead.
+3. **Flag any inline logic that could use an existing utility** — hand-rolled string manipulation, manual path handling, custom environment checks, ad-hoc type guards, and similar patterns are common candidates.
+
+### Agent 2: Code Quality Review
+
+Review the same changes for hacky patterns:
+
+1. **Redundant state**: state that duplicates existing state, cached values that could be derived, observers/effects that could be direct calls
+2. **Parameter sprawl**: adding new parameters to a function instead of generalizing or restructuring existing ones
+3. **Copy-paste with slight variation**: near-duplicate code blocks that should be unified with a shared abstraction
+4. **Leaky abstractions**: exposing internal details that should be encapsulated, or breaking existing abstraction boundaries
+5. **Stringly-typed code**: using raw strings where constants, enums (string unions), or branded types already exist in the codebase
+6. **Unnecessary JSX nesting**: wrapper Boxes/elements that add no layout value — check if inner component props (flexShrink, alignItems, etc.) already provide the needed behavior
+7. **Unnecessary comments**: comments explaining WHAT the code does (well-named identifiers already do that), narrating the change, or referencing the task/caller — delete; keep only non-obvious WHY (hidden constraints, subtle invariants, workarounds)
+
+### Agent 3: Efficiency Review
+
+Review the same changes for efficiency:
+
+1. **Unnecessary work**: redundant computations, repeated file reads, duplicate network/API calls, N+1 patterns
+2. **Missed concurrency**: independent operations run sequentially when they could run in parallel
+3. **Hot-path bloat**: new blocking work added to startup or per-request/per-render hot paths
+4. **Recurring no-op updates**: state/store updates inside polling loops, intervals, or event handlers that fire unconditionally — add a change-detection guard so downstream consumers aren't notified when nothing changed. Also: if a wrapper function takes an updater/reducer callback, verify it honors same-reference returns (or whatever the "no change" signal is) — otherwise callers' early-return no-ops are silently defeated
+5. **Unnecessary existence checks**: pre-checking file/resource existence before operating (TOCTOU anti-pattern) — operate directly and handle the error
+6. **Memory**: unbounded data structures, missing cleanup, event listener leaks
+7. **Overly broad operations**: reading entire files when only a portion is needed, loading all items when filtering for one
+
+## Phase 3: Fix Issues
+
+Wait for all three agents to complete. Aggregate their findings and fix each issue directly. If a finding is a false positive or not worth addressing, note it and move on — do not argue with the finding, just skip it.
+
+When done, briefly summarize what was fixed (or confirm the code was already clean).
+
+---
+
+<task-notification>
+<task-id>ad520407417435e0b</task-id>
+<tool-use-id>toolu_01CqtuCVHon23L3Nur7YQXFf</tool-use-id>
+<output-file>REDACTED.output</output-file>
+<status>completed</status>
+<summary>Agent "Code quality review" completed</summary>
+<result>Perfect. Now I have all the context I need. Let me analyze this diff for code quality issues:
+
+## Code Quality Review
+
+**Real issues found:**
+
+1. **Stringly-typed validation in leaderboard-submit (lines 33-34, 211-216)**
+   - Hardcoded difficulty strings `['easy', 'normal', 'hard', 'extreme', 'physical']` and character types are defined as string arrays instead of using TypeScript enums or constants.
+   - If new difficulties/characters are added to types.ts, the server validation array will silently fall out of sync.
+   - Recommendation: Import and use actual type exports from shared types.
+
+2. **Inconsistent comment format (Comment quality)**
+   - Korean comments mixed with implicit assumptions about game design. The server-side comment "어빌리티 자체 보너스 점수 추가 — updateScore와 동일하지만 abilityBonusTotal에 누적됨" (comment on line 20 of types.ts) promises `addAbilityBonus` updates score identically to `updateScore`, but the implementation also accumulates separately in `abilityBonusTotal`. This isn't clearly wrong, but the comment could be clearer about the dual responsibility.
+
+3. **Magic number 0.95 without definition (line 133 in leaderboard-submit)**
+   - The 95% ability bonus cap is hardcoded inline with a comment explaining the ratio. This should be extracted to a named constant at the top with the SCORE_CAPS for consistency and maintainability.
+
+4. **Potential off-by-one in bonus calculation logic (line 133)**
+   - The check `Math.min(verification?.abilityBonusTotal ?? 0, score * 0.95)` applies a cap based on *final score*, but `abilityBonusTotal` is accumulated client-side and sent server-side. If a legitimately high ability bonus is possible by design, this cap might reject valid scores without clear messaging. Worth verifying the game design intent is actually enforced.
+
+**Non-issues (as you noted):**
+
+- Separation of `updateScore` vs `addAbilityBonus` is intentional and justified for anti-cheat tracking.
+- Hardcoded `10` in LegacyAbility is game design and appropriately scoped.
+- Comment translations are colloquial but not problematic for a Korean game.</result>
+<usage><total_tokens>20960</total_tokens><tool_uses>6</tool_uses><duration_ms>14497</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>ae7d3fcd4091e0780</task-id>
+<tool-use-id>toolu_01W7o48texk9RY1TFcWBpWxm</tool-use-id>
+<output-file>REDACTED.output</output-file>
+<status>completed</status>
+<summary>Agent "Efficiency review" completed</summary>
+<result>Based on my review of the code, here are the efficiency issues found:
+
+## Efficiency Issues
+
+**1. Redundant computation in tick score handler (GameScene.ts line 525-527)**
+   - You compute `tickResult - points` and add to `abilityBonusTotal`, then call `updateScore(tickResult)` separately
+   - This duplicates the bonus calculation twice: once inline, once in the method call's comparison logic
+   - The calculation happens at most 10x/sec (when elapsed >= 100ms), which is low-frequency, but it's still wasteful
+   - Issue: If `updateScore()` internally calculates bonuses again, you're double-computing
+
+**2. Unbounded `abilityBonusTotal` accumulation (server-side validation)**
+   - The server-side cap of `score * 0.95` (line 133) is applied *after* the game reports arbitrary `abilityBonusTotal`
+   - The client can send any value; the server silently clamps it rather than rejecting tampering attempts
+   - This becomes a silent data loss issue: high ability bonuses are truncated without logging client tampering (unlike item collection bonus which has explicit clamping with a cap comment)
+   - Issue: Scores legitimately earned through abilities can be silently reduced, creating a silent failure mode
+
+**3. Duplicate API method for ability bonus (GameScene.ts line 575)**
+   - `addAbilityBonus()` in the API object does the same work as the inline code: `abilityBonusTotal += n; updateScore(n);`
+   - Both paths (tick score + ability milestone handler) are now doing identical work
+   - This creates a consistency risk: if one path updates and the other doesn't, scores diverge
+   - Issue: Violation of DRY principle with parallel bonus-tracking paths
+
+**4. No protective validation on client-side `abilityBonusTotal` accumulation**
+   - GameScene accumulates `abilityBonusTotal` with no ceiling check
+   - By the time the server caps it at `score * 0.95`, the game has already reported inflated numbers
+   - If ability bonuses are exploitable (e.g., ability trigger spam), the server cap doesn't prevent client-side cheat detection from missing the abuse
+   - Issue: Late validation means cheating is not caught client-side where it matters</result>
+<usage><total_tokens>21868</total_tokens><tool_uses>6</tool_uses><duration_ms>12731</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>af0af31876fd628ca</task-id>
+<tool-use-id>toolu_01TuiDVX1LMcQLUFcS1qaf4R</tool-use-id>
+<output-file>REDACTED.output</output-file>
+<status>completed</status>
+<summary>Agent "Code reuse review" completed</summary>
+<result>Based on my thorough analysis of the git diff and the codebase, here's my code reuse review:
+
+## Code Reuse Review
+
+**NO REAL ISSUES FOUND**
+
+This diff has excellent design. The changes follow established patterns consistently:
+
+1. **New method signature is well-justified**: `addAbilityBonus()` is intentionally distinct from `updateScore()` - it performs dual operations (track in accumulator + update score) which is semantically different from a generic score update. This cannot be reused for existing score updates.
+
+2. **Bonus tracking pattern is consistent**: The `abilityBonusTotal` follows the same architectural pattern as the existing `collectBonusTotal` and item collection counters (`goldCollected`, `diamondCollected`, etc.). Both are:
+   - Declared as private fields in GameScene
+   - Initialized in `init()`
+   - Accumulated during gameplay
+   - Included in the verification data sent to the server
+   - Capped server-side with `Math.min()`
+
+3. **No duplicate logic**: The implementation cleanly separates concerns:
+   - **Client side** (`GameScene.ts`): Tracks raw accumulation of ability bonuses
+   - **Server side** (`leaderboard-submit/index.ts`): Applies tamper-proof bounds (`Math.min(verification?.abilityBonusTotal ?? 0, score * 0.95)`)
+
+4. **Ability migrations are appropriate**: Converting `api.updateScore()` to `api.addAbilityBonus()` in ArchieveAbility and LegacyAbility correctly marks score contributions that bypass time-based earning, enabling the server's anti-cheat verification.
+
+The code demonstrates good separation of concerns and doesn't introduce unnecessary abstractions.</result>
+<usage><total_tokens>41568</total_tokens><tool_uses>17</tool_uses><duration_ms>32159</duration_ms></usage>
+</task-notification>
+
+---
+
+깃 푸시해줘.
