@@ -38,15 +38,15 @@ export interface FeverTimeConfig {
  *
  * @example
  * // 250점에서 첫 피버 타임 발동
- * // 이후 간격: 1200, 1200, 1300, 1300, 1400, 1400... (2회마다 100씩 증가)
- * // → 250, 1450, 2650, 3950, 5250, 6650, 8050...
+ * // 이후 간격: 1100, 1100, 1100, 1200, 1200, 1200, 1300, 1300, 1300... (3회마다 100씩 증가)
+ * // → 250, 1350, 2450, 3550, 4750, 5950, 7150, 8450, 9750, 11050...
  * // 4.5초간 지속
  * // 일반 똥 2개 + 금똥/다이아똥 8개 생성
  * // 낙하 속도 1.2배 빠름
  */
 export const FEVER_TIME_CONFIG: FeverTimeConfig = {
   firstTriggerScore: 250,
-  baseInterval: 1200,
+  baseInterval: 1100,
   intervalIncrement: 100,
   intervalIncreaseEvery: 3,
   duration: 4500,
