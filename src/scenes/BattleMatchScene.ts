@@ -194,7 +194,7 @@ export default class BattleMatchScene extends BaseScene {
       : def.grade === 'R'  ? '★'
       : def.grade;
 
-    const cardW = W - 16;
+    const cardW = Math.min(W - 16, 374);
     this.ui(this.add.rectangle(cx, 200 + yOff, cardW, 190, 0x0d1b2a, 0.9)
       .setStrokeStyle(1, 0x334466));
 
@@ -244,7 +244,7 @@ export default class BattleMatchScene extends BaseScene {
     }
 
     // ── 1행: 캐릭터 선택 | 전적 보기 (좌우 나란히) ──────────────
-    const colBtnW = Math.min(175, (W - 30) / 2);
+    const colBtnW = (cardW - 10) / 2;
     const colBtnOff = colBtnW / 2 + 5;
     const charBtn = this.ui(this.add.rectangle(cx - colBtnOff, 328 + yOff, colBtnW, 48, 0x1a3a5c));
     charBtn.setStrokeStyle(2, 0x4499dd);
