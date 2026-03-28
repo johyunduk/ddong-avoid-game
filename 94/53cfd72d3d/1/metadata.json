@@ -1,0 +1,32 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "9453cfd72d3d",
+  "session_id": "16308c36-021c-40d2-8288-c97637e12d99",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-28T06:29:25.691397Z",
+  "branch": "dev",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src/config/feverTime.ts"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "e5826f91916e",
+  "transcript_identifier_at_start": "12240e60-02ac-421e-83b4-4bf1d8fc69a8",
+  "token_usage": {
+    "input_tokens": 21,
+    "cache_creation_tokens": 21500,
+    "cache_read_tokens": 346175,
+    "output_tokens": 2684,
+    "api_call_count": 12
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-28T06:29:25.66889Z",
+    "agent_lines": 3,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 3,
+    "agent_percentage": 100
+  },
+  "transcript_path": ".claude/projects/-Users-johyunduk-Projects-ddong-avoid-game/16308c36-021c-40d2-8288-c97637e12d99.jsonl"
+}
