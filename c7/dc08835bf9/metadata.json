@@ -1,0 +1,29 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "c7dc08835bf9",
+  "strategy": "manual-commit",
+  "branch": "dev",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src/main.ts",
+    "src/scenes/CharacterSelectScene.ts",
+    "src/scenes/ModeSelectScene.ts",
+    "src/utils/settings.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/c7/dc08835bf9/0/metadata.json",
+      "transcript": "/c7/dc08835bf9/0/full.jsonl",
+      "context": "/c7/dc08835bf9/0/context.md",
+      "content_hash": "/c7/dc08835bf9/0/content_hash.txt",
+      "prompt": "/c7/dc08835bf9/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 3114,
+    "cache_creation_tokens": 480925,
+    "cache_read_tokens": 11174560,
+    "output_tokens": 60407,
+    "api_call_count": 131
+  }
+}
