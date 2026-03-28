@@ -1,0 +1,847 @@
+Implement the following plan:
+
+# 배틀 모드 티어/레이팅 시스템 구현 계획
+
+## Context
+
+대전 결과(승/패)에 따라 레이팅 포인트(RP)가 오르내리고, RP 구간에 따라 티어가 결정되는 시스템.
+티어 차이가 클수록 이변 시 RP 획득이 많고, 예상된 결과면 RP 변동이 적음 (LoL LP 방식).
+
+현재 `battle_records` 테이블이 승/패/부전승 카운터만 갖고 있으므로,
+`rating_points` 컬럼을 추가하고 DB 함수를 교체한다.
+
+---
+
+## 레이팅/티어 설계
+
+### 티어 구간 (RP 기준)
+
+| RP | 티어 |
+|----|------|
+| 0–499 | **옵션 A:** 💩 똥뉴비 / **옵션 B:** 🪨 아이언 / **옵션 C:** 🥚 알 |
+| 500–999 | **A:** 🟤 피하기꾼 / **B:** 🥉 브론즈 / **C:** 🐣 새싹 |
+| 1000–1499 | **A:** ⚡ 번개손 / **B:** 🥈 실버 / **C:** 🔥 전사 ← 신규 시작 포인트 |
+| 1500–1999 | **A:** 🥇 금똥전사 / **B:** 🥇 골드 / **C:** ⚡ 고수 |
+| 2000–2499 | **A:** 💎 다이아똥왕 / **B:** 💎 다이아 / **C:** 🌙 달인 |
+| 2500+ | **A:** 👑 전설 / **B:** 👑 챔피언 / **C:** 👑 신 |
+
+> 신규 유저 시작 RP: **1000** (실버/전사/전사 구간 하단)
+> 하한선: **0** (이하로 내려가지 않음, 하지만 티어 하락은 가능)
+
+### RP 변동 공식 (티어 차이 기반)
+
+```
+tierDiff = 상대 티어 인덱스 - 내 티어 인덱스
+         (양수 = 상대가 더 높은 티어, 음수 = 상대가 더 낮은 티어)
+
+승리:
+  tierDiff >= +2  → +35  (큰 이변, 많이 획득)
+  tierDiff == +1  → +30
+  tierDiff ==  0  → +25  (동급 대전 기준값)
+  tierDiff == -1  → +20
+  tierDiff <= -2  → +15  (예상된 승리, 적게 획득)
+
+패배:
+  tierDiff >= +2  → -10  (예상된 패배, 적게 잃음)
+  tierDiff == +1  → -15
+  tierDiff ==  0  → -20
+  tierDiff == -1  → -25
+  tierDiff <= -2  → -30  (큰 이변, 많이 잃음)
+
+부전승(DISCONNECT): +20 고정
+```
+
+---
+
+## opponentId 전달 경로
+
+현재 `BattleGameScene`은 `opponentId`를 추적하지 않음.
+`BattleMatchScene`에서 READY 이벤트 수신 시 `payload.userId`를 캡처해서 씬 체인으로 전달.
+
+```
+BattleMatchScene (READY 수신 → opponentUserId 저장)
+  → BattleGameScene (init data에 opponentId 추가)
+    → BattleResultScene (init data에 opponentId 추가)
+      → submitBattleResult(result, opponentId)
+        → Edge Function (DB에서 상대 RP 조회 → 델타 계산)
+```
+
+---
+
+## 구현 순서
+
+### Step 1: DB Migration — `supabase/migrations/20260321_battle_rating.sql`
+
+```sql
+-- rating_points 컬럼 추가 (기존 유저는 1000으로 초기화)
+ALTER TABLE public.battle_records
+  ADD COLUMN IF NOT EXISTS rating_points INTEGER NOT NULL DEFAULT 1000;
+
+-- 기존 함수/뷰 교체
+DROP FUNCTION IF EXISTS increment_battle_record(UUID, TEXT);
+DROP FUNCTION IF EXISTS get_battle_rank(INTEGER);
+DROP VIEW IF EXISTS public.battle_leaderboard_view;
+
+-- 신규 통합 함수: upsert + RP 업데이트 + rank 반환
+CREATE OR REPLACE FUNCTION submit_battle_record(
+  p_user_id    UUID,
+  p_result     TEXT,        -- 'win' | 'lose' | 'disconnect'
+  p_point_delta INTEGER     -- Edge Function에서 계산한 델타 (음수 가능)
+)
+RETURNS TABLE(rating_points INTEGER, wins INTEGER, losses INTEGER, disconnects INTEGER, rank BIGINT)
+LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE
+  v_rp   INT;
+  v_w    INT;
+  v_l    INT;
+  v_d    INT;
+  v_rank BIGINT;
+BEGIN
+  INSERT INTO public.battle_records (user_id) VALUES (p_user_id)
+  ON CONFLICT (user_id) DO NOTHING;
+
+  UPDATE public.battle_records SET
+    rating_points = GREATEST(0, rating_points + p_point_delta),
+    wins        = wins        + CASE WHEN p_result = 'win'        THEN 1 ELSE 0 END,
+    losses      = losses      + CASE WHEN p_result = 'lose'       THEN 1 ELSE 0 END,
+    disconnects = disconnects + CASE WHEN p_result = 'disconnect' THEN 1 ELSE 0 END,
+    updated_at  = NOW()
+  WHERE user_id = p_user_id;
+
+  SELECT br.rating_points, br.wins, br.losses, br.disconnects
+    INTO v_rp, v_w, v_l, v_d
+    FROM public.battle_records br WHERE br.user_id = p_user_id;
+
+  SELECT COUNT(*) + 1 INTO v_rank
+    FROM public.battle_records WHERE rating_points > v_rp;
+
+  RETURN QUERY SELECT v_rp, v_w, v_l, v_d, v_rank;
+END; $$;
+
+REVOKE ALL ON FUNCTION submit_battle_record FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION submit_battle_record TO service_role;
+
+-- 랭킹 뷰 (rating_points DESC 정렬)
+CREATE OR REPLACE VIEW public.battle_leaderboard_view AS
+SELECT
+  br.user_id,
+  br.rating_points,
+  br.wins, br.losses, br.disconnects,
+  CASE WHEN (br.wins + br.losses + br.disconnects) = 0 THEN 0.0
+    ELSE ROUND((br.wins + br.disconnects)::NUMERIC
+         / (br.wins + br.losses + br.disconnects)::NUMERIC * 100, 1)
+  END AS win_rate,
+  p.initials
+FROM public.battle_records br
+JOIN public.profiles p ON p.id = br.user_id
+ORDER BY br.rating_points DESC;
+
+GRANT SELECT ON public.battle_leaderboard_view TO anon, authenticated;
+
+CREATE OR REPLACE FUNCTION get_battle_rank_by_rp(p_rp INTEGER)
+RETURNS BIGINT LANGUAGE sql STABLE AS $$
+  SELECT COUNT(*) FROM public.battle_records WHERE rating_points > p_rp;
+$$;
+GRANT EXECUTE ON FUNCTION get_battle_rank_by_rp TO anon, authenticated, service_role;
+```
+
+### Step 2: `src/utils/battleTier.ts` (신규)
+
+```typescript
+export interface BattleTierDef {
+  name: string;
+  icon: string;      // 이모지
+  minRp: number;
+  maxRp: number;
+  color: string;     // hex, UI 색상
+}
+
+// ← 티어 이름은 사용자 선택 후 확정
+export const BATTLE_TIERS: BattleTierDef[] = [
+  { name: '???', icon: '💩', minRp: 0,    maxRp: 499,  color: '#8B4513' },
+  { name: '???', icon: '🟤', minRp: 500,  maxRp: 999,  color: '#CD7F32' },
+  { name: '???', icon: '⚡', minRp: 1000, maxRp: 1499, color: '#C0C0C0' },
+  { name: '???', icon: '🥇', minRp: 1500, maxRp: 1999, color: '#FFD700' },
+  { name: '???', icon: '💎', minRp: 2000, maxRp: 2499, color: '#00BFFF' },
+  { name: '???', icon: '👑', minRp: 2500, maxRp: Infinity, color: '#FF4500' },
+] as const;
+
+export function getBattleTier(rp: number): BattleTierDef
+export function getTierIndex(rp: number): number
+export function calcPointDelta(
+  result: 'win' | 'lose' | 'disconnect',
+  myRp: number,
+  opponentRp: number
+): number
+```
+
+### Step 3: `supabase/functions/battle-result-submit/index.ts` (교체)
+
+- Input: `{ result, opponentId? }`
+- 상대 RP 조회: `supabaseAdmin.from('battle_records').select('rating_points').eq('user_id', opponentId).single()`
+- 상대 RP 없으면(첫 게임) 기본값 1000 사용
+- `calcPointDelta` 로직을 Edge Function 내부에 인라인 (Deno 환경에서 공유 불가)
+- `supabaseAdmin.rpc('submit_battle_record', { p_user_id, p_result, p_point_delta })`
+- 반환: `{ success, ratingPoints, pointDelta, wins, losses, disconnects, rank, tierName, tierIcon }`
+
+배포: `supabase functions deploy battle-result-submit --no-verify-jwt`
+
+### Step 4: `src/utils/battleLeaderboard.ts` (수정)
+
+```typescript
+// BattleRecordEntry에 추가
+ratingPoints: number;
+tierName: string;
+tierIcon: string;
+
+// SubmitBattleResultResponse에 추가
+ratingPoints: number;
+pointDelta: number;
+tierName: string;
+tierIcon: string;
+
+// submitBattleResult 시그니처 변경
+export async function submitBattleResult(
+  result: BattleResult,
+  opponentId?: string
+): Promise<SubmitBattleResultResponse>
+```
+
+### Step 5: `src/scenes/BattleMatchScene.ts` (수정)
+
+```typescript
+// 클래스에 추가
+private opponentUserId: string = '';
+
+// onEvent(BattleEvent.READY) 콜백에서 캡처
+// payload: ReadyPayload = { userId, characterId }
+this.battleChannel.onEvent(BattleEvent.READY, (payload: ReadyPayload) => {
+  this.opponentUserId = payload.userId;
+  ...
+});
+
+// goToBattle()에서 전달
+this.scene.start('BattleGameScene', { roomCode, userId, opponentId: this.opponentUserId });
+```
+
+### Step 6: `src/scenes/BattleGameScene.ts` (수정)
+
+```typescript
+// init()에 추가
+this.opponentId = data.opponentId ?? '';
+
+// endBattle()에서 전달
+this.scene.start('BattleResultScene', {
+  result, myScore, opponentScore, roomCode,
+  opponentId: this.opponentId,   // NEW
+});
+```
+
+### Step 7: `src/scenes/BattleResultScene.ts` (수정)
+
+- `init()`: `this.opponentId = data.opponentId ?? ''`
+- 제출 후 응답 받아 UI 업데이트:
+
+```
+y=130  ⚡ 번개손  →  🥇 금똥전사   (티어 상승 시)
+       ⚡ 번개손              (티어 유지 시)
+y=155  +30 RP  (초록) / -20 RP  (빨강)
+```
+
+- `submitBattleResult(this.result, this.opponentId)` 호출
+- 제출 전: "전적 기록 중..." 표시, 완료 후 RP 변동 표시
+
+### Step 8: `src/scenes/BattleLeaderboardScene.ts` (수정)
+
+- 헤더: `순위  이름   티어   RP   승률`
+- 각 행에 `entry.tierIcon + entry.tierName` 표시
+- 내 전적 요약에 현재 티어 포함: `⚡ 번개손 | 1250 RP | 60% (5위)`
+- `currentUserRank` 응답에서 `rating_points` 기반으로 `getBattleTier()` 호출
+
+---
+
+## 핵심 파일 참조
+
+| 파일 | 변경 |
+|------|------|
+| `supabase/migrations/20260321_battle_rating.sql` | 신규 — rating_points 컬럼, 함수 교체, 뷰 재생성 |
+| `supabase/functions/battle-result-submit/index.ts` | 교체 — opponentId 수신, RP 계산 |
+| `src/utils/battleTier.ts` | 신규 — 티어 정의, 계산 함수 |
+| `src/utils/battleLeaderboard.ts` | 수정 — 인터페이스 확장, opponentId 전달 |
+| `src/scenes/BattleMatchScene.ts` | 수정 — opponentUserId 캡처 |
+| `src/scenes/BattleGameScene.ts` | 수정 — opponentId 전달 |
+| `src/scenes/BattleResultScene.ts` | 수정 — RP/티어 변동 UI |
+| `src/scenes/BattleLeaderboardScene.ts` | 수정 — 티어 아이콘, RP 표시 |
+
+## TypeScript 준수
+
+- `as const` 사용 (enum 금지)
+- `import { type ... }` 패턴
+- 변경 후 `npx tsc --noEmit` 필수
+
+## 검증
+
+1. migration 실행 → `battle_records.rating_points` 컬럼 확인
+2. Edge Function 재배포
+3. 대전 1판 → 결과 씬에 "+25 RP" 표시 확인
+4. 다른 티어 유저와 대전 → RP 변동량이 달라지는지 확인
+5. RP 0인 상태에서 패배 → 0 유지 (음수 안 됨) 확인
+6. BattleLeaderboardScene → 티어 아이콘 + RP 정렬 확인
+
+## 티어 이름 결정 필요 (구현 전 사용자 선택)
+
+| | 0-499 | 500-999 | 1000-1499 | 1500-1999 | 2000-2499 | 2500+ |
+|-|-------|---------|-----------|-----------|-----------|-------|
+| **A (똥 테마)** | 💩 똥뉴비 | 🟤 피하기꾼 | ⚡ 번개손 | 🥇 금똥전사 | 💎 다이아똥왕 | 👑 전설 |
+| **B (표준 게임)** | 🪨 아이언 | 🥉 브론즈 | 🥈 실버 | 🥇 골드 | 💎 다이아 | 👑 챔피언 |
+| **C (성장 스토리)** | 🥚 알 | 🐣 새싹 | 🔥 전사 | ⚡ 고수 | 🌙 달인 | 👑 신 |
+
+
+If you need specific details from before exiting plan mode (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/johyunduk/.REDACTED.jsonl
+
+---
+
+이어서 진행해줘
+
+---
+
+battle-result-submit {error: "Failed to update battle record"}
+error
+: 
+"Failed to update battle record" 500에러 발생해
+
+---
+
+[Request interrupted by user for tool use]
+
+---
+
+아까 쿼리는 내가 직접 날렸어.
+
+---
+
+code
+: 
+"42702"
+detail
+: 
+"column reference \"rating_points\" is ambiguous"
+error
+: 
+"Failed to update battle record" 500 에러 여전히 나
+
+---
+
+# Simplify: Code Review and Cleanup
+
+Review all changed files for reuse, quality, and efficiency. Fix any issues found.
+
+## Phase 1: Identify Changes
+
+Run `git diff` (or `git diff HEAD` if there are staged changes) to see what changed. If there are no git changes, review the most recently modified files that the user mentioned or that you edited earlier in this conversation.
+
+## Phase 2: Launch Three Review Agents in Parallel
+
+Use the Agent tool to launch all three agents concurrently in a single message. Pass each agent the full diff so it has the complete context.
+
+### Agent 1: Code Reuse Review
+
+For each change:
+
+1. **Search for existing utilities and helpers** that could replace newly written code. Look for similar patterns elsewhere in the codebase — common locations are utility directories, shared modules, and files adjacent to the changed ones.
+2. **Flag any new function that duplicates existing functionality.** Suggest the existing function to use instead.
+3. **Flag any inline logic that could use an existing utility** — hand-rolled string manipulation, manual path handling, custom environment checks, ad-hoc type guards, and similar patterns are common candidates.
+
+### Agent 2: Code Quality Review
+
+Review the same changes for hacky patterns:
+
+1. **Redundant state**: state that duplicates existing state, cached values that could be derived, observers/effects that could be direct calls
+2. **Parameter sprawl**: adding new parameters to a function instead of generalizing or restructuring existing ones
+3. **Copy-paste with slight variation**: near-duplicate code blocks that should be unified with a shared abstraction
+4. **Leaky abstractions**: exposing internal details that should be encapsulated, or breaking existing abstraction boundaries
+5. **Stringly-typed code**: using raw strings where constants, enums (string unions), or branded types already exist in the codebase
+6. **Unnecessary JSX nesting**: wrapper Boxes/elements that add no layout value — check if inner component props (flexShrink, alignItems, etc.) already provide the needed behavior
+
+### Agent 3: Efficiency Review
+
+Review the same changes for efficiency:
+
+1. **Unnecessary work**: redundant computations, repeated file reads, duplicate network/API calls, N+1 patterns
+2. **Missed concurrency**: independent operations run sequentially when they could run in parallel
+3. **Hot-path bloat**: new blocking work added to startup or per-request/per-render hot paths
+4. **Recurring no-op updates**: state/store updates inside polling loops, intervals, or event handlers that fire unconditionally — add a change-detection guard so downstream consumers aren't notified when nothing changed. Also: if a wrapper function takes an updater/reducer callback, verify it honors same-reference returns (or whatever the "no change" signal is) — otherwise callers' early-return no-ops are silently defeated
+5. **Unnecessary existence checks**: pre-checking file/resource existence before operating (TOCTOU anti-pattern) — operate directly and handle the error
+6. **Memory**: unbounded data structures, missing cleanup, event listener leaks
+7. **Overly broad operations**: reading entire files when only a portion is needed, loading all items when filtering for one
+
+## Phase 3: Fix Issues
+
+Wait for all three agents to complete. Aggregate their findings and fix each issue directly. If a finding is a false positive or not worth addressing, note it and move on — do not argue with the finding, just skip it.
+
+When done, briefly summarize what was fixed (or confirm the code was already clean).
+
+---
+
+일단 깃에 올려줘
+
+---
+
+근데 양쪽 다 게임을 진입 했는데 한쪽에서는 계속 상대방 연결을 기다린다고 되어 있는데 왜 그럴까?
+
+---
+
+[Request interrupted by user for tool use]
+
+---
+
+음? 상대 점수가 집계도 안되고 더 이상해졌는데
+
+---
+
+뭐 수정한거지? 뭔가 되는거 같긴한데?
+
+---
+
+방찾기 해서 매칭이 된 경우 준비완료를 양쪽 다 한 경우 3카운트 이후 게임이 시작되게 해줘
+
+---
+
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+Summary:
+1. Primary Request and Intent:
+   - Implement a battle mode tier/rating (RP) system for the existing 1v1 battle mode
+   - Tier system: 6 tiers (똥뉴비→피하기꾼→번개손→금똥전사→다이아똥왕→전설) based on RP ranges
+   - RP changes based on tier difference between players (win: +15~+35, lose: -10~-30, disconnect: +20 fixed)
+   - New starting RP: 1000, floor: 0
+   - Pass opponentId through scene chain (BattleMatchScene → BattleGameScene → BattleResultScene) for RP delta calculation
+   - Show RP change and tier up animation in BattleResultScene
+   - Show tier icon + RP in BattleLeaderboardScene
+   - Run /simplify after implementation
+   - Fix "Failed to update battle record" 500 error from Edge Function
+   - Fix "한쪽에서는 계속 상대방 연결을 기다린다" (one side stuck waiting for opponent connection)
+   - Add "방찾기" (quick match/auto-matchmaking) button — NEW PENDING TASK (interrupted mid-implementation)
+
+2. Key Technical Concepts:
+   - Phaser 3 scene chain data passing (init data)
+   - Supabase Edge Functions (Deno runtime — cannot import local TS modules)
+   - Supabase Realtime channels (Broadcast + Presence)
+   - PostgreSQL RETURNS TABLE column name ambiguity with same-named table columns
+   - TypeScript strict mode: verbatimModuleSyntax, erasableSyntaxOnly (no enum, use `as const`)
+   - RP tier calculation inlined in Edge Functions (can't share with client TS)
+   - Promise hanging issue when Supabase channel.subscribe() returns non-SUBSCRIBED status
+   - Presence leave race condition between BattleMatchScene and BattleGameScene channels
+   - `maybeSingle()` vs `single()` for Supabase queries (PGRST116 error avoidance)
+   - Promise.all() for parallel DB queries
+
+3. Files and Code Sections:
+
+   - `supabase/migrations/20260321_battle_rating.sql` (NEW)
+     - Adds `rating_points INTEGER NOT NULL DEFAULT 1000` column to `battle_records`
+     - Drops old `increment_battle_record` and `get_battle_rank` functions
+     - Creates `submit_battle_record(p_user_id, p_result, p_point_delta)` function
+     - Key fix: reads values into variables FIRST, then updates using only variables (avoids RETURNS TABLE column name ambiguity with table columns)
+     - Creates `battle_leaderboard_view` ordered by `rating_points DESC`
+     - Creates `get_battle_rank_by_rp(p_rp INTEGER)` function
+
+   - `src/utils/battleTier.ts` (NEW)
+     - Defines `BattleTierDef` interface and `BATTLE_TIERS` array
+     - Warning comment: must sync with 2 Edge Functions when changed
+     - `getBattleTier(rp)`, `getTierIndex(rp)`, `calcPointDelta(result, myRp, opponentRp)`
+     ```typescript
+     export const BATTLE_TIERS: readonly BattleTierDef[] = [
+       { name: '똥뉴비', icon: '💩', minRp: 0, maxRp: 499, color: '#8B4513' },
+       { name: '피하기꾼', icon: '🟤', minRp: 500, maxRp: 999, color: '#CD7F32' },
+       { name: '번개손', icon: '⚡', minRp: 1000, maxRp: 1499, color: '#C0C0C0' },
+       { name: '금똥전사', icon: '🥇', minRp: 1500, maxRp: 1999, color: '#FFD700' },
+       { name: '다이아똥왕', icon: '💎', minRp: 2000, maxRp: 2499, color: '#00BFFF' },
+       { name: '전설', icon: '👑', minRp: 2500, maxRp: Infinity, color: '#FF4500' },
+     ] as const;
+     ```
+
+   - `supabase/functions/battle-result-submit/index.ts` (REPLACED)
+     - Receives `{ result, opponentId }` from client
+     - Parallel DB queries via Promise.all() for myRp and opponentRp
+     - Uses `.maybeSingle()` instead of `.single()`
+     - Inlines tier calculation (Deno cannot import local TS)
+     - Calls `submit_battle_record` RPC
+     - Returns `{ success, previousRp, ratingPoints, pointDelta, wins, losses, disconnects, winRate, rank, tierName, tierIcon }`
+     - `previousRp` added to fix reverse-calculation bug in client
+
+   - `supabase/functions/battle-leaderboard-top/index.ts` (MODIFIED)
+     - Queries `battle_leaderboard_view` with `rating_points` field
+     - Optimization: if currentUser is in top N, reuse view data (skip extra DB query + RPC)
+     - Only queries `battle_records` + `get_battle_rank_by_rp` if user is outside top N
+     - Uses `.maybeSingle()`
+     - Returns entries with `ratingPoints`, `tierName`, `tierIcon`
+
+   - `src/utils/battleLeaderboard.ts` (REWRITTEN)
+     - Extracted `getOrCreateSession()` helper to remove duplicate auth session code
+     - `SubmitBattleResultResponse` now includes `previousRp`, `ratingPoints`, `pointDelta`, `tierName`, `tierIcon`
+     - `BattleRecordEntry` now includes `ratingPoints`, `tierName`, `tierIcon`
+     - `BattleLeaderboardResponse.currentUserRank` now includes `ratingPoints`
+     - `submitBattleResult(result, opponentId?)` — opponentId parameter added
+
+   - `src/scenes/BattleMatchScene.ts` (MODIFIED)
+     - Added `import { type ReadyPayload }` from BattleTypes
+     - Added `private opponentUserId: string = ''` field
+     - READY event handler now captures `payload.userId` → `this.opponentUserId`
+     - `goToBattle()` passes `opponentId: this.opponentUserId` to BattleGameScene
+
+   - `src/scenes/BattleGameScene.ts` (MODIFIED)
+     - `BattleInitData` interface: added `opponentId?: string`
+     - Added `private opponentId: string = ''` field
+     - `init()`: sets `this.opponentId = data.opponentId ?? ''`
+     - `endBattle()`: passes `opponentId: this.opponentId` to BattleResultScene
+     - `initBattleChannel()`: uses `joinRoom()` (reverted from `joinGame()` after it broke scores)
+
+   - `src/scenes/BattleResultScene.ts` (REWRITTEN)
+     - Added `opponentId` to `BattleResultData` interface
+     - Added `tierText` and `rpDeltaText` Phaser.GameObjects.Text fields
+     - Layout adjusted (result title moved to y=85, RP display at y=130/155)
+     - "전적 기록 중..." placeholder while submitting
+     - `showRpResult(res)`: uses `res.previousRp` directly (not reverse-calculated) to determine tier change
+     - Shows tier upgrade arrow (e.g., "⚡ 번개손 → 🥇 금똥전사") or current tier + RP
+     - Shows "+25 RP" (green) or "-20 RP" (red)
+     - Added "🏆 전적 보기" button
+
+   - `src/scenes/BattleLeaderboardScene.ts` (REWRITTEN)
+     - Header: `순위  이름   티어      RP    승률`
+     - Each row: `getBattleTier(entry.ratingPoints)` for tier icon + name
+     - My rank summary: `${myTier.icon} ${myTier.name} | ${ratingPoints} RP | 승/부/패 | 승률% (rank위)`
+     - `currentUserRank` type includes `ratingPoints`
+
+   - `src/utils/battleChannel.ts` (MODIFIED)
+     - `createRoom()` and `joinRoom()` now pass `'battle-room'` prefix to `createChannel(topicPrefix)`
+     - Added `joinGame()` method using `'battle-game'` prefix (currently unused — BattleGameScene reverted to joinRoom)
+     - **KEY FIX**: `subscribe()` now handles `CHANNEL_ERROR`, `TIMED_OUT`, `CLOSED` status codes
+     - Added 10-second timeout as safety net against infinite hanging
+     ```typescript
+     async subscribe(): Promise<void> {
+       if (!this.channel) return;
+       return new Promise((resolve) => {
+         const timeout = setTimeout(() => {
+           console.warn('[BattleChannel] subscribe timeout — forcing channelReady');
+           resolve();
+         }, 10000);
+         this.channel!.subscribe(async (status) => {
+           if (status === 'SUBSCRIBED') {
+             clearTimeout(timeout);
+             await this.channel!.track({ userId: this.userId, joinedAt: Date.now() });
+             resolve();
+           } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+             console.warn('[BattleChannel] subscribe failed with status:', status);
+             clearTimeout(timeout);
+             resolve();
+           }
+         });
+       });
+     }
+     ```
+
+   - `supabase/migrations/20260321_battle_records.sql` (NEW — existing schema baseline committed)
+
+4. Errors and Fixes:
+   - **"Failed to update battle record" 500 error**:
+     - Error code `42702`: "column reference 'rating_points' is ambiguous"
+     - Cause: `RETURNS TABLE(rating_points INTEGER, wins INTEGER, ...)` declares output columns with same names as `battle_records` table columns → ambiguous in UPDATE SET clause
+     - Fix: Read current values into variables first, then update using only variables on right-hand side of SET
+     - User ran the SQL fix manually in Supabase dashboard
+
+   - **`/simplify` findings fixed**:
+     - Bug: `previousRp` reverse-calculation error when RP is clamped at 0 → Edge Function now returns `previousRp: myRp`
+     - Performance: sequential DB queries → `Promise.all()` parallel
+     - Performance: leaderboard top-N check before extra query
+     - Code reuse: `getOrCreateSession()` helper extracted
+     - `.single()` → `.maybeSingle()`
+
+   - **"joinGame" change broke opponent score display**:
+     - After changing BattleGameScene to use `joinGame()` (battle-game: topic), opponent scores stopped working
+     - User feedback: "뭔가 되는거 같긴한데" — reverted to `joinRoom()` in BattleGameScene
+     - Root cause of original bug was actually `subscribe()` not handling non-SUBSCRIBED statuses
+
+   - **"상대와 연결 중..." stuck (one side)**:
+     - Root cause: `subscribe()` Promise never resolved when Supabase returned `CHANNEL_ERROR`/`TIMED_OUT` instead of `SUBSCRIBED`
+     - Fix: Handle all non-SUBSCRIBED statuses + 10 second timeout
+
+5. Problem Solving:
+   - Tier system implemented end-to-end: DB → Edge Function → client UI
+   - RP delta calculation inlined in both Edge Functions due to Deno import constraint
+   - Battle result scene now shows real-time RP changes after submission
+   - Leaderboard now sorted by RP with tier icons
+   - Subscribe hanging bug fixed with error state handling + timeout
+   - Edge Function `battle-result-submit` and `battle-leaderboard-top` both redeployed with `--no-verify-jwt`
+
+6. All User Messages:
+   - "Implement the following plan: [배틀 모드 티어/레이팅 시스템 구현 계획]" — initial implementation request
+   - "이어서 진행해줘" — continue implementation
+   - "battle-result-submit {error: 'Failed to update battle record'} 500에러 발생해"
+   - "아까 쿼리는 내가 직접 날렸어." — user ran migration manually
+   - "/simplify" — code review and cleanup
+   - "일단 깃에 올려줘" — commit and push
+   - "근데 양쪽 다 게임을 진입 했는데 한쪽에서는 계속 상대방 연결을 기다린다고 되어 있는데 왜 그럴까?"
+   - "[Request interrupted] 음? 상대 점수가 집계도 안되고 더 이상해졌는데" — joinGame change broke scores
+   - "뭐 수정한거지? 뭔가 되는거 같긴한데?" — asking about what was fixed
+   - "방찾기 해서 매칭이 된 경우 준비완료를 양쪽 다 한 경우 3카운트 이후 게임이 시작되게 해줘" — NEW feature request (interrupted)
+
+7. Pending Tasks:
+   - **"방찾기" quick match feature**: Auto-matchmaking button in BattleMatchScene menu. Flow: click "방찾기" → automatic opponent matching → both players see "준비완료" button → when both press it → 3-2-1 countdown → game starts. Was being implemented when conversation was interrupted.
+
+8. Current Work:
+   Reading `BattleMatchScene.ts` (first 160 lines) to understand the current menu layout before implementing the "방찾기" quick match feature. The user's request was:
+   > "방찾기 해서 매칭이 된 경우 준비완료를 양쪽 다 한 경우 3카운트 이후 게임이 시작되게 해줘"
+   
+   Current menu buttons in `showMenu()`:
+   - y=250: "🏠 방 만들기" (red, 260x70)
+   - y=350: "🔗 방 참가" (blue, 260x70)
+   - y=450: "🏆 전적 보기" (text link)
+
+9. Optional Next Step:
+   Implement "방찾기" quick match in `BattleMatchScene.ts`. The plan:
+   - Add "🔍 방찾기" button to `showMenu()` (adjust y positions of existing buttons)
+   - Add `private quickMatchChannel: RealtimeChannel | null` field (import from @supabase/supabase-js)
+   - Add `private quickMatchDone: boolean = false` flag
+   - `handleQuickMatch()`: subscribe to `battle-quickmatch` Supabase channel, show "탐색 중..." UI with cancel button
+   - On presence sync with 2+ players: lower userId becomes host (generates room code, broadcasts `match_found` to opponent)
+   - Host: calls existing `createRoom` logic + `doSendReady()` automatically
+   - Guest: receives `match_found` broadcast, calls existing `joinRoom` logic + `doSendReady()` automatically  
+   - When both READY → existing `checkBothReady()` → `sendGameStart()` → `showCountdown()` (3-2-1-GO) → game
+   - Add `leaveQuickMatch()` cleanup + handle in `shutdown()`
+   - The existing countdown in `showCountdown()` already implements the "3카운트 이후 게임 시작" behavior
+
+If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/johyunduk/.REDACTED.jsonl
+Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.
+
+---
+
+엥 방찾기를 하나 더 만들라는게 아니라 방 참가를 하고 3카운트하고 바로 게임 시작이 아니라 방 참가 후 준비완료를 하는게 있었으면 좋겠다고.
+
+---
+
+# Simplify: Code Review and Cleanup
+
+Review all changed files for reuse, quality, and efficiency. Fix any issues found.
+
+## Phase 1: Identify Changes
+
+Run `git diff` (or `git diff HEAD` if there are staged changes) to see what changed. If there are no git changes, review the most recently modified files that the user mentioned or that you edited earlier in this conversation.
+
+## Phase 2: Launch Three Review Agents in Parallel
+
+Use the Agent tool to launch all three agents concurrently in a single message. Pass each agent the full diff so it has the complete context.
+
+### Agent 1: Code Reuse Review
+
+For each change:
+
+1. **Search for existing utilities and helpers** that could replace newly written code. Look for similar patterns elsewhere in the codebase — common locations are utility directories, shared modules, and files adjacent to the changed ones.
+2. **Flag any new function that duplicates existing functionality.** Suggest the existing function to use instead.
+3. **Flag any inline logic that could use an existing utility** — hand-rolled string manipulation, manual path handling, custom environment checks, ad-hoc type guards, and similar patterns are common candidates.
+
+### Agent 2: Code Quality Review
+
+Review the same changes for hacky patterns:
+
+1. **Redundant state**: state that duplicates existing state, cached values that could be derived, observers/effects that could be direct calls
+2. **Parameter sprawl**: adding new parameters to a function instead of generalizing or restructuring existing ones
+3. **Copy-paste with slight variation**: near-duplicate code blocks that should be unified with a shared abstraction
+4. **Leaky abstractions**: exposing internal details that should be encapsulated, or breaking existing abstraction boundaries
+5. **Stringly-typed code**: using raw strings where constants, enums (string unions), or branded types already exist in the codebase
+6. **Unnecessary JSX nesting**: wrapper Boxes/elements that add no layout value — check if inner component props (flexShrink, alignItems, etc.) already provide the needed behavior
+
+### Agent 3: Efficiency Review
+
+Review the same changes for efficiency:
+
+1. **Unnecessary work**: redundant computations, repeated file reads, duplicate network/API calls, N+1 patterns
+2. **Missed concurrency**: independent operations run sequentially when they could run in parallel
+3. **Hot-path bloat**: new blocking work added to startup or per-request/per-render hot paths
+4. **Recurring no-op updates**: state/store updates inside polling loops, intervals, or event handlers that fire unconditionally — add a change-detection guard so downstream consumers aren't notified when nothing changed. Also: if a wrapper function takes an updater/reducer callback, verify it honors same-reference returns (or whatever the "no change" signal is) — otherwise callers' early-return no-ops are silently defeated
+5. **Unnecessary existence checks**: pre-checking file/resource existence before operating (TOCTOU anti-pattern) — operate directly and handle the error
+6. **Memory**: unbounded data structures, missing cleanup, event listener leaks
+7. **Overly broad operations**: reading entire files when only a portion is needed, loading all items when filtering for one
+
+## Phase 3: Fix Issues
+
+Wait for all three agents to complete. Aggregate their findings and fix each issue directly. If a finding is a false positive or not worth addressing, note it and move on — do not argue with the finding, just skip it.
+
+When done, briefly summarize what was fixed (or confirm the code was already clean).
+
+---
+
+준비완료 버튼이 나오는 화면에서 현재 선택된 내 캐릭터를 보여주고 캐릭터를 변경할 수 있는 버튼이 있었으면 좋겠어
+
+---
+
+양쪽 다 선택할 수 있어야 하는데 방을 만든 쪽만 선택이 가능한데?
+
+---
+
+음 근데 승리 조건을 어떻게 하는게 좋을까? 똥을 맞았더라도 점수는 더 높을 가능성이 있는데.
+
+---
+
+음 그러면 이거 대전 모드는 그냥 점수를 없애고 오래 살기로 하는게 좋겠다. 점수 대신 시간으로 표시해줘.
+
+---
+
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+Summary:
+1. Primary Request and Intent:
+   - **"방찾기" button (revised)**: User initially asked for an auto-matchmaking "방찾기" feature, but then clarified: they don't want a new button — they want the **existing room join/create flow** to have a manual "준비완료" (ready) button that both players must press before the 3-count countdown starts.
+   - **Character picker on ready screen**: Show the currently selected character portrait + arrows (◀▶) to cycle through owned characters on the ready button screen. Both host and guest should be able to change characters.
+   - **Fix: guest can't select characters**: "양쪽 다 선택할 수 있어야 하는데 방을 만든 쪽만 선택이 가능한데?" — only the host could select; guest couldn't.
+   - **Win condition redesign**: Remove score entirely from battle mode. Replace with survival time. Display time (seconds) instead of score in both the game HUD and result screen. "음 그러면 이거 대전 모드는 그냥 점수를 없애고 오래 살기로 하는게 좋겠다. 점수 대신 시간으로 표시해줘."
+   - **`/simplify`**: Code review and cleanup of BattleMatchScene.ts changes.
+
+2. Key Technical Concepts:
+   - Phaser 3 scene lifecycle: `shutdown()` → `create()` reuses the class instance (fields NOT reset to defaults automatically)
+   - Supabase Realtime Presence: `join`/`leave` events; `onPresenceJoin` can fire multiple times
+   - Broadcast events: READY, GAME_START, SCORE_UPDATE, GAME_OVER
+   - Race condition: guest sends READY before host receives presence join → host stuck on "대기 중" screen
+   - `readyButtonShown` flag prevents duplicate renders from multiple presence join firings
+   - TypeScript strict mode: `verbatimModuleSyntax`, `erasableSyntaxOnly` (no enum, use `as const`)
+   - `protected` fields in Phaser scene inheritance: `scoreText`, `highScoreText`, `score`, `gameOver`, `difficultyLevel`, `poops`
+   - GameScene's `updateScore()` triggers special poop spawn milestones — must not be disabled in battle mode
+
+3. Files and Code Sections:
+   - **`src/scenes/BattleMatchScene.ts`** — Extensively rewritten. Key changes:
+     - Removed all quickmatch code (field `quickMatchChannel`, `quickMatchDone`, `requireManualReady`; methods `handleQuickMatch`, `showQuickMatchSearching`, `setupBattleAfterMatch`, `showQuickMatchReady`, `leaveQuickMatchChannel`)
+     - Restored 2-button menu layout (y=250/350/450)
+     - Added `showReadyButton()`: shows "상대방과 연결되었습니다!", character portrait, arrows, name/grade, ready button
+     - Added `pickCharacter(delta)`: cycles owned chars, saves selection, re-renders
+     - `onPresenceJoin` for host → `showReadyButton()`
+     - `doJoin()` for guest → `showReadyButton()` directly after subscribe
+     - Removed auto-`doSendReady()` from READY event handler
+     - Added `readyButtonShown: boolean` flag to prevent duplicate renders
+     - Race condition fix: READY handler also calls `showReadyButton()` for host
+     - Reset `ownedChars = []`, `charPickIdx = 0` in both `handleCreateRoom()` and `doJoin()`
+     - `showReadyButton()` always reinitializes `ownedChars` from localStorage (no lazy-init guard)
+     
+     Key current state of critical methods:
+     ```typescript
+     private showReadyButton() {
+       if (this.readyButtonShown) return;
+       this.readyButtonShown = true;
+       this.clearUI();
+       // Always reinitialize fresh
+       this.ownedChars = getOwnedCharacters();
+       const currentId = getSafeSelectedCharacter();
+       this.charPickIdx = Math.max(0, this.ownedChars.indexOf(currentId));
+       const def = getCharacterDef(this.ownedChars[this.charPickIdx]);
+       // Shows portrait (72x100), arrows if ownedChars.length > 1, name, grade, ready button
+       ...
+     }
+     private pickCharacter(delta: number) {
+       this.charPickIdx = (this.charPickIdx + delta + this.ownedChars.length) % this.ownedChars.length;
+       setSelectedCharacter(this.ownedChars[this.charPickIdx]);
+       this.readyButtonShown = false;
+       this.showReadyButton();
+     }
+     ```
+     ```typescript
+     // Race condition fix in READY handler:
+     this.battleChannel.onEvent(BattleEvent.READY, (payload: ReadyPayload) => {
+       this.opponentReady = true;
+       if (payload.userId) this.opponentUserId = payload.userId;
+       if (this.isHost) this.showReadyButton(); // race condition fix
+       this.checkBothReady();
+     });
+     ```
+
+   - **`src/scenes/BattleGameScene.ts`** — Read in full (about to be modified). Current state:
+     - Fields: `opponentScore: number`, `opponentScoreText`, `scoreUpdateTimer`, `battleFinished`
+     - `create()`: hides `highScoreText`, shows "상대: 0" at y=3 center, starts `initBattleChannel()`
+     - `initBattleChannel()`: subscribes → starts `scoreUpdateTimer` (sends `this.score` every 1s)
+     - `hitPoop()`: sends `this.score` via `sendGameOver()`
+     - `endBattle()`: passes `myScore: this.score, opponentScore: this.opponentScore` to BattleResultScene
+     - `shutdown()`: removes scoreUpdateTimer, clears disconnect timer, destroys channel
+     - `scoreText` (from GameScene) is `protected` — accessible from BattleGameScene
+
+   - **`src/scenes/BattleResultScene.ts`** — Will need modification:
+     - Currently shows `${this.myScore}` and `${this.opponentScore}` as plain numbers
+     - Labels: "내 점수" and "상대 점수"
+     - These need to become time-formatted strings
+
+   - **`src/utils/character.ts`** — Exports used in BattleMatchScene:
+     - `getSafeSelectedCharacter()`, `getOwnedCharacters()`, `getCharacterDef()`, `setSelectedCharacter()`
+     - `CharacterDef.imageKey` (e.g. `'chibi_front'`), `imagePath`, `name`, `grade`, `gradeColor`
+
+4. Errors and fixes:
+   - **User correction on "방찾기"**: Implemented a new quick-match button. User said: "방찾기를 하나 더 만들라는게 아니라 방 참가를 하고 3카운트하고 바로 게임 시작이 아니라 방 참가 후 준비완료를 하는게 있었으면 좋겠다고" → Reverted all quickmatch code, implemented manual ready button for existing flow.
+   - **Race condition (from /simplify)**: Host stuck on "대기 중" if guest sends READY before presence join fires → Fixed by calling `showReadyButton()` inside READY event handler when `this.isHost`.
+   - **Duplicate UI renders (from /simplify)**: `onPresenceJoin` could fire multiple times → Fixed with `readyButtonShown` flag (early return if already shown).
+   - **Misleading text (from /simplify)**: "상대방이 입장했습니다!" doesn't work for both roles → Changed to "상대방과 연결되었습니다!"
+   - **Redundant guard (from /simplify)**: `if (!this.myReady) this.doSendReady()` in button handler → Simplified to `this.doSendReady()` (already guarded internally).
+   - **Guest can't select characters**: Phaser reuses scene instance, `ownedChars` was populated from previous host session, `if (ownedChars.length === 0)` guard skipped reinit for guest → Fixed by: (1) resetting `ownedChars = []`, `charPickIdx = 0` in `handleCreateRoom()` and `doJoin()`, (2) removing the lazy-init guard in `showReadyButton()`.
+
+5. Problem Solving:
+   - **Manual ready flow**: Both host and guest now see a "준비완료" button with character picker. Neither auto-readies. When both press the button, host's `checkBothReady()` triggers countdown → game.
+   - **Character picker**: Loads all owned character front images in `preload()` (uses Phaser texture cache, no duplicates if CharacterSelectScene already loaded them). Shows portrait with arrows for cycling.
+   - **Win condition redesign**: Decided to remove score entirely and use survival time instead. Implementation is pending (user's most recent request).
+
+6. All user messages:
+   - (Continuation from previous context) — Conversation continued from previous session
+   - "엥 방찾기를 하나 더 만들라는게 아니라 방 참가를 하고 3카운트하고 바로 게임 시작이 아니라 방 참가 후 준비완료를 하는게 있었으면 좋겠다고."
+   - "/simplify" (invoked skill)
+   - (Empty message — accepted /simplify results)
+   - "준비완료 버튼이 나오는 화면에서 현재 선택된 내 캐릭터를 보여주고 캐릭터를 변경할 수 있는 버튼이 있었으면 좋겠어"
+   - "양쪽 다 선택할 수 있어야 하는데 방을 만든 쪽만 선택이 가능한데?"
+   - "음 근데 승리 조건을 어떻게 하는게 좋을까? 똥을 맞았더라도 점수는 더 높을 가능성이 있는데."
+   - "음 그러면 이거 대전 모드는 그냥 점수를 없애고 오래 살기로 하는게 좋겠다. 점수 대신 시간으로 표시해줘."
+
+7. Pending Tasks:
+   - **Implement survival time system in BattleGameScene**:
+     - Hide `this.scoreText` (protected, accessible)
+     - Add `survivalMs: number` field, reset in `init()`
+     - Add `survivalTimerEvent: Phaser.Time.TimerEvent` (100ms loop, increments survivalMs, updates display)
+     - Add `survivalText: Phaser.GameObjects.Text` at same position (showing "⏱ 0.0초")
+     - Change `opponentScoreText` to show "상대: --" → "상대: 0.0초" format
+     - Change `scoreUpdateTimer` to send `this.survivalMs` instead of `this.score`
+     - Change `hitPoop()` to send `this.survivalMs` via `sendGameOver()`
+     - Change `endBattle()` to pass `myScore: this.survivalMs`
+     - Remove `survivalTimerEvent` in `endBattle()` and `shutdown()`
+   - **Update BattleResultScene**:
+     - Change "내 점수" → "내 생존 시간", "상대 점수" → "상대 생존 시간"
+     - Format score values as time strings using a `formatSurvivalTime(ms)` helper
+
+8. Current Work:
+   The assistant had just finished reading `BattleGameScene.ts` in full and was about to implement the survival time system. The user's request was:
+   > "음 그러면 이거 대전 모드는 그냥 점수를 없애고 오래 살기로 하는게 좋겠다. 점수 대신 시간으로 표시해줘."
+
+   The full BattleGameScene.ts was read and key findings noted:
+   - `scoreText` is `protected` in GameScene → `this.scoreText.setVisible(false)` works from BattleGameScene
+   - `score`, `gameOver`, `difficultyLevel`, `difficultyConfig`, `poops` are all `protected`
+   - `scoreUpdateTimer` currently sends `this.score` every 1000ms → needs to send `this.survivalMs`
+   - `hitPoop()` sends `this.score` via `sendGameOver()` → needs `this.survivalMs`
+   - `endBattle()` passes `myScore: this.score` → needs `this.survivalMs`
+   - Planned `formatSurvivalTime(ms: number): string` → `"12.3초"` or `"1:05.0"` for over 60s
+
+9. Optional Next Step:
+   Implement survival time in `BattleGameScene.ts` and update `BattleResultScene.ts` per the user's request:
+   > "음 그러면 이거 대전 모드는 그냥 점수를 없애고 오래 살기로 하는게 좋겠다. 점수 대신 시간으로 표시해줘."
+
+   Specifically:
+   1. Add `private survivalMs: number = 0` and `private survivalTimerEvent!: Phaser.Time.TimerEvent` and `private survivalText!: Phaser.GameObjects.Text` to BattleGameScene
+   2. In `init()`: `this.survivalMs = 0`
+   3. In `create()`: `this.scoreText.setVisible(false)`, create `survivalText` showing "⏱ 0.0초", start 100ms survival timer, change opponentScoreText initial text to "상대: --"
+   4. In `initBattleChannel()`: change `sendScoreUpdate(this.score)` → `sendScoreUpdate(this.survivalMs)`
+   5. In `setupBattleListeners()` SCORE_UPDATE handler: format `payload.score` as time for opponentScoreText
+   6. In `setupBattleListeners()` GAME_OVER handler: change `sendScoreUpdate(this.score)` → `sendScoreUpdate(this.survivalMs)`
+   7. In `hitPoop()`: change `sendGameOver(this.score)` → `sendGameOver(this.survivalMs)`
+   8. In `endBattle()`: change `myScore: this.score` → `myScore: this.survivalMs`, remove `survivalTimerEvent`
+   9. In `shutdown()`: remove `survivalTimerEvent`
+   10. Update `BattleResultScene.ts`: change labels and format time values
+
+If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/johyunduk/.REDACTED.jsonl
+Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.
+
+---
+
+근데 양쪽 게임 플레이 시간이 다른데 왜 그렇지? 둘은 같은 방을 공유하는데 시간이 왜 다르지? 각 클라이언트에서 따로 시간을 관리하는건가? 하나의 방이 관리를 하면 안되나? 근데 이러면 시간은 어차피 항상 같은데 비교할 필요가 없으니 시간도 필요 없는게 아닌가?
+
+---
+
+[Request interrupted by user for tool use]
