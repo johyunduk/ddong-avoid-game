@@ -80,5 +80,5 @@ export const DIFFICULTY_SCALING = {
   /** 이 점수마다 difficultyLevel 1회 증가 */
   scoreInterval: 500,
   /** 1회당 difficultyLevel 증가량 */
-  levelIncrement: 0.2,
+  levelIncrement: 0.1,
 } as const;
