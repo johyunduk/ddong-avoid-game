@@ -3,7 +3,7 @@
   "checkpoint_id": "53fcdbf67cb9",
   "strategy": "manual-commit",
   "branch": "dev",
-  "checkpoints_count": 2,
+  "checkpoints_count": 3,
   "files_touched": [
     "src/types/GameMode.ts"
   ],
@@ -70,13 +70,20 @@
       "context": "/53/fcdbf67cb9/8/context.md",
       "content_hash": "/53/fcdbf67cb9/8/content_hash.txt",
       "prompt": "/53/fcdbf67cb9/8/prompt.txt"
+    },
+    {
+      "metadata": "/53/fcdbf67cb9/9/metadata.json",
+      "transcript": "/53/fcdbf67cb9/9/full.jsonl",
+      "context": "/53/fcdbf67cb9/9/context.md",
+      "content_hash": "/53/fcdbf67cb9/9/content_hash.txt",
+      "prompt": "/53/fcdbf67cb9/9/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 1490,
-    "cache_creation_tokens": 2971212,
-    "cache_read_tokens": 96105603,
-    "output_tokens": 681217,
-    "api_call_count": 1032
+    "input_tokens": 1510,
+    "cache_creation_tokens": 2996660,
+    "cache_read_tokens": 96478917,
+    "output_tokens": 685851,
+    "api_call_count": 1044
   }
 }
