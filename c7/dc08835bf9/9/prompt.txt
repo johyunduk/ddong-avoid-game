@@ -1,0 +1,431 @@
+@public/assets/rank/ 에 매칭 대전티어별 이미지를 추가했어. 이거로 변경해줘
+
+---
+
+대전 모드 화면에서 내 랭크와 점수가 보였으면 좋겠어
+
+---
+
+랭크 매칭 위에 캐릭터 버튼을 추가해서 거기서 캐릭터 선택을 하게 하자. 이유는 나중에 캐릭터가 많아질수록 캐릭터 선택이 오래 걸릴거 같아. 그러니 이미 메인 화면에 있는거 그대로 사용하면 되지 않을까 싶은데? 그러고 그 위에는 현재 선택된 캐릭터와 캐릭터가 몇 성인지 그리고 그 오른쪽에 랭크와 점수 나오게 UI qkRnjwnj
+
+---
+
+[Request interrupted by user]
+
+---
+
+랭크 매칭 위에 캐릭터 버튼을 추가해서 거기서 캐릭터 선택을 하게 하자. 이유는 나중에 캐릭터가 많아질수록 캐릭터 선택이 오래 걸릴거 같아. 그러니 이미 메인 화면에 있는거 그대로 사용하면 되지 않을까 싶은데? 그러고 그 위에는 현재 선택된 캐릭터와 캐릭터가 몇 성인지 그리고 그 오른쪽에 랭크와 점수 나오게 UI 바꿔줘
+
+---
+
+세로로 좀 더 크게 해주고 캐릭터 선택 버튼은 매칭 버튼같은 버튼으로 만들어줘. 근데 버튼의 크기는 캐릭터 선택 버튼과 일치 시켜줘
+
+---
+
+전적 보기, 메인 메뉴 이쪽의 공간들을 줄이면서 처리해봐. 그리고 매칭 버튼 가로 넓이 내가 캐릭터 선택이랑 동일하게 바꾸라고 했잖니?
+
+---
+
+전적보기, 메인메뉴 위아래 공간을 줄이고 나머지의 버튼들 공간을 늘리라고 했니 안했니?
+
+---
+
+캐릭터 선택버튼 랭크 매칭 버튼 한줄로 나오게 바꿔줘. 아래 방 만들기, 방 참가 버튼 버튼들 처럼 크기도 그렇게 해주고. 그리고나서 위에 있는 캐릭터와 랭크 티어 보이는 칸을 좀 더 크게 해주고
+
+---
+
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+Summary:
+1. Primary Request and Intent:
+   - **Rank images**: User added 5 PNG rank images (`alpha_rank.png`, `beta_rank.png`, `legacy_rank.png`, `master_rank.png`, `god_rank.png`) to `public/assets/rank/` and wanted them used in tier UI across battle scenes.
+   - **Show rank on battle screen**: Display the user's current tier image, tier name, and RP on the `BattleMatchScene` main menu.
+   - **Revamp battle menu UI**: Replace the inline character carousel (left/right arrows) with: a compact info card (current character + grade on left, rank badge on right) + a dedicated "캐릭터 선택" button that navigates to `CharacterSelectScene`.
+   - **Button styling**: Character select button should look like a match button (same border/style), not a plain button.
+   - **Spacing fix**: Reduce space around "전적 보기" and "메인 메뉴" (pack them tightly at bottom), increase spacing between the main action buttons.
+   - **Most recent**: Make character select button and ranked match button appear **side by side on one row** (like 방 만들기/방 참가 layout: x=100 and x=300, w=175, h=48). Make the info card taller/bigger.
+
+2. Key Technical Concepts:
+   - **Phaser 3**: Scene management (`scene.start()` with data params), `uiGroup` pattern for stateful UI lifecycle, `Phaser.GameObjects.Graphics` for divider lines, `?.active` guard for async UI updates
+   - **`BattleTierDef` + `imgKey`**: Tier definition extended with Phaser texture key; `preloadTierImages()` helper loads all 5 rank PNGs
+   - **Async rank badge pattern**: `cachedMyRp`/`cachedMyRank` instance fields cache fetched data; `updateRankBadge()` uses `?.active` guards so it works even if `clearUI()` has destroyed refs
+   - **`returnScene` parameter**: `CharacterSelectScene.init(data)` added to support returning to any caller scene
+   - **`getBattleLeaderboard(1)` optimization**: `getMyRating()` fetches limit=1 to minimize payload while still getting `currentUserRank`
+   - **TypeScript strict mode**: `verbatimModuleSyntax`, `erasableSyntaxOnly` — `import type` required, no enums
+
+3. Files and Code Sections:
+   - **`src/utils/battleTier.ts`**
+     - Added `imgKey: string` to `BattleTierDef`; added `import type Phaser from 'phaser'`; added `preloadTierImages(scene)` helper
+     - ```typescript
+       export interface BattleTierDef {
+         name: string; icon: string; imgKey: string;
+         minRp: number; maxRp: number; color: string;
+       }
+       export const BATTLE_TIERS = [
+         { name: '알파',   icon: '🔴', imgKey: 'rank_alpha',  minRp: 0,    maxRp: 499,      color: '#CC3333' },
+         { name: '베타',   icon: '🟠', imgKey: 'rank_beta',   minRp: 500,  maxRp: 999,      color: '#CC7700' },
+         { name: '레거시', icon: '🟡', imgKey: 'rank_legacy', minRp: 1000, maxRp: 1499,     color: '#CCCC00' },
+         { name: '마스터', icon: '💎', imgKey: 'rank_master', minRp: 1500, maxRp: 1999,     color: '#00BFFF' },
+         { name: '갓',     icon: '👑', imgKey: 'rank_god',    minRp: 2000, maxRp: Infinity, color: '#FF4500' },
+       ] as const;
+       export function preloadTierImages(scene: Phaser.Scene): void {
+         for (const tier of BATTLE_TIERS) {
+           if (!scene.textures.exists(tier.imgKey)) {
+             const tierId = tier.imgKey.replace('rank_', '');
+             scene.load.image(tier.imgKey, `assets/rank/${tierId}_rank.png`);
+           }
+         }
+       }
+       ```
+
+   - **`src/scenes/BattleResultScene.ts`**
+     - Added `preloadTierImages(this)` in `preload()`
+     - Added fields: `tierIconImg`, `tierUpgradeOldImg`, `tierArrowText`
+     - Shifted ranked UI text Y positions down (y=162, 183, 205) to make room for tier image at y=124
+     - `showRpResult()`: destroys old images, creates new ones — normal tier shows 48×48 centered image; tier upgrade shows old(32px)→arrow→new(40px) side by side
+     - ```typescript
+       private tierIconImg?: Phaser.GameObjects.Image;
+       private tierUpgradeOldImg?: Phaser.GameObjects.Image;
+       private tierArrowText?: Phaser.GameObjects.Text;
+       ```
+
+   - **`src/scenes/BattleLeaderboardScene.ts`**
+     - Added `preloadTierImages(this)` in `preload()`
+     - User summary line: added 20×20 tier image at x=13
+     - Leaderboard rows restructured from single monospace string to per-column positioned objects with fixed X coords:
+     - ```typescript
+       const COL_RANK=28, COL_NAME=44, COL_TIER_IMG=148, COL_TIER_NAME=162, COL_RP=258, COL_RATE=362;
+       // Per row: rank text, name text, tier image (20×20), tier name text (tier.color), RP, winRate
+       ```
+     - All objects pushed to `leaderboardTexts` array for cleanup
+
+   - **`src/utils/battleLeaderboard.ts`**
+     - Added `getMyRating()` — calls `getBattleLeaderboard(1)` and returns `currentUserRank`
+     - ```typescript
+       export async function getMyRating(): Promise<BattleLeaderboardResponse['currentUserRank']> {
+         const response = await getBattleLeaderboard(1);
+         return response.currentUserRank;
+       }
+       ```
+
+   - **`src/scenes/CharacterSelectScene.ts`**
+     - Added `private returnScene: string = 'ModeSelectScene'`
+     - Added `init(data: { returnScene?: string })` method
+     - Back button changed: `this.scene.start('ModeSelectScene')` → `this.scene.start(this.returnScene)`
+
+   - **`src/scenes/BattleMatchScene.ts`** (most heavily modified)
+     - **Imports added**: `getBattleTier`, `preloadTierImages` from battleTier; `getMyRating` from battleLeaderboard
+     - **Removed fields**: `ownedChars`, `charPickIdx`, `lastPickTime`, `menuCharImg`, `menuCharNameTxt`, `menuCharGradeTxt`
+     - **Removed method**: `pickMenuCharacter()`
+     - **Removed import**: `setSelectedCharacter`, `getOwnedCharacters` (getOwnedCharacters kept for preload)
+     - **Added fields**:
+       ```typescript
+       private cachedMyRp: number | null = null;
+       private cachedMyRank: number | null = null;
+       private rankBadgeImg: Phaser.GameObjects.Image | null = null;
+       private rankBadgeNameTxt: Phaser.GameObjects.Text | null = null;
+       private rankBadgeRpTxt: Phaser.GameObjects.Text | null = null;
+       private rankBadgeRankTxt: Phaser.GameObjects.Text | null = null;
+       ```
+     - **`create()`**: Added `this.fetchMyRating()` call; back button moved to y=562
+     - **`showMenu()` current state** (info card h=130, buttons NOT yet side-by-side):
+       - Info card: `rect(200, 170, 374, 130)`, divider at x=203
+       - Char image: x=62, y=170, 54×76; name x=95/y=144; stars x=95/y=167; grade x=95/y=188
+       - Rank badge: tier image x=240/y=167 (42×42, alpha=0 until data); name x=270/y=150; RP x=270/y=169; rank x=270/y=187
+       - Char select btn: `rect(200, 272, 374, 40)` — full width, blue style (0x1a3a5c, stroke 0x4499dd)
+       - Ranked btn: `rect(200, 358, 374, 60)` — full width, gold style (0x7a5c00, stroke 0xFFD700)
+       - Separator: y=422; Create/join: y=458 (x=100/x=300, w=175, h=48); 전적보기: y=537; 메인메뉴: y=562
+     - **`fetchMyRating()`**: async, calls `getMyRating()`, caches result, calls `updateRankBadge()`; on null result shows 1000 RP default
+     - **`updateRankBadge(rp, rank)`**: updates all 4 rank badge refs if `.active`, sets tier image (42×42), tier color, "첫 게임 도전!" if rank===null
+
+4. Errors and fixes:
+   - **Edit tool string mismatch**: When trying to replace `showMenu()` wholesale, the `Edit` tool failed with "String to replace not found" due to whitespace differences from prior edits. Fixed by reading the current file state and using more targeted, smaller replacement strings.
+   - **User correction — ranked button width**: User pointed out they had already asked for ranked match button width to match character select (374px) but it was still 300px. Fixed: changed `rect(200, 314, 300, 60)` → `rect(200, 314, 374, 60)`.
+   - **User correction — spacing**: After moving back button to y=510, there was 90px of empty space below it (canvas bottom=600). User correctly noted the space wasn't being redistributed properly. Fixed by: back button → y=562, 전적보기 → y=537 (tight group at bottom), buttons above given more generous spacing.
+
+5. Problem Solving:
+   - **Async tier data in sync UI**: Solved with cache fields (`cachedMyRp`, `cachedMyRank`) + `?.active` guard in `updateRankBadge()` — works correctly whether data arrives before or after `showMenu()` is called, and across multiple calls to `showMenu()`.
+   - **`CharacterSelectScene` return destination**: Solved by adding `init(data: { returnScene? })` and using `this.returnScene` in back button, defaulting to `'ModeSelectScene'` for backward compatibility.
+   - **Leaderboard row layout with images**: Solved by replacing single monospace text string with per-column positioned objects at fixed X coordinates.
+
+6. All user messages:
+   - "@public/assets/rank/ 에 매칭 대전티어별 이미지를 추가했어. 이거로 변경해줘"
+   - "대전 모드 화면에서 내 랭크와 점수가 보였으면 좋겠어"
+   - "랭크 매칭 위에 캐릭터 버튼을 추가해서 거기서 캐릭터 선택을 하게 하자. 이유는 나중에 캐릭터가 많아질수록 캐릭터 선택이 오래 걸릴거 같아. 그러니 이미 메인 화면에 있는거 그대로 사용하면 되지 않을까 싶은데? 그러고 그 위에는 현재 선택된 캐릭터와 캐릭터가 몇 성인지 그리고 그 오른쪽에 랭크와 점수 나오게 UI 바꿔줘"
+   - "세로로 좀 더 크게 해주고 캐릭터 선택 버튼은 매칭 버튼같은 버튼으로 만들어줘. 근데 버튼의 크기는 캐릭터 선택 버튼과 일치 시켜줘"
+   - "전적 보기, 메인 메뉴 이쪽의 공간들을 줄이면서 처리해봐. 그리고 매칭 버튼 가로 넓이 내가 캐릭터 선택이랑 동일하게 바꾸라고 했잖니?"
+   - "전적보기, 메인메뉴 위아래 공간을 줄이고 나머지의 버튼들 공간을 늘리라고 했니 안했니?"
+   - "캐릭터 선택버튼 랭크 매칭 버튼 한줄로 나오게 바꿔줘. 아래 방 만들기, 방 참가 버튼 버튼들 처럼 크기도 그렇게 해주고. 그리고나서 위에 있는 캐릭터와 랭크 티어 보이는 칸을 좀 더 크게 해주고"
+
+7. Pending Tasks:
+   - **캐릭터 선택 + 랭크 매칭 버튼을 한 줄로 배치**: x=100/x=300, w=175, h=48 (방 만들기/방 참가 레이아웃과 동일). Font size needs to be reduced to fit 175px width.
+   - **정보 카드 크기 확대**: h=130 → ~h=190, internal content repositioned to use extra vertical space (larger char image, larger tier image, more spread-out text).
+
+8. Current Work:
+   The assistant was in the middle of implementing the user's most recent request: putting the character select button and ranked match button **side by side on one row**, sized like 방 만들기/방 참가 (w=175, h=48 each at x=100 and x=300), and making the info card taller. The assistant had just read the current file state (lines 174–248) and was about to write the replacement edit when the summary was requested.
+
+   Current card state in file:
+   - `rect(200, 170, 374, 130)` — needs to become ~h=190
+   - Char select: `rect(200, 272, 374, 40)` — needs to become `rect(100, ?, 175, 48)`
+   - Ranked: `rect(200, 358, 374, 60)` — needs to become `rect(300, ?, 175, 48)` on same row
+
+9. Optional Next Step:
+   Directly continuing from the user's last request: "캐릭터 선택버튼 랭크 매칭 버튼 한줄로 나오게 바꿔줘. 아래 방 만들기, 방 참가 버튼 버튼들 처럼 크기도 그렇게 해주고. 그리고나서 위에 있는 캐릭터와 랭크 티어 보이는 칸을 좀 더 크게 해주고"
+
+   Replace the info card section and the two button rows in `src/scenes/BattleMatchScene.ts` `showMenu()`:
+   1. Increase info card: `rect(200, 200, 374, 190)` (h=130→190, center shifts from 170→200)
+   2. Reposition card content to use extra vertical space (char image 58×82, tier image 52×52, text spread to y=158–207)
+   3. Replace char select (full-width, y=272) + ranked (full-width, y=358) with one row: char select at x=100 and ranked at x=300, both w=175, h=48, same y (e.g., y=323), with reduced font size (~17px)
+   4. Shift separator, create/join, 전적보기, 메인메뉴 Y positions to accommodate the layout change
+
+If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/johyunduk/.REDACTED.jsonl
+Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.
+
+---
+
+랭크가 api로 호출을 해서 그런지 느리네. 일단은 로컬 스토리지에도 저장을 해서 바로 뜨게 하고 부정 방지를 위해 api 응답 오면 변경되게 해줘.
+
+---
+
+캐릭터 선택 오른쪽에 전적보기 버튼으로 바꾸고 그 아래에 캐릭터, 전적보기 가로 합친 크기 만큼의 버튼으로 매칭 버튼으로 해줘
+
+---
+
+티어 이미지 살짝 크게 해주고 대전 모드 화면의 글씨들 좀 잘 보이게 해줘.
+
+---
+
+친선전 (RP 없음) 이게 진짜 안보이거든>?
+
+---
+
+릴리즈 노트 작성해줘.
+
+---
+
+[Request interrupted by user for tool use]
+
+---
+
+'1대1 실시간 대전 모드 추가', '랭크 매칭 시스템' 이것만 남겨줘
+
+---
+
+대전 모드 매칭 1분 넘어가는 경우 상대가 없다고 알려주면 좋겠어
+
+---
+
+대전 모드 화면에서 캐릭터랑 랭크 티어 이미지 조금만 더 키워줘
+
+---
+
+이미지 오른쪽 글씨들 위치를 좀 아래로 내려줘
+
+---
+
+이거는 일단 돌려줘봐
+
+---
+
+엥 아니 원래대로 글씨위치 해달라고 뭔소리야
+
+---
+
+깃 푸시해줘
+
+---
+
+대전모드 랭킹전이랑 친선전 둘 다 extreme 모드에서 기본으로 나오는 일반똥 갯수보다 하나는 줄여줘.
+
+---
+
+그리고 대전 모드에서 특수 똥 먹을 때 상대방 측에 일반 똥 소환을 안하는거 같은데?
+
+---
+
+# Simplify: Code Review and Cleanup
+
+Review all changed files for reuse, quality, and efficiency. Fix any issues found.
+
+## Phase 1: Identify Changes
+
+Run `git diff` (or `git diff HEAD` if there are staged changes) to see what changed. If there are no git changes, review the most recently modified files that the user mentioned or that you edited earlier in this conversation.
+
+## Phase 2: Launch Three Review Agents in Parallel
+
+Use the Agent tool to launch all three agents concurrently in a single message. Pass each agent the full diff so it has the complete context.
+
+### Agent 1: Code Reuse Review
+
+For each change:
+
+1. **Search for existing utilities and helpers** that could replace newly written code. Look for similar patterns elsewhere in the codebase — common locations are utility directories, shared modules, and files adjacent to the changed ones.
+2. **Flag any new function that duplicates existing functionality.** Suggest the existing function to use instead.
+3. **Flag any inline logic that could use an existing utility** — hand-rolled string manipulation, manual path handling, custom environment checks, ad-hoc type guards, and similar patterns are common candidates.
+
+### Agent 2: Code Quality Review
+
+Review the same changes for hacky patterns:
+
+1. **Redundant state**: state that duplicates existing state, cached values that could be derived, observers/effects that could be direct calls
+2. **Parameter sprawl**: adding new parameters to a function instead of generalizing or restructuring existing ones
+3. **Copy-paste with slight variation**: near-duplicate code blocks that should be unified with a shared abstraction
+4. **Leaky abstractions**: exposing internal details that should be encapsulated, or breaking existing abstraction boundaries
+5. **Stringly-typed code**: using raw strings where constants, enums (string unions), or branded types already exist in the codebase
+6. **Unnecessary JSX nesting**: wrapper Boxes/elements that add no layout value — check if inner component props (flexShrink, alignItems, etc.) already provide the needed behavior
+
+### Agent 3: Efficiency Review
+
+Review the same changes for efficiency:
+
+1. **Unnecessary work**: redundant computations, repeated file reads, duplicate network/API calls, N+1 patterns
+2. **Missed concurrency**: independent operations run sequentially when they could run in parallel
+3. **Hot-path bloat**: new blocking work added to startup or per-request/per-render hot paths
+4. **Recurring no-op updates**: state/store updates inside polling loops, intervals, or event handlers that fire unconditionally — add a change-detection guard so downstream consumers aren't notified when nothing changed. Also: if a wrapper function takes an updater/reducer callback, verify it honors same-reference returns (or whatever the "no change" signal is) — otherwise callers' early-return no-ops are silently defeated
+5. **Unnecessary existence checks**: pre-checking file/resource existence before operating (TOCTOU anti-pattern) — operate directly and handle the error
+6. **Memory**: unbounded data structures, missing cleanup, event listener leaks
+7. **Overly broad operations**: reading entire files when only a portion is needed, loading all items when filtering for one
+
+## Phase 3: Fix Issues
+
+Wait for all three agents to complete. Aggregate their findings and fix each issue directly. If a finding is a false positive or not worth addressing, note it and move on — do not argue with the finding, just skip it.
+
+When done, briefly summarize what was fixed (or confirm the code was already clean).
+
+---
+
+@public/assets/character_ranks/ 여기에 캐릭터 등급을 추가해는데 R, SR, UR 쓰던 부분들 이거로 교체해 줄 수 있나?
+
+---
+
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+Summary:
+1. Primary Request and Intent:
+   - Replace text-based grade labels (R, SR, UR) displayed throughout the game UI with actual images from `public/assets/character_ranks/` (which contains `r.png`, `sr.png`, `ur.png`)
+   - Prior completed work this session: rank tier images in battle scenes, BattleMatchScene UI revamp (info card + button layout), localStorage rank caching with djb2 signing, release notes v2.3.0, 1-minute matchmaking timeout warning, battle mode poop count reduction (-1 vs EXTREME), special poop send fix (channelReady race condition + pending queue)
+
+2. Key Technical Concepts:
+   - Phaser 3 scene management, `add.image()` vs `add.text()` for grade display
+   - `CharacterDef` interface in `src/utils/character.ts` — `grade: '등급외' | 'R' | 'SR' | 'UR'`, `gradeColor: string`
+   - `preloadTierImages()` pattern (src/utils/battleTier.ts) — reusable helper for loading images in scenes
+   - Dynamic image key derivation: `grade_${grade.toLowerCase()}` → `grade_r`, `grade_sr`, `grade_ur`
+   - `등급외` has no image (chibi character) — needs fallback handling
+   - djb2 signing for localStorage anti-cheat
+   - `protected extraPoopCountReduction()` hook pattern for scene-level spawn count override
+   - Pending queue pattern for Supabase broadcast before `channelReady`
+   - TypeScript strict: `verbatimModuleSyntax`, `erasableSyntaxOnly`, `import type` required, no enums
+
+3. Files and Code Sections:
+   - **`src/utils/character.ts`**
+     - `CharacterDef` interface: `grade: '등급외' | 'R' | 'SR' | 'UR'`, `gradeColor: string`
+     - Will need a helper function `getGradeImgKey(grade)` or new field `gradeImageKey`
+   
+   - **`src/scenes/CharacterSelectScene.ts`** — 3 grade text locations to replace:
+     - Line 639-645: Card grid badge `this.add.text(x + CARD_W/2 - 2, y - CARD_H/2 + 2, char.grade, {...})` — right-top corner of 100×120 card
+     - Line 775-778: Detail panel badge `this.add.text(74, 492, def.grade, {fontSize: '12px', color: def.gradeColor, ...})`
+     - Line 970-973: Info panel badge `this.add.text(82, cardTop + 8, def.grade, {fontSize: '11px', color: def.gradeColor, ...})`
+     - `returnScene` parameter support was added: `init(data: { returnScene?: string })`; back button uses `this.returnScene`
+
+   - **`src/scenes/BattleMatchScene.ts`** — 2 grade text locations:
+     - Line 198-205 (showMenu): `stars` text (★★★/★★/★) at y=190 + `def.grade` text at y=215
+     - Line 703-705 (VS ready screen): `this.add.text(96, 362, myDef.grade, {fontSize: '13px', color: myDef.gradeColor, ...})`
+     - Line 718-720: `this.opponentCharGradeTxt` dynamic text updated via `setText(def.grade)`
+     - Current info card: `rect(200, 200, 374, 190)`, char image 68×96 at x=62, tier image 74×74 at x=248
+     - Buttons: char select (x=100,y=328,w=175,h=48), 전적보기 (x=300,y=328), 랭크매칭 (x=200,y=392,w=374,h=56)
+     - `pendingPoopSends: number = 0` field added for race condition fix
+
+   - **`src/scenes/GachaScene.ts`** — 2 grade text locations:
+     - Line 125-128: `this.slideshowGradeText = this.add.text(200, 344, currentDef.grade, {fontSize: '13px', letterSpacing: 6, ...})`
+     - Line 195-197: Dynamic update `this.slideshowGradeText.setText(def.grade).setColor(def.gradeColor)`
+     - Line 665-668: Reveal card `this.add.text(200, 388, pulled.grade, {fontSize: '18px', ...}).setAlpha(0)` with tween
+
+   - **`src/utils/battleLeaderboard.ts`**
+     - Added `getCachedMyRating()` and `setCachedMyRating()` with djb2 signing
+     - Keys: `battleRatingCache`/`battleRatingCacheSig`, salt: `'ddong-battle-rating-\u0076\u0031'`
+
+   - **`src/scenes/BattleGameScene.ts`**
+     - `protected override extraPoopCountReduction(): number { return 1; }` — reduces EXTREME's 8 poops to 7
+     - `private pendingPoopSends: number = 0` — queues special poop sends before channelReady
+     - `handleSpecialCollected`: checks `channelReady`; if false → `pendingPoopSends += 1`
+     - After `subscribe()`: flushes `pendingPoopSends` via `battleChannel.sendPoop(n)`
+
+   - **`src/scenes/GameScene.ts`**
+     - Added `protected extraPoopCountReduction(): number { return 0; }` hook
+     - `spawnPoop()`: `const reduction = this.ability.getSpawnCountReduction() + this.extraPoopCountReduction()`
+
+   - **`src/data/releaseNotes.ts`**
+     - Added v2.3.0 (2026-03-22): '1대1 실시간 대전 모드 추가', '랭크 매칭 시스템 추가'
+
+   - **`public/assets/character_ranks/`** — newly added by user:
+     - `r.png`, `sr.png`, `ur.png`
+
+4. Errors and fixes:
+   - **channelReady removal (bad fix)**: Removed `channelReady` check from `sendPoop` assuming SDK queues messages. Three review agents confirmed Supabase SDK does NOT auto-queue before subscription → restored `channelReady` + added `pendingPoopSends` queue
+   - **Edit tool string mismatch**: Multiple times in prior sessions; fixed by reading file first and using exact current content
+
+5. Problem Solving:
+   - **Rank badge instant display**: stale-while-revalidate pattern — show localStorage cache immediately, update when API responds; anti-tamper with djb2 signature
+   - **Special poop not sending to opponent**: `channelReady` race condition (score 40 = 4s, channel connects in <1s normally but up to 10s timeout); fixed with pending queue flushed after `subscribe()`
+   - **Battle mode difficulty**: `extraPoopCountReduction()` hook pattern instead of copy-pasting `spawnPoop()` override
+
+6. All user messages:
+   - "@public/assets/rank/ 에 매칭 대전티어별 이미지를 추가했어. 이거로 변경해줘"
+   - "대전 모드 화면에서 내 랭크와 점수가 보였으면 좋겠어"
+   - "랭크 매칭 위에 캐릭터 버튼을 추가해서 거기서 캐릭터 선택을 하게 하자..."
+   - "세로로 좀 더 크게 해주고 캐릭터 선택 버튼은 매칭 버튼같은 버튼으로 만들어줘..."
+   - "전적 보기, 메인 메뉴 이쪽의 공간들을 줄이면서 처리해봐..."
+   - "전적보기, 메인메뉴 위아래 공간을 줄이고 나머지의 버튼들 공간을 늘리라고 했니 안했니?"
+   - "캐릭터 선택버튼 랭크 매칭 버튼 한줄로 나오게 바꿔줘..."
+   - "랭크가 api로 호출을 해서 그런지 느리네. 일단은 로컬 스토리지에도 저장을 해서 바로 뜨게 하고 부정 방지를 위해 api 응답 오면 변경되게 해줘"
+   - "캐릭터 선택 오른쪽에 전적보기 버튼으로 바꾸고 그 아래에 캐릭터, 전적보기 가로 합친 크기 만큼의 버튼으로 매칭 버튼으로 해줘"
+   - "티어 이미지 살짝 크게 해주고 대전 모드 화면의 글씨들 좀 잘 보이게 해줘"
+   - "친선전 (RP 없음) 이게 진짜 안보이거든?"
+   - "릴리즈 노트 작성해줘"
+   - "'1대1 실시간 대전 모드 추가', '랭크 매칭 시스템' 이것만 남겨줘"
+   - "대전 모드 매칭 1분 넘어가는 경우 상대가 없다고 알려주면 좋겠어"
+   - "대전 모드 화면에서 캐릭터랑 랭크 티어 이미지 조금만 더 키워줘"
+   - "이미지 오른쪽 글씨들 위치를 좀 아래로 내려줘" (then immediately) "엥 아니 원래대로 글씨위치 해달라고 뭔소리야"
+   - "이거는 일단 돌려줘봐" (npm run dev 요청 → CLAUDE.md 규정으로 거절)
+   - "깃 푸시해줘"
+   - "대전 모드 랭킹전이랑 친선전 둘 다 extreme 모드에서 기본으로 나오는 일반똥 갯수보다 하나는 줄여줘"
+   - "그리고 대전 모드에서 특수 똥 먹을 때 상대방 측에 일반 똥 소환을 안하는거 같은데?"
+   - "/simplify" (code review → channelReady fix)
+   - "@public/assets/character_ranks/ 여기에 캐릭터 등급을 추가해는데 R, SR, UR 쓰던 부분들 이거로 교체해 줄 수 있나?" ← **현재 작업 (Plan Mode)**
+
+7. Pending Tasks:
+   - **[ACTIVE - Plan Mode]** Replace grade text labels (R, SR, UR) with images from `public/assets/character_ranks/` (r.png, sr.png, ur.png) in:
+     - `CharacterSelectScene.ts` — 3 locations (card grid badge, detail panel, info panel)
+     - `BattleMatchScene.ts` — 2 locations (showMenu info card, VS ready screen)
+     - `GachaScene.ts` — 2 locations (slideshow grade text, reveal card grade text)
+
+8. Current Work:
+   User entered Plan Mode requesting: "@public/assets/character_ranks/ 여기에 캐릭터 등급을 추가해는데 R, SR, UR 쓰던 부분들 이거로 교체해 줄 수 있나?"
+   
+   Two Explore agents have been run:
+   - Agent 1 found all 7 grade text locations across CharacterSelectScene, BattleMatchScene, GachaScene
+   - Agent 2 confirmed exact line numbers, coordinates, and code for all replacement targets
+   
+   Plan file has not yet been written. Currently in Phase 2 (Design) of plan mode workflow.
+
+   Key findings for implementation:
+   - Image files: `public/assets/character_ranks/r.png`, `sr.png`, `ur.png`
+   - `등급외` has no image → skip image or show nothing
+   - Best approach: helper function `getGradeImgKey(grade)` returning `'grade_r'` | `'grade_sr'` | `'grade_ur'` | `null`
+   - Preload helper similar to `preloadTierImages()` pattern in `battleTier.ts`
+   - `GachaScene.slideshowGradeText` is a class field (Text object) used dynamically — needs to become an Image field
+
+9. Optional Next Step:
+   Write the plan file at `/Users/johyunduk/.claude/plans/goofy-fluttering-journal.md` with implementation details, then call ExitPlanMode. The plan should cover:
+   - Adding `preloadGradeImages(scene)` helper (similar to `preloadTierImages`)
+   - Helper `getGradeImgKey(grade)` returning texture key or null for 등급외
+   - 7 text→image replacements across 3 scene files
+   - Dynamic fields in GachaScene (`slideshowGradeText` → `slideshowGradeImg`)
+   - Dynamic update in BattleMatchScene (`opponentCharGradeTxt` → image update pattern)
+
+If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/johyunduk/.REDACTED.jsonl
+Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.
+
+---
+
+[Request interrupted by user for tool use]
