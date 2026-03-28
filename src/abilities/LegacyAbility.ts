@@ -399,7 +399,7 @@ export class LegacyAbility extends BaseAbility {
       if (!poop.active) continue;
       this.playBurnEffect(api.scene, poop.x, poop.y);
       (poop as PoolablePoopBase).recycle();
-      api.updateScore(10);
+      api.addAbilityBonus(10);
     }
   }
 

@@ -23,7 +23,7 @@ export class ArchieveAbility extends BaseAbility {
     if (score % ARCHIEVE_PARAMS.bonusInterval === 0 && score > this.lastArchieveScore) {
       this.lastArchieveScore = score;
       this.isProcessingBonus = true;
-      api.updateScore(ARCHIEVE_PARAMS.bonusScore);
+      api.addAbilityBonus(ARCHIEVE_PARAMS.bonusScore);
       this.isProcessingBonus = false;
     }
   }

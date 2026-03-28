@@ -74,6 +74,7 @@ export interface ScoreVerificationData {
   topazCollected: number;
   rainbowCollected: number;
   collectBonusTotal?: number; // ability.onCollectSpecial + synergy.collectBonus 누계
+  abilityBonusTotal?: number; // addAbilityBonus() + getTickScore 배율 초과분 누계 (레거시 불태우기, 아카이브 배율 등)
 }
 
 /**

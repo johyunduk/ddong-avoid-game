@@ -17,6 +17,8 @@ export interface GameSceneAPI {
   readonly scene: Phaser.Scene;
 
   updateScore(amount: number): void;
+  /** 어빌리티 자체 보너스 점수 추가 — updateScore와 동일하지만 abilityBonusTotal에 누적됨 */
+  addAbilityBonus(amount: number): void;
   spawnGoldPoop(): void;
   spawnDiamondPoop(): void;
   spawnTopazPoop(): void;

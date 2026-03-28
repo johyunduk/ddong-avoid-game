@@ -14,6 +14,9 @@ const SCORE_CAPS: Record<string, number> = {
   physical: 30000,
 };
 
+// 어빌리티 보너스 상한: 점수의 이 비율까지 허용 (나머지는 최소한 시간 기반이어야 함)
+const ABILITY_BONUS_CAP_RATIO = 0.95;
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -128,12 +131,18 @@ Deno.serve(async (req: Request) => {
         (verification?.rainbowCollected ?? 0);
       // collectBonusTotal은 클라이언트 신고값이므로 수집 아이템당 최대 10점으로 상한 적용 (tampering 방지)
       const collectBonusTotal = Math.min(verification?.collectBonusTotal ?? 0, totalItemsCollected * 10);
+      const rawAbilityBonus = verification?.abilityBonusTotal ?? 0;
+      const abilityBonusTotal = Math.min(rawAbilityBonus, score * ABILITY_BONUS_CAP_RATIO);
+      if (rawAbilityBonus > abilityBonusTotal) {
+        console.warn('abilityBonusTotal clamped', { rawAbilityBonus, cap: score * ABILITY_BONUS_CAP_RATIO, score });
+      }
       const bonusScore =
         (verification?.goldCollected ?? 0) * 20 +
         (verification?.diamondCollected ?? 0) * 40 +
         (verification?.topazCollected ?? 0) * 80 +
         (verification?.rainbowCollected ?? 0) * 90 +
-        collectBonusTotal;
+        collectBonusTotal +
+        abilityBonusTotal;
       const timeBasedScore = Math.max(0, score - bonusScore);
       const minRequiredSec = timeBasedScore * 0.1 * 0.5;
 

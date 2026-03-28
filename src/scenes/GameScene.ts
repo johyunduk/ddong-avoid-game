@@ -65,6 +65,7 @@ export default class GameScene extends BaseScene {
   private topazCollected: number = 0;
   private rainbowCollected: number = 0;
   private collectBonusTotal: number = 0; // ability.onCollectSpecial + synergy.collectBonus 누계
+  private abilityBonusTotal: number = 0; // addAbilityBonus() + getTickScore 배율 초과분 누계
   // 피버 타임 관련
   protected isFeverTime: boolean = false; // 피버 타임 활성화 여부
   private feverTimeRemaining: number = 0; // 피버 타임 남은 시간 (ms)
@@ -116,6 +117,7 @@ export default class GameScene extends BaseScene {
     this.topazCollected = 0;
     this.rainbowCollected = 0;
     this.collectBonusTotal = 0;
+    this.abilityBonusTotal = 0;
     this.sessionPromise = null; // 재시작 시 이전 세션 프로미스 해제
     // 디버그 Graphics 참조 초기화 (씬 재시작 시 이전 객체는 Phaser가 파괴하므로 참조만 해제)
     this.manualHitboxDebug = undefined;
@@ -520,7 +522,9 @@ export default class GameScene extends BaseScene {
       if (elapsed >= 100) {
         const points = Math.floor(elapsed / 100);
         this.lastScoreTime = now - (elapsed % 100); // 나머지 시간 이월
-        this.updateScore(this.ability.getTickScore(points));
+        const tickResult = this.ability.getTickScore(points);
+        this.abilityBonusTotal += tickResult - points; // 배율 초과분 누적
+        this.updateScore(tickResult);
       }
 
       // 캐릭터 능력 프레임 업데이트 (글리치 분신 추적 등)
@@ -568,6 +572,7 @@ export default class GameScene extends BaseScene {
       get rainbowPoops()    { return self.rainbowPoops; },
       get scene()           { return self as unknown as Phaser.Scene; },
       updateScore:    (n) => self.updateScore(n),
+      addAbilityBonus: (n) => { self.abilityBonusTotal += n; self.updateScore(n); },
       spawnGoldPoop:    () => self.spawnGoldPoop(),
       spawnDiamondPoop: () => self.spawnDiamondPoop(),
       spawnTopazPoop:   () => self.spawnTopazPoop(),
@@ -1438,6 +1443,7 @@ export default class GameScene extends BaseScene {
             topazCollected: this.topazCollected,
             rainbowCollected: this.rainbowCollected,
             collectBonusTotal: this.collectBonusTotal,
+            abilityBonusTotal: this.abilityBonusTotal,
           },
           characterType,
           sessionId
