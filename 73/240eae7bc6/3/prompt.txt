@@ -1,0 +1,906 @@
+모바일에서 백그라운드로 넘겼는데도 bgm이 플레이 되는데 어떻게 처리좀 해줄 . 있나?
+
+---
+
+그리고 메인 화면에 설정 같은 작은 버튼을 추가하고 일단은 bgm 재생, 음소거 처리 가능한 설정 하나만 일단 추가해줘.
+
+---
+
+모바일에서 클릭시 더블클릭처럼 되서 설정이 켜지지가 않아
+
+---
+
+bgm on/off 처리도 더블 클릭되서 안꺼져. 모든 클릭이 더블 클릭으로 처리되는데 앞단이나 어딘가에서 한번에 막는 방법은 없나?
+
+---
+
+다른곳은 저렇게 개별적으로 처리 했던 부분이 없었나 봐줘
+
+---
+
+# Simplify: Code Review and Cleanup
+
+Review all changed files for reuse, quality, and efficiency. Fix any issues found.
+
+## Phase 1: Identify Changes
+
+Run `git diff` (or `git diff HEAD` if there are staged changes) to see what changed. If there are no git changes, review the most recently modified files that the user mentioned or that you edited earlier in this conversation.
+
+## Phase 2: Launch Three Review Agents in Parallel
+
+Use the Agent tool to launch all three agents concurrently in a single message. Pass each agent the full diff so it has the complete context.
+
+### Agent 1: Code Reuse Review
+
+For each change:
+
+1. **Search for existing utilities and helpers** that could replace newly written code. Look for similar patterns elsewhere in the codebase — common locations are utility directories, shared modules, and files adjacent to the changed ones.
+2. **Flag any new function that duplicates existing functionality.** Suggest the existing function to use instead.
+3. **Flag any inline logic that could use an existing utility** — hand-rolled string manipulation, manual path handling, custom environment checks, ad-hoc type guards, and similar patterns are common candidates.
+
+### Agent 2: Code Quality Review
+
+Review the same changes for hacky patterns:
+
+1. **Redundant state**: state that duplicates existing state, cached values that could be derived, observers/effects that could be direct calls
+2. **Parameter sprawl**: adding new parameters to a function instead of generalizing or restructuring existing ones
+3. **Copy-paste with slight variation**: near-duplicate code blocks that should be unified with a shared abstraction
+4. **Leaky abstractions**: exposing internal details that should be encapsulated, or breaking existing abstraction boundaries
+5. **Stringly-typed code**: using raw strings where constants, enums (string unions), or branded types already exist in the codebase
+6. **Unnecessary JSX nesting**: wrapper Boxes/elements that add no layout value — check if inner component props (flexShrink, alignItems, etc.) already provide the needed behavior
+7. **Unnecessary comments**: comments explaining WHAT the code does (well-named identifiers already do that), narrating the change, or referencing the task/caller — delete; keep only non-obvious WHY (hidden constraints, subtle invariants, workarounds)
+
+### Agent 3: Efficiency Review
+
+Review the same changes for efficiency:
+
+1. **Unnecessary work**: redundant computations, repeated file reads, duplicate network/API calls, N+1 patterns
+2. **Missed concurrency**: independent operations run sequentially when they could run in parallel
+3. **Hot-path bloat**: new blocking work added to startup or per-request/per-render hot paths
+4. **Recurring no-op updates**: state/store updates inside polling loops, intervals, or event handlers that fire unconditionally — add a change-detection guard so downstream consumers aren't notified when nothing changed. Also: if a wrapper function takes an updater/reducer callback, verify it honors same-reference returns (or whatever the "no change" signal is) — otherwise callers' early-return no-ops are silently defeated
+5. **Unnecessary existence checks**: pre-checking file/resource existence before operating (TOCTOU anti-pattern) — operate directly and handle the error
+6. **Memory**: unbounded data structures, missing cleanup, event listener leaks
+7. **Overly broad operations**: reading entire files when only a portion is needed, loading all items when filtering for one
+
+## Phase 3: Fix Issues
+
+Wait for all three agents to complete. Aggregate their findings and fix each issue directly. If a finding is a false positive or not worth addressing, note it and move on — do not argue with the finding, just skip it.
+
+When done, briefly summarize what was fixed (or confirm the code was already clean).
+
+---
+
+설정 버튼 오른쪽 하단으로 옮겨줘
+
+---
+
+설정 아이콘 살짝 크게 해주고 좀 잘 눈에 띄게 해줘
+
+---
+
+검정 원형에 가운데 정렬이 안된듯?
+
+---
+
+깃 푸시해줘
+
+---
+
+상하단의 레터박스는 제거하여 풀스크린으로 개선가능한가?
+
+---
+
+2번으로
+
+---
+
+[Request interrupted by user for tool use]
+
+---
+
+홈화면은 괜찮은데 나머지 화면들 중에서 뭔가 한쪽으로 쏠려있거나 그런 경우들이 . 보이는데?
+
+---
+
+난이도 선택화면 너무 양옆으로 너무 화면과 붙어있음. 대전모드 화면도 양옆으로 너무 꽉차있음. 캐릭터와 배경화면 목록들 스크롤 내리기 전부터 맨위 항목들의 위쪽이 잘려있음.
+
+---
+
+수집 화면 목록 맨 아래 항목들의 아래가 짤리고 있어. 난이도 선택 화면은 난이도 끼리 붙어 있는데 난이도 박스 크기를 좀 줄여서 처리해줘.
+
+---
+
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+Summary:
+1. Primary Request and Intent:
+   - Pause BGM when mobile app goes to background
+   - Add settings button (⚙️) with BGM mute/unmute toggle to main screen (ModeSelectScene)
+   - Fix all-clicks double-firing on mobile (touchstart + synthesized mousedown both processed by Phaser)
+   - Move settings button to bottom-right, make it bigger/more visible
+   - Remove letterbox by switching to `Phaser.Scale.RESIZE` (full responsive) — user chose this over ENVELOP or canvas height expansion
+   - Fix post-RESIZE layout issues: hardcoded coordinates in module-level constants, scroll clipping, elements too wide for screen
+
+2. Key Technical Concepts:
+   - Phaser 3 `Scale.RESIZE` mode: canvas fills the container, `this.scale.width`/`this.scale.height` give runtime dimensions
+   - `yOff = (H - 600) / 2` pattern: centers 600px design layout vertically on taller screens
+   - Bottom-anchored elements formula: `H - (600 - originalY)` (NOT `originalY + yOff`)
+   - Page Visibility API (`visibilitychange`, `pagehide`, `pageshow`) for mobile BGM pause
+   - Mobile double-tap fix: DOM capture-phase `mousedown` guard with 350ms `lastTouchTime` cooldown
+   - `game.sound.mute` as runtime single source of truth (vs. `isBgmMuted()` from localStorage)
+   - `TOUCH_MOUSE_DEBOUNCE_MS = 350` named constant
+   - Phaser `SoundManager.pauseAll()` / `resumeAll()` for global audio control
+   - localStorage persistence for settings (`ddong_bgm_muted` key)
+
+3. Files and Code Sections:
+
+   - **`src/main.ts`**
+     - Removed `width: 400, height: 600` from Phaser config
+     - Changed `Scale.FIT` → `Scale.RESIZE`
+     - Added `game.events.once('ready')` to restore mute state and install touch dedup guard:
+     ```typescript
+     const TOUCH_MOUSE_DEBOUNCE_MS = 350;
+     let lastTouchTime = 0;
+     canvas.addEventListener('touchstart', () => { lastTouchTime = performance.now(); }, { passive: true });
+     canvas.addEventListener('mousedown', (e) => {
+       if (performance.now() - lastTouchTime < TOUCH_MOUSE_DEBOUNCE_MS) {
+         e.stopImmediatePropagation();
+         e.preventDefault();
+       }
+     }, true);
+     ```
+     - Added visibilitychange/pagehide/pageshow BGM handlers
+
+   - **`src/utils/settings.ts`** (new file)
+     ```typescript
+     const BGM_MUTED_KEY = 'ddong_bgm_muted';
+     export function isBgmMuted(): boolean { return localStorage.getItem(BGM_MUTED_KEY) === 'true'; }
+     export function setBgmMuted(muted: boolean): void { localStorage.setItem(BGM_MUTED_KEY, String(muted)); }
+     ```
+
+   - **`src/style.css`**
+     - `#game-container`: changed `max-width/max-height: 100%` → `width/height: 100%` for RESIZE mode
+
+   - **`src/scenes/ModeSelectScene.ts`**
+     - RESIZE pattern applied with `W, H, cx, yOff`
+     - Settings button at `(W-26, H-26)` with dark circle bg, 34px emoji, scale-on-hover
+     - `showSettingsPanel()`: overlay at `(cx, H/2, W, H)`, container at `(cx, H/2)`, uses `this.sound.mute` for initial state
+     - `createReleaseNotesLink(cx, H-80)`, `createSettingsButton(W-26, H-26)` take coordinates as parameters
+     - Import reduced to only `setBgmMuted` (removed `isBgmMuted`)
+
+   - **`src/scenes/CharacterSelectScene.ts`**
+     - Module-level `GRID_LEFT` and `WP_GRID_LEFT` (used `400` hardcoded) replaced with comments
+     - Added instance fields:
+       ```typescript
+       private gridLeft = 0;
+       private wpGridLeft = 0;
+       private yOff = 0;
+       ```
+     - In `create()`:
+       ```typescript
+       this.yOff       = yOff;
+       this.gridLeft   = (W - (COLS * CARD_W + (COLS - 1) * GAP_X)) / 2;
+       this.wpGridLeft = (W - (WP_COLS * WP_CARD_W + (WP_COLS - 1) * WP_GAP_X)) / 2;
+       ```
+     - `cardsContainer` initialized at `(0, this.yOff)` instead of `(0, 0)`
+     - Scroll updates: `this.cardsContainer.setY(this.yOff - this.scrollOffset)`
+     - Tab switch reset: `this.cardsContainer.setY(this.yOff)`
+     - **Scroll bottom fix** (bottom clip fix):
+       ```typescript
+       // create():
+       const scrollBottomActual = H - (600 - SCROLL_BOTTOM); // H - 52
+       // buildCharacterGrid() and buildWallpaperGrid():
+       const scrollBottomActual = this.scale.height - (600 - SCROLL_BOTTOM);
+       ```
+
+   - **`src/scenes/DifficultySelectScene.ts`**
+     - RESIZE pattern applied
+     - Grid spacing made responsive:
+       ```typescript
+       const SIDE = 16;
+       const colW = (W - SIDE * 2) / 2;
+       const startX = SIDE + colW / 2;
+       const spacingX = colW;
+       ```
+     - `createButtonCard()` card size reduced 170×165 → 152×145, with adjusted internal offsets
+
+   - **`src/scenes/BattleMatchScene.ts`**
+     - RESIZE pattern applied throughout
+     - Info card width: `374` → `W - 16` (stored as `cardW`)
+     - Paired buttons: `cx ± 100, width 175` → `cx ± colBtnOff, width colBtnW` where:
+       ```typescript
+       const colBtnW = Math.min(175, (W - 30) / 2);
+       const colBtnOff = colBtnW / 2 + 5;
+       ```
+
+   - **`src/scenes/ReleaseNotesScene.ts`**
+     - RESIZE pattern applied
+     - `dateText x=380` → `W - 20`
+     - `line x=200` → `cx` with width `W - 40`
+     - `wordWrap width=340` → `W - 60`
+
+   - **All other scenes** (BattleGameScene, BattleLeaderboardScene, BattleResultScene, GachaScene, LeaderboardScene, GameScene): RESIZE pattern applied by parallel agents; `yOff` pattern for menu scenes, full dynamic sizing for game scenes.
+
+4. Errors and fixes:
+   - **Settings panel double-tap bug**: Initial fix was 150ms overlay activation delay. This was a symptom — root cause was global double-fire. Fixed globally in main.ts with capture-phase mousedown guard. The overlay delay was then removed.
+   - **CharacterSelectScene individual input guards**: Three `this.input.enabled = false; delayedCall(150)` patches existed before global fix. Removed once global fix was in place.
+   - **`closePanel` declared after use (TS2448)**: In `showSettingsPanel()`, `closeBtn.on('pointerdown', closePanel)` was written before `const closePanel = () => {...}`. Fixed by moving `closePanel` declaration before its usages.
+   - **GRID_LEFT/WP_GRID_LEFT module constants**: Used hardcoded `400` width, broke centering on different screen widths. Fixed by converting to `this.gridLeft`/`this.wpGridLeft` instance fields computed from `W` in `create()`.
+   - **CharacterSelectScene cardsContainer y=0**: Cards were placed at absolute y positions (GRID_TOP=105+...) but container started at y=0. With `yOff > 0`, mask started at `SCROLL_TOP + yOff` but cards didn't shift down → top clipped. Fixed: `cardsContainer = this.add.container(0, this.yOff)` and scroll update `setY(this.yOff - scrollOffset)`.
+   - **CharacterSelectScene scroll bottom clip**: `scrollBottomActual = SCROLL_BOTTOM + yOff` only adds half the extra height. Bottom-anchored elements need `H - (600 - SCROLL_BOTTOM)`. Fixed formula to `H - 52` in all three locations (create, buildCharacterGrid, buildWallpaperGrid).
+   - **DifficultySelectScene buttons touching edges**: `startX = cx - 100` not margin-aware. Fixed with `SIDE=16` margin-based calculation.
+   - **BattleMatchScene elements too wide**: Fixed with `cardW = W - 16` and `colBtnW`/`colBtnOff` responsive calculations.
+
+5. Problem Solving:
+   - Mobile BGM background: Solved with Page Visibility API + pagehide/pageshow dual approach for iOS Safari compatibility
+   - Mobile double-tap global fix: Identified root cause (synthesized mousedown after touchstart), applied capture-phase DOM guard in main.ts before Phaser sees the event
+   - Letterbox removal: Comprehensive RESIZE mode refactoring across all 12 scenes using `yOff` centering pattern for menu scenes and full dynamic sizing for game scenes
+   - Scroll area clipping: Identified that `yOff`-shifted bottom values are incorrect for bottom-anchored elements; correct formula is `H - (600 - constant)`
+
+6. All user messages:
+   - "모바일에서 백그라운드로 넘겼는데도 bgm이 플레이 되는데 어떻게 처리좀 해줄 수 있나?"
+   - "그리고 메인 화면에 설정 같은 작은 버튼을 추가하고 일단은 bgm 재생, 음소거 처리 가능한 설정 하나만 일단 추가해줘."
+   - "모바일에서 클릭시 더블클릭처럼 되서 설정이 켜지지가 않아"
+   - "bgm on/off 처리도 더블 클릭되서 안꺼져. 모든 클릭이 더블 클릭으로 처리되는데 앞단이나 어딘가에서 한번에 막는 방법은 없나?"
+   - "다른곳은 저렇게 개별적으로 처리 했던 부분이 없었나 봐줘"
+   - "/simplify"
+   - "설정 버튼 오른쪽 하단으로 옮겨줘"
+   - "설정 아이콘 살짝 크게 해주고 좀 잘 눈에 띄게 해줘"
+   - "검정 원형에 가운데 정렬이 안된듯?"
+   - "깃 푸시해줘" (push was denied by user mid-execution)
+   - "상하단의 레터박스는 제거하여 풀스크린으로 개선가능한가?"
+   - "2번으로" (chose full RESIZE responsive mode)
+   - "홈화면은 괜찮은데 나머지 화면들 중에서 뭔가 한쪽으로 쏠려있거나 그런 경우들이 보이는데?"
+   - "난이도 선택화면 너무 양옆으로 너무 화면과 붙어있음. 대전모드 화면도 양옆으로 너무 꽉차있음. 캐릭터와 배경화면 목록들 스크롤 내리기 전부터 맨위 항목들의 위쪽이 잘려있음."
+   - "수집 화면 목록 맨 아래 항목들의 아래가 짤리고 있어. 난이도 선택 화면은 난이도 끼리 붙어 있는데 난이도 박스 크기를 좀 줄여서 처리해줘."
+
+7. Pending Tasks:
+   - Run `npx tsc --noEmit` after the DifficultySelectScene card size reduction (was the last edit, check not yet run)
+   - Git commit and push all RESIZE refactoring changes (user previously rejected a push mid-execution for the earlier settings commit — a fresh push of the RESIZE work has not been done)
+   - Check spacingY for DifficultySelectScene — currently 180, may need reduction now that card height is 145 (was 165)
+
+8. Current Work:
+   The last action performed was editing `createButtonCard()` in `src/scenes/DifficultySelectScene.ts` to reduce card size from 170×165 to 152×145, adjusting all internal y-offsets and font sizes proportionally:
+   ```typescript
+   // Before:
+   const shadow = this.add.rectangle(x + 4, y + 4, 170, 165, 0x000000, 0.4);
+   const button = this.add.rectangle(x, y, 170, 165, color, 1);
+   const emojiText = this.add.text(x, y - 44, config.emoji, { fontSize: '34px', ... });
+   const title = this.add.text(x, y - 10, config.title, { fontSize: '20px', ... });
+   const description = this.add.text(x, y + 14, ..., { fontSize: '11px', ... });
+   const infoBg = this.add.rectangle(x, y + 47, 154, 40, ...);
+   const info1 = this.add.text(x, y + 38, ..., { fontSize: '11px', ... });
+   const info2 = this.add.text(x, y + 55, ..., { fontSize: '11px', ... });
+
+   // After:
+   const shadow = this.add.rectangle(x + 3, y + 3, 152, 145, 0x000000, 0.4);
+   const button = this.add.rectangle(x, y, 152, 145, color, 1);
+   const emojiText = this.add.text(x, y - 38, config.emoji, { fontSize: '30px', ... });
+   const title = this.add.text(x, y - 8, config.title, { fontSize: '18px', ... });
+   const description = this.add.text(x, y + 13, ..., { fontSize: '10px', ... });
+   const infoBg = this.add.rectangle(x, y + 42, 136, 34, ...);
+   const info1 = this.add.text(x, y + 34, ..., { fontSize: '10px', ... });
+   const info2 = this.add.text(x, y + 49, ..., { fontSize: '10px', ... });
+   ```
+   Also fixed `CharacterSelectScene` scroll bottom clip with `scrollBottomActual = H - (600 - SCROLL_BOTTOM)`.
+
+9. Optional Next Step:
+   Run `npx tsc --noEmit` to verify the DifficultySelectScene card size changes compile cleanly, then consider whether `spacingY = 180` needs to be reduced to match the new 145px card height. After that, commit and push all the RESIZE refactoring work.
+   
+   The user's last request was: "수집 화면 목록 맨 아래 항목들의 아래가 짤리고 있어. 난이도 선택 화면은 난이도 끼리 붙어 있는데 난이도 박스 크기를 좀 줄여서 처리해줘." — both of these were addressed in the last two edits (scrollBottomActual fix + card size reduction in createButtonCard). Next step is to verify compilation and check if spacingY also needs adjustment.
+
+If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/johyunduk/.REDACTED.jsonl
+Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.
+
+---
+
+이어서 진행해줘
+
+---
+
+[Request interrupted by user for tool use]
+
+---
+
+여전히 캐릭터, 배경화면 목록 맨 마지막 항목들은 아래쪽이 짤리는데
+
+---
+
+일단 이건 해결이 됐어. 근데 화면에 꽉차게 하다보니 pc에서 실행하는 경우도 꽉차게 나오는데 max 넓이 높이를 줘야겠어.
+
+---
+
+# Simplify: Code Review and Cleanup
+
+Review all changed files for reuse, quality, and efficiency. Fix any issues found.
+
+## Phase 1: Identify Changes
+
+Run `git diff` (or `git diff HEAD` if there are staged changes) to see what changed. If there are no git changes, review the most recently modified files that the user mentioned or that you edited earlier in this conversation.
+
+## Phase 2: Launch Three Review Agents in Parallel
+
+Use the Agent tool to launch all three agents concurrently in a single message. Pass each agent the full diff so it has the complete context.
+
+### Agent 1: Code Reuse Review
+
+For each change:
+
+1. **Search for existing utilities and helpers** that could replace newly written code. Look for similar patterns elsewhere in the codebase — common locations are utility directories, shared modules, and files adjacent to the changed ones.
+2. **Flag any new function that duplicates existing functionality.** Suggest the existing function to use instead.
+3. **Flag any inline logic that could use an existing utility** — hand-rolled string manipulation, manual path handling, custom environment checks, ad-hoc type guards, and similar patterns are common candidates.
+
+### Agent 2: Code Quality Review
+
+Review the same changes for hacky patterns:
+
+1. **Redundant state**: state that duplicates existing state, cached values that could be derived, observers/effects that could be direct calls
+2. **Parameter sprawl**: adding new parameters to a function instead of generalizing or restructuring existing ones
+3. **Copy-paste with slight variation**: near-duplicate code blocks that should be unified with a shared abstraction
+4. **Leaky abstractions**: exposing internal details that should be encapsulated, or breaking existing abstraction boundaries
+5. **Stringly-typed code**: using raw strings where constants, enums (string unions), or branded types already exist in the codebase
+6. **Unnecessary JSX nesting**: wrapper Boxes/elements that add no layout value — check if inner component props (flexShrink, alignItems, etc.) already provide the needed behavior
+7. **Unnecessary comments**: comments explaining WHAT the code does (well-named identifiers already do that), narrating the change, or referencing the task/caller — delete; keep only non-obvious WHY (hidden constraints, subtle invariants, workarounds)
+
+### Agent 3: Efficiency Review
+
+Review the same changes for efficiency:
+
+1. **Unnecessary work**: redundant computations, repeated file reads, duplicate network/API calls, N+1 patterns
+2. **Missed concurrency**: independent operations run sequentially when they could run in parallel
+3. **Hot-path bloat**: new blocking work added to startup or per-request/per-render hot paths
+4. **Recurring no-op updates**: state/store updates inside polling loops, intervals, or event handlers that fire unconditionally — add a change-detection guard so downstream consumers aren't notified when nothing changed. Also: if a wrapper function takes an updater/reducer callback, verify it honors same-reference returns (or whatever the "no change" signal is) — otherwise callers' early-return no-ops are silently defeated
+5. **Unnecessary existence checks**: pre-checking file/resource existence before operating (TOCTOU anti-pattern) — operate directly and handle the error
+6. **Memory**: unbounded data structures, missing cleanup, event listener leaks
+7. **Overly broad operations**: reading entire files when only a portion is needed, loading all items when filtering for one
+
+## Phase 3: Fix Issues
+
+Wait for all three agents to complete. Aggregate their findings and fix each issue directly. If a finding is a false positive or not worth addressing, note it and move on — do not argue with the finding, just skip it.
+
+When done, briefly summarize what was fixed (or confirm the code was already clean).
+
+---
+
+<task-notification>
+<task-id>a9672940150baf51c</task-id>
+<tool-use-id>toolu_01Mwb51BNuBgi3yik2brorWq</tool-use-id>
+<output-file>REDACTED.output</output-file>
+<status>completed</status>
+<summary>Agent "코드 재사용 검토" completed</summary>
+<result>이제 충분한 정보를 수집했습니다. 전체 diff를 종합적으로 분석하겠습니다.
+
+## 코드 재사용 검토 결과
+
+이 diff는 Phaser 3 게임의 **RESIZE 모드 전환** 및 **반응형 UI 레이아웃** 구현입니다. 다음과 같은 코드 재사용 문제를 발견했습니다:
+
+---
+
+### **1. 중복된 좌표 계산 패턴 (3곳 이상)**
+
+**문제**: 여러 장면에서 동일한 좌표 계산이 반복됨
+
+```
+const W = this.scale.width;
+const H = this.scale.height;
+const cx = W / 2;
+const yOff = (H - 600) / 2;
+```
+
+이 패턴이 다음 파일들에서 **반복되고 있습니다**:
+- `/Users/johyunduk/Projects/ddong-avoid-game/src/scenes/BattleGameScene.ts` (라인 315-317)
+- `/Users/johyunduk/Projects/ddong-avoid-game/src/scenes/BattleLeaderboardScene.ts` (라인 100-103, 150-151)
+- `/Users/johyunduk/Projects/ddong-avoid-game/src/scenes/BattleMatchScene.ts` (라인 232-235, 273-276, 413-414, 468-469, 499-500, 560-561, 684-685)
+- `/Users/johyunduk/Projects/ddong-avoid-game/src/scenes/BattleResultScene.ts` (라인 714-717, 830-831)
+- `/Users/johyunduk/Projects/ddong-avoid-game/src/scenes/CharacterSelectScene.ts` (라인 893-900, 1225-1227, 1376-1378)
+- `/Users/johyunduk/Projects/ddong-avoid-game/src/scenes/DifficultySelectScene.ts` (라인 1478-1481)
+- `/Users/johyunduk/Projects/ddong-avoid-game/src/scenes/GachaScene.ts` (라인 1607-1610, 1671-1672, 1688-1689, 1729-1731, 1809-1811)
+
+**권장사항**: `BaseScene`에 헬퍼 메서드를 추가하세요:
+
+```typescript
+// BaseScene.ts에 추가
+protected getScaleInfo() {
+  return {
+    W: this.scale.width,
+    H: this.scale.height,
+    cx: this.scale.width / 2,
+    yOff: (this.scale.height - 600) / 2
+  };
+}
+```
+
+그 후 사용처를 다음과 같이 간소화:
+
+```typescript
+const { W, H, cx, yOff } = this.getScaleInfo();
+```
+
+---
+
+### **2. 중복된 변수명 (동일 값 재계산)**
+
+**문제**: 동일한 메서드 내에서 동일한 값을 서로 다른 변수명으로 재계산
+
+#### **BattleMatchScene.ts**
+- 라인 232-235에서 `W, H, cx, yOff` 선언
+- 라인 273-276에서 **동일한 값을 동일한 이름으로 재선언** → 중복
+
+#### **BattleLeaderboardScene.ts**
+- 라인 100-103에서 초기 선언
+- 라인 150-151에서 **다시 선언** (일부)
+
+**영향 파일**:
+- `/Users/johyunduk/Projects/ddong-avoid-game/src/scenes/BattleMatchScene.ts` (showMenu 메서드)
+- `/Users/johyunduk/Projects/ddong-avoid-game/src/scenes/BattleLeaderboardScene.ts` (showLeaderboard 메서드)
+- `/Users/johyunduk/Projects/ddong-avoid-game/src/scenes/GachaScene.ts` (여러 메서드에서 `_W, _H, _cx, _yOff` 별칭 사용)
+
+**권장사항**: 메서드 최상단에서 **한 번만 선언**하고, 필요시 재사용
+
+---
+
+### **3. 인라인 좌표 계산 (동일 패턴 3회 이상 반복)**
+
+**문제**: 변수 선언 없이 직접 `this.scale.width / 2`, `(this.scale.height - 600) / 2` 계산
+
+#### **BattleMatchScene.ts 예시**:
+- 라인 450: `this.scale.width / 2, 290 + (this.scale.height - 600) / 2`
+- 라인 459: `this.scale.width / 2, 290 + (this.scale.height - 600) / 2` (동일)
+- 라인 676: `this.scale.width / 2, 420 + (this.scale.height - 600) / 2` (동일 패턴)
+- 라인 702: `this.scale.width / 2, 280 + (this.scale.height - 600) / 2` (동일 패턴)
+
+#### **GachaScene.ts 예시**:
+- 라인 1703: `this.scale.width / 2, 370 + (this.scale.height - 600) / 2`
+- 라인 1712: `this.scale.width / 2, 370 + (this.scale.height - 600) / 2` (동일)
+- 라인 1721: `this.scale.width / 2, this.scale.height / 2, this.scale.width, this.scale.height` (동일 패턴)
+
+**권장사항**: 위의 헬퍼 메서드 `getScaleInfo()`를 사용하여 정규화
+
+---
+
+### **4. CSS 하드코딩 제거**
+
+**파일**: `/Users/johyunduk/Projects/ddong-avoid-game/src/style.css` (라인 2724-2729)
+
+**이전**:
+```css
+#game-container {
+  max-width: 100%;
+  max-height: 100%;
+}
+```
+
+**이후**:
+```css
+#game-container {
+  width: 100%;
+  height: 100%;
+  max-width: 480px;
+  max-height: 720px;
+}
+```
+
+이것은 좋은 개선이지만, 향후 **상수 파일**(`src/config/screen.ts`)로 분리할 것을 권장합니다.
+
+---
+
+## 종합 권장사항
+
+### **즉시 적용 가능한 개선**
+
+**1. BaseScene에 헬퍼 메서드 추가** (`src/scenes/BaseScene.ts`):
+
+```typescript
+protected getScaleInfo() {
+  return {
+    W: this.scale.width,
+    H: this.scale.height,
+    cx: this.scale.width / 2,
+    yOff: (this.scale.height - 600) / 2
+  };
+}
+```
+
+**2. 각 장면에서 선언 통합** (예: BattleMatchScene의 `create()`와 `showMenu()` 분리):
+
+- `/Users/johyunduk/Projects/ddong-avoid-game/src/scenes/BattleMatchScene.ts` (라인 232-235, 273-276)
+  → 한 번만 선언 후 메서드 간 전달 또는 인스턴스 변수로 저장
+
+- `/Users/johyunduk/Projects/ddong-avoid-game/src/scenes/GachaScene.ts`
+  → `_W, _H, _cx, _yOff` 별칭 대신 표준 변수명 사용
+
+**3. 스크린 설정 상수화** (향후):
+```typescript
+// src/config/screen.ts
+export const SCREEN_CONFIG = {
+  BASE_WIDTH: 400,
+  BASE_HEIGHT: 600,
+  RESIZE_ASPECT_RATIO: true,
+};
+```
+
+---
+
+이러한 개선을 통해 **DRY 원칙 준수**와 **유지보수성 향상**을 동시에 달성할 수 있습니다.</result>
+<usage><total_tokens>62876</total_tokens><tool_uses>12</tool_uses><duration_ms>53889</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a7e2550361175e0fd</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>REDACTED.output</output-file>
+<status>completed</status>
+<summary>Agent "코드 품질 검토" completed</summary>
+<result>Perfect! Now I have enough information to compile my findings. Let me create a comprehensive report.
+
+## 코드 품질 검토 결과
+
+다음 5가지 카테고리에서 문제점을 발견했습니다:
+
+### 1. **중복 상태: 파라미터로 전달 가능한 값을 로컬 변수로 매번 재계산**
+
+**문제**: 동일한 계산식 `cx` (가로 중앙), `yOff` (세로 오프셋), `W`, `H`가 동일한 메서드 내 여러 곳에서 중복 선언됨
+
+| 파일 | 행번호 | 메서드 | 발견 |
+|------|--------|--------|------|
+| BattleMatchScene.ts | 449-450, 458-459 | `onMatchFound()`, `onRematchRequested()` | `this.scale.width / 2`, `(this.scale.height - 600) / 2` 계산을 인라인으로 직접 사용 |
+| BattleMatchScene.ts | 413-414, 468-469, 499-500, 560-561 | `showRankedWaiting()`, `showCreateWaiting()`, `showJoinInput()`, `showReadyButton()` | 각 메서드에서 동일하게 `cx`, `yOff` 재선언 |
+
+**구체적 위치**:
+- `/tmp/full_diff.txt` 라인 449-450: `onMatchFound()` 메서드
+- `/tmp/full_diff.txt` 라인 458-459: `onRematchRequested()` 메서드
+- `/tmp/full_diff.txt` 라인 413-414, 468-469, 499-500, 560-561: BattleMatchScene의 4개 서로 다른 메서드에서 동일 계산
+
+---
+
+### 2. **파라미터 증가: 함수 시그니처 변경으로 인한 파라미터 추가**
+
+**문제**: 기존 함수에 위치 정보 파라미터를 추가하여 호출부에서 값을 계산해야 함
+
+| 파일 | 변경된 함수 | 변경 전 → 변경 후 |
+|------|-----------|------------------|
+| ModeSelectScene.ts | `createReleaseNotesLink()` | 파라미터 없음 → `(x: number, y: number)` |
+| ModeSelectScene.ts | `createSettingsButton()` | 파라미터 없음 → `(x: number, y: number)` |
+| ReleaseNotesScene.ts | `setupScrollInput()` | 파라미터 없음 → `(scrollTop: number, scrollBottom: number)` |
+| ReleaseNotesScene.ts | `createBackButton()` | 파라미터 없음 → `(x: number, y: number)` |
+
+**구체적 위치**:
+- `/tmp/full_diff.txt` 라인 2556-2557: `createReleaseNotesLink(x: number, y: number)`
+- `/tmp/full_diff.txt` 라인 2567-2568: `createSettingsButton(x: number, y: number)`
+- `/tmp/full_diff.txt` 라인 2678-2679: `setupScrollInput(scrollTop: number, scrollBottom: number)`
+- `/tmp/full_diff.txt` 라인 2675: `createBackButton(cx, H - 30)` 호출
+
+---
+
+### 3. **중복 상태: 파생 가능한 값을 별도 상태로 저장**
+
+**문제**: `CharacterSelectScene`에서 `yOff` 값을 메서드 전체에서 사용하기 위해 `this.yOff`로 저장
+
+| 파일 | 행번호 | 저장 방식 |
+|------|--------|----------|
+| CharacterSelectScene.ts | 883-885 | `private yOff = 0;` (상태로 저장) |
+| CharacterSelectScene.ts | 898 | `this.yOff = yOff;` (create() 메서드에서 할당) |
+
+**구체적 위치**:
+- `/tmp/full_diff.txt` 라인 883-885: 클래스 멤버 변수 선언
+- `/tmp/full_diff.txt` 라인 898: `create()` 메서드에서 `this.yOff` 할당
+
+**영향**: `scrollOffset` 계산 시 `this.yOff` 사용 (라인 979), 마스크 정의 시 사용 (라인 969-970)
+
+---
+
+### 4. **인라인 계산의 불일치: 동일 로직을 서로 다른 방식으로 작성**
+
+**문제**: 같은 의도의 계산을 일관성 없게 표현
+
+| 위치 | 계산 방식 A | 계산 방식 B |
+|------|-----------|-----------|
+| BattleMatchScene | `const cx = W / 2; const yOff = (H - 600) / 2;` (먼저 변수 선언) | `this.scale.width / 2`, `(this.scale.height - 600) / 2` (인라인) |
+
+**구체적 위치**:
+- `/tmp/full_diff.txt` 라인 449-450: 변수 없이 인라인 계산
+- `/tmp/full_diff.txt` 라인 459: 동일 패턴 반복
+- 반면 다른 메서드들(라인 413-414, 468-469)에서는 변수로 선언
+
+---
+
+### 5. **불필요한 주석: 코드 의도가 이미 명확한데 중복 설명**
+
+**문제**: 화면 높이 기준 위치 계산을 여러 곳에서 같은 형태로 주석
+
+| 파일 | 행번호 | 주석 내용 |
+|------|--------|----------|
+| CharacterSelectScene.ts | 967-970 | `// 카드 영역 마스크 (스크롤 영역 밖 숨김) // this.make: display list에 추가되지 않으므로 shutdown 시 직접 정리 필요 // const scrollTopActual = SCROLL_TOP + yOff; // 상단: 헤더 아래 // const scrollBottomActual = H - (600 - SCROLL_BOTTOM); // 하단: 하단 버튼 위 (화면 하단 고정)` |
+
+**구체적 위치**:
+- `/tmp/full_diff.txt` 라인 967-970: 스크롤 영역 상단/하단 계산에 대한 과도한 주석
+
+---
+
+### 요약
+
+| 문제 유형 | 심각도 | 개수 | 주요 위치 |
+|-----------|--------|------|---------|
+| 중복 상태 (파생 값) | 높음 | 9곳 | BattleMatchScene 여러 메서드, CharacterSelectScene |
+| 파라미터 증가 | 중간 | 4개 함수 | ModeSelectScene, ReleaseNotesScene |
+| 인라인 계산 불일치 | 중간 | 2곳 | BattleMatchScene (라인 449-450, 459) |
+| 파생 상태 저장 | 중간 | 1곳 | CharacterSelectScene (this.yOff) |
+| 불필요한 주석 | 낮음 | 1곳 | CharacterSelectScene (라인 967-970) |</result>
+<usage><total_tokens>55202</total_tokens><tool_uses>17</tool_uses><duration_ms>50006</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a75869eba506338cf</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>REDACTED.output</output-file>
+<status>completed</status>
+<summary>Agent "효율성 검토" completed</summary>
+<result>이미 충분한 diff를 읽었으므로 분석을 완료하겠습니다.
+
+## 효율성 검토 결과
+
+diff 분석을 통해 발견된 효율성 문제점들:
+
+### 1. **반복적인 `this.scale.width / 2`, `this.scale.height / 2` 계산**
+
+**심각도**: 높음 (매 프레임 또는 이벤트마다 실행되는 핫패스)
+
+여러 메소드에서 동일한 계산을 반복:
+- `/tmp/full_diff.txt` 라인 450: `this.scale.width / 2, 290 + (this.scale.height - 600) / 2` 
+- `/tmp/full_diff.txt` 라인 459: `this.scale.width / 2, 290 + (this.scale.height - 600) / 2`
+- `/tmp/full_diff.txt` 라인 675: `this.scale.width / 2, 420 + (this.scale.height - 600) / 2`
+- `/tmp/full_diff.txt` 라인 702: `this.scale.width / 2, 280 + (this.scale.height - 600) / 2`
+
+**문제**: 동일한 표현식이 여러 메소드에서 반복 계산됨. 메소드 스코프 내에서 `cx`, `yOff` 변수로 캐싱하지 않는 경우가 있음.
+
+**예시**: BattleMatchScene.ts
+- 라인 450, 459에서 `this.scale.width / 2`를 두 번 계산 (인라인)
+- 라인 675에서 또 다시 동일 계산
+
+### 2. **메소드 내부에서 변수 캐싱 위치의 불일관성**
+
+**심각도**: 중간 (코드 유지보수성 저하)
+
+- `/tmp/full_diff.txt` 라인 413-414: `showRankedWaiting()` 내에서 `cx`, `yOff` 정의
+- `/tmp/full_diff.txt` 라인 468-470: `showCreateWaiting()` 내에서 동일 패턴 반복
+- `/tmp/full_diff.txt` 라인 499-500: `showJoinInput()` 내에서 또 반복
+- `/tmp/full_diff.txt` 라인 560-561: `showReadyButtonShown()` 내에서 또 반복
+
+각 메소드가 독립적으로 동일한 계산을 반복.
+
+### 3. **이벤트 리스너 누수 없음 (양호)**
+
+긍정적: 모든 이벤트 리스너(`.on()`)는 properly bound되어 있고, 메모리 누수 위험이 낮음.
+
+- `/tmp/full_diff.txt` 라인 1133-1135: `closeBg.on()` 호출 후 파이썬 객체의 lifetime 관리됨
+- `/tmp/full_diff.txt` 라인 1166-1168: `applyBg.on()` 호출도 마찬가지
+
+### 4. **조건부 존재 확인 후 작업 (TOCTOU 패턴)**
+
+**심각도**: 낮음-중간
+
+- `/tmp/full_diff.txt` 라인 298, 598, 651, 663, 1073, 1103: `if (this.textures.exists(...))` 후 작업
+- `/tmp/full_diff.txt` 라인 1734: `if (def && this.textures.exists(def.bgKey))` 
+
+문제: 체크와 사용 사이의 간격은 없지만, 매 업데이트마다 동일한 존재 확인 반복 가능.
+
+**예시** (BattleMatchScene.ts, 라인 598-600):
+```
+if (this.textures.exists(myDef.imageKey)) {
+  this.ui(this.add.image(cx - 104, 280 + yOff, myDef.imageKey)...);
+}
+```
+
+존재 확인이 매번 실행되므로, 알려진 정적 리소스는 초기화 시 한 번만 확인 권장.
+
+### 5. **DOM 좌표 변환 시 반복 계산**
+
+**심각도**: 중간
+
+`/tmp/full_diff.txt` 라인 510-524 (BattleMatchScene.ts `showJoinInput()`):
+
+```diff
+-    const scaleX = rect.width / 400;
+-    const scaleY = rect.height / 600;
+...
+-      left: ${rect.left + 200 * scaleX}px;
+-      top: ${rect.top + 270 * scaleY}px;
+```
+
+→ 변경 후:
+```
++    const scaleX = rect.width / this.scale.width;
++    const scaleY = rect.height / this.scale.height;
+...
++      left: ${rect.left + cx * scaleX}px;
++      top: ${rect.top + (270 + yOff) * scaleY}px;
+```
+
+이는 개선됨. 이전에는 하드코딩된 400/600이 사용되어 반응형 화면에서 계산 오류 발생.
+
+### 6. **Loop 내 중복 계산 (피버 타임 UI)**
+
+**심각도**: 높음 (매 프레임 실행)
+
+`/tmp/full_diff.txt` 라인 1057-1062 (GameScene.ts `updateFeverTime()`):
+
+```typescript
+// 각 프레임마다 실행:
+const totalWidth = this.feverTimeUITexts.reduce((sum, t) => sum + t.width, 0);  // 반복
+let currentX = this.scale.width / 2 - totalWidth / 2;  // 반복 계산
+for (let i = 0; i < this.feverTimeUITexts.length && i < newText.length; i++) {
+  this.feverTimeUITexts[i].setX(currentX);
+  currentX += this.feverTimeUITexts[i].width;  // 중복 접근
+}
+```
+
+**문제**: 
+- `reduce()` 호출이 매 프레임 실행 (100ms마다)
+- `this.scale.width / 2` 계산이 반복
+- 텍스트 길이가 실제로 변경될 때만 재계산하면 됨
+
+**최적화 가능**: 텍스트 길이 변경 여부를 `previousLength` 캐시로 추적하여 조건부 실행
+
+### 7. **스크롤 관련 계산 최적화 (CharacterSelectScene)**
+
+**심각도**: 낮음-중간
+
+`/tmp/full_diff.txt` 라인 969-983 (CharacterSelectScene.ts):
+
+이전:
+```typescript
+const scrollTopActual    = SCROLL_TOP + yOff;
+const scrollBottomActual = H - (600 - SCROLL_BOTTOM);
+```
+
+이후에도 계산이 중복되는 문제:
+- 라인 1027-1028: `showWallpaperGrid()` 내 동일 계산 반복
+- 라인 1045-1046: `buildWallpaperGrid()` 내 또 반복
+
+**해결책**: 클래스 멤버 변수로 `scrollTopActual`, `scrollBottomActual` 캐싱
+
+## 요약: 우선순위별 문제
+
+| 우선순위 | 문제 | 파일 | 라인 | 심각도 |
+|---------|------|------|------|--------|
+| **1** | 피버 타임 UI 매 프레임 `reduce()` + `this.scale.width / 2` 반복 | GameScene.ts | 1057-1062 | 높음 |
+| **2** | `showJoinInput()` 등 메소드 간 `cx`, `yOff` 계산 중복 | BattleMatchScene.ts | 413-414, 468-470, 499-500, 560-561 | 중간 |
+| **3** | 스크롤 경계값 `scrollTopActual`, `scrollBottomActual` 중복 계산 | CharacterSelectScene.ts | 969-983, 1027-1028, 1045-1046 | 중간 |
+| **4** | 정적 텍스처 존재 확인 매번 실행 | BattleMatchScene.ts 등 | 298, 598, 651, 663 | 낮음 |
+| **5** | `this.scale.height - (600 - SCROLL_BOTTOM)` 공식 반복 | CharacterSelectScene.ts | 970, 1027, 1045 | 낮음 |
+
+이벤트 리스너 누수, 병렬 처리 기회, TOCTOU 보안 문제는 **발견되지 않음**.</result>
+<usage><total_tokens>53022</total_tokens><tool_uses>24</tool_uses><duration_ms>60098</duration_ms></usage>
+</task-notification>
+
+---
+
+깃 푸시해줘
+
+---
+
+좀 넓은 화면인 경우 대전 모드 화면에서 항목들의 크기가 좀 달라지는거 같은데
+
+---
+
+# Simplify: Code Review and Cleanup
+
+Review all changed files for reuse, quality, and efficiency. Fix any issues found.
+
+## Phase 1: Identify Changes
+
+Run `git diff` (or `git diff HEAD` if there are staged changes) to see what changed. If there are no git changes, review the most recently modified files that the user mentioned or that you edited earlier in this conversation.
+
+## Phase 2: Launch Three Review Agents in Parallel
+
+Use the Agent tool to launch all three agents concurrently in a single message. Pass each agent the full diff so it has the complete context.
+
+### Agent 1: Code Reuse Review
+
+For each change:
+
+1. **Search for existing utilities and helpers** that could replace newly written code. Look for similar patterns elsewhere in the codebase — common locations are utility directories, shared modules, and files adjacent to the changed ones.
+2. **Flag any new function that duplicates existing functionality.** Suggest the existing function to use instead.
+3. **Flag any inline logic that could use an existing utility** — hand-rolled string manipulation, manual path handling, custom environment checks, ad-hoc type guards, and similar patterns are common candidates.
+
+### Agent 2: Code Quality Review
+
+Review the same changes for hacky patterns:
+
+1. **Redundant state**: state that duplicates existing state, cached values that could be derived, observers/effects that could be direct calls
+2. **Parameter sprawl**: adding new parameters to a function instead of generalizing or restructuring existing ones
+3. **Copy-paste with slight variation**: near-duplicate code blocks that should be unified with a shared abstraction
+4. **Leaky abstractions**: exposing internal details that should be encapsulated, or breaking existing abstraction boundaries
+5. **Stringly-typed code**: using raw strings where constants, enums (string unions), or branded types already exist in the codebase
+6. **Unnecessary JSX nesting**: wrapper Boxes/elements that add no layout value — check if inner component props (flexShrink, alignItems, etc.) already provide the needed behavior
+7. **Unnecessary comments**: comments explaining WHAT the code does (well-named identifiers already do that), narrating the change, or referencing the task/caller — delete; keep only non-obvious WHY (hidden constraints, subtle invariants, workarounds)
+
+### Agent 3: Efficiency Review
+
+Review the same changes for efficiency:
+
+1. **Unnecessary work**: redundant computations, repeated file reads, duplicate network/API calls, N+1 patterns
+2. **Missed concurrency**: independent operations run sequentially when they could run in parallel
+3. **Hot-path bloat**: new blocking work added to startup or per-request/per-render hot paths
+4. **Recurring no-op updates**: state/store updates inside polling loops, intervals, or event handlers that fire unconditionally — add a change-detection guard so downstream consumers aren't notified when nothing changed. Also: if a wrapper function takes an updater/reducer callback, verify it honors same-reference returns (or whatever the "no change" signal is) — otherwise callers' early-return no-ops are silently defeated
+5. **Unnecessary existence checks**: pre-checking file/resource existence before operating (TOCTOU anti-pattern) — operate directly and handle the error
+6. **Memory**: unbounded data structures, missing cleanup, event listener leaks
+7. **Overly broad operations**: reading entire files when only a portion is needed, loading all items when filtering for one
+
+## Phase 3: Fix Issues
+
+Wait for all three agents to complete. Aggregate their findings and fix each issue directly. If a finding is a false positive or not worth addressing, note it and move on — do not argue with the finding, just skip it.
+
+When done, briefly summarize what was fixed (or confirm the code was already clean).
+
+---
+
+랭크 매칭 버튼은 여전이 큰 화면에서 혼자 튀어 나왔는데
+
+---
+
+깃 푸시해줘
+
+---
+
+야 근데 모바일에서 게임하고 있을 때 뭔가 오른쪽 왼쪽 좀 씹히는거 같아.
+
+---
+
+# Simplify: Code Review and Cleanup
+
+Review all changed files for reuse, quality, and efficiency. Fix any issues found.
+
+## Phase 1: Identify Changes
+
+Run `git diff` (or `git diff HEAD` if there are staged changes) to see what changed. If there are no git changes, review the most recently modified files that the user mentioned or that you edited earlier in this conversation.
+
+## Phase 2: Launch Three Review Agents in Parallel
+
+Use the Agent tool to launch all three agents concurrently in a single message. Pass each agent the full diff so it has the complete context.
+
+### Agent 1: Code Reuse Review
+
+For each change:
+
+1. **Search for existing utilities and helpers** that could replace newly written code. Look for similar patterns elsewhere in the codebase — common locations are utility directories, shared modules, and files adjacent to the changed ones.
+2. **Flag any new function that duplicates existing functionality.** Suggest the existing function to use instead.
+3. **Flag any inline logic that could use an existing utility** — hand-rolled string manipulation, manual path handling, custom environment checks, ad-hoc type guards, and similar patterns are common candidates.
+
+### Agent 2: Code Quality Review
+
+Review the same changes for hacky patterns:
+
+1. **Redundant state**: state that duplicates existing state, cached values that could be derived, observers/effects that could be direct calls
+2. **Parameter sprawl**: adding new parameters to a function instead of generalizing or restructuring existing ones
+3. **Copy-paste with slight variation**: near-duplicate code blocks that should be unified with a shared abstraction
+4. **Leaky abstractions**: exposing internal details that should be encapsulated, or breaking existing abstraction boundaries
+5. **Stringly-typed code**: using raw strings where constants, enums (string unions), or branded types already exist in the codebase
+6. **Unnecessary JSX nesting**: wrapper Boxes/elements that add no layout value — check if inner component props (flexShrink, alignItems, etc.) already provide the needed behavior
+7. **Unnecessary comments**: comments explaining WHAT the code does (well-named identifiers already do that), narrating the change, or referencing the task/caller — delete; keep only non-obvious WHY (hidden constraints, subtle invariants, workarounds)
+
+### Agent 3: Efficiency Review
+
+Review the same changes for efficiency:
+
+1. **Unnecessary work**: redundant computations, repeated file reads, duplicate network/API calls, N+1 patterns
+2. **Missed concurrency**: independent operations run sequentially when they could run in parallel
+3. **Hot-path bloat**: new blocking work added to startup or per-request/per-render hot paths
+4. **Recurring no-op updates**: state/store updates inside polling loops, intervals, or event handlers that fire unconditionally — add a change-detection guard so downstream consumers aren't notified when nothing changed. Also: if a wrapper function takes an updater/reducer callback, verify it honors same-reference returns (or whatever the "no change" signal is) — otherwise callers' early-return no-ops are silently defeated
+5. **Unnecessary existence checks**: pre-checking file/resource existence before operating (TOCTOU anti-pattern) — operate directly and handle the error
+6. **Memory**: unbounded data structures, missing cleanup, event listener leaks
+7. **Overly broad operations**: reading entire files when only a portion is needed, loading all items when filtering for one
+
+## Phase 3: Fix Issues
+
+Wait for all three agents to complete. Aggregate their findings and fix each issue directly. If a finding is a false positive or not worth addressing, note it and move on — do not argue with the finding, just skip it.
+
+When done, briefly summarize what was fixed (or confirm the code was already clean).
+
+---
+
+깃 푸시해줘
