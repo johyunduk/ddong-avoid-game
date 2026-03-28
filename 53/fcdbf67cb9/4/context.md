@@ -1,0 +1,16 @@
+# Session Context
+
+## User Prompts
+
+### Prompt 1
+
+현재 똥 떨어지는 속도 증가량이 어떻게 되지?
+
+### Prompt 2
+
+점점 빨라지는게 지금의 절반으로 하려면?
+
+### Prompt 3
+
+git add . 까지는 했어 커밋하고 푸시해줘
+
