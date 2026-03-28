@@ -1,0 +1,247 @@
+Implement the following plan:
+
+# 등급 텍스트 → 이미지 교체 계획
+
+## Context
+`public/assets/character_ranks/`에 `r.png`, `sr.png`, `ur.png` 이미지가 추가됨.
+현재 R/SR/UR 등급을 텍스트로 표시하는 곳 전체를 이미지로 교체.
+`등급외`는 이미지 없음 → null 처리(이미지 미표시).
+
+---
+
+## 1. 공통 헬퍼 추가 — `src/utils/character.ts`
+
+```typescript
+/** 등급 이미지 텍스처 키 반환. 등급외 → null */
+export function getGradeImgKey(grade: string): string | null {
+  if (grade === '등급외') return null;
+  return `grade_${grade.toLowerCase()}`; // grade_r, grade_sr, grade_ur
+}
+```
+
+---
+
+## 2. 씬별 preload 추가
+
+각 씬의 `preload()` 메서드에 추가:
+```typescript
+this.load.image('grade_r',  'assets/character_ranks/r.png');
+this.load.image('grade_sr', 'assets/character_ranks/sr.png');
+this.load.image('grade_ur', 'assets/character_ranks/ur.png');
+```
+
+대상 파일:
+- `src/scenes/CharacterSelectScene.ts`
+- `src/scenes/BattleMatchScene.ts`
+- `src/scenes/GachaScene.ts`
+
+---
+
+## 3. 교체 대상 (7곳)
+
+### CharacterSelectScene.ts
+
+#### 3-1. 카드 그리드 배지 (Line ~639)
+- 기존: `this.add.text(x + CARD_W/2 - 2, y - CARD_H/2 + 2, char.grade, {...})`
+- 교체: `getGradeImgKey(char.grade)`가 있으면 `add.image(x + CARD_W/2 + 2, y - CARD_H/2 + 6, key).setDisplaySize(28, 14).setOrigin(1, 0).setDepth(5)`
+- 등급외 → 이미지 생략
+
+#### 3-2. 캐릭터 상세 패널 배지 (Line ~775)
+- 기존: `this.add.text(74, 492, def.grade, {fontSize: '12px', color: def.gradeColor, ...})`
+- 교체: `getGradeImgKey(def.grade)`가 있으면 `add.image(74, 492, key).setDisplaySize(42, 21).setOrigin(0.5)`
+
+#### 3-3. 정보 패널 배지 (Line ~970)
+- 기존: `this.add.text(82, cardTop + 8, def.grade, {fontSize: '11px', color: def.gradeColor, ...})`
+- 교체: `getGradeImgKey(def.grade)`가 있으면 `add.image(82, cardTop + 8, key).setDisplaySize(38, 19).setOrigin(0.5, 0)`
+
+---
+
+### BattleMatchScene.ts
+
+#### 3-4. showMenu 캐릭터 카드 등급 (Line ~215)
+- 기존: `this.add.text(..., def.grade, {fontSize: '13px', color: def.gradeColor})`
+- 교체: `getGradeImgKey(def.grade)` → `add.image(x, y, key).setDisplaySize(48, 24)`
+- `등급외` → 생략
+
+#### 3-5. VS 준비 화면 — 내 캐릭터 등급 (Line ~703)
+- 기존: `this.add.text(96, 362, myDef.grade, {fontSize: '13px', color: myDef.gradeColor, ...})`
+- 교체: 이미지로 교체
+
+#### 3-6. VS 준비 화면 — 상대 캐릭터 등급 (동적 업데이트)
+- 기존: `this.opponentCharGradeTxt = this.add.text(304, 362, ...)` + `setText(def.grade)`
+- 교체: `this.opponentCharGradeImg: Phaser.GameObjects.Image | null` 필드 선언
+  - 초기: `null`
+  - 업데이트 시: 기존 이미지 destroy → 새 키로 `add.image()` 또는 null이면 생략
+
+---
+
+### GachaScene.ts
+
+#### 3-7. 슬라이드쇼 등급 (동적 업데이트)
+- 기존: `this.slideshowGradeText = this.add.text(200, 344, ...)` + `setText/setColor` 동적 변경
+- 교체:
+  - 클래스 필드: `private slideshowGradeImg: Phaser.GameObjects.Image | null = null;`
+  - 초기 create: `getGradeImgKey(currentDef.grade)` → `add.image(200, 344, key).setDisplaySize(60, 30)` 또는 null
+  - 동적 업데이트: 기존 이미지 destroy → 새 이미지 생성
+  - 기존 `slideshowGradeText` 참조 모두 제거 (사용하는 tween alpha 체인 확인)
+
+#### 3-8. 뽑기 결과 카드 등급 (Line ~665)
+- 기존: `this.add.text(200, 388, pulled.grade, {fontSize: '18px', ...}).setAlpha(0)` + tween
+- 교체: `add.image(200, 388, key).setDisplaySize(72, 36).setAlpha(0)` + 동일 tween
+- `등급외` → 이미지 생략 (chibi는 등급 배지 불필요)
+
+---
+
+## 4. 사이즈 가이드 (원본 비율 유지 — r.png 등은 가로가 더 긴 형태로 추정)
+
+| 위치 | displaySize |
+|------|-------------|
+| 카드 그리드 배지 | 28×14 |
+| 캐릭터 상세 패널 | 42×21 |
+| 정보 패널 | 38×19 |
+| BattleMatch 카드 | 48×24 |
+| VS 준비 화면 | 44×22 |
+| 슬라이드쇼 | 60×30 |
+| 뽑기 결과 카드 | 72×36 |
+
+> 실제 이미지 비율에 따라 조정 필요.
+
+---
+
+## 5. 수정 파일 목록
+
+| 파일 | 변경 내용 |
+|------|----------|
+| `src/utils/character.ts` | `getGradeImgKey()` 헬퍼 추가 |
+| `src/scenes/CharacterSelectScene.ts` | preload + 3곳 text→image |
+| `src/scenes/BattleMatchScene.ts` | preload + 2곳 text→image + `opponentCharGradeImg` 필드 |
+| `src/scenes/GachaScene.ts` | preload + `slideshowGradeImg` 필드 + 2곳 text→image |
+
+---
+
+## 6. 검증
+
+1. `npx tsc --noEmit` — 타입 오류 없음 확인
+2. 각 씬 진입 후 등급 이미지 정상 표시 확인
+3. 등급외(치비) 카드에 이미지 없는 것 확인
+4. GachaScene 슬라이드쇼 전환 시 이미지 정상 갱신 확인
+5. BattleMatchScene VS 화면 상대 등급 이미지 갱신 확인
+
+
+If you need specific details from before exiting plan mode (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/johyunduk/.REDACTED.jsonl
+
+---
+
+치비도 R 등급으로 나오게 해줘. 나중에 등급이 계속 올라갈거니까 일단은 R 등급으로 해줘
+
+---
+
+캐릭터 등급 이미지가 약간 위아래로 눌려있는 느낌이라 좀 뚱뚱해 보이는데?
+
+---
+
+캐릭터 선택 화면 기준으로 너무 오른쪽에 붙어 있네 살짝 왼쪽으로 오게 하고 크기를 조금 더 키워도 될 거 같아.
+
+---
+
+이거 등급을 오른쪽 위 구석이 아니라 왼쪽 위 구석으로 옮겨줘
+
+---
+
+약간 너무 가운데쪽으로 온거 같은데 좀 더 왼쪽 위 구석으로 살짝만 옮겨줘
+
+---
+
+캐릭터 목록에서 정렬 순서를 바꾸고 싶어. 치비는 주인공이니 당연히 지급 위치 맨 처음에 나오고 그 다음 UR, SR, R 등급 순서였으면 좋겠어
+
+---
+
+깃 푸시해줘
+
+---
+
+얘네도 추가해서 추시해
+
+---
+
+[Request interrupted by user]
+
+---
+
+얘네도 추가해서 푸시해
+
+---
+
+캐릭터 목록 화면에서 각 캐릭터별 박스의 뒷 배경이 검정색인데 밝은색으로 바꾸고 이름 글씨를 어두운 색으로 해줘.
+
+---
+
+중간정도로 해줘 너무 밝다
+
+---
+
+일단 그냥 롤백했고 투명도를 조금 줄 수 있나? 80%정도
+
+---
+
+엥 호버를 하고 나서는 투명도가 사라지네
+
+---
+
+깃 푸시해줘
+
+---
+
+배틀 전적 초기화 하고 싶은데 어떻게 하지?
+
+---
+
+전체
+
+---
+
+truncate 하면 안되나? 그냥 아무것도 없으면 좋겠는데
+
+---
+
+랭크도 초기화 하고 싶은데. 내꼐아직 레거시로 뜨고 있어
+
+---
+
+했는데 왜 레거시 티어로 나오지?
+
+---
+
+C로 해줘
+
+---
+
+티어 조회 전까지는 레거시가 유지되어 있는데
+
+---
+
+깃 푸시해줘
+
+---
+
+현재 피버타임 주기가 어떻게 되지?
+
+---
+
+첫 발동 250점, 반복 간격을 2번 발동에 한번씩 100점을 늘리고 싶어. 그래서 첫발동 250점이고 그 후 피버는 1200점 뒤인 1450, 2650 이고 이 이후는 1300점 그리고 두번 후 1400점 이런식이면 좋겠어. 이해됐니?
+
+---
+
+2번에 한번씩이 아니라 3번에 한번씩으로 해줘
+
+---
+
+릴리즈 노트 새로운거 말고 지금 가장 최신인거에 피버타임 주기 변경이라고 추가해줘
+
+---
+
+— 횟수가 늘수록 간격이 점진적으로 증가 이거는 뺴줘
+
+---
+
+깃 푸시해줘
