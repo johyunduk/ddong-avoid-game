@@ -1,0 +1,31 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "2d3a94450e82",
+  "strategy": "manual-commit",
+  "branch": "dev",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src/abilities/ArchieveAbility.ts",
+    "src/abilities/LegacyAbility.ts",
+    "src/abilities/types.ts",
+    "src/scenes/GameScene.ts",
+    "src/utils/leaderboard.ts",
+    "supabase/functions/leaderboard-submit/index.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/2d/3a94450e82/0/metadata.json",
+      "transcript": "/2d/3a94450e82/0/full.jsonl",
+      "context": "/2d/3a94450e82/0/context.md",
+      "content_hash": "/2d/3a94450e82/0/content_hash.txt",
+      "prompt": "/2d/3a94450e82/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 3114,
+    "cache_creation_tokens": 480925,
+    "cache_read_tokens": 11174560,
+    "output_tokens": 60407,
+    "api_call_count": 131
+  }
+}
