@@ -74,10 +74,15 @@ export default class BattleResultScene extends BaseScene {
   create() {
     super.create();
 
+    const W = this.scale.width;
+    const H = this.scale.height;
+    const cx = W / 2;
+    const yOff = (H - 600) / 2;
+
     // 배경
-    const bg = this.add.image(200, 300, 'background2');
-    bg.setDisplaySize(400, 600);
-    this.add.rectangle(200, 300, 400, 600, 0x000000, 0.75);
+    const bg = this.add.image(cx, H / 2, 'background2');
+    bg.setDisplaySize(W, H);
+    this.add.rectangle(cx, H / 2, W, H, 0x000000, 0.75);
 
     // 결과 텍스트
     const isWin = this.result === BattleResult.WIN || this.result === BattleResult.DISCONNECT;
@@ -86,7 +91,7 @@ export default class BattleResultScene extends BaseScene {
       : '💀 패배... 💀';
     const titleColor = isWin ? '#FFD700' : '#ff4444';
 
-    this.add.text(200, 85, resultText, {
+    this.add.text(cx, 85 + yOff, resultText, {
       fontSize: '36px',
       color: titleColor,
       fontStyle: 'bold',
@@ -97,21 +102,21 @@ export default class BattleResultScene extends BaseScene {
     // 티어/RP 영역
     if (this.isRanked) {
       // 랭크전: 전적 제출 후 채워짐 (y=120 영역에 티어 이미지가 들어올 자리 확보)
-      this.tierText = this.add.text(200, 162, '전적 기록 중...', {
+      this.tierText = this.add.text(cx, 162 + yOff, '전적 기록 중...', {
         fontSize: '15px',
         color: '#aaaaaa',
         stroke: '#000',
         strokeThickness: 3,
       }).setOrigin(0.5);
 
-      this.rpDeltaText = this.add.text(200, 183, '', {
+      this.rpDeltaText = this.add.text(cx, 183 + yOff, '', {
         fontSize: '18px',
         fontStyle: 'bold',
         stroke: '#000',
         strokeThickness: 4,
       }).setOrigin(0.5);
 
-      this.currentRpText = this.add.text(200, 205, '', {
+      this.currentRpText = this.add.text(cx, 205 + yOff, '', {
         fontSize: '13px',
         color: '#888888',
         stroke: '#000',
@@ -119,7 +124,7 @@ export default class BattleResultScene extends BaseScene {
       }).setOrigin(0.5);
     } else {
       // 친선전: RP 변동 없음 표시
-      this.add.text(200, 148, '친선전 — RP 변동 없음', {
+      this.add.text(cx, 148 + yOff, '친선전 — RP 변동 없음', {
         fontSize: '14px',
         color: '#666666',
         stroke: '#000',
@@ -129,9 +134,9 @@ export default class BattleResultScene extends BaseScene {
 
     if (this.isRanked) {
       // 랭크전: 재대전 없음 → 새 매칭 버튼
-      const newMatchBtn = this.add.rectangle(200, 310, 250, 50, 0x7a5c00);
+      const newMatchBtn = this.add.rectangle(cx, 310 + yOff, 250, 50, 0x7a5c00);
       newMatchBtn.setStrokeStyle(3, 0xFFD700);
-      this.add.text(200, 310, '🎖️ 새 랭크 매칭', {
+      this.add.text(cx, 310 + yOff, '🎖️ 새 랭크 매칭', {
         fontSize: '20px',
         color: '#FFD700',
         fontStyle: 'bold',
@@ -148,7 +153,7 @@ export default class BattleResultScene extends BaseScene {
       });
     } else {
       // 친선전: 기존 재대전 버튼 유지
-      this.rematchStatusText = this.add.text(200, 250, '', {
+      this.rematchStatusText = this.add.text(cx, 250 + yOff, '', {
         fontSize: '14px',
         color: '#FFD700',
         fontStyle: 'bold',
@@ -157,9 +162,9 @@ export default class BattleResultScene extends BaseScene {
         align: 'center',
       }).setOrigin(0.5);
 
-      this.rematchBtn = this.add.rectangle(200, 310, 250, 50, 0xe74c3c);
+      this.rematchBtn = this.add.rectangle(cx, 310 + yOff, 250, 50, 0xe74c3c);
       this.rematchBtn.setStrokeStyle(3, 0xffffff);
-      this.rematchBtnLabel = this.add.text(200, 310, '⚔️ 재대전', {
+      this.rematchBtnLabel = this.add.text(cx, 310 + yOff, '⚔️ 재대전', {
         fontSize: '20px',
         color: '#ffffff',
         fontStyle: 'bold',
@@ -173,9 +178,9 @@ export default class BattleResultScene extends BaseScene {
     }
 
     // 전적 보기 버튼
-    const rankBtn = this.add.rectangle(200, 380, 250, 50, 0x27ae60);
+    const rankBtn = this.add.rectangle(cx, 380 + yOff, 250, 50, 0x27ae60);
     rankBtn.setStrokeStyle(3, 0xffffff);
-    this.add.text(200, 380, '🏆 전적 보기', {
+    this.add.text(cx, 380 + yOff, '🏆 전적 보기', {
       fontSize: '20px',
       color: '#ffffff',
       fontStyle: 'bold',
@@ -186,7 +191,7 @@ export default class BattleResultScene extends BaseScene {
     rankBtn.on('pointerdown', () => this.navigateAway('BattleLeaderboardScene'));
 
     // 메인 메뉴 텍스트 링크
-    const menuLink = this.add.text(200, 450, '메인 메뉴', {
+    const menuLink = this.add.text(cx, 450 + yOff, '메인 메뉴', {
       fontSize: '16px',
       color: '#aaaaaa',
       stroke: '#000',
@@ -221,6 +226,9 @@ export default class BattleResultScene extends BaseScene {
   private showRpResult(res: SubmitBattleResultResponse) {
     if (!this.tierText?.active || !this.rpDeltaText?.active) return;
 
+    const cx = this.scale.width / 2;
+    const yOff = (this.scale.height - 600) / 2;
+
     const oldTierIdx = getTierIndex(res.previousRp);
     const newTierIdx = getTierIndex(res.ratingPoints);
     const newTier = getBattleTier(res.ratingPoints);
@@ -236,16 +244,16 @@ export default class BattleResultScene extends BaseScene {
     if (newTierIdx > oldTierIdx) {
       const oldTier = getBattleTier(res.previousRp);
       // 티어 승급: 구 티어(작게) → 신 티어(크게) 나란히 표시
-      this.tierUpgradeOldImg = this.add.image(145, 126, oldTier.imgKey).setDisplaySize(32, 32);
-      this.tierArrowText = this.add.text(200, 126, '→', {
+      this.tierUpgradeOldImg = this.add.image(cx - 55, 126 + yOff, oldTier.imgKey).setDisplaySize(32, 32);
+      this.tierArrowText = this.add.text(cx, 126 + yOff, '→', {
         fontSize: '22px', color: '#FFD700', fontStyle: 'bold',
         stroke: '#000', strokeThickness: 4,
       }).setOrigin(0.5);
-      this.tierIconImg = this.add.image(255, 126, newTier.imgKey).setDisplaySize(40, 40);
+      this.tierIconImg = this.add.image(cx + 55, 126 + yOff, newTier.imgKey).setDisplaySize(40, 40);
       this.tierText.setText(`${oldTier.name}  →  ${newTier.name}`);
       this.tierText.setColor('#FFD700');
     } else {
-      this.tierIconImg = this.add.image(200, 124, newTier.imgKey).setDisplaySize(48, 48);
+      this.tierIconImg = this.add.image(cx, 124 + yOff, newTier.imgKey).setDisplaySize(48, 48);
       this.tierText.setText(`${newTier.name}  |  ${res.ratingPoints} RP`);
       this.tierText.setColor('#cccccc');
     }

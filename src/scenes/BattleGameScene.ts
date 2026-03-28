@@ -92,7 +92,7 @@ export default class BattleGameScene extends GameScene {
     }).setOrigin(0, 0).setDepth(10);
 
     // 상대 생존 시간 (우상단)
-    this.opponentScoreText = this.add.text(390, 3, '상대: --', {
+    this.opponentScoreText = this.add.text(this.scale.width - 10, 3, '상대: --', {
       fontSize: '14px',
       color: '#ff6666',
       fontStyle: 'bold',
@@ -115,7 +115,7 @@ export default class BattleGameScene extends GameScene {
     });
 
     // 연결 상태 표시
-    const connectingText = this.add.text(200, 55, '⏳ 상대와 연결 중...', {
+    const connectingText = this.add.text(this.scale.width / 2, 55, '⏳ 상대와 연결 중...', {
       fontSize: '13px',
       color: '#ffaa00',
       stroke: '#000',
@@ -244,7 +244,7 @@ export default class BattleGameScene extends GameScene {
         return; // 채널 미준비 시 알림 생략
       }
 
-      const sendText = this.add.text(200, 150, '💩→ 상대에게 전송!', {
+      const sendText = this.add.text(this.scale.width / 2, 150, '💩→ 상대에게 전송!', {
         fontSize: '16px',
         color: '#ff4444',
         fontStyle: 'bold',
@@ -294,7 +294,7 @@ export default class BattleGameScene extends GameScene {
       (this.difficultyLevel * POOP_CONFIG.normal.speedIncrement);
 
     for (let i = 0; i < count; i++) {
-      const x = Phaser.Math.Between(15, 385);
+      const x = Phaser.Math.Between(15, this.scale.width - 15);
       const y = Phaser.Math.Between(-100, -20);
       const poop = this.poops.get() as Poop;
       if (!poop) continue;
@@ -312,7 +312,9 @@ export default class BattleGameScene extends GameScene {
   }
 
   private showReceiveWarning() {
-    const border = this.add.rectangle(200, 300, 400, 600)
+    const W = this.scale.width;
+    const H = this.scale.height;
+    const border = this.add.rectangle(W / 2, H / 2, W, H)
       .setStrokeStyle(6, 0xff0000)
       .setFillStyle(0xff0000, 0.1)
       .setDepth(150);
@@ -324,7 +326,7 @@ export default class BattleGameScene extends GameScene {
       onComplete: () => border.destroy(),
     });
 
-    const warningText = this.add.text(200, 60, '⚠️ 공격 받음!', {
+    const warningText = this.add.text(W / 2, 60, '⚠️ 공격 받음!', {
       fontSize: '18px',
       color: '#ff0000',
       fontStyle: 'bold',
@@ -344,7 +346,7 @@ export default class BattleGameScene extends GameScene {
 
   private showDisconnectWarning() {
     if (this.disconnectWarningText) return;
-    this.disconnectWarningText = this.add.text(200, 200, '⚠️ 상대방 연결 끊김\n5초 후 부전승...', {
+    this.disconnectWarningText = this.add.text(this.scale.width / 2, this.scale.height / 2 - 100, '⚠️ 상대방 연결 끊김\n5초 후 부전승...', {
       fontSize: '18px',
       color: '#ffaa00',
       fontStyle: 'bold',

@@ -33,12 +33,17 @@ export default class LeaderboardScene extends BaseScene {
   create() {
     super.create();
 
+    const W = this.scale.width;
+    const H = this.scale.height;
+    const cx = W / 2;
+    const yOff = (H - 600) / 2;
+
     // 배경 이미지 추가
-    const background = this.add.image(200, 300, 'background2');
-    background.setDisplaySize(400, 600);
+    const background = this.add.image(cx, H / 2, 'background2');
+    background.setDisplaySize(W, H);
 
     // 타이틀
-    this.add.text(200, 40, '🏆 랭킹보드 🏆', {
+    this.add.text(cx, 40 + yOff, '🏆 랭킹보드 🏆', {
       fontSize: '28px',
       color: '#fff',
       fontStyle: 'bold',
@@ -47,10 +52,10 @@ export default class LeaderboardScene extends BaseScene {
     }).setOrigin(0.5);
 
     // 난이도 선택 버튼들
-    this.createDifficultyButtons();
+    this.createDifficultyButtons(cx, yOff);
 
     // 랭킹 표시 영역 (초기 로딩)
-    this.loadingText = this.add.text(200, 300, '로딩 중...', {
+    this.loadingText = this.add.text(cx, H / 2, '로딩 중...', {
       fontSize: '20px',
       color: '#fff',
       stroke: '#000',
@@ -58,13 +63,13 @@ export default class LeaderboardScene extends BaseScene {
     }).setOrigin(0.5);
 
     // 뒤로가기 버튼
-    this.createBackButton();
+    this.createBackButton(cx, H - 40);
 
     // 초기 데이터 로드
     this.loadLeaderboard();
   }
 
-  private createDifficultyButtons() {
+  private createDifficultyButtons(cx: number, yOff: number) {
     this.difficultyButtons.forEach(btn => btn.destroy());
     this.difficultyButtons.clear();
 
@@ -77,8 +82,8 @@ export default class LeaderboardScene extends BaseScene {
 
     const buttonWidth = 70;
     const spacing = 85;
-    const startX = 200 - (spacing * 1.5);
-    const y = 95;
+    const startX = cx - (spacing * 1.5);
+    const y = 95 + yOff;
 
     difficulties.forEach((difficulty, index) => {
       const x = startX + (index * spacing);
@@ -156,7 +161,7 @@ export default class LeaderboardScene extends BaseScene {
 
     // 로딩 표시
     if (!this.loadingText) {
-      this.loadingText = this.add.text(200, 300, '로딩 중...', {
+      this.loadingText = this.add.text(this.scale.width / 2, this.scale.height / 2, '로딩 중...', {
         fontSize: '20px',
         color: '#fff',
         stroke: '#000',
@@ -195,7 +200,7 @@ export default class LeaderboardScene extends BaseScene {
         this.loadingText.setVisible(false);
       }
 
-      this.errorText = this.add.text(200, 300, '랭킹을 불러올 수 없습니다\n\n나중에 다시 시도해주세요', {
+      this.errorText = this.add.text(this.scale.width / 2, this.scale.height / 2, '랭킹을 불러올 수 없습니다\n\n나중에 다시 시도해주세요', {
         fontSize: '16px',
         color: '#ff6666',
         stroke: '#000',
@@ -206,11 +211,13 @@ export default class LeaderboardScene extends BaseScene {
   }
 
   private displayLeaderboard() {
-    const startY = 150;
+    const yOff = (this.scale.height - 600) / 2;
+    const cx = this.scale.width / 2;
+    const startY = 150 + yOff;
     const lineHeight = 35;
 
     // 헤더
-    const headerText = this.add.text(200, startY, '순위    이름      점수', {
+    const headerText = this.add.text(cx, startY, '순위    이름      점수', {
       fontSize: '16px',
       color: '#ffff00',
       fontStyle: 'bold',
@@ -221,7 +228,7 @@ export default class LeaderboardScene extends BaseScene {
 
     // 랭킹 데이터 표시
     if (this.leaderboardData.length === 0) {
-      const noDataText = this.add.text(200, startY + 50, '아직 랭킹이 없습니다\n\n첫 번째 플레이어가 되어보세요!', {
+      const noDataText = this.add.text(cx, startY + 50, '아직 랭킹이 없습니다\n\n첫 번째 플레이어가 되어보세요!', {
         fontSize: '18px',
         color: '#ccc',
         stroke: '#000',
@@ -247,7 +254,7 @@ export default class LeaderboardScene extends BaseScene {
       const scoreText = entry.score.toString().padStart(6, ' ');
 
       const text = this.add.text(
-        200,
+        cx,
         y,
         `${rankText}${nameText}${scoreText}`,
         {
@@ -263,11 +270,11 @@ export default class LeaderboardScene extends BaseScene {
     });
   }
 
-  private createBackButton() {
-    const button = this.add.rectangle(200, 560, 150, 40, 0xffffff, 1);
+  private createBackButton(cx: number, y: number) {
+    const button = this.add.rectangle(cx, y, 150, 40, 0xffffff, 1);
     button.setStrokeStyle(3, 0x000000);
 
-    const text = this.add.text(200, 560, '← 뒤로가기', {
+    const text = this.add.text(cx, y, '← 뒤로가기', {
       fontSize: '18px',
       color: '#000',
       fontStyle: 'bold'

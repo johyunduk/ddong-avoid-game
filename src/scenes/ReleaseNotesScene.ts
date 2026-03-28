@@ -24,17 +24,25 @@ export default class ReleaseNotesScene extends BaseScene {
   create() {
     super.create();
 
+    const W = this.scale.width;
+    const H = this.scale.height;
+    const cx = W / 2;
+    const yOff = (H - 600) / 2;
+    const scrollTop = 70 + yOff;
+    const scrollBottom = H - 60; // 뒤로가기 버튼 위
+    const scrollHeight = scrollBottom - scrollTop;
+
     this.scrollY = 0;
 
     // 배경
-    const background = this.add.image(200, 300, 'background2');
-    background.setDisplaySize(400, 600);
+    const background = this.add.image(cx, H / 2, 'background2');
+    background.setDisplaySize(W, H);
 
     // 반투명 오버레이 (더 어둡게)
-    this.add.rectangle(200, 300, 400, 600, 0x000000, 0.7);
+    this.add.rectangle(cx, H / 2, W, H, 0x000000, 0.7);
 
     // 타이틀 (고정)
-    this.add.text(200, 35, '릴리즈 노트', {
+    this.add.text(cx, 35 + yOff, '릴리즈 노트', {
       fontSize: '26px',
       color: '#fff',
       fontStyle: 'bold',
@@ -44,12 +52,12 @@ export default class ReleaseNotesScene extends BaseScene {
 
     // 스크롤 영역 마스크
     this.maskShape = this.make.graphics({ x: 0, y: 0 });
-    this.maskShape.fillRect(0, 70, 400, 470);
+    this.maskShape.fillRect(0, scrollTop, W, scrollHeight);
     const mask = this.maskShape.createGeometryMask();
     this.events.once('shutdown', () => { this.maskShape.destroy(); });
 
     // 스크롤 컨테이너
-    this.scrollContainer = this.add.container(0, 70);
+    this.scrollContainer = this.add.container(0, scrollTop);
     this.scrollContainer.setMask(mask);
 
     // 릴리즈 노트 내용 생성
@@ -92,7 +100,7 @@ export default class ReleaseNotesScene extends BaseScene {
         this.scrollContainer.add(badgeText);
       }
 
-      const dateText = this.add.text(380, currentY + 5, release.date, {
+      const dateText = this.add.text(W - 20, currentY + 5, release.date, {
         fontSize: '15px',
         color: '#ddd',
         fontStyle: 'bold',
@@ -104,7 +112,7 @@ export default class ReleaseNotesScene extends BaseScene {
       currentY += 35;
 
       // 구분선
-      const line = this.add.rectangle(200, currentY, 360, 2, 0xFFD700, 0.4);
+      const line = this.add.rectangle(cx, currentY, W - 40, 2, 0xFFD700, 0.4);
       this.scrollContainer.add(line);
       currentY += 14;
 
@@ -115,7 +123,7 @@ export default class ReleaseNotesScene extends BaseScene {
           color: '#fff',
           stroke: '#000',
           strokeThickness: 3,
-          wordWrap: { width: 340 },
+          wordWrap: { width: W - 60 },
         });
         this.scrollContainer.add(changeText);
         currentY += changeText.height + 10;
@@ -131,20 +139,19 @@ export default class ReleaseNotesScene extends BaseScene {
     currentY += 20;
 
     // 스크롤 가능 범위 계산 (컨텐츠 높이 - 보이는 영역 높이)
-    const visibleHeight = 470;
-    this.maxScrollY = Math.max(0, currentY - visibleHeight);
+    this.maxScrollY = Math.max(0, currentY - scrollHeight);
 
     // 스크롤 입력 설정
-    this.setupScrollInput();
+    this.setupScrollInput(scrollTop, scrollBottom);
 
     // 뒤로가기 버튼 (고정)
-    this.createBackButton();
+    this.createBackButton(cx, H - 30);
   }
 
-  private setupScrollInput() {
+  private setupScrollInput(scrollTop: number, scrollBottom: number) {
     // 터치/마우스 드래그 스크롤
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      if (pointer.y > 70 && pointer.y < 540) {
+      if (pointer.y > scrollTop && pointer.y < scrollBottom) {
         this.isDragging = true;
         this.dragStartY = pointer.y;
         this.dragStartScrollY = this.scrollY;
@@ -159,7 +166,7 @@ export default class ReleaseNotesScene extends BaseScene {
         0,
         this.maxScrollY,
       );
-      this.scrollContainer.y = 70 - this.scrollY;
+      this.scrollContainer.y = scrollTop - this.scrollY;
     });
 
     this.input.on('pointerup', () => {
@@ -173,15 +180,15 @@ export default class ReleaseNotesScene extends BaseScene {
         0,
         this.maxScrollY,
       );
-      this.scrollContainer.y = 70 - this.scrollY;
+      this.scrollContainer.y = scrollTop - this.scrollY;
     });
   }
 
-  private createBackButton() {
-    const button = this.add.rectangle(200, 560, 150, 40, 0xffffff, 1).setDepth(10);
+  private createBackButton(cx: number, y: number) {
+    const button = this.add.rectangle(cx, y, 150, 40, 0xffffff, 1).setDepth(10);
     button.setStrokeStyle(3, 0x000000);
 
-    const text = this.add.text(200, 560, '← 뒤로가기', {
+    const text = this.add.text(cx, y, '← 뒤로가기', {
       fontSize: '18px',
       color: '#000',
       fontStyle: 'bold',

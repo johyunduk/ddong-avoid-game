@@ -99,13 +99,18 @@ export default class BattleMatchScene extends BaseScene {
   create() {
     super.create();
 
+    const W = this.scale.width;
+    const H = this.scale.height;
+    const cx = W / 2;
+    const yOff = (H - 600) / 2;
+
     // 배경 (모든 상태에서 유지)
-    const bg = this.add.image(200, 300, 'background2');
-    bg.setDisplaySize(400, 600);
-    this.add.rectangle(200, 300, 400, 600, 0x000000, 0.6);
+    const bg = this.add.image(cx, H / 2, 'background2');
+    bg.setDisplaySize(W, H);
+    this.add.rectangle(cx, H / 2, W, H, 0x000000, 0.6);
 
     // 타이틀 (모든 상태에서 유지)
-    this.add.text(200, 45, '⚔️ 대전 모드', {
+    this.add.text(cx, 45 + yOff, '⚔️ 대전 모드', {
       fontSize: '34px',
       color: '#ff4444',
       fontStyle: 'bold',
@@ -113,7 +118,7 @@ export default class BattleMatchScene extends BaseScene {
       strokeThickness: 6,
     }).setOrigin(0.5);
 
-    this.add.text(200, 85, 'EXTREME 난이도로 1대1 대전!', {
+    this.add.text(cx, 85 + yOff, 'EXTREME 난이도로 1대1 대전!', {
       fontSize: '15px',
       color: '#dddddd',
       stroke: '#000',
@@ -121,7 +126,7 @@ export default class BattleMatchScene extends BaseScene {
     }).setOrigin(0.5);
 
     // 뒤로가기 (모든 상태에서 유지)
-    const backBtn = this.add.text(200, 562, '← 메인 메뉴', {
+    const backBtn = this.add.text(cx, 562 + yOff, '← 메인 메뉴', {
       fontSize: '18px',
       color: '#aaaaaa',
       stroke: '#000',
@@ -177,6 +182,11 @@ export default class BattleMatchScene extends BaseScene {
   private showMenu() {
     this.clearUI();
 
+    const W = this.scale.width;
+    const H = this.scale.height;
+    const cx = W / 2;
+    const yOff = (H - 600) / 2;
+
     // ── 정보 카드 (캐릭터 좌측 | 랭크 우측) ──────────────────────
     const def = getCharacterDef(getSafeSelectedCharacter());
     const stars = def.grade === 'UR' ? '★★★'
@@ -184,46 +194,47 @@ export default class BattleMatchScene extends BaseScene {
       : def.grade === 'R'  ? '★'
       : def.grade;
 
-    this.ui(this.add.rectangle(200, 200, 374, 190, 0x0d1b2a, 0.9)
+    const cardW = W - 16;
+    this.ui(this.add.rectangle(cx, 200 + yOff, cardW, 190, 0x0d1b2a, 0.9)
       .setStrokeStyle(1, 0x334466));
 
     // 구분선
     const divGfx = this.add.graphics();
     divGfx.lineStyle(1, 0x334466, 0.8);
-    divGfx.lineBetween(203, 110, 203, 290);
+    divGfx.lineBetween(cx + 3, 110 + yOff, cx + 3, 290 + yOff);
     this.ui(divGfx);
 
     // 캐릭터 이미지
     if (this.textures.exists(def.imageKey)) {
-      this.ui(this.add.image(62, 200, def.imageKey).setDisplaySize(68, 96));
+      this.ui(this.add.image(cx - 138, 200 + yOff, def.imageKey).setDisplaySize(68, 96));
     }
-    this.ui(this.add.text(95, 162, def.name, {
+    this.ui(this.add.text(cx - 105, 162 + yOff, def.name, {
       fontSize: '16px', color: '#ffffff', fontStyle: 'bold',
       stroke: '#000', strokeThickness: 3,
     }).setOrigin(0, 0.5));
-    this.ui(this.add.text(95, 190, stars, {
+    this.ui(this.add.text(cx - 105, 190 + yOff, stars, {
       fontSize: '15px', color: def.gradeColor,
       stroke: '#000', strokeThickness: 2,
     }).setOrigin(0, 0.5));
     const menuGradeKey = getGradeImgKey(def.grade);
     if (menuGradeKey) {
-      this.ui(this.add.image(95, 215, menuGradeKey).setDisplaySize(30, 30).setOrigin(0, 0.5));
+      this.ui(this.add.image(cx - 105, 215 + yOff, menuGradeKey).setDisplaySize(30, 30).setOrigin(0, 0.5));
     }
 
     // 랭크 뱃지 (우측)
-    this.ui(this.add.text(295, 117, '내 랭크', {
+    this.ui(this.add.text(cx + 95, 117 + yOff, '내 랭크', {
       fontSize: '12px', color: '#aaaaaa', stroke: '#000', strokeThickness: 2,
     }).setOrigin(0.5));
     this.rankBadgeImg = this.ui(
-      this.add.image(248, 200, 'rank_alpha').setDisplaySize(74, 74).setAlpha(0),
+      this.add.image(cx + 48, 200 + yOff, 'rank_alpha').setDisplaySize(74, 74).setAlpha(0),
     );
-    this.rankBadgeNameTxt = this.ui(this.add.text(288, 162, '---', {
+    this.rankBadgeNameTxt = this.ui(this.add.text(cx + 88, 162 + yOff, '---', {
       fontSize: '15px', color: '#aaaaaa', stroke: '#000', strokeThickness: 2,
     }).setOrigin(0, 0.5));
-    this.rankBadgeRpTxt = this.ui(this.add.text(288, 184, '···', {
+    this.rankBadgeRpTxt = this.ui(this.add.text(cx + 88, 184 + yOff, '···', {
       fontSize: '14px', color: '#bbbbbb', stroke: '#000', strokeThickness: 2,
     }).setOrigin(0, 0.5));
-    this.rankBadgeRankTxt = this.ui(this.add.text(288, 207, '', {
+    this.rankBadgeRankTxt = this.ui(this.add.text(cx + 88, 207 + yOff, '', {
       fontSize: '13px', color: '#999999', stroke: '#000', strokeThickness: 2,
     }).setOrigin(0, 0.5));
 
@@ -233,9 +244,11 @@ export default class BattleMatchScene extends BaseScene {
     }
 
     // ── 1행: 캐릭터 선택 | 전적 보기 (좌우 나란히) ──────────────
-    const charBtn = this.ui(this.add.rectangle(100, 328, 175, 48, 0x1a3a5c));
+    const colBtnW = Math.min(175, (W - 30) / 2);
+    const colBtnOff = colBtnW / 2 + 5;
+    const charBtn = this.ui(this.add.rectangle(cx - colBtnOff, 328 + yOff, colBtnW, 48, 0x1a3a5c));
     charBtn.setStrokeStyle(2, 0x4499dd);
-    this.ui(this.add.text(100, 328, '👤 캐릭터 선택', {
+    this.ui(this.add.text(cx - colBtnOff, 328 + yOff, '👤 캐릭터 선택', {
       fontSize: '15px', color: '#aaddff', fontStyle: 'bold',
       stroke: '#000', strokeThickness: 3,
     }).setOrigin(0.5));
@@ -246,9 +259,9 @@ export default class BattleMatchScene extends BaseScene {
       this.scene.start('CharacterSelectScene', { returnScene: 'BattleMatchScene' });
     });
 
-    const recordBtn = this.ui(this.add.rectangle(300, 328, 175, 48, 0x1a2a1a));
+    const recordBtn = this.ui(this.add.rectangle(cx + colBtnOff, 328 + yOff, colBtnW, 48, 0x1a2a1a));
     recordBtn.setStrokeStyle(2, 0x44aa44);
-    this.ui(this.add.text(300, 328, '🏆 전적 보기', {
+    this.ui(this.add.text(cx + colBtnOff, 328 + yOff, '🏆 전적 보기', {
       fontSize: '15px', color: '#88ee88', fontStyle: 'bold',
       stroke: '#000', strokeThickness: 3,
     }).setOrigin(0.5));
@@ -258,9 +271,9 @@ export default class BattleMatchScene extends BaseScene {
     recordBtn.on('pointerdown', () => this.scene.start('BattleLeaderboardScene'));
 
     // ── 2행: 랭크 매칭 (전체 너비) ───────────────────────────────
-    const rankedBtn = this.ui(this.add.rectangle(200, 392, 374, 56, 0x7a5c00));
+    const rankedBtn = this.ui(this.add.rectangle(cx, 392 + yOff, cardW, 56, 0x7a5c00));
     rankedBtn.setStrokeStyle(2, 0xFFD700);
-    this.ui(this.add.text(200, 392, '🎖️ 랭크 매칭', {
+    this.ui(this.add.text(cx, 392 + yOff, '🎖️ 랭크 매칭', {
       fontSize: '22px', color: '#FFD700', fontStyle: 'bold',
       stroke: '#000', strokeThickness: 4,
     }).setOrigin(0.5));
@@ -270,14 +283,14 @@ export default class BattleMatchScene extends BaseScene {
     rankedBtn.on('pointerdown', () => this.startRankedMatchmaking());
 
     // ── 친선전 버튼 (좌우 나란히) ─────────────────────────────────
-    this.ui(this.add.text(200, 462, '─── 친선전 (RP 없음) ───', {
+    this.ui(this.add.text(cx, 462 + yOff, '─── 친선전 (RP 없음) ───', {
       fontSize: '15px', color: '#cccccc',
       stroke: '#000', strokeThickness: 3,
     }).setOrigin(0.5));
 
-    const createBtn = this.ui(this.add.rectangle(100, 500, 175, 48, 0xc0392b));
+    const createBtn = this.ui(this.add.rectangle(cx - colBtnOff, 500 + yOff, colBtnW, 48, 0xc0392b));
     createBtn.setStrokeStyle(2, 0xffffff);
-    this.ui(this.add.text(100, 500, '🏠 방 만들기', {
+    this.ui(this.add.text(cx - colBtnOff, 500 + yOff, '🏠 방 만들기', {
       fontSize: '17px', color: '#ffffff', fontStyle: 'bold',
       stroke: '#000', strokeThickness: 3,
     }).setOrigin(0.5));
@@ -286,9 +299,9 @@ export default class BattleMatchScene extends BaseScene {
     createBtn.on('pointerout', () => createBtn.setFillStyle(0xc0392b));
     createBtn.on('pointerdown', () => this.handleCreateRoom());
 
-    const joinBtn = this.ui(this.add.rectangle(300, 500, 175, 48, 0x2471a3));
+    const joinBtn = this.ui(this.add.rectangle(cx + colBtnOff, 500 + yOff, colBtnW, 48, 0x2471a3));
     joinBtn.setStrokeStyle(2, 0xffffff);
-    this.ui(this.add.text(300, 500, '🔗 방 참가', {
+    this.ui(this.add.text(cx + colBtnOff, 500 + yOff, '🔗 방 참가', {
       fontSize: '17px', color: '#ffffff', fontStyle: 'bold',
       stroke: '#000', strokeThickness: 3,
     }).setOrigin(0.5));
@@ -395,18 +408,21 @@ export default class BattleMatchScene extends BaseScene {
   private showRankedWaiting() {
     this.clearUI();
 
-    this.ui(this.add.text(200, 225, '🎖️ 랭크 매칭 중...', {
+    const cx = this.scale.width / 2;
+    const yOff = (this.scale.height - 600) / 2;
+
+    this.ui(this.add.text(cx, 225 + yOff, '🎖️ 랭크 매칭 중...', {
       fontSize: '26px', color: '#FFD700', fontStyle: 'bold',
       stroke: '#000', strokeThickness: 5,
     }).setOrigin(0.5));
 
-    const subText = this.ui(this.add.text(200, 278, '상대를 찾고 있습니다', {
+    const subText = this.ui(this.add.text(cx, 278 + yOff, '상대를 찾고 있습니다', {
       fontSize: '16px', color: '#cccccc',
       stroke: '#000', strokeThickness: 3,
     }).setOrigin(0.5));
 
     let elapsed = 0;
-    const elapsedText = this.ui(this.add.text(200, 315, '0초 경과', {
+    const elapsedText = this.ui(this.add.text(cx, 315 + yOff, '0초 경과', {
       fontSize: '15px', color: '#999999',
       stroke: '#000', strokeThickness: 3,
     }).setOrigin(0.5));
@@ -432,9 +448,9 @@ export default class BattleMatchScene extends BaseScene {
     }));
 
     // 취소 버튼
-    const cancelBtn = this.ui(this.add.rectangle(200, 410, 220, 54, 0x444444));
+    const cancelBtn = this.ui(this.add.rectangle(cx, 410 + yOff, 220, 54, 0x444444));
     cancelBtn.setStrokeStyle(2, 0xaaaaaa);
-    this.ui(this.add.text(200, 410, '취소', {
+    this.ui(this.add.text(cx, 410 + yOff, '취소', {
       fontSize: '20px', color: '#ffffff',
       stroke: '#000', strokeThickness: 3,
     }).setOrigin(0.5));
@@ -475,7 +491,8 @@ export default class BattleMatchScene extends BaseScene {
     this.resetMatchState(asHost);
 
     this.clearUI();
-    this.ui(this.add.text(200, 290, '✅ 매칭 완료!', {
+    const { cx, yOff } = this.getScaleInfo();
+    this.ui(this.add.text(cx, 290 + yOff, '✅ 매칭 완료!', {
       fontSize: '24px', color: '#00ff88', fontStyle: 'bold',
       stroke: '#000', strokeThickness: 4,
     }).setOrigin(0.5));
@@ -518,7 +535,8 @@ export default class BattleMatchScene extends BaseScene {
 
     // 재도전 중 안내 UI
     this.clearUI();
-    this.ui(this.add.text(200, 290, '🔄 재도전 연결 중...', {
+    const { cx, yOff } = this.getScaleInfo();
+    this.ui(this.add.text(cx, 290 + yOff, '🔄 재도전 연결 중...', {
       fontSize: '20px', color: '#00ff88', fontStyle: 'bold',
       stroke: '#000', strokeThickness: 4,
     }).setOrigin(0.5));
@@ -544,23 +562,26 @@ export default class BattleMatchScene extends BaseScene {
   private showCreateWaiting(code: string) {
     this.clearUI();
 
-    this.ui(this.add.text(200, 200, '초대 코드', {
+    const cx = this.scale.width / 2;
+    const yOff = (this.scale.height - 600) / 2;
+
+    this.ui(this.add.text(cx, 200 + yOff, '초대 코드', {
       fontSize: '16px', color: '#aaaaaa',
       stroke: '#000', strokeThickness: 3,
     }).setOrigin(0.5));
 
-    this.ui(this.add.text(200, 260, code, {
+    this.ui(this.add.text(cx, 260 + yOff, code, {
       fontSize: '56px', color: '#FFD700', fontStyle: 'bold',
       stroke: '#000', strokeThickness: 6, letterSpacing: 10,
     }).setOrigin(0.5));
 
-    this.ui(this.add.text(200, 330, '상대방에게 코드를 알려주세요', {
+    this.ui(this.add.text(cx, 330 + yOff, '상대방에게 코드를 알려주세요', {
       fontSize: '15px', color: '#ffffff',
       stroke: '#000', strokeThickness: 3,
     }).setOrigin(0.5));
 
     // 대기 애니메이션 점
-    const dots = this.ui(this.add.text(200, 370, '대기 중', {
+    const dots = this.ui(this.add.text(cx, 370 + yOff, '대기 중', {
       fontSize: '16px', color: '#888888',
       stroke: '#000', strokeThickness: 3,
     }).setOrigin(0.5));
@@ -583,7 +604,10 @@ export default class BattleMatchScene extends BaseScene {
   private showJoinInput() {
     this.clearUI();
 
-    this.ui(this.add.text(200, 200, '방 코드 입력', {
+    const cx = this.scale.width / 2;
+    const yOff = (this.scale.height - 600) / 2;
+
+    this.ui(this.add.text(cx, 200 + yOff, '방 코드 입력', {
       fontSize: '18px', color: '#ffffff', fontStyle: 'bold',
       stroke: '#000', strokeThickness: 3,
     }).setOrigin(0.5));
@@ -591,8 +615,8 @@ export default class BattleMatchScene extends BaseScene {
     // Phaser 캔버스 좌표 → DOM 좌표 변환
     const canvas = this.game.canvas;
     const rect = canvas.getBoundingClientRect();
-    const scaleX = rect.width / 400;
-    const scaleY = rect.height / 600;
+    const scaleX = rect.width / this.scale.width;
+    const scaleY = rect.height / this.scale.height;
 
     const input = document.createElement('input');
     input.type = 'text';
@@ -600,8 +624,8 @@ export default class BattleMatchScene extends BaseScene {
     input.placeholder = 'CODE';
     input.style.cssText = `
       position: fixed;
-      left: ${rect.left + 200 * scaleX}px;
-      top: ${rect.top + 270 * scaleY}px;
+      left: ${rect.left + cx * scaleX}px;
+      top: ${rect.top + (270 + yOff) * scaleY}px;
       transform: translateX(-50%);
       width: ${Math.round(200 * scaleX)}px;
       height: ${Math.round(55 * scaleY)}px;
@@ -626,15 +650,15 @@ export default class BattleMatchScene extends BaseScene {
     });
 
     // 에러 메시지 영역
-    const errorText = this.ui(this.add.text(200, 330, '', {
+    const errorText = this.ui(this.add.text(cx, 330 + yOff, '', {
       fontSize: '14px', color: '#ff4444',
       stroke: '#000', strokeThickness: 3,
     }).setOrigin(0.5));
 
     // 참가 버튼
-    const joinBtn = this.ui(this.add.rectangle(200, 390, 220, 55, 0x1e8449));
+    const joinBtn = this.ui(this.add.rectangle(cx, 390 + yOff, 220, 55, 0x1e8449));
     joinBtn.setStrokeStyle(3, 0xffffff);
-    this.ui(this.add.text(200, 390, '참가하기', {
+    this.ui(this.add.text(cx, 390 + yOff, '참가하기', {
       fontSize: '22px', color: '#ffffff', fontStyle: 'bold',
       stroke: '#000', strokeThickness: 3,
     }).setOrigin(0.5));
@@ -665,7 +689,7 @@ export default class BattleMatchScene extends BaseScene {
     });
 
     // 뒤로 (메뉴로)
-    const backText = this.ui(this.add.text(200, 470, '← 돌아가기', {
+    const backText = this.ui(this.add.text(cx, 470 + yOff, '← 돌아가기', {
       fontSize: '16px', color: '#aaaaaa',
       stroke: '#000', strokeThickness: 3,
     }).setOrigin(0.5).setInteractive({ useHandCursor: true }));
@@ -681,60 +705,62 @@ export default class BattleMatchScene extends BaseScene {
     this.readyButtonShown = true;
     this.clearUI();
 
+    const cx = this.scale.width / 2;
+    const yOff = (this.scale.height - 600) / 2;
     const myDef = getCharacterDef(getSafeSelectedCharacter());
 
     // 모드 배지
     const modeLabel = this.isRanked ? '🎖️ 랭크 매칭' : '🏠 친선전';
     const modeLabelColor = this.isRanked ? '#FFD700' : '#aaaaaa';
-    this.ui(this.add.text(200, 155, modeLabel, {
+    this.ui(this.add.text(cx, 155 + yOff, modeLabel, {
       fontSize: '14px', color: modeLabelColor,
       stroke: '#000', strokeThickness: 3,
     }).setOrigin(0.5));
 
-    this.ui(this.add.text(200, 180, '상대방과 연결되었습니다!', {
+    this.ui(this.add.text(cx, 180 + yOff, '상대방과 연결되었습니다!', {
       fontSize: '18px', color: '#00ff88', fontStyle: 'bold',
       stroke: '#000', strokeThickness: 3,
     }).setOrigin(0.5));
 
     // ── VS 레이블 ─────────────────────────────────────────────────
-    this.ui(this.add.text(96, 215, '나', {
+    this.ui(this.add.text(cx - 104, 215 + yOff, '나', {
       fontSize: '15px', color: '#aaaaaa', stroke: '#000', strokeThickness: 3,
     }).setOrigin(0.5));
-    this.ui(this.add.text(200, 213, 'VS', {
+    this.ui(this.add.text(cx, 213 + yOff, 'VS', {
       fontSize: '22px', color: '#ff4444', fontStyle: 'bold',
       stroke: '#000', strokeThickness: 5,
     }).setOrigin(0.5));
-    this.ui(this.add.text(304, 215, '상대', {
+    this.ui(this.add.text(cx + 104, 215 + yOff, '상대', {
       fontSize: '15px', color: '#aaaaaa', stroke: '#000', strokeThickness: 3,
     }).setOrigin(0.5));
 
     // ── 내 캐릭터 (왼쪽) ─────────────────────────────────────────
-    this.ui(this.add.rectangle(96, 280, 92, 104, 0x000033, 0.7)
+    this.ui(this.add.rectangle(cx - 104, 280 + yOff, 92, 104, 0x000033, 0.7)
       .setStrokeStyle(2, 0x4466ff));
     if (this.textures.exists(myDef.imageKey)) {
-      this.ui(this.add.image(96, 280, myDef.imageKey).setDisplaySize(60, 86));
+      this.ui(this.add.image(cx - 104, 280 + yOff, myDef.imageKey).setDisplaySize(60, 86));
     }
-    this.ui(this.add.text(96, 342, myDef.name, {
+    this.ui(this.add.text(cx - 104, 342 + yOff, myDef.name, {
       fontSize: '14px', color: '#ffffff', fontStyle: 'bold',
       stroke: '#000', strokeThickness: 3,
     }).setOrigin(0.5));
     const myGradeKey = getGradeImgKey(myDef.grade);
     if (myGradeKey) {
-      this.ui(this.add.image(96, 362, myGradeKey).setDisplaySize(28, 28).setOrigin(0.5));
+      this.ui(this.add.image(cx - 104, 362 + yOff, myGradeKey).setDisplaySize(28, 28).setOrigin(0.5));
     }
 
     // ── 상대 캐릭터 (오른쪽) ─────────────────────────────────────
-    this.ui(this.add.rectangle(304, 280, 92, 104, 0x330000, 0.7)
+    this.ui(this.add.rectangle(cx + 104, 280 + yOff, 92, 104, 0x330000, 0.7)
       .setStrokeStyle(2, 0xff4444));
 
     // 항상 플레이스홀더 먼저 생성 — updateOpponentCharDisplay가 이 객체를 기준으로 업데이트
-    this.opponentCharPlaceholder = this.ui(this.add.text(304, 280, '?', {
+    this.opponentCharPlaceholder = this.ui(this.add.text(cx + 104, 280 + yOff, '?', {
       fontSize: '42px', color: '#555555', stroke: '#000', strokeThickness: 3,
     }).setOrigin(0.5));
-    this.opponentCharNameTxt = this.ui(this.add.text(304, 342, '대기 중...', {
+    this.opponentCharNameTxt = this.ui(this.add.text(cx + 104, 342 + yOff, '대기 중...', {
       fontSize: '14px', color: '#666666', stroke: '#000', strokeThickness: 2,
     }).setOrigin(0.5));
-    this.opponentCharGradeTxt = this.ui(this.add.text(304, 362, '', {
+    this.opponentCharGradeTxt = this.ui(this.add.text(cx + 104, 362 + yOff, '', {
       fontSize: '13px', color: '#666666',
     }).setOrigin(0.5));
     // grade image will be set in updateOpponentCharDisplay
@@ -745,13 +771,13 @@ export default class BattleMatchScene extends BaseScene {
     }
 
     // ── 준비 버튼 ─────────────────────────────────────────────────
-    this.ui(this.add.text(200, 400, '캐릭터를 확인하고 준비하세요', {
+    this.ui(this.add.text(cx, 400 + yOff, '캐릭터를 확인하고 준비하세요', {
       fontSize: '13px', color: '#bbbbbb', stroke: '#000', strokeThickness: 2,
     }).setOrigin(0.5));
 
-    const readyBtn = this.ui(this.add.rectangle(200, 440, 270, 64, 0x1e8449));
+    const readyBtn = this.ui(this.add.rectangle(cx, 440 + yOff, 270, 64, 0x1e8449));
     readyBtn.setStrokeStyle(3, 0xffffff);
-    this.ui(this.add.text(200, 440, '✅ 준비완료', {
+    this.ui(this.add.text(cx, 440 + yOff, '✅ 준비완료', {
       fontSize: '24px', color: '#ffffff', fontStyle: 'bold',
       stroke: '#000', strokeThickness: 4,
     }).setOrigin(0.5));
@@ -790,7 +816,9 @@ export default class BattleMatchScene extends BaseScene {
       this.opponentCharImg.setTexture(def.imageKey).setDisplaySize(58, 82);
     } else if (this.opponentCharNameTxt?.active) {
       // 아직 이미지가 없고 UI는 살아있음 → 새로 생성
-      this.opponentCharImg = this.add.image(304, 280, def.imageKey).setDisplaySize(58, 82);
+      const _cx = this.scale.width / 2;
+      const _yOff = (this.scale.height - 600) / 2;
+      this.opponentCharImg = this.add.image(_cx + 104, 280 + _yOff, def.imageKey).setDisplaySize(58, 82);
       this.uiGroup.push(this.opponentCharImg);
     }
     // 이름 / 등급
@@ -803,7 +831,9 @@ export default class BattleMatchScene extends BaseScene {
     }
     const oppGradeKey = getGradeImgKey(def.grade);
     if (oppGradeKey && this.opponentCharNameTxt?.active) {
-      this.opponentCharGradeImg = this.add.image(304, 362, oppGradeKey).setDisplaySize(28, 28).setOrigin(0.5);
+      const _cx2 = this.scale.width / 2;
+      const _yOff2 = (this.scale.height - 600) / 2;
+      this.opponentCharGradeImg = this.add.image(_cx2 + 104, 362 + _yOff2, oppGradeKey).setDisplaySize(28, 28).setOrigin(0.5);
       this.uiGroup.push(this.opponentCharGradeImg);
     }
   }
@@ -822,7 +852,7 @@ export default class BattleMatchScene extends BaseScene {
 
     this.battleChannel.onPresenceLeave(() => {
       this.opponentReady = false;
-      this.ui(this.add.text(200, 420, '⚠️ 상대방이 나갔습니다', {
+      this.ui(this.add.text(this.scale.width / 2, 420 + (this.scale.height - 600) / 2, '⚠️ 상대방이 나갔습니다', {
         fontSize: '16px', color: '#ff4444',
         stroke: '#000', strokeThickness: 3,
       }).setOrigin(0.5));
@@ -864,12 +894,14 @@ export default class BattleMatchScene extends BaseScene {
     this.battleChannel.sendReady(charId);
 
     // UI 갱신: 상대 대기 화면
+    const _cx = this.scale.width / 2;
+    const _yOff = (this.scale.height - 600) / 2;
     this.clearUI();
-    this.ui(this.add.text(200, 270, '✅ 준비 완료!', {
+    this.ui(this.add.text(_cx, 270 + _yOff, '✅ 준비 완료!', {
       fontSize: '24px', color: '#00ff00', fontStyle: 'bold',
       stroke: '#000', strokeThickness: 4,
     }).setOrigin(0.5));
-    this.ui(this.add.text(200, 320, '상대를 기다리는 중...', {
+    this.ui(this.add.text(_cx, 320 + _yOff, '상대를 기다리는 중...', {
       fontSize: '16px', color: '#ffffff',
       stroke: '#000', strokeThickness: 3,
     }).setOrigin(0.5));
@@ -909,7 +941,7 @@ export default class BattleMatchScene extends BaseScene {
     this.clearUI();
 
     let count = 3;
-    const countText = this.ui(this.add.text(200, 280, `${count}`, {
+    const countText = this.ui(this.add.text(this.scale.width / 2, 280 + (this.scale.height - 600) / 2, `${count}`, {
       fontSize: '90px', color: '#ff4444', fontStyle: 'bold',
       stroke: '#000', strokeThickness: 8,
     }).setOrigin(0.5));

@@ -248,8 +248,12 @@ export default class GameScene extends BaseScene {
       ? wpDefForBg.bgKey
       : this.getDefaultBackgroundKey();
 
-    const background = this.add.image(200, 300, backgroundKey);
-    background.setDisplaySize(400, 600);
+    const W = this.scale.width;
+    const H = this.scale.height;
+    const cx = W / 2;
+
+    const background = this.add.image(cx, H / 2, backgroundKey);
+    background.setDisplaySize(W, H);
 
     // BGM 키 결정 (preload에서 이미 로드됨)
     let bgMusicKey = 'bgMusic';
@@ -267,7 +271,7 @@ export default class GameScene extends BaseScene {
     this.bgMusic.play();
 
     // 월드 바운드 설정 (플레이어가 화면 안쪽에만 머무르도록)
-    this.physics.world.setBounds(15, 0, 370, 600);
+    this.physics.world.setBounds(15, 0, W - 30, H);
 
     // 플레이어 생성 (난이도별 속도 적용, 게임 모드별 스프라이트)
     const CHARS_WITH_SPRITES = GameScene.CHARS_WITH_SPRITES;
@@ -287,7 +291,7 @@ export default class GameScene extends BaseScene {
       : this.charAwakeLevel >= 2 ? _gs(10, 15, 20)
       : this.charAwakeLevel >= 1 ? _gs(5, 10, 15)
       : 0;
-    this.player = new Player(this, 200, 520, this.difficultyConfig.playerSpeed + this.ability.getPlayerSpeedBonus() + gradeAwakeSpeed + (this.activeSynergy?.speedBonus ?? 0), playerTexturePrefix);
+    this.player = new Player(this, cx, H - 80, this.difficultyConfig.playerSpeed + this.ability.getPlayerSpeedBonus() + gradeAwakeSpeed + (this.activeSynergy?.speedBonus ?? 0), playerTexturePrefix);
 
     // 💩 그룹 생성 (Object Pool: maxSize로 상한 설정)
     this.poops = this.physics.add.group({
@@ -390,7 +394,7 @@ export default class GameScene extends BaseScene {
     const HUD_H = 36;
     const hudBg = this.add.graphics();
     hudBg.fillStyle(0x000000, 0.28);
-    hudBg.fillRect(0, 0, 400, HUD_H);
+    hudBg.fillRect(0, 0, W, HUD_H);
     hudBg.setDepth(9);
 
     const hudTextY = Math.round(HUD_H / 2) - 11; // 18px 폰트 수직 중앙
@@ -405,7 +409,7 @@ export default class GameScene extends BaseScene {
     }).setDepth(10);
 
     // 최고 점수 텍스트 (오른쪽 위)
-    this.highScoreText = this.add.text(384, hudTextY, `최고: ${this.highScore}`, {
+    this.highScoreText = this.add.text(W - 16, hudTextY, `최고: ${this.highScore}`, {
       fontSize: '18px',
       color: '#FFD700',
       fontStyle: 'bold',
@@ -414,7 +418,7 @@ export default class GameScene extends BaseScene {
     }).setOrigin(1, 0).setDepth(10);
 
     // 조작 안내 (3초 후 자동으로 페이드아웃)
-    const hintText = this.add.text(200, 58, '← → 키로 이동', {
+    const hintText = this.add.text(cx, 58, '← → 키로 이동', {
       fontSize: '15px',
       color: '#ffffff',
       stroke: '#000000',
@@ -441,7 +445,7 @@ export default class GameScene extends BaseScene {
 
     // 시너지 뱃지 (배경화면-캐릭터 조합 일치 시 게임 시작 직후 표시)
     if (this.activeSynergy) {
-      const badge = this.add.text(200, 15, `✦ ${this.activeSynergy.label}`, {
+      const badge = this.add.text(cx, 15, `✦ ${this.activeSynergy.label}`, {
         fontSize: '12px',
         color: '#FFD700',
         stroke: '#000',
@@ -635,8 +639,11 @@ export default class GameScene extends BaseScene {
     this.physics.pause();
     this.sound.stopAll();
 
-    this.add.rectangle(200, 300, 400, 600, 0x000000, 0.8).setDepth(500);
-    this.add.text(200, 280, '⚠️ 비정상적인 플레이가\n감지되었습니다', {
+    const _W = this.scale.width;
+    const _H = this.scale.height;
+    const _cx = _W / 2;
+    this.add.rectangle(_cx, _H / 2, _W, _H, 0x000000, 0.8).setDepth(500);
+    this.add.text(_cx, _H / 2, '⚠️ 비정상적인 플레이가\n감지되었습니다', {
       fontSize: '22px',
       color: '#ff4444',
       fontStyle: 'bold',
@@ -669,7 +676,7 @@ export default class GameScene extends BaseScene {
     const fallSpeed = this.difficultyConfig.baseSpeed + (this.difficultyLevel * POOP_CONFIG.normal.speedIncrement);
     for (let i = 0; i < poopCount; i++) {
       // 💩이 화면 전체에서 생성되도록 (💩 크기 15를 고려해서 양쪽 여유)
-      const x = Phaser.Math.Between(15, 385);
+      const x = Phaser.Math.Between(15, this.scale.width - 15);
       const y = Phaser.Math.Between(-200, -20);
       const poop = this.poops.get() as Poop;
       if (!poop) continue;
@@ -686,7 +693,7 @@ export default class GameScene extends BaseScene {
     if (this.gameOver) return;
 
     // 금똥 1개를 화면 중앙 상단에서 생성 (더 잘 보이도록)
-    const x = Phaser.Math.Between(50, 350);
+    const x = Phaser.Math.Between(50, this.scale.width - 50);
     const y = -50;
     const goldPoop = this.goldPoops.get() as GoldPoop;
     if (!goldPoop) return;
@@ -708,7 +715,7 @@ export default class GameScene extends BaseScene {
     }
 
     // 다이아똥 1개를 화면 중앙 상단에서 생성 (더 잘 보이도록)
-    const x = Phaser.Math.Between(50, 350);
+    const x = Phaser.Math.Between(50, this.scale.width - 50);
     const y = -50;
     const diamondPoop = this.diamondPoops.get() as DiamondPoop;
     if (!diamondPoop) return;
@@ -725,7 +732,7 @@ export default class GameScene extends BaseScene {
   private spawnTopazPoop() {
     if (this.gameOver) return;
 
-    const x = Phaser.Math.Between(50, 350);
+    const x = Phaser.Math.Between(50, this.scale.width - 50);
     const y = -50;
     const topazPoop = this.topazPoops.get() as TopazPoop;
     if (!topazPoop) return;
@@ -740,7 +747,7 @@ export default class GameScene extends BaseScene {
   private spawnRainbowPoop() {
     if (this.gameOver) return;
 
-    const x = Phaser.Math.Between(50, 350);
+    const x = Phaser.Math.Between(50, this.scale.width - 50);
     const y = -50;
     const rainbowPoop = this.rainbowPoops.get() as RainbowPoop;
     if (!rainbowPoop) return;
@@ -769,7 +776,7 @@ export default class GameScene extends BaseScene {
     this.updateScore(total);
     if (!this.isFeverTime) {
       const suffix = bonus > 0 ? ` (+${bonus})` : '';
-      const t = this.add.text(200, 100, `${emoji} +${total}점!${suffix} ${emoji}`, {
+      const t = this.add.text(this.scale.width / 2, 100, `${emoji} +${total}점!${suffix} ${emoji}`, {
         fontSize: '28px', color, fontStyle: 'bold',
         stroke: '#000', strokeThickness: 4,
       }).setOrigin(0.5);
@@ -997,7 +1004,7 @@ export default class GameScene extends BaseScene {
 
     // 생성된 Text 객체의 width를 합산해 중앙 정렬
     const totalWidth = this.feverTimeUITexts.reduce((sum, t) => sum + t.width, 0);
-    let currentX = FEVER_TIME_CONFIG.ui.position.x - totalWidth / 2;
+    let currentX = this.scale.width / 2 - totalWidth / 2;
     for (const charText of this.feverTimeUITexts) {
       charText.setX(currentX);
       currentX += charText.width;
@@ -1048,7 +1055,7 @@ export default class GameScene extends BaseScene {
     if (this.feverTimeUITexts.length > 0) {
       // setText() 후 width가 즉시 갱신되므로 별도 측정 객체 불필요
       const totalWidth = this.feverTimeUITexts.reduce((sum, t) => sum + t.width, 0);
-      let currentX = FEVER_TIME_CONFIG.ui.position.x - totalWidth / 2;
+      let currentX = this.scale.width / 2 - totalWidth / 2;
       for (let i = 0; i < this.feverTimeUITexts.length && i < newText.length; i++) {
         this.feverTimeUITexts[i].setX(currentX);
         currentX += this.feverTimeUITexts[i].width;
@@ -1103,7 +1110,7 @@ export default class GameScene extends BaseScene {
     // 1. 일반 똥 생성 (피버 타임 속도 배수 적용)
     const normalFallSpeed = baseFallSpeed * FEVER_TIME_CONFIG.speedMultiplier;
     for (let i = 0; i < FEVER_TIME_CONFIG.normalPoopCount; i++) {
-      const x = Phaser.Math.Between(15, 385);
+      const x = Phaser.Math.Between(15, this.scale.width - 15);
       const y = Phaser.Math.Between(-200, -20);
       const poop = this.poops.get() as Poop;
       if (!poop) continue;
@@ -1115,7 +1122,7 @@ export default class GameScene extends BaseScene {
 
     // 2. 금똥/다이아똥 랜덤 생성 (피버 타임 속도 배수 적용)
     for (let i = 0; i < FEVER_TIME_CONFIG.bonusPoopCount; i++) {
-      const x = Phaser.Math.Between(50, 350);
+      const x = Phaser.Math.Between(50, this.scale.width - 50);
       const y = Phaser.Math.Between(-200, -50);
 
       // 50% 확률로 금똥 또는 다이아똥 결정
@@ -1219,13 +1226,16 @@ export default class GameScene extends BaseScene {
    * 게임 오버 UI 표시 및 랭킹 시스템 연동
    */
   protected async showGameOverUI(isNewRecord: boolean) {
+    const W = this.scale.width;
+    const H = this.scale.height;
+    const cx = W / 2;
     // 반투명 검정 배경 추가 (가독성 향상)
-    this.add.rectangle(200, 300, 400, 600, 0x000000, 0.7).setDepth(200);
+    this.add.rectangle(cx, H / 2, W, H, 0x000000, 0.7).setDepth(200);
 
     // SKOR 제출 (백그라운드, 모든 모드에서 실행)
     // 새 기록 시: 이니셜 입력 영역(y≈380) 아래에 배치 / 일반 시: 개인최고(y≈320) 아래에 배치
-    const skorStatusY = isNewRecord ? 418 : 380;
-    const skorStatusText = this.add.text(200, skorStatusY, '💰 SKOR 정제 중...', {
+    const skorStatusY = isNewRecord ? H / 2 + 118 : H / 2 + 80;
+    const skorStatusText = this.add.text(cx, skorStatusY, '💰 SKOR 정제 중...', {
       fontSize: '16px',
       color: '#aaaaaa',
       stroke: '#000',
@@ -1237,7 +1247,7 @@ export default class GameScene extends BaseScene {
     if (isNewRecord) {
       // === 새 기록 달성 시: 상단에 배치 ===
       // 게임 오버 타이틀
-      this.add.text(200, 80, 'GAME OVER', {
+      this.add.text(cx, H / 2 - 220, 'GAME OVER', {
         fontSize: '48px',
         color: '#ff0000',
         fontStyle: 'bold',
@@ -1246,7 +1256,7 @@ export default class GameScene extends BaseScene {
       }).setOrigin(0.5).setDepth(200);
 
       // 최종 점수
-      this.add.text(200, 150, `점수: ${this.score}`, {
+      this.add.text(cx, H / 2 - 150, `점수: ${this.score}`, {
         fontSize: '32px',
         color: '#ffffff',
         fontStyle: 'bold',
@@ -1255,7 +1265,7 @@ export default class GameScene extends BaseScene {
       }).setOrigin(0.5).setDepth(200);
 
       // 새 기록 메시지
-      this.add.text(200, 200, '🎉 개인 신기록 🎉', {
+      this.add.text(cx, H / 2 - 100, '🎉 개인 신기록 🎉', {
         fontSize: '28px',
         color: '#FFD700',
         fontStyle: 'bold',
@@ -1268,7 +1278,7 @@ export default class GameScene extends BaseScene {
     } else {
       // === 새 기록 미달성 시: 중앙에 배치 ===
       // 게임 오버 타이틀
-      this.add.text(200, 180, 'GAME OVER', {
+      this.add.text(cx, H / 2 - 120, 'GAME OVER', {
         fontSize: '48px',
         color: '#ff0000',
         fontStyle: 'bold',
@@ -1277,7 +1287,7 @@ export default class GameScene extends BaseScene {
       }).setOrigin(0.5).setDepth(200);
 
       // 최종 점수
-      this.add.text(200, 260, `점수: ${this.score}`, {
+      this.add.text(cx, H / 2 - 40, `점수: ${this.score}`, {
         fontSize: '32px',
         color: '#ffffff',
         fontStyle: 'bold',
@@ -1286,7 +1296,7 @@ export default class GameScene extends BaseScene {
       }).setOrigin(0.5).setDepth(200);
 
       // 로컬 최고 점수
-      this.add.text(200, 320, `개인 최고: ${this.highScore}`, {
+      this.add.text(cx, H / 2 + 20, `개인 최고: ${this.highScore}`, {
         fontSize: '24px',
         color: '#FFD700',
         stroke: '#000000',
@@ -1302,8 +1312,11 @@ export default class GameScene extends BaseScene {
    * 이니셜 입력 UI 표시
    */
   private showInitialInputUI() {
+    const W = this.scale.width;
+    const H = this.scale.height;
+    const cx = W / 2;
     // 안내 텍스트
-    this.add.text(200, 250, '이니셜 입력 (영어 대문자 3자)', {
+    this.add.text(cx, H / 2 - 50, '이니셜 입력 (영어 대문자 3자)', {
       fontSize: '18px',
       color: '#ffffff',
       fontStyle: 'bold',
@@ -1321,13 +1334,13 @@ export default class GameScene extends BaseScene {
     // (Phaser FIT 스케일 모드에서 캔버스가 이동/축소될 수 있으므로 DOM 좌표계와 동기화)
     const canvas = this.game.canvas;
     const rect = canvas.getBoundingClientRect();
-    const gameW = this.game.config.width as number;   // 400
-    const gameH = this.game.config.height as number;  // 600
+    const gameW = this.scale.width;
+    const gameH = this.scale.height;
     const scaleX = rect.width / gameW;
     const scaleY = rect.height / gameH;
-    // 게임 좌표 (200, 285) → viewport 픽셀 좌표로 변환
-    const screenLeft = rect.left + 200 * scaleX;
-    const screenTop  = rect.top  + 285 * scaleY;
+    // 게임 좌표 (cx, H/2-15) → viewport 픽셀 좌표로 변환
+    const screenLeft = rect.left + (gameW / 2) * scaleX;
+    const screenTop  = rect.top  + (gameH / 2 - 15) * scaleY;
 
     inputElement.style.cssText = `
       position: fixed;
@@ -1366,7 +1379,7 @@ export default class GameScene extends BaseScene {
     });
 
     // 제출 버튼 텍스트
-    const submitButtonText = this.add.text(200, 375, '랭킹 등록', {
+    const submitButtonText = this.add.text(cx, H / 2 + 75, '랭킹 등록', {
       fontSize: '24px',
       color: '#00ff00',
       fontStyle: 'bold',
@@ -1385,7 +1398,7 @@ export default class GameScene extends BaseScene {
       // 검증
       if (initials.length !== 3) {
         if (errorText) errorText.destroy();
-        errorText = this.add.text(200, 420, '정확히 3글자를 입력하세요', {
+        errorText = this.add.text(cx, H / 2 + 120, '정확히 3글자를 입력하세요', {
           fontSize: '16px',
           color: '#ff0000',
           fontStyle: 'bold',
@@ -1397,7 +1410,7 @@ export default class GameScene extends BaseScene {
 
       if (!/^[A-Z]{3}$/.test(initials)) {
         if (errorText) errorText.destroy();
-        errorText = this.add.text(200, 420, '영어 대문자만 입력하세요', {
+        errorText = this.add.text(cx, H / 2 + 120, '영어 대문자만 입력하세요', {
           fontSize: '16px',
           color: '#ff0000',
           fontStyle: 'bold',
@@ -1416,7 +1429,7 @@ export default class GameScene extends BaseScene {
       if (errorText) errorText.destroy();
 
       // 랭킹 제출
-      const submittingText = this.add.text(200, 300, '랭킹 제출 중...', {
+      const submittingText = this.add.text(cx, H / 2, '랭킹 제출 중...', {
         fontSize: '18px',
         color: '#ffff00',
         fontStyle: 'bold',
@@ -1453,7 +1466,7 @@ export default class GameScene extends BaseScene {
 
         // 순위 표시
         if (result.rank !== null) {
-          this.add.text(200, 340, `🏆 전체 ${result.rank}위! 🏆`, {
+          this.add.text(cx, H / 2 + 40, `🏆 전체 ${result.rank}위! 🏆`, {
             fontSize: '24px',
             color: '#FFD700',
             fontStyle: 'bold',
@@ -1463,7 +1476,7 @@ export default class GameScene extends BaseScene {
         }
 
         // 이니셜 표시
-        this.add.text(200, 380, `${initials}`, {
+        this.add.text(cx, H / 2 + 80, `${initials}`, {
           fontSize: '20px',
           color: '#00ff00',
           fontStyle: 'bold',
@@ -1551,7 +1564,7 @@ export default class GameScene extends BaseScene {
         const questText = result.questRewards
           .map(r => `${questLabels[r.quest] ?? r.quest} 퀘스트 +${r.reward}`)
           .join(' / ');
-        this.add.text(200, statusText.y + 23, `🎯 ${questText}`, {
+        this.add.text(this.scale.width / 2, statusText.y + 23, `🎯 ${questText}`, {
           fontSize: '13px',
           color: '#88ff88',
           stroke: '#000',
@@ -1568,19 +1581,22 @@ export default class GameScene extends BaseScene {
    * @param isNewRecord 새 기록 달성 여부 (SKOR 텍스트 위치에 따라 버튼 y 조정)
    */
   private showRestartButton(isNewRecord = false) {
-    // 새 기록 시: SKOR 텍스트(y≈418) + 퀘스트(y≈441) 아래 배치
-    // 일반 시: SKOR 텍스트(y≈380) + 퀘스트(y≈403) 아래 배치
-    const retryY = isNewRecord ? 470 : 455;
-    const menuY  = isNewRecord ? 548 : 535;
+    const W = this.scale.width;
+    const H = this.scale.height;
+    const cx = W / 2;
+    // 새 기록 시: SKOR 텍스트(H/2+118) + 퀘스트(+23) 아래 배치
+    // 일반 시: SKOR 텍스트(H/2+80) + 퀘스트(+23) 아래 배치
+    const retryY = isNewRecord ? H / 2 + 170 : H / 2 + 155;
+    const menuY  = isNewRecord ? H / 2 + 248 : H / 2 + 235;
 
     // 다시 하기 버튼 배경
-    const retryButtonBg = this.add.rectangle(200, retryY, 250, 70, 0x00aa00)
+    const retryButtonBg = this.add.rectangle(cx, retryY, 250, 70, 0x00aa00)
       .setOrigin(0.5)
       .setDepth(199)
       .setStrokeStyle(3, 0xffffff);
 
     // 다시 하기 버튼 텍스트
-    const retryButtonText = this.add.text(200, retryY, '다시 하기', {
+    const retryButtonText = this.add.text(cx, retryY, '다시 하기', {
       fontSize: '22px',
       color: '#ffffff',
       fontStyle: 'bold'
@@ -1590,13 +1606,13 @@ export default class GameScene extends BaseScene {
     retryButtonBg.setInteractive({ useHandCursor: true });
 
     // 메인 메뉴 버튼 배경
-    const menuButtonBg = this.add.rectangle(200, menuY, 250, 70, 0x555555)
+    const menuButtonBg = this.add.rectangle(cx, menuY, 250, 70, 0x555555)
       .setOrigin(0.5)
       .setDepth(199)
       .setStrokeStyle(3, 0xffffff);
 
     // 메인 메뉴 버튼 텍스트
-    const menuButtonText = this.add.text(200, menuY, '메인 메뉴', {
+    const menuButtonText = this.add.text(cx, menuY, '메인 메뉴', {
       fontSize: '22px',
       color: '#ffffff',
       fontStyle: 'bold'

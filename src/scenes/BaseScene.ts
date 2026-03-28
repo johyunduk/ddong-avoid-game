@@ -9,6 +9,13 @@ export default class BaseScene extends Phaser.Scene {
   /** 씬 전환 후 입력 차단 시간(ms). 0이면 즉시 허용 */
   protected inputGuardMs = 200;
 
+  /** 자주 쓰는 화면 치수를 한 번에 반환. 600px 기준 레이아웃의 수직 오프셋 포함. */
+  protected getScaleInfo() {
+    const W = this.scale.width;
+    const H = this.scale.height;
+    return { W, H, cx: W / 2, yOff: (H - 600) / 2 };
+  }
+
   create() {
     if (this.inputGuardMs > 0) {
       this.input.enabled = false;

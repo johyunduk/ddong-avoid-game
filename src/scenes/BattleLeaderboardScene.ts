@@ -33,13 +33,18 @@ export default class BattleLeaderboardScene extends BaseScene {
   create() {
     super.create();
 
+    const W = this.scale.width;
+    const H = this.scale.height;
+    const cx = W / 2;
+    const yOff = (H - 600) / 2;
+
     // 배경
-    const bg = this.add.image(200, 300, 'background2');
-    bg.setDisplaySize(400, 600);
-    this.add.rectangle(200, 300, 400, 600, 0x000000, 0.75);
+    const bg = this.add.image(cx, H / 2, 'background2');
+    bg.setDisplaySize(W, H);
+    this.add.rectangle(cx, H / 2, W, H, 0x000000, 0.75);
 
     // 타이틀
-    this.add.text(200, 40, '⚔️ 배틀 전적', {
+    this.add.text(cx, 40 + yOff, '⚔️ 배틀 전적', {
       fontSize: '28px',
       color: '#ff4444',
       fontStyle: 'bold',
@@ -48,7 +53,7 @@ export default class BattleLeaderboardScene extends BaseScene {
     }).setOrigin(0.5);
 
     // 내 전적 영역 (로드 후 채워짐)
-    this.loadingText = this.add.text(200, 300, '로딩 중...', {
+    this.loadingText = this.add.text(cx, H / 2, '로딩 중...', {
       fontSize: '20px',
       color: '#ffffff',
       stroke: '#000',
@@ -56,7 +61,7 @@ export default class BattleLeaderboardScene extends BaseScene {
     }).setOrigin(0.5);
 
     // 뒤로가기
-    const backBtn = this.add.text(200, 565, '← 대전 모드', {
+    const backBtn = this.add.text(cx, H - 35, '← 대전 모드', {
       fontSize: '18px',
       color: '#aaaaaa',
       stroke: '#000',
@@ -93,7 +98,7 @@ export default class BattleLeaderboardScene extends BaseScene {
         this.loadingText.setVisible(false);
       }
 
-      this.add.text(200, 300, '전적을 불러올 수 없습니다\n나중에 다시 시도해주세요', {
+      this.add.text(this.scale.width / 2, this.scale.height / 2, '전적을 불러올 수 없습니다\n나중에 다시 시도해주세요', {
         fontSize: '16px',
         color: '#ff6666',
         stroke: '#000',
@@ -109,6 +114,9 @@ export default class BattleLeaderboardScene extends BaseScene {
       if (obj.active) obj.destroy();
     }
     this.leaderboardTexts = [];
+
+    const cx = this.scale.width / 2;
+    const yOff = (this.scale.height - 600) / 2;
 
     // 컬럼 X 위치 (캔버스 400px 기준)
     const COL_RANK   = 28;   // right-align
@@ -133,12 +141,12 @@ export default class BattleLeaderboardScene extends BaseScene {
       const myTier = getBattleTier(ratingPoints);
 
       // 티어 이미지 (좌측 소형)
-      const myTierImg = this.add.image(13, 78, myTier.imgKey).setDisplaySize(20, 20);
+      const myTierImg = this.add.image(13, 78 + yOff, myTier.imgKey).setDisplaySize(20, 20);
       this.leaderboardTexts.push(myTierImg);
 
       // 랭크 전적
       const rankSummary = this.add.text(
-        200, 78,
+        cx, 78 + yOff,
         `${myTier.name} | ${ratingPoints} RP | 랭크: ${wins}승 ${disconnects}부 ${losses}패 | ${winRate}% (${rank}위)`,
         { fontSize: '11px', color: '#FFD700', stroke: '#000', strokeThickness: 3 },
       ).setOrigin(0.5);
@@ -149,7 +157,7 @@ export default class BattleLeaderboardScene extends BaseScene {
       const fl = friendlyLosses ?? 0;
       const fd = friendlyDisconnects ?? 0;
       const friendlySummary = this.add.text(
-        200, 97,
+        cx, 97 + yOff,
         `친선전: ${fw}승 ${fd}부 ${fl}패`,
         { fontSize: '11px', color: '#88ccff', stroke: '#000', strokeThickness: 3 },
       ).setOrigin(0.5);
@@ -157,26 +165,26 @@ export default class BattleLeaderboardScene extends BaseScene {
     }
 
     // 구분선
-    const divider = this.add.rectangle(200, 115, 360, 2, 0x555555);
+    const divider = this.add.rectangle(cx, 115 + yOff, 360, 2, 0x555555);
     this.leaderboardTexts.push(divider);
 
     // 헤더
     const headerStyle = { fontSize: '13px', color: '#ffff00', fontStyle: 'bold', fontFamily: 'monospace', stroke: '#000', strokeThickness: 3 };
-    this.leaderboardTexts.push(this.add.text(COL_RANK,      133, '순위', headerStyle).setOrigin(1, 0.5));
-    this.leaderboardTexts.push(this.add.text(COL_NAME,      133, '이름', headerStyle).setOrigin(0, 0.5));
-    this.leaderboardTexts.push(this.add.text(COL_TIER_IMG,  133, '티어', headerStyle).setOrigin(0.5, 0.5));
-    this.leaderboardTexts.push(this.add.text(COL_RP,        133, 'RP',   headerStyle).setOrigin(1, 0.5));
-    this.leaderboardTexts.push(this.add.text(COL_RATE,      133, '승률', headerStyle).setOrigin(1, 0.5));
+    this.leaderboardTexts.push(this.add.text(COL_RANK,      133 + yOff, '순위', headerStyle).setOrigin(1, 0.5));
+    this.leaderboardTexts.push(this.add.text(COL_NAME,      133 + yOff, '이름', headerStyle).setOrigin(0, 0.5));
+    this.leaderboardTexts.push(this.add.text(COL_TIER_IMG,  133 + yOff, '티어', headerStyle).setOrigin(0.5, 0.5));
+    this.leaderboardTexts.push(this.add.text(COL_RP,        133 + yOff, 'RP',   headerStyle).setOrigin(1, 0.5));
+    this.leaderboardTexts.push(this.add.text(COL_RATE,      133 + yOff, '승률', headerStyle).setOrigin(1, 0.5));
 
     if (this.leaderboardEntries.length === 0) {
-      const noData = this.add.text(200, 300, '아직 대전 기록이 없습니다\n첫 번째 플레이어가 되어보세요!', {
+      const noData = this.add.text(cx, this.scale.height / 2, '아직 대전 기록이 없습니다\n첫 번째 플레이어가 되어보세요!', {
         fontSize: '16px', color: '#cccccc', stroke: '#000', strokeThickness: 3, align: 'center',
       }).setOrigin(0.5);
       this.leaderboardTexts.push(noData);
       return;
     }
 
-    const startY = 160;
+    const startY = 160 + yOff;
     const lineH = 31;
 
     this.leaderboardEntries.forEach((entry, index) => {
@@ -186,7 +194,7 @@ export default class BattleLeaderboardScene extends BaseScene {
 
       // 현재 유저 행 하이라이트
       if (isMe) {
-        this.leaderboardTexts.push(this.add.rectangle(200, y, 380, 28, 0x8B6914, 0.5));
+        this.leaderboardTexts.push(this.add.rectangle(cx, y, 380, 28, 0x8B6914, 0.5));
       }
 
       // 순위 색상

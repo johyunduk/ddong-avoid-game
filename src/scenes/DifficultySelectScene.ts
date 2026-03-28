@@ -83,19 +83,24 @@ export default class DifficultySelectScene extends BaseScene {
   create() {
     super.create();
 
+    const W = this.scale.width;
+    const H = this.scale.height;
+    const cx = W / 2;
+    const yOff = (H - 600) / 2;
+
     // 배경 이미지 추가
-    const background = this.add.image(200, 300, 'background');
-    background.setDisplaySize(400, 600);
+    const background = this.add.image(cx, H / 2, 'background');
+    background.setDisplaySize(W, H);
 
     // 반투명 오버레이로 가독성 향상
-    this.add.rectangle(200, 300, 400, 600, 0x000000, 0.4);
+    this.add.rectangle(cx, H / 2, W, H, 0x000000, 0.4);
 
     // 타이틀 배경
-    this.add.rectangle(200, 75, 350, 72, 0x000000, 0.7)
+    this.add.rectangle(cx, 75 + yOff, 350, 72, 0x000000, 0.7)
       .setStrokeStyle(3, 0xFFD700);
 
     // 타이틀
-    this.add.text(200, 60, '🎮 난이도 선택 🎮', {
+    this.add.text(cx, 60 + yOff, '🎮 난이도 선택 🎮', {
       fontSize: '26px',
       color: '#FFD700',
       fontStyle: 'bold',
@@ -104,17 +109,19 @@ export default class DifficultySelectScene extends BaseScene {
       padding: { top: 4 }
     }).setOrigin(0.5);
 
-    this.add.text(200, 92, '도전할 난이도를 선택하세요', {
+    this.add.text(cx, 92 + yOff, '도전할 난이도를 선택하세요', {
       fontSize: '13px',
       color: '#ffffff',
       stroke: '#000',
       strokeThickness: 3
     }).setOrigin(0.5);
 
-    // 2x2 그리드로 버튼 배치
-    const startX = 100;
-    const startY = 210;
-    const spacingX = 200;
+    // 2x2 그리드로 버튼 배치 — 화면 폭 기준 여백 16px 확보
+    const SIDE = 16;
+    const colW = (W - SIDE * 2) / 2;
+    const startX = SIDE + colW / 2;
+    const startY = 210 + yOff;
+    const spacingX = colW;
     const spacingY = 180;
 
     DIFFICULTIES.forEach((difficultyConfig: DifficultyConfig, index: number) => {
@@ -130,10 +137,10 @@ export default class DifficultySelectScene extends BaseScene {
     this.createPureButton(startX + spacingX, startY + spacingY);
 
     // 뒤로가기 버튼
-    const backButtonBg = this.add.rectangle(200, 560, 150, 40, 0xffffff, 1);
+    const backButtonBg = this.add.rectangle(cx, 560 + yOff, 150, 40, 0xffffff, 1);
     backButtonBg.setStrokeStyle(3, 0x000000);
 
-    const backButton = this.add.text(200, 560, '← 뒤로가기', {
+    const backButton = this.add.text(cx, 560 + yOff, '← 뒤로가기', {
       fontSize: '18px',
       color: '#000',
       fontStyle: 'bold'
@@ -192,42 +199,41 @@ export default class DifficultySelectScene extends BaseScene {
   private createButtonCard(x: number, y: number, config: ButtonCardConfig) {
     const { color, strokeColor = 0x000000 } = config;
 
-    const shadow = this.add.rectangle(x + 4, y + 4, 170, 165, 0x000000, 0.4);
+    const shadow = this.add.rectangle(x + 3, y + 3, 152, 145, 0x000000, 0.4);
 
-    const button = this.add.rectangle(x, y, 170, 165, color, 1);
+    const button = this.add.rectangle(x, y, 152, 145, color, 1);
     button.setStrokeStyle(3, strokeColor);
 
-    // 이모지: 카드 상단에서 충분한 여백 확보 (카드 상단 y-82, 이모지 중심 y-44)
-    const emojiText = this.add.text(x, y - 44, config.emoji, {
-      fontSize: '34px',
-      padding: { top: 6 }
+    const emojiText = this.add.text(x, y - 38, config.emoji, {
+      fontSize: '30px',
+      padding: { top: 4 }
     }).setOrigin(0.5);
 
-    const title = this.add.text(x, y - 10, config.title, {
-      fontSize: '20px',
+    const title = this.add.text(x, y - 8, config.title, {
+      fontSize: '18px',
       color: '#000',
       fontStyle: 'bold',
       stroke: '#fff',
       strokeThickness: 2
     }).setOrigin(0.5);
 
-    const description = this.add.text(x, y + 14, config.description, {
-      fontSize: '11px',
+    const description = this.add.text(x, y + 13, config.description, {
+      fontSize: '10px',
       color: '#333',
       align: 'center'
     }).setOrigin(0.5);
 
-    const infoBg = this.add.rectangle(x, y + 47, 154, 40, 0x000000, 0.15)
+    const infoBg = this.add.rectangle(x, y + 42, 136, 34, 0x000000, 0.15)
       .setStrokeStyle(1, 0x000000, 0.2);
 
-    const info1 = this.add.text(x, y + 38, config.info1, {
-      fontSize: '11px',
+    const info1 = this.add.text(x, y + 34, config.info1, {
+      fontSize: '10px',
       color: '#111',
       fontStyle: 'bold'
     }).setOrigin(0.5);
 
-    const info2 = this.add.text(x, y + 55, config.info2, {
-      fontSize: '11px',
+    const info2 = this.add.text(x, y + 49, config.info2, {
+      fontSize: '10px',
       color: '#111',
       fontStyle: 'bold'
     }).setOrigin(0.5);

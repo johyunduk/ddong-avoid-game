@@ -29,7 +29,7 @@ const CARD_W = 100;
 const CARD_H = 120;
 const GAP_X = 15;
 const GAP_Y = 10;
-const GRID_LEFT = (400 - (COLS * CARD_W + (COLS - 1) * GAP_X)) / 2; // 35px
+// GRID_LEFT는 화면 폭에 따라 create()에서 동적 계산 → this.gridLeft
 const GRID_TOP = 105;
 
 // ── 배경화면 그리드 설정 (세로 카드 3열) ────────────────────────────────────
@@ -38,7 +38,7 @@ const WP_CARD_W = 110;
 const WP_CARD_H = 165;  // bgKey 비율(400×600) 반영 세로 카드
 const WP_GAP_X = 15;
 const WP_GAP_Y = 15;
-const WP_GRID_LEFT = (400 - (WP_COLS * WP_CARD_W + (WP_COLS - 1) * WP_GAP_X)) / 2; // 20px
+// WP_GRID_LEFT는 화면 폭에 따라 create()에서 동적 계산 → this.wpGridLeft
 const WP_GRID_TOP = 105;
 
 // 표시할 전체 배경화면 = 기본 제공 + 가챠 (wallpaper.ts WALLPAPERS 기준 자동 파생)
@@ -90,6 +90,9 @@ export default class CharacterSelectScene extends BaseScene {
 
   // 카드 그리드 공유 리소스
   private coresGfx!: Phaser.GameObjects.Graphics;
+  private gridLeft = 0;
+  private wpGridLeft = 0;
+  private yOff = 0;
   private maskGfx!: Phaser.GameObjects.Graphics;
 
   // 상세 정보 패널
@@ -174,14 +177,23 @@ export default class CharacterSelectScene extends BaseScene {
       }
     }).catch(() => { /* 네트워크 오류 시 로컬 상태 유지 */ });
 
+    const W = this.scale.width;
+    const H = this.scale.height;
+    const cx = W / 2;
+    const yOff = (H - 600) / 2;
+
+    this.yOff       = yOff;
+    this.gridLeft   = (W - (COLS   * CARD_W   + (COLS   - 1) * GAP_X))   / 2;
+    this.wpGridLeft = (W - (WP_COLS * WP_CARD_W + (WP_COLS - 1) * WP_GAP_X)) / 2;
+
     const selectedDef = CHARACTERS.find(c => c.id === this.selectedId) ?? CHARACTERS[0];
 
     // ── 배경: 선택된 캐릭터 일러스트 ───────────────────────────────────
-    this.bgImage = this.add.image(200, 300, selectedDef.illustKey);
-    this.bgImage.setDisplaySize(400, 600);
+    this.bgImage = this.add.image(cx, H / 2, selectedDef.illustKey);
+    this.bgImage.setDisplaySize(W, H);
 
     // ── 헤더 (고정, depth 10 — 스크롤 카드보다 위) ──────────────────────
-    this.add.text(200, 30, '수집', {
+    this.add.text(cx, 30 + yOff, '수집', {
       fontSize: '22px',
       color: '#ffffff',
       fontStyle: 'bold',
@@ -190,23 +202,23 @@ export default class CharacterSelectScene extends BaseScene {
     }).setOrigin(0.5).setDepth(10);
 
     // ── 탭 버튼 ────────────────────────────────────────────────────────
-    const TAB_Y = 60;
+    const TAB_Y = 60 + yOff;
     const TAB_W = 160;
     const TAB_H = 30;
 
-    this.charTabBtnBg = this.add.rectangle(110, TAB_Y, TAB_W, TAB_H, 0x1144bb)
+    this.charTabBtnBg = this.add.rectangle(cx - 90, TAB_Y, TAB_W, TAB_H, 0x1144bb)
       .setStrokeStyle(1.5, 0x4488ff)
       .setDepth(10)
       .setInteractive({ useHandCursor: true });
-    this.charTabLabel = this.add.text(110, TAB_Y, '캐릭터', {
+    this.charTabLabel = this.add.text(cx - 90, TAB_Y, '캐릭터', {
       fontSize: '14px', color: '#ffffff', fontStyle: 'bold',
     }).setOrigin(0.5).setDepth(10);
 
-    this.wpTabBtnBg = this.add.rectangle(290, TAB_Y, TAB_W, TAB_H, 0x222222)
+    this.wpTabBtnBg = this.add.rectangle(cx + 90, TAB_Y, TAB_W, TAB_H, 0x222222)
       .setStrokeStyle(1.5, 0x555555)
       .setDepth(10)
       .setInteractive({ useHandCursor: true });
-    this.wpTabLabel = this.add.text(290, TAB_Y, '배경화면', {
+    this.wpTabLabel = this.add.text(cx + 90, TAB_Y, '배경화면', {
       fontSize: '14px', color: '#888888', fontStyle: 'bold',
     }).setOrigin(0.5).setDepth(10);
 
@@ -220,10 +232,10 @@ export default class CharacterSelectScene extends BaseScene {
     });
 
     // 구분선
-    this.add.rectangle(200, 80, 380, 1, 0x444444).setDepth(10);
+    this.add.rectangle(cx, 80 + yOff, W - 20, 1, 0x444444).setDepth(10);
 
     // 현재 선택 상태 표시
-    this.headerNameText = this.add.text(200, 88, `현재: ${selectedDef.name}`, {
+    this.headerNameText = this.add.text(cx, 88 + yOff, `현재: ${selectedDef.name}`, {
       fontSize: '13px',
       color: selectedDef.gradeColor,
       stroke: '#000',
@@ -231,27 +243,29 @@ export default class CharacterSelectScene extends BaseScene {
     }).setOrigin(0.5).setDepth(10);
 
     // ── 스크롤 가능한 카드 컨테이너 ─────────────────────────────────────
-    this.cardsContainer = this.add.container(0, 0);
+    this.cardsContainer = this.add.container(0, this.yOff);
 
     this.buildCharacterGrid();
+
+    // 카드 영역 마스크 (스크롤 영역 밖 숨김)
+    // this.make: display list에 추가되지 않으므로 shutdown 시 직접 정리 필요
+    const scrollTopActual    = SCROLL_TOP + yOff;          // 상단: 헤더 아래
+    const scrollBottomActual = H - (600 - SCROLL_BOTTOM);  // 하단: 하단 버튼 위 (화면 하단 고정)
 
     // 스크롤 최대 범위 계산 (buildCharacterGrid 내부에서도 설정되지만 여기서도 초기화)
     const totalRows = Math.ceil(CHARACTERS.length / COLS);
     const contentBottom = GRID_TOP + (totalRows - 1) * (CARD_H + GAP_Y) + CARD_H + 10;
-    this.maxScrollOffset = Math.max(0, contentBottom - SCROLL_BOTTOM);
-
-    // 카드 영역 마스크 (스크롤 영역 밖 숨김)
-    // this.make: display list에 추가되지 않으므로 shutdown 시 직접 정리 필요
+    this.maxScrollOffset = Math.max(0, yOff + contentBottom - scrollBottomActual);
     this.maskGfx = this.make.graphics({ x: 0, y: 0 });
     this.maskGfx.fillStyle(0xffffff);
-    this.maskGfx.fillRect(0, SCROLL_TOP, 400, SCROLL_BOTTOM - SCROLL_TOP);
+    this.maskGfx.fillRect(0, scrollTopActual, W, scrollBottomActual - scrollTopActual);
     this.cardsContainer.setMask(this.maskGfx.createGeometryMask());
 
     // ── 드래그 스크롤 입력 ───────────────────────────────────────────────
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
       this.hasPointerDownInScene = true;
       if (this.detailPanel) return; // 상세 패널 열려있으면 스크롤 무시
-      if (p.y < SCROLL_TOP || p.y > SCROLL_BOTTOM) return;
+      if (p.y < scrollTopActual || p.y > scrollBottomActual) return;
       this.pointerDownY = p.y;
       this.pointerDownScrollY = this.scrollOffset;
       this.hasDragged = false;
@@ -268,7 +282,7 @@ export default class CharacterSelectScene extends BaseScene {
           0,
           this.maxScrollOffset,
         );
-        this.cardsContainer.setY(-this.scrollOffset);
+        this.cardsContainer.setY(this.yOff - this.scrollOffset);
       }
     });
 
@@ -291,7 +305,7 @@ export default class CharacterSelectScene extends BaseScene {
           0,
           this.maxScrollOffset,
         );
-        this.cardsContainer.setY(-this.scrollOffset);
+        this.cardsContainer.setY(this.yOff - this.scrollOffset);
       },
     );
 
@@ -310,7 +324,7 @@ export default class CharacterSelectScene extends BaseScene {
     CHARACTERS.forEach((char, index) => {
       const col = index % COLS;
       const row = Math.floor(index / COLS);
-      const x = GRID_LEFT + col * (CARD_W + GAP_X) + CARD_W / 2;
+      const x = this.gridLeft + col * (CARD_W + GAP_X) + CARD_W / 2;
       const y = GRID_TOP + row * (CARD_H + GAP_Y) + CARD_H / 2;
       this.createCharacterCard(char, x, y);
     });
@@ -318,7 +332,8 @@ export default class CharacterSelectScene extends BaseScene {
 
     const totalRows = Math.ceil(CHARACTERS.length / COLS);
     const contentBottom = GRID_TOP + (totalRows - 1) * (CARD_H + GAP_Y) + CARD_H + 10;
-    this.maxScrollOffset = Math.max(0, contentBottom - SCROLL_BOTTOM);
+    const scrollBottomActual = this.scale.height - (600 - SCROLL_BOTTOM);
+    this.maxScrollOffset = Math.max(0, this.yOff + contentBottom - scrollBottomActual);
   }
 
   private buildWallpaperGrid() {
@@ -330,14 +345,15 @@ export default class CharacterSelectScene extends BaseScene {
     availableWps.forEach((wp, index) => {
       const col = index % WP_COLS;
       const row = Math.floor(index / WP_COLS);
-      const x = WP_GRID_LEFT + col * (WP_CARD_W + WP_GAP_X) + WP_CARD_W / 2;
+      const x = this.wpGridLeft + col * (WP_CARD_W + WP_GAP_X) + WP_CARD_W / 2;
       const y = WP_GRID_TOP + row * (WP_CARD_H + WP_GAP_Y) + WP_CARD_H / 2;
       this.createWallpaperCard(wp, x, y);
     });
 
     const totalRows = Math.ceil(availableWps.length / WP_COLS);
     const contentBottom = WP_GRID_TOP + (totalRows - 1) * (WP_CARD_H + WP_GAP_Y) + WP_CARD_H + 10;
-    this.maxScrollOffset = Math.max(0, contentBottom - SCROLL_BOTTOM);
+    const scrollBottomActual = this.scale.height - (600 - SCROLL_BOTTOM);
+    this.maxScrollOffset = Math.max(0, this.yOff + contentBottom - scrollBottomActual);
   }
 
   private switchTab(tab: 'character' | 'wallpaper') {
@@ -345,7 +361,7 @@ export default class CharacterSelectScene extends BaseScene {
     this.activeTab = tab;
     this.scrollOffset = 0;
     this.hasDragged = false;
-    this.cardsContainer.setY(0);
+    this.cardsContainer.setY(this.yOff);
     this.updateBgForTab();
 
     // 컨테이너 내 카드 오브젝트 전부 제거
@@ -385,19 +401,21 @@ export default class CharacterSelectScene extends BaseScene {
 
   /** 현재 탭에 맞게 배경 이미지 업데이트 */
   private updateBgForTab() {
+    const W = this.scale.width;
+    const H = this.scale.height;
     if (this.activeTab === 'character') {
       const def = CHARACTERS.find(c => c.id === this.selectedId) ?? CHARACTERS[0];
-      this.bgImage.setTexture(def.illustKey).setDisplaySize(400, 600).setAlpha(1).clearTint();
+      this.bgImage.setTexture(def.illustKey).setDisplaySize(W, H).setAlpha(1).clearTint();
     } else {
       const wpDef = this.selectedWpId
         ? WALLPAPERS.find(w => w.id === this.selectedWpId)
         : null;
       if (wpDef && this.textures.exists(wpDef.bgKey)) {
-        this.bgImage.setTexture(wpDef.bgKey).setDisplaySize(400, 600).setAlpha(1).clearTint();
+        this.bgImage.setTexture(wpDef.bgKey).setDisplaySize(W, H).setAlpha(1).clearTint();
       } else {
         // 선택 배경 없음 → 캐릭터 일러스트를 어둡게 처리
         const def = CHARACTERS.find(c => c.id === this.selectedId) ?? CHARACTERS[0];
-        this.bgImage.setTexture(def.illustKey).setDisplaySize(400, 600).setAlpha(0.2);
+        this.bgImage.setTexture(def.illustKey).setDisplaySize(W, H).setAlpha(0.2);
       }
     }
   }
@@ -483,6 +501,9 @@ export default class CharacterSelectScene extends BaseScene {
   private showWallpaperDetail(def: BackgroundDef): void {
     this.hideCharacterDetail();
 
+    const W = this.scale.width;
+    const H = this.scale.height;
+    const cx = W / 2;
     const isOwned = this.ownedWpIds.includes(def.id);
     const isSelected = this.selectedWpId === def.id;
 
@@ -490,32 +511,34 @@ export default class CharacterSelectScene extends BaseScene {
     this.detailPanel = panel;
 
     // 클릭 차단
-    const blocker = this.add.rectangle(200, 300, 400, 600, 0x000000, 0).setInteractive();
+    const blocker = this.add.rectangle(cx, H / 2, W, H, 0x000000, 0).setInteractive();
     panel.add(blocker);
 
     // 배경화면 전체화면 미리보기
     if (this.textures.exists(def.bgKey)) {
-      const bg = this.add.image(200, 300, def.bgKey).setDisplaySize(400, 600);
+      const bg = this.add.image(cx, H / 2, def.bgKey).setDisplaySize(W, H);
       panel.add(bg);
     } else {
-      const fallback = this.add.rectangle(200, 300, 400, 600, 0x050515);
-      const hint = this.add.text(200, 300, '이미지 없음\n(에셋 추가 필요)', {
+      const fallback = this.add.rectangle(cx, H / 2, W, H, 0x050515);
+      const hint = this.add.text(cx, H / 2, '이미지 없음\n(에셋 추가 필요)', {
         fontSize: '16px', color: '#666666', align: 'center',
       }).setOrigin(0.5);
       panel.add(fallback);
       panel.add(hint);
     }
 
+    const yOff = (H - 600) / 2;
+
     // 하단 그라디언트 오버레이
     const grad = this.add.graphics();
     grad.fillGradientStyle(0x000000, 0x000000, 0x000000, 0x000000, 0, 0, 0.8, 0.8);
-    grad.fillRect(0, 380, 400, 220);
+    grad.fillRect(0, H - 220, W, 220);
     panel.add(grad);
 
     // ✕ 닫기 버튼
-    const closeBg = this.add.circle(372, 38, 22, 0x000000, 0.55)
+    const closeBg = this.add.circle(W - 28, 38 + yOff, 22, 0x000000, 0.55)
       .setInteractive({ useHandCursor: true });
-    const closeBtn = this.add.text(372, 38, '✕', { fontSize: '18px', color: '#cccccc' }).setOrigin(0.5);
+    const closeBtn = this.add.text(W - 28, 38 + yOff, '✕', { fontSize: '18px', color: '#cccccc' }).setOrigin(0.5);
     closeBg.on('pointerover', () => { closeBg.setFillStyle(0x333333, 0.8); closeBtn.setColor('#ffffff'); });
     closeBg.on('pointerout',  () => { closeBg.setFillStyle(0x000000, 0.55); closeBtn.setColor('#cccccc'); });
     closeBg.on('pointerup',   () => this.hideCharacterDetail());
@@ -523,65 +546,65 @@ export default class CharacterSelectScene extends BaseScene {
     panel.add(closeBtn);
 
     // 이름
-    panel.add(this.add.text(24, 450, def.name, {
+    panel.add(this.add.text(24, H - 150, def.name, {
       fontSize: '26px', color: '#ffffff', fontStyle: 'bold',
       stroke: '#000000', strokeThickness: 5,
     }));
-    panel.add(this.add.text(24, 494, def.description, {
+    panel.add(this.add.text(24, H - 106, def.description, {
       fontSize: '12px', color: '#aaaaaa',
       stroke: '#000000', strokeThickness: 3,
-      wordWrap: { width: 350 },
+      wordWrap: { width: W - 50 },
     }));
 
     // ── 버튼 2개 ──
-    const BTN_Y = 562;
+    const BTN_Y = H - 38;
     const BTN_W = 168;
     const BTN_H = 42;
 
     if (isOwned) {
       if (!isSelected) {
         // [적용하기]
-        const applyBg = this.add.rectangle(108, BTN_Y, BTN_W, BTN_H, 0x115511)
+        const applyBg = this.add.rectangle(cx - 92, BTN_Y, BTN_W, BTN_H, 0x115511)
           .setStrokeStyle(2, WP_ACCENT_INT)
           .setInteractive({ useHandCursor: true });
         applyBg.on('pointerover', () => applyBg.setFillStyle(0x226622));
         applyBg.on('pointerout',  () => applyBg.setFillStyle(0x115511));
         applyBg.on('pointerup',   () => this.applyWallpaper(def.id));
         panel.add(applyBg);
-        panel.add(this.add.text(108, BTN_Y, '✔  적용하기', {
+        panel.add(this.add.text(cx - 92, BTN_Y, '✔  적용하기', {
           fontSize: '14px', color: '#88ff88', fontStyle: 'bold',
         }).setOrigin(0.5));
       } else {
         // [해제]
-        const removeBg = this.add.rectangle(108, BTN_Y, BTN_W, BTN_H, 0x331111)
+        const removeBg = this.add.rectangle(cx - 92, BTN_Y, BTN_W, BTN_H, 0x331111)
           .setStrokeStyle(2, 0x884444)
           .setInteractive({ useHandCursor: true });
         removeBg.on('pointerover', () => removeBg.setFillStyle(0x442222));
         removeBg.on('pointerout',  () => removeBg.setFillStyle(0x331111));
         removeBg.on('pointerup',   () => this.applyWallpaper(null));
         panel.add(removeBg);
-        panel.add(this.add.text(108, BTN_Y, '✕  해제', {
+        panel.add(this.add.text(cx - 92, BTN_Y, '✕  해제', {
           fontSize: '14px', color: '#ff8888', fontStyle: 'bold',
         }).setOrigin(0.5));
       }
     } else {
-      const lockBg = this.add.rectangle(108, BTN_Y, BTN_W, BTN_H, 0x1a1a1a)
+      const lockBg = this.add.rectangle(cx - 92, BTN_Y, BTN_W, BTN_H, 0x1a1a1a)
         .setStrokeStyle(1.5, 0x444444);
       panel.add(lockBg);
-      panel.add(this.add.text(108, BTN_Y, '🔒  미보유', {
+      panel.add(this.add.text(cx - 92, BTN_Y, '🔒  미보유', {
         fontSize: '14px', color: '#555555',
       }).setOrigin(0.5));
     }
 
     // [닫기] 버튼 (우측)
-    const closeBtnBg = this.add.rectangle(292, BTN_Y, BTN_W, BTN_H, 0x1a1a1a)
+    const closeBtnBg = this.add.rectangle(cx + 92, BTN_Y, BTN_W, BTN_H, 0x1a1a1a)
       .setStrokeStyle(1.5, 0x555555)
       .setInteractive({ useHandCursor: true });
     closeBtnBg.on('pointerover', () => closeBtnBg.setFillStyle(0x2e2e2e));
     closeBtnBg.on('pointerout',  () => closeBtnBg.setFillStyle(0x1a1a1a));
     closeBtnBg.on('pointerup',   () => this.hideCharacterDetail());
     panel.add(closeBtnBg);
-    panel.add(this.add.text(292, BTN_Y, '닫기', {
+    panel.add(this.add.text(cx + 92, BTN_Y, '닫기', {
       fontSize: '14px', color: '#cccccc', fontStyle: 'bold',
     }).setOrigin(0.5));
   }
@@ -710,12 +733,15 @@ export default class CharacterSelectScene extends BaseScene {
     const def = CHARACTERS.find(c => c.id === id) ?? CHARACTERS[0];
     this.headerNameText.setText(`현재: ${def.name}`);
     this.headerNameText.setColor(def.gradeColor);
-    this.bgImage.setTexture(def.illustKey);
+    this.bgImage.setTexture(def.illustKey).setDisplaySize(this.scale.width, this.scale.height);
   }
 
   private showCharacterDetail(id: string): void {
     this.hideCharacterDetail();
 
+    const W = this.scale.width;
+    const H = this.scale.height;
+    const cx = W / 2;
     const def = CHARACTERS.find(c => c.id === id) ?? CHARACTERS[0];
     const isOwned = this.ownedIds.includes(id);
     const gradeColorInt = parseInt(def.gradeColor.replace('#', ''), 16);
@@ -724,17 +750,17 @@ export default class CharacterSelectScene extends BaseScene {
     this.detailPanel = panel;
 
     // ── 클릭 투과 차단 레이어 (카드 목록으로 이벤트 전달 방지)
-    const blocker = this.add.rectangle(200, 300, 400, 600, 0x000000, 0).setInteractive();
+    const blocker = this.add.rectangle(cx, H / 2, W, H, 0x000000, 0).setInteractive();
     panel.add(blocker);
 
     // ── 일러스트 전체 화면 ───────────────────────────────────────────
-    const illust = this.add.image(200, 300, def.illustKey).setDisplaySize(400, 600);
+    const illust = this.add.image(cx, H / 2, def.illustKey).setDisplaySize(W, H);
     panel.add(illust);
 
     // ── 비디오 (일러스트와 같은 위치, 처음엔 숨김) ─────────────────
     const hasVideo = !!(def.videoKey && this.cache.video.exists(def.videoKey));
     const videoObj = hasVideo
-      ? this.add.video(200, 300, def.videoKey!).setDisplaySize(400, 600).setVisible(false)
+      ? this.add.video(cx, H / 2, def.videoKey!).setDisplaySize(W, H).setVisible(false)
       : null;
     if (videoObj) {
       panel.add(videoObj);
@@ -743,15 +769,16 @@ export default class CharacterSelectScene extends BaseScene {
 
     // ── 하단 그라디언트 (위 투명 → 아래 짙은 어둠) ─────────────────
     // 비디오/일러스트 위, 버튼 아래에 위치하도록 여기서 추가
+    const yOff = (H - 600) / 2;
     const grad = this.add.graphics();
     grad.fillGradientStyle(0x000000, 0x000000, 0x000000, 0x000000, 0, 0, 0.78, 0.78);
-    grad.fillRect(0, 380, 400, 220);
+    grad.fillRect(0, H - 220, W, 220);
     panel.add(grad);
 
     // ── ✕ 닫기 버튼 (우상단 플로팅) ────────────────────────────────
-    const closeBg = this.add.circle(372, 38, 22, 0x000000, 0.55)
+    const closeBg = this.add.circle(W - 28, 38 + yOff, 22, 0x000000, 0.55)
       .setInteractive({ useHandCursor: true });
-    const closeBtn = this.add.text(372, 38, '✕', {
+    const closeBtn = this.add.text(W - 28, 38 + yOff, '✕', {
       fontSize: '18px', color: '#cccccc',
     }).setOrigin(0.5);
     closeBg.on('pointerover', () => { closeBg.setFillStyle(0x333333, 0.8); closeBtn.setColor('#ffffff'); });
@@ -762,37 +789,37 @@ export default class CharacterSelectScene extends BaseScene {
 
     // ── 하단 정보 영역 ───────────────────────────────────────────────
     // 픽셀 스프라이트
-    const sprite = this.add.image(38, 515, def.imageKey).setDisplaySize(46, 64);
+    const sprite = this.add.image(38, H - 85, def.imageKey).setDisplaySize(46, 64);
     if (!isOwned) { sprite.setTint(0x222222).setAlpha(0.55); }
     panel.add(sprite);
 
     // 등급 배지
     const gradeImgKey2 = getGradeImgKey(def.grade);
     if (gradeImgKey2) {
-      const gradeBadge = this.add.image(74, 492, gradeImgKey2).setDisplaySize(28, 28).setOrigin(0.5);
+      const gradeBadge = this.add.image(74, H - 108, gradeImgKey2).setDisplaySize(28, 28).setOrigin(0.5);
       panel.add(gradeBadge);
     }
 
     // 캐릭터 이름 (크게)
-    const nameText = this.add.text(74, 510, def.name, {
+    const nameText = this.add.text(74, H - 90, def.name, {
       fontSize: '26px', color: '#ffffff', fontStyle: 'bold',
       stroke: '#000000', strokeThickness: 5,
     });
     panel.add(nameText);
 
     // ── 하단 버튼 2개 (나란히) ──────────────────────────────────────
-    const BTN_Y = 568;
+    const BTN_Y = H - 32;
     const BTN_W = 168;
     const BTN_H = 42;
 
     // 📋 정보 보기 (좌)
-    const infoBg = this.add.rectangle(108, BTN_Y, BTN_W, BTN_H, 0x1a1a1a)
+    const infoBg = this.add.rectangle(cx - 92, BTN_Y, BTN_W, BTN_H, 0x1a1a1a)
       .setStrokeStyle(1.5, 0x555555)
       .setInteractive({ useHandCursor: true });
     infoBg.on('pointerover', () => infoBg.setFillStyle(0x2e2e2e));
     infoBg.on('pointerout',  () => infoBg.setFillStyle(0x1a1a1a));
     infoBg.on('pointerup',   () => this.showInfoPanel(def));
-    const infoLabel = this.add.text(108, BTN_Y, '📋  정보 보기', {
+    const infoLabel = this.add.text(cx - 92, BTN_Y, '📋  정보 보기', {
       fontSize: '14px', color: '#cccccc', fontStyle: 'bold',
     }).setOrigin(0.5);
     panel.add(infoBg);
@@ -800,22 +827,22 @@ export default class CharacterSelectScene extends BaseScene {
 
     // ✔ 선택하기 / 🔒 미보유 (우)
     if (isOwned) {
-      const selBg = this.add.rectangle(292, BTN_Y, BTN_W, BTN_H, 0x1144bb)
+      const selBg = this.add.rectangle(cx + 92, BTN_Y, BTN_W, BTN_H, 0x1144bb)
         .setStrokeStyle(2, gradeColorInt)
         .setInteractive({ useHandCursor: true });
       selBg.on('pointerover', () => selBg.setFillStyle(0x2860dd));
       selBg.on('pointerout',  () => selBg.setFillStyle(0x1144bb));
       selBg.on('pointerup',   () => this.confirmSelect(id));
-      const selLabel = this.add.text(292, BTN_Y, '✔  선택하기', {
+      const selLabel = this.add.text(cx + 92, BTN_Y, '✔  선택하기', {
         fontSize: '15px', color: '#ffffff', fontStyle: 'bold',
         stroke: '#000000', strokeThickness: 2,
       }).setOrigin(0.5);
       panel.add(selBg);
       panel.add(selLabel);
     } else {
-      const lockBg = this.add.rectangle(292, BTN_Y, BTN_W, BTN_H, 0x1a1a1a)
+      const lockBg = this.add.rectangle(cx + 92, BTN_Y, BTN_W, BTN_H, 0x1a1a1a)
         .setStrokeStyle(1.5, 0x444444);
-      const lockLabel = this.add.text(292, BTN_Y, '🔒  미보유', {
+      const lockLabel = this.add.text(cx + 92, BTN_Y, '🔒  미보유', {
         fontSize: '14px', color: '#555555',
       }).setOrigin(0.5);
       panel.add(lockBg);
@@ -852,9 +879,9 @@ export default class CharacterSelectScene extends BaseScene {
     }
   }
 
-  /** GachaScene.fitVideoToCanvas와 동일 — aspect ratio 유지하며 400×600 캔버스에 cover */
+  /** GachaScene.fitVideoToCanvas와 동일 — aspect ratio 유지하며 캔버스에 cover */
   private fitVideoToPanel(vid: Phaser.GameObjects.Video): void {
-    const W = 400, H = 600;
+    const W = this.scale.width, H = this.scale.height;
     vid.setDisplaySize(W, H);
 
     const applyContain = () => {
@@ -925,13 +952,12 @@ export default class CharacterSelectScene extends BaseScene {
     const awakeBonusText = awakeBonusLines.join('\n');
 
     // 반투명 배경 (클릭 시 닫기)
-    const overlay = this.add.rectangle(200, 300, 400, 600, 0x000000, 0.80)
+    const overlay = this.add.rectangle(this.scale.width / 2, this.scale.height / 2, this.scale.width, this.scale.height, 0x000000, 0.80)
       .setInteractive();
     overlay.on('pointerup', () => this.hideInfoPanel());
     panel.add(overlay);
 
     // ── 카드 크기 계산 (텍스트 높이 선측정) ─────────────────────────
-    const B_LEFT = 30;
     const CARD_W = 370;
     const WRAP_W = CARD_W - 40; // 좌(15px)·우(25px) 여백 제외한 실제 텍스트 폭
     const HEADER_H = 60;  // 스프라이트+이름+구분선 영역
@@ -949,29 +975,32 @@ export default class CharacterSelectScene extends BaseScene {
     abMeasure?.destroy();
 
     // 화면 중앙 배치 (상하 여백 각 70px 보장)
-    const cardTop = Math.max(70, Math.round((600 - cardH) / 2));
-    const card = this.add.rectangle(200, cardTop + cardH / 2, CARD_W, cardH, 0x111111)
+    const _cx = this.scale.width / 2;
+    const _H = this.scale.height;
+    const _yOff = (_H - 600) / 2;
+    const cardTop = Math.max(70 + _yOff, Math.round((_H - cardH) / 2));
+    const card = this.add.rectangle(_cx, cardTop + cardH / 2, CARD_W, cardH, 0x111111)
       .setStrokeStyle(2, gradeColorInt);
     panel.add(card);
 
     // ── 헤더: 픽셀 스프라이트 + 등급 + 이름 ─────────────────────────
-    const sprite = this.add.image(52, cardTop + 24, def.imageKey).setDisplaySize(38, 52);
+    const sprite = this.add.image(_cx - CARD_W / 2 + 37, cardTop + 24, def.imageKey).setDisplaySize(38, 52);
     panel.add(sprite);
 
     const gradeImgKey3 = getGradeImgKey(def.grade);
     if (gradeImgKey3) {
-      const badge = this.add.image(82, cardTop + 8, gradeImgKey3).setDisplaySize(24, 24).setOrigin(0.5, 0);
+      const badge = this.add.image(_cx - CARD_W / 2 + 67, cardTop + 8, gradeImgKey3).setDisplaySize(24, 24).setOrigin(0.5, 0);
       panel.add(badge);
     }
 
-    const name = this.add.text(82, cardTop + 24, def.name, {
+    const name = this.add.text(_cx - CARD_W / 2 + 67, cardTop + 24, def.name, {
       fontSize: '17px', color: '#ffffff', fontStyle: 'bold',
       stroke: '#000', strokeThickness: 3,
     });
     panel.add(name);
 
     // ✕ 닫기 (헤더 우측)
-    const closeX = 200 + CARD_W / 2 - 14;
+    const closeX = _cx + CARD_W / 2 - 14;
     const closeY = cardTop + 16;
     const infoBtnBg = this.add.circle(closeX, closeY, 18, 0x000000, 0)
       .setInteractive({ useHandCursor: true });
@@ -985,17 +1014,18 @@ export default class CharacterSelectScene extends BaseScene {
     panel.add(closeTxt);
 
     // 구분선
-    panel.add(this.add.rectangle(200, cardTop + HEADER_H - 4, CARD_W - 20, 1, 0x444444));
+    panel.add(this.add.rectangle(_cx, cardTop + HEADER_H - 4, CARD_W - 20, 1, 0x444444));
 
     // ── 기본 효과 ─────────────────────────────────────────────────────
+    const textLeft = _cx - CARD_W / 2 + 15;
     let curY = cardTop + HEADER_H + 4;
 
-    panel.add(this.add.text(B_LEFT, curY, '🔷 기본 효과', {
+    panel.add(this.add.text(textLeft, curY, '🔷 기본 효과', {
       fontSize: '12px', color: '#88bbff', fontStyle: 'bold',
     }));
     curY += 18;
 
-    const basicText = this.add.text(B_LEFT, curY, def.basicEffect, {
+    const basicText = this.add.text(textLeft, curY, def.basicEffect, {
       fontSize: '13px', color: '#eeeeee', wordWrap: { width: WRAP_W },
     });
     panel.add(basicText);
@@ -1003,7 +1033,7 @@ export default class CharacterSelectScene extends BaseScene {
 
     if (awakeBonusText) {
       curY += 8;
-      panel.add(this.add.text(B_LEFT, curY, awakeBonusText, {
+      panel.add(this.add.text(textLeft, curY, awakeBonusText, {
         fontSize: '12px', color: '#ffd700', wordWrap: { width: WRAP_W },
       }));
       curY += (abHeight - 8);
@@ -1012,12 +1042,12 @@ export default class CharacterSelectScene extends BaseScene {
     curY += 14;
 
     // ── 특수 능력 ─────────────────────────────────────────────────────
-    panel.add(this.add.text(B_LEFT, curY, '⚡ 특수 능력', {
+    panel.add(this.add.text(textLeft, curY, '⚡ 특수 능력', {
       fontSize: '12px', color: '#ffdd88', fontStyle: 'bold',
     }));
     curY += 18;
 
-    panel.add(this.add.text(B_LEFT, curY, def.specialAbility, {
+    panel.add(this.add.text(textLeft, curY, def.specialAbility, {
       fontSize: '13px',
       color: def.specialAbility === '없음' ? '#666666' : '#eeeeee',
       wordWrap: { width: WRAP_W },
@@ -1030,10 +1060,12 @@ export default class CharacterSelectScene extends BaseScene {
   }
 
   private createBackButton() {
-    const btn = this.add.rectangle(200, 573, 200, 50, 0x333333).setDepth(10);
+    const cx = this.scale.width / 2;
+    const btnY = this.scale.height - 27;
+    const btn = this.add.rectangle(cx, btnY, 200, 50, 0x333333).setDepth(10);
     btn.setStrokeStyle(2, 0x888888);
 
-    this.add.text(200, 573, '← 돌아가기', {
+    this.add.text(cx, btnY, '← 돌아가기', {
       fontSize: '18px',
       color: '#ffffff',
       fontStyle: 'bold',

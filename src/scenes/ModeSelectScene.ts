@@ -24,13 +24,18 @@ export default class ModeSelectScene extends BaseScene {
   create() {
     super.create();
 
-    const background = this.add.image(200, 300, 'background2');
-    background.setDisplaySize(400, 600);
+    const W = this.scale.width;
+    const H = this.scale.height;
+    const cx = W / 2;
+    const yOff = (H - 600) / 2;
 
-    const title = this.add.image(200, 90, 'title');
+    const background = this.add.image(cx, H / 2, 'background2');
+    background.setDisplaySize(W, H);
+
+    const title = this.add.image(cx, 90 + yOff, 'title');
     title.setScale(0.4);
 
-    this.add.text(200, 190, '모드를 선택하세요', {
+    this.add.text(cx, 190 + yOff, '모드를 선택하세요', {
       fontSize: '20px',
       color: '#fff',
       fontStyle: 'bold',
@@ -39,21 +44,21 @@ export default class ModeSelectScene extends BaseScene {
     }).setOrigin(0.5);
 
     // 클래식 + 대전 모드 버튼 (같은 줄, 캐릭터/랭킹 버튼과 동일 크기)
-    this.createModeButton(GAME_MODES[0], 120, 250);
-    this.createBattleButton(280, 250);
+    this.createModeButton(GAME_MODES[0], cx - 80, 250 + yOff);
+    this.createBattleButton(cx + 80, 250 + yOff);
 
     // 뽑기 버튼 (SKOR 잔액 포함)
-    this.createGachaButton(200, 345);
+    this.createGachaButton(cx, 345 + yOff);
 
     // 하단 버튼 행: 캐릭터 선택 + 랭킹
-    this.createCharacterButton(120, 435);
-    this.createLeaderboardButton(280, 435);
+    this.createCharacterButton(cx - 80, 435 + yOff);
+    this.createLeaderboardButton(cx + 80, 435 + yOff);
 
     // 릴리즈 노트 링크
-    this.createReleaseNotesLink();
+    this.createReleaseNotesLink(cx, H - 80);
 
-    // 설정 버튼 (우상단)
-    this.createSettingsButton();
+    // 설정 버튼 (우하단)
+    this.createSettingsButton(W - 26, H - 26);
 
     // SKOR 잔액 비동기 로드
     this.loadSkorBalance();
@@ -197,8 +202,8 @@ export default class ModeSelectScene extends BaseScene {
     });
   }
 
-  private createReleaseNotesLink() {
-    const text = this.add.text(200, 520, '📋 릴리즈 노트', {
+  private createReleaseNotesLink(x: number, y: number) {
+    const text = this.add.text(x, y, '📋 릴리즈 노트', {
       fontSize: '15px',
       color: '#cccccc',
       stroke: '#000',
@@ -211,8 +216,8 @@ export default class ModeSelectScene extends BaseScene {
     text.on('pointerdown', () => this.scene.start('ReleaseNotesScene'));
   }
 
-  private createSettingsButton() {
-    const btn = this.add.text(374, 574, '⚙️', {
+  private createSettingsButton(x: number, y: number) {
+    const btn = this.add.text(x, y, '⚙️', {
       fontSize: '34px',
       padding: { x: 0, y: 0 },
     }).setOrigin(0.5).setDepth(11).setInteractive({ useHandCursor: true });
@@ -229,10 +234,10 @@ export default class ModeSelectScene extends BaseScene {
     if (this.settingsPanel) return;
 
     const W = 280, H = 140;
-    const cx = 200, cy = 300;
+    const cx = this.scale.width / 2, cy = this.scale.height / 2;
 
     // 반투명 배경 (터치 차단)
-    const overlay = this.add.rectangle(200, 300, 400, 600, 0x000000, 0.5)
+    const overlay = this.add.rectangle(cx, cy, this.scale.width, this.scale.height, 0x000000, 0.5)
       .setDepth(50).setInteractive();
 
     // 패널 카드

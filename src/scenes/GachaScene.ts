@@ -103,21 +103,26 @@ export default class GachaScene extends BaseScene {
     const currentDef = getCharacterDef(SLIDESHOW_IDS[0]);
     const gradeColorInt = parseInt(currentDef.gradeColor.replace('#', ''), 16);
 
+    const W = this.scale.width;
+    const H = this.scale.height;
+    const cx = W / 2;
+    const yOff = (H - 600) / 2;
+
     // ── 일러스트 배경 2레이어 (crossfade용) ──
     // bgA: 처음엔 현재 일러스트 (alpha=1), bgB: 다음 일러스트 대기 (alpha=0)
-    this.slideshowBgA = this.add.image(200, 300, currentDef.illustKey).setDisplaySize(400, 600);
-    this.slideshowBgB = this.add.image(200, 300, currentDef.illustKey).setDisplaySize(400, 600).setAlpha(0);
+    this.slideshowBgA = this.add.image(cx, H / 2, currentDef.illustKey).setDisplaySize(W, H);
+    this.slideshowBgB = this.add.image(cx, H / 2, currentDef.illustKey).setDisplaySize(W, H).setAlpha(0);
 
     // ── 하단 버튼 영역 그라데이션 ──
     const gradSteps = 14;
     for (let i = 0; i < gradSteps; i++) {
-      this.add.rectangle(200, 600 - i * 22, 400, 22, 0x000000, (gradSteps - i) * 0.052);
+      this.add.rectangle(cx, H - i * 22, W, 22, 0x000000, (gradSteps - i) * 0.052);
     }
 
     // ── 상단: 배너 배지 (슬라이드마다 등급 색상 업데이트) ──
-    this.slideshowBadgeBox = this.add.rectangle(200, 36, 140, 30, 0x000000, 0.75)
+    this.slideshowBadgeBox = this.add.rectangle(cx, 36 + yOff, 140, 30, 0x000000, 0.75)
       .setStrokeStyle(1.5, gradeColorInt);
-    this.slideshowBadgeTxt = this.add.text(200, 36, `✦  ${CURRENT_BANNER.label}  ✦`, {
+    this.slideshowBadgeTxt = this.add.text(cx, 36 + yOff, `✦  ${CURRENT_BANNER.label}  ✦`, {
       fontSize: '13px', color: currentDef.gradeColor, fontStyle: 'bold',
       stroke: '#000000', strokeThickness: 3,
     }).setOrigin(0.5);
@@ -128,10 +133,10 @@ export default class GachaScene extends BaseScene {
     // SKOR(15px)              y=408 → 399~417  (gap ≈ 8px)
     const initGradeKey = getGradeImgKey(currentDef.grade);
     this.slideshowGradeImg = initGradeKey
-      ? this.add.image(200, 344, initGradeKey).setDisplaySize(40, 40).setOrigin(0.5)
+      ? this.add.image(cx, 344 + yOff, initGradeKey).setDisplaySize(40, 40).setOrigin(0.5)
       : null;
 
-    this.slideshowNameText = this.add.text(200, 374, currentDef.name, {
+    this.slideshowNameText = this.add.text(cx, 374 + yOff, currentDef.name, {
       fontSize: '28px', color: '#ffffff', fontStyle: 'bold',
       stroke: '#000000', strokeThickness: 8,
     }).setOrigin(0.5);
@@ -139,7 +144,7 @@ export default class GachaScene extends BaseScene {
     // ── SKOR 잔액 ──
     const cached = getCachedSkorBalance();
     const initialText = cached !== null ? `💰  ${cached} SKOR` : '💰  -- SKOR';
-    const skorText = this.add.text(200, 408, initialText, {
+    const skorText = this.add.text(cx, 408 + yOff, initialText, {
       fontSize: '15px', color: '#aaaaaa',
       stroke: '#000000', strokeThickness: 4,
     }).setOrigin(0.5);
@@ -202,7 +207,8 @@ export default class GachaScene extends BaseScene {
     }
     const gradeKey = getGradeImgKey(def.grade);
     if (gradeKey) {
-      this.slideshowGradeImg = this.add.image(200, 344, gradeKey).setDisplaySize(40, 40).setOrigin(0.5).setAlpha(0);
+      const _yOff = (this.scale.height - 600) / 2;
+      this.slideshowGradeImg = this.add.image(this.scale.width / 2, 344 + _yOff, gradeKey).setDisplaySize(40, 40).setOrigin(0.5).setAlpha(0);
       this.tweens.add({ targets: this.slideshowGradeImg, alpha: 1, duration: 150 });
     }
     if (this.slideshowNameText?.active) {
@@ -216,20 +222,24 @@ export default class GachaScene extends BaseScene {
     const textColor   = isUR ? '#ff3333' : '#00ff41';
     const titleColor  = isUR ? '#cc0000' : '#00cc33';
     const title       = isUR ? 'root@krypt — [EMERGENCY OVERRIDE]' : 'root@krypt — entity_summon';
+    const cx = this.scale.width / 2;
+    const yOff = (this.scale.height - 600) / 2;
 
-    this.add.rectangle(200, 342, 370, 172, 0x000000)
+    this.add.rectangle(cx, 342 + yOff, 370, 172, 0x000000)
       .setStrokeStyle(1, borderColor, 0.8);
-    this.add.text(26, 260, '● ● ●', { fontSize: '11px', color: textColor });
-    this.add.text(200, 261, title, {
+    this.add.text(26, 260 + yOff, '● ● ●', { fontSize: '11px', color: textColor });
+    this.add.text(cx, 261 + yOff, title, {
       fontSize: '11px', color: titleColor, fontFamily: 'monospace',
     }).setOrigin(0.5);
   }
 
   private buildPullButtons(_fromLobby = false) {
-    this.addPullButton(200, 448, '1회 소환', '100 SKOR', 'single');
-    this.addPullButton(200, 516, '10회 소환', '900 SKOR  ·  10% 절약', 'multi');
+    const cx = this.scale.width / 2;
+    const yOff = (this.scale.height - 600) / 2;
+    this.addPullButton(cx, 448 + yOff, '1회 소환', '100 SKOR', 'single');
+    this.addPullButton(cx, 516 + yOff, '10회 소환', '900 SKOR  ·  10% 절약', 'multi');
 
-    const back = this.add.text(200, 572, '← 돌아가기', {
+    const back = this.add.text(cx, 572 + yOff, '← 돌아가기', {
       fontSize: '14px', color: '#ffffff',
       stroke: '#000000', strokeThickness: 3,
     }).setOrigin(0.5).setInteractive({ useHandCursor: true });
@@ -265,7 +275,7 @@ export default class GachaScene extends BaseScene {
   private async startPull(type: 'single' | 'multi') {
     const cost = type === 'multi' ? 900 : 100;
     if (this.skorBalance < 0) {
-      const errMsg = this.add.text(200, 370, '잔액 확인 중... 잠시 후 다시 시도하세요', {
+      const errMsg = this.add.text(this.scale.width / 2, 370 + (this.scale.height - 600) / 2, '잔액 확인 중... 잠시 후 다시 시도하세요', {
         fontSize: '13px', color: '#ffaa44',
         stroke: '#000000', strokeThickness: 3,
         backgroundColor: '#00000099',
@@ -275,7 +285,7 @@ export default class GachaScene extends BaseScene {
       return;
     }
     if (this.skorBalance < cost) {
-      const errMsg = this.add.text(200, 370, `SKOR 부족  (보유 ${Math.floor(this.skorBalance)} / 필요 ${cost})`, {
+      const errMsg = this.add.text(this.scale.width / 2, 370 + (this.scale.height - 600) / 2, `SKOR 부족  (보유 ${Math.floor(this.skorBalance)} / 필요 ${cost})`, {
         fontSize: '13px', color: '#ff5555',
         stroke: '#000000', strokeThickness: 3,
         backgroundColor: '#00000099',
@@ -324,7 +334,7 @@ export default class GachaScene extends BaseScene {
       const isUR = result.video === 'red'
       this.skipTerminal = false;
       this.clearUI();
-      this.add.rectangle(200, 300, 400, 600, 0x000000);
+      this.add.rectangle(this.scale.width / 2, this.scale.height / 2, this.scale.width, this.scale.height, 0x000000);
       this.drawTerminalChrome(false); // 항상 초록으로 시작
       this.addSkipButton(() => { this.skipTerminal = true; });
       await this.runTerminalAnimation(count, isUR);
@@ -439,28 +449,32 @@ export default class GachaScene extends BaseScene {
 
     const wpName = def?.name ?? wp.id;
 
+    const { width: _W, height: _H } = this.cameras.main;
+    const _cx = _W / 2;
+    const _yOff = (_H - 600) / 2;
+
     // ── 배경: 실제 배경화면 이미지 (있으면) 또는 단색 ──
     if (def && this.textures.exists(def.bgKey)) {
-      this.add.image(200, 300, def.bgKey).setDisplaySize(400, 600);
+      this.add.image(_cx, _H / 2, def.bgKey).setDisplaySize(_W, _H);
     } else {
-      this.add.rectangle(200, 300, 400, 600, 0x050515);
+      this.add.rectangle(_cx, _H / 2, _W, _H, 0x050515);
     }
     // 어두운 오버레이
-    this.add.rectangle(200, 300, 400, 600, 0x000000, 0.5);
+    this.add.rectangle(_cx, _H / 2, _W, _H, 0x000000, 0.5);
 
     // 보라 헤이즈
-    this.add.circle(200, 260, 220, WP_ACCENT_INT, 0.10);
-    this.add.circle(200, 260, 120, WP_ACCENT_INT, 0.07);
+    this.add.circle(_cx, 260 + _yOff, 220, WP_ACCENT_INT, 0.10);
+    this.add.circle(_cx, 260 + _yOff, 120, WP_ACCENT_INT, 0.07);
 
     // ── 상단 타이틀 ──
-    const title = this.add.text(200, 60, '배경화면 획득!', {
+    const title = this.add.text(_cx, 60 + _yOff, '배경화면 획득!', {
       fontSize: '22px', color: '#ffffff', fontStyle: 'bold',
       stroke: '#000000', strokeThickness: 5,
     }).setOrigin(0.5).setAlpha(0);
     this.tweens.add({ targets: title, alpha: 1, duration: 300, delay: 100 });
 
     // ── WALLPAPER 배지 ──
-    const badge = this.add.text(200, 100, 'WALLPAPER', {
+    const badge = this.add.text(_cx, 100 + _yOff, 'WALLPAPER', {
       fontSize: '13px', color: WP_ACCENT_HEX, fontStyle: 'bold',
       stroke: '#000000', strokeThickness: 4,
       fontFamily: 'monospace', letterSpacing: 4,
@@ -468,18 +482,18 @@ export default class GachaScene extends BaseScene {
     this.tweens.add({ targets: badge, alpha: 1, duration: 300, delay: 250 });
 
     // ── 배경화면 이름 ──
-    const nameText = this.add.text(200, 500, wpName, {
+    const nameText = this.add.text(_cx, 500 + _yOff, wpName, {
       fontSize: '30px', color: '#ffffff', fontStyle: 'bold',
       stroke: '#000000', strokeThickness: 6,
     }).setOrigin(0.5).setAlpha(0);
     this.tweens.add({
-      targets: nameText, alpha: 1, y: { from: 520, to: 500 },
+      targets: nameText, alpha: 1, y: { from: 520 + _yOff, to: 500 + _yOff },
       duration: 400, ease: 'Back.easeOut', delay: 400,
     });
 
     // ── 설명 ──
     if (def?.description) {
-      const desc = this.add.text(200, 544, def.description, {
+      const desc = this.add.text(_cx, 544 + _yOff, def.description, {
         fontSize: '13px', color: '#cccccc',
         stroke: '#000000', strokeThickness: 3,
       }).setOrigin(0.5).setAlpha(0);
@@ -488,7 +502,7 @@ export default class GachaScene extends BaseScene {
 
     // ── NEW! 배지 ──
     if (wp.isNew) {
-      const newBadge = this.add.text(325, 145, ' NEW! ', {
+      const newBadge = this.add.text(_W - 75, 145 + _yOff, ' NEW! ', {
         fontSize: '15px', color: '#ffff00', fontStyle: 'bold',
         backgroundColor: '#cc0000', stroke: '#000', strokeThickness: 2,
       }).setOrigin(0.5).setAlpha(0).setScale(0);
@@ -501,7 +515,7 @@ export default class GachaScene extends BaseScene {
     // ── 탭 안내 ──
     const isLast = this.revealItemIndex >= this.revealItems.length - 1;
     const hint = isLast ? 'TAP → RESULTS' : `TAP → NEXT  (${this.revealItemIndex + 1}/${this.revealItems.length})`;
-    const tapHint = this.add.text(200, 576, hint, {
+    const tapHint = this.add.text(_cx, 576 + _yOff, hint, {
       fontSize: '13px', color: '#555555', fontFamily: 'monospace',
     }).setOrigin(0.5);
     this.tweens.add({
@@ -641,21 +655,25 @@ export default class GachaScene extends BaseScene {
 
     const gColor = GRADE_COLORS[pulled.grade] ?? 0xffffff;
 
+    const { width: W, height: H } = this.cameras.main;
+    const cx = W / 2;
+    const yOff = (H - 600) / 2;
+
     // ── 배경: 사이버 우주 이미지 + 등급 컬러 헤이즈 ──
     if (this.textures.exists('gacha_background')) {
-      const bg = this.add.image(200, 300, 'gacha_background');
-      bg.setDisplaySize(400, 600);
+      const bg = this.add.image(cx, H / 2, 'gacha_background');
+      bg.setDisplaySize(W, H);
     } else {
-      this.add.rectangle(200, 300, 400, 600, 0x050510);
+      this.add.rectangle(cx, H / 2, W, H, 0x050510);
     }
     // 어두운 오버레이 (가독성 확보)
-    this.add.rectangle(200, 300, 400, 600, 0x000000, 0.5);
+    this.add.rectangle(cx, H / 2, W, H, 0x000000, 0.5);
     // 등급 컬러 헤이즈 (중앙 중심 방사)
-    this.add.circle(200, 260, 200, gColor, 0.08);
-    this.add.circle(200, 260, 120, gColor, 0.06);
+    this.add.circle(cx, 260 + yOff, 200, gColor, 0.08);
+    this.add.circle(cx, 260 + yOff, 120, gColor, 0.06);
 
     // 배경 글로우 (캐릭터 뒤 빛)
-    const glow = this.add.circle(200, 255, 150, gColor, 0.0).setAlpha(0);
+    const glow = this.add.circle(cx, 255 + yOff, 150, gColor, 0.0).setAlpha(0);
     this.tweens.add({
       targets: glow, alpha: 1,
       scaleX: { from: 0.3, to: 1.3 }, scaleY: { from: 0.3, to: 1.3 },
@@ -663,33 +681,33 @@ export default class GachaScene extends BaseScene {
     });
 
     // 캐릭터 이미지
-    const img = this.add.image(200, 240, def.imageKey).setAlpha(0);
+    const img = this.add.image(cx, 240 + yOff, def.imageKey).setAlpha(0);
     img.setDisplaySize(130, 205);
     this.tweens.add({
-      targets: img, alpha: 1, y: { from: 268, to: 240 },
+      targets: img, alpha: 1, y: { from: 268 + yOff, to: 240 + yOff },
       duration: 500, ease: 'Back.easeOut', delay: 150,
     });
 
     // 등급 라벨
     const revealGradeKey = getGradeImgKey(pulled.grade);
     if (revealGradeKey) {
-      const gradeImg = this.add.image(200, 388, revealGradeKey).setDisplaySize(52, 52).setOrigin(0.5).setAlpha(0);
+      const gradeImg = this.add.image(cx, 388 + yOff, revealGradeKey).setDisplaySize(52, 52).setOrigin(0.5).setAlpha(0);
       this.tweens.add({ targets: gradeImg, alpha: 1, duration: 300, delay: 400 });
     }
 
     // 캐릭터 이름
-    const nameText = this.add.text(200, 424, def.name, {
+    const nameText = this.add.text(cx, 424 + yOff, def.name, {
       fontSize: '34px', color: '#ffffff', fontStyle: 'bold',
       stroke: '#000000', strokeThickness: 6,
     }).setOrigin(0.5).setAlpha(0);
     this.tweens.add({
-      targets: nameText, alpha: 1, y: { from: 442, to: 424 },
+      targets: nameText, alpha: 1, y: { from: 442 + yOff, to: 424 + yOff },
       duration: 400, ease: 'Back.easeOut', delay: 500,
     });
 
     // NEW! 배지
     if (pulled.isNew) {
-      const badge = this.add.text(325, 145, ' NEW! ', {
+      const badge = this.add.text(W - 75, 145 + yOff, ' NEW! ', {
         fontSize: '15px', color: '#ffff00', fontStyle: 'bold',
         backgroundColor: '#cc0000', stroke: '#000', strokeThickness: 2,
       }).setOrigin(0.5).setAlpha(0).setScale(0);
@@ -704,7 +722,7 @@ export default class GachaScene extends BaseScene {
     const hint = isLast
       ? 'TAP → RESULTS'
       : `TAP → NEXT  (${this.revealItemIndex + 1}/${this.revealItems.length})`;
-    const tapHint = this.add.text(200, 562, hint, {
+    const tapHint = this.add.text(cx, 562 + yOff, hint, {
       fontSize: '13px', color: '#555555', fontFamily: 'monospace',
     }).setOrigin(0.5);
     this.tweens.add({
@@ -753,14 +771,17 @@ export default class GachaScene extends BaseScene {
 
   private showSummary() {
     this.clearUI();
+    const { width: _W, height: _H } = this.cameras.main;
+    const _cx = _W / 2;
+    const _yOff = (_H - 600) / 2;
     if (this.textures.exists('gacha_background')) {
-      this.add.image(200, 300, 'gacha_background').setDisplaySize(400, 600);
+      this.add.image(_cx, _H / 2, 'gacha_background').setDisplaySize(_W, _H);
     } else {
-      this.add.rectangle(200, 300, 400, 600, 0x060612);
+      this.add.rectangle(_cx, _H / 2, _W, _H, 0x060612);
     }
-    this.add.rectangle(200, 300, 400, 600, 0x000000, 0.55);
+    this.add.rectangle(_cx, _H / 2, _W, _H, 0x000000, 0.55);
 
-    this.add.text(200, 38, '[ EXTRACTION COMPLETE ]', {
+    this.add.text(_cx, 38 + _yOff, '[ EXTRACTION COMPLETE ]', {
       fontSize: '17px', color: '#00ff41', fontStyle: 'bold', fontFamily: 'monospace',
     }).setOrigin(0.5);
 
@@ -771,8 +792,8 @@ export default class GachaScene extends BaseScene {
     const cols = Math.min(total, 5);
     const cardW = 64, cardH = 84, gapX = 8, gapY = 12;
     const totalW = cols * cardW + (cols - 1) * gapX;
-    const startX = (400 - totalW) / 2 + cardW / 2;
-    const startY = total > 5 ? 130 : 175;
+    const startX = (_W - totalW) / 2 + cardW / 2;
+    const startY = (total > 5 ? 130 : 175) + _yOff;
 
     // 캐릭터 카드
     this.pullResults.forEach((pulled, i) => {
@@ -844,27 +865,27 @@ export default class GachaScene extends BaseScene {
 
     // 잔여 SKOR
     const skorY = gridBottom + 20;
-    this.add.text(200, skorY, `잔여 SKOR: ${Math.floor(this.remainingSkor)}`, {
+    this.add.text(_cx, skorY, `잔여 SKOR: ${Math.floor(this.remainingSkor)}`, {
       fontSize: '14px', color: '#00ff41', fontFamily: 'monospace',
     }).setOrigin(0.5);
 
     // 한 번 더 / 메인으로 버튼
     // btn1Y: skor 텍스트 하단(skorY+11) + 여백(14) + 버튼 반높이(26) = skorY+51
-    const btn1Y = Math.min(skorY + 51, 470);
-    const btn2Y = Math.min(btn1Y + 68, 550);
+    const btn1Y = Math.min(skorY + 51, 470 + _yOff);
+    const btn2Y = Math.min(btn1Y + 68, 550 + _yOff);
 
-    const againBtn = this.add.rectangle(200, btn1Y, 260, 52, 0x080818)
+    const againBtn = this.add.rectangle(_cx, btn1Y, 260, 52, 0x080818)
       .setStrokeStyle(1, 0x00ff41).setInteractive({ useHandCursor: true });
-    this.add.text(200, btn1Y, '한 번 더', {
+    this.add.text(_cx, btn1Y, '한 번 더', {
       fontSize: '19px', color: '#00ff41', fontStyle: 'bold', fontFamily: 'monospace',
     }).setOrigin(0.5);
     againBtn.on('pointerover', () => againBtn.setFillStyle(0x081808));
     againBtn.on('pointerout',  () => againBtn.setFillStyle(0x080818));
     againBtn.on('pointerdown', () => this.buildLobby());
 
-    const mainBtn = this.add.rectangle(200, btn2Y, 260, 52, 0x1a1a1a)
+    const mainBtn = this.add.rectangle(_cx, btn2Y, 260, 52, 0x1a1a1a)
       .setStrokeStyle(1, 0x444444).setInteractive({ useHandCursor: true });
-    this.add.text(200, btn2Y, '메인으로', {
+    this.add.text(_cx, btn2Y, '메인으로', {
       fontSize: '19px', color: '#888888', fontStyle: 'bold', fontFamily: 'monospace',
     }).setOrigin(0.5);
     mainBtn.on('pointerover', () => mainBtn.setFillStyle(0x282828));
@@ -877,10 +898,12 @@ export default class GachaScene extends BaseScene {
   // ═══════════════════════════════════════════════════
 
   private addSkipButton(onClick: () => void) {
-    this.add.rectangle(363, 28, 88, 30, 0x000000, 0.6)
+    const skipX = this.scale.width - 37;
+    const skipY = 28 + (this.scale.height - 600) / 2;
+    this.add.rectangle(skipX, skipY, 88, 30, 0x000000, 0.6)
       .setInteractive()
       .on('pointerdown', onClick);
-    const txt = this.add.text(363, 28, 'SKIP  ▶▶', {
+    const txt = this.add.text(skipX, skipY, 'SKIP  ▶▶', {
       fontSize: '12px', color: '#777777', fontFamily: 'monospace',
     }).setOrigin(0.5).setInteractive({ useHandCursor: true });
     txt.on('pointerover', () => txt.setColor('#cccccc'));

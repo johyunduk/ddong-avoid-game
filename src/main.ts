@@ -16,8 +16,6 @@ import './style.css';
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.WEBGL,
-  width: 400,
-  height: 600,
   parent: 'game-container',
   backgroundColor: '#87CEEB',
   physics: {
@@ -35,7 +33,7 @@ const config: Phaser.Types.Core.GameConfig = {
   },
   scene: [ModeSelectScene, DifficultySelectScene, GameScene, LeaderboardScene, ReleaseNotesScene, CharacterSelectScene, GachaScene, BattleMatchScene, BattleGameScene, BattleResultScene, BattleLeaderboardScene],
   scale: {
-    mode: Phaser.Scale.FIT,
+    mode: Phaser.Scale.RESIZE,
     autoCenter: Phaser.Scale.CENTER_BOTH
   },
   render: {
