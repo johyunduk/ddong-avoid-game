@@ -7,8 +7,13 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
   private texturePrefix: string;
   private leftKeyDown: boolean = false;
   private rightKeyDown: boolean = false;
+  private touchLeft: boolean = false;
+  private touchRight: boolean = false;
   private readonly onKeyDown: (e: KeyboardEvent) => void;
   private readonly onKeyUp: (e: KeyboardEvent) => void;
+  private readonly onPointerDown: (p: Phaser.Input.Pointer) => void;
+  private readonly onPointerUp: () => void;
+  private readonly onPointerMove: (p: Phaser.Input.Pointer) => void;
 
   // 현재 텍스처 방향 캐시 — setTexture를 매 프레임 호출하지 않기 위해
   private currentDir: string = 'front';
@@ -65,13 +70,30 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     window.addEventListener('keydown', this.onKeyDown, { capture: true });
     window.addEventListener('keyup', this.onKeyUp, { capture: true });
 
+    // 터치 방향을 폴링 대신 이벤트 기반으로 추적 (빠른 터치 시 isDown 공백 프레임 방지)
+    const getDir = (p: Phaser.Input.Pointer) => {
+      const cx = scene.cameras.main.width / 2;
+      this.touchLeft  = p.x < cx;
+      this.touchRight = p.x > cx;
+    };
+    this.onPointerDown = getDir;
+    this.onPointerMove = (p) => { if (p.isDown) getDir(p); };
+    this.onPointerUp   = () => { this.touchLeft = false; this.touchRight = false; };
+
+    scene.input.on('pointerdown', this.onPointerDown);
+    scene.input.on('pointermove', this.onPointerMove);
+    scene.input.on('pointerup',   this.onPointerUp);
+
     // shutdown은 restart/stop/destroy 시 항상 먼저 호출됨 → 한 번만 등록으로 충분
-    scene.events.once('shutdown', this.removeKeyListeners, this);
+    scene.events.once('shutdown', this.removeListeners, this);
   }
 
-  private removeKeyListeners() {
+  private removeListeners() {
     window.removeEventListener('keydown', this.onKeyDown, { capture: true });
     window.removeEventListener('keyup', this.onKeyUp, { capture: true });
+    this.scene.input.off('pointerdown', this.onPointerDown);
+    this.scene.input.off('pointermove', this.onPointerMove);
+    this.scene.input.off('pointerup',   this.onPointerUp);
   }
 
   update() {
@@ -91,20 +113,14 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
       this.setVelocityX(0);
     }
 
-    // 터치/마우스 입력 처리 (화면 중앙 기준)
-    if (this.scene.input.activePointer.isDown) {
-      const pointerX = this.scene.input.activePointer.x;
-      const screenCenter = this.scene.cameras.main.width / 2;
-
-      if (pointerX < screenCenter) {
-        this.setVelocityX(-this.speed);
-        nextDir = 'left';
-        isMoving = true;
-      } else if (pointerX > screenCenter) {
-        this.setVelocityX(this.speed);
-        nextDir = 'right';
-        isMoving = true;
-      }
+    if (this.touchLeft) {
+      this.setVelocityX(-this.speed);
+      nextDir = 'left';
+      isMoving = true;
+    } else if (this.touchRight) {
+      this.setVelocityX(this.speed);
+      nextDir = 'right';
+      isMoving = true;
     }
 
     // 멈춰있을 때는 정면 이미지
