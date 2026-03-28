@@ -1490,17 +1490,20 @@ export default class GameScene extends BaseScene {
     });
   }
 
+  // 서버 getBracketCap과 동일 — 낙관적 UI 계산용 (서버 응답 전 예상값 표시)
+  private getSkorBracketCap(score: number): number {
+    if (score < 500)  return 20;
+    if (score < 1000) return 45;
+    if (score < 1500) return 80;
+    if (score < 2000) return 115;
+    if (score < 3000) return 160;
+    if (score < 5000) return 215;
+    return 280;
+  }
+
   /**
    * 게임오버 시 SKOR 정제 수익 제출 및 화면 표시
    */
-  /** 점수 브래킷별 게임당 SKOR 상한 (서버와 동일) */
-  private getSkorBracketCap(score: number): number {
-    if (score < 1000) return 40;
-    if (score < 2000) return 70;
-    if (score < 3000) return 90;
-    return 110;
-  }
-
   private async submitSkorOnGameOver(statusText: Phaser.GameObjects.Text) {
     // ── 낙관적 UI: 서버 응답 전에 예상 SKOR 즉시 계산 ──
     const rawSkor =

@@ -15,18 +15,21 @@ const WEIGHTS = {
 
 // 점수 브래킷별 게임당 SKOR 상한
 function getBracketCap(score: number): number {
-  if (score < 1000) return 40;
-  if (score < 2000) return 70;
-  if (score < 3000) return 90;
-  return 110;
+  if (score < 500)  return 20;
+  if (score < 1000) return 45;
+  if (score < 1500) return 80;
+  if (score < 2000) return 115;
+  if (score < 3000) return 160;
+  if (score < 5000) return 215;
+  return 280;
 }
 
 // 반복 퀘스트 정의
 const QUESTS = [
-  { key: 'gold',    interval: 300, reward: 5  },
-  { key: 'diamond', interval: 150, reward: 8  },
-  { key: 'topaz',   interval: 80,  reward: 10 },
-  { key: 'rainbow', interval: 50,  reward: 15 },
+  { key: 'gold',    interval: 50, reward: 10 },
+  { key: 'diamond', interval: 25, reward: 15 },
+  { key: 'topaz',   interval: 12, reward: 20 },
+  { key: 'rainbow', interval: 8,  reward: 35 },
 ] as const;
 
 Deno.serve(async (req: Request) => {
