@@ -11,9 +11,14 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
   private touchRight: boolean = false;
   private readonly onKeyDown: (e: KeyboardEvent) => void;
   private readonly onKeyUp: (e: KeyboardEvent) => void;
-  private readonly onPointerDown: (p: Phaser.Input.Pointer) => void;
-  private readonly onPointerUp: () => void;
-  private readonly onPointerMove: (p: Phaser.Input.Pointer) => void;
+  // 캔버스 DOM 이벤트 (scene.input 우회 → 게임오브젝트 pointerdown 과 충돌 없음)
+  private readonly canvas: HTMLCanvasElement;
+  private canvasRect: DOMRect;
+  private readonly onTouchTrack: (e: TouchEvent) => void;
+  private readonly onInputEnd: () => void;
+  private readonly onMouseDown: (e: MouseEvent) => void;
+  private readonly onMouseMove: (e: MouseEvent) => void;
+  private readonly onResize: () => void;
 
   // 현재 텍스처 방향 캐시 — setTexture를 매 프레임 호출하지 않기 위해
   private currentDir: string = 'front';
@@ -70,19 +75,39 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     window.addEventListener('keydown', this.onKeyDown, { capture: true });
     window.addEventListener('keyup', this.onKeyUp, { capture: true });
 
-    // 터치 방향을 폴링 대신 이벤트 기반으로 추적 (빠른 터치 시 isDown 공백 프레임 방지)
-    const getDir = (p: Phaser.Input.Pointer) => {
-      const cx = scene.cameras.main.width / 2;
-      this.touchLeft  = p.x < cx;
-      this.touchRight = p.x > cx;
-    };
-    this.onPointerDown = getDir;
-    this.onPointerMove = (p) => { if (p.isDown) getDir(p); };
-    this.onPointerUp   = () => { this.touchLeft = false; this.touchRight = false; };
+    // 터치/마우스를 캔버스 DOM 이벤트로 직접 추적
+    // — scene.input.on() 을 쓰면 Phaser 내부 입력 파이프라인과 충돌해 게임오브젝트
+    //   pointerdown(버튼 등)이 무시되는 버그가 발생하므로 DOM 레벨에서 처리
+    this.canvas = scene.game.canvas;
+    this.canvasRect = this.canvas.getBoundingClientRect();
 
-    scene.input.on('pointerdown', this.onPointerDown);
-    scene.input.on('pointermove', this.onPointerMove);
-    scene.input.on('pointerup',   this.onPointerUp);
+    const applyDir = (clientX: number) => {
+      const gameX = (clientX - this.canvasRect.left) * (scene.scale.width / this.canvasRect.width);
+      const cx = scene.scale.width / 2;
+      const newLeft  = gameX < cx;
+      const newRight = gameX > cx;
+      if (newLeft === this.touchLeft && newRight === this.touchRight) return;
+      this.touchLeft  = newLeft;
+      this.touchRight = newRight;
+    };
+
+    this.onTouchTrack = (e: TouchEvent) => {
+      if (e.touches.length > 0) applyDir(e.touches[0].clientX);
+    };
+    this.onInputEnd  = () => { this.touchLeft = false; this.touchRight = false; };
+    this.onMouseDown = (e: MouseEvent) => { applyDir(e.clientX); };
+    this.onMouseMove = (e: MouseEvent) => { if (e.buttons > 0) applyDir(e.clientX); };
+    this.onResize    = () => { this.canvasRect = this.canvas.getBoundingClientRect(); };
+
+    const canvas = this.canvas;
+    canvas.addEventListener('touchstart',  this.onTouchTrack, { passive: true });
+    canvas.addEventListener('touchend',    this.onInputEnd);
+    canvas.addEventListener('touchcancel', this.onInputEnd);
+    canvas.addEventListener('touchmove',   this.onTouchTrack, { passive: true });
+    canvas.addEventListener('mousedown',   this.onMouseDown);
+    canvas.addEventListener('mouseup',     this.onInputEnd);
+    canvas.addEventListener('mousemove',   this.onMouseMove);
+    window.addEventListener('resize',      this.onResize);
 
     // shutdown은 restart/stop/destroy 시 항상 먼저 호출됨 → 한 번만 등록으로 충분
     scene.events.once('shutdown', this.removeListeners, this);
@@ -91,9 +116,15 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
   private removeListeners() {
     window.removeEventListener('keydown', this.onKeyDown, { capture: true });
     window.removeEventListener('keyup', this.onKeyUp, { capture: true });
-    this.scene.input.off('pointerdown', this.onPointerDown);
-    this.scene.input.off('pointermove', this.onPointerMove);
-    this.scene.input.off('pointerup',   this.onPointerUp);
+    const canvas = this.canvas;
+    canvas.removeEventListener('touchstart',  this.onTouchTrack);
+    canvas.removeEventListener('touchend',    this.onInputEnd);
+    canvas.removeEventListener('touchcancel', this.onInputEnd);
+    canvas.removeEventListener('touchmove',   this.onTouchTrack);
+    canvas.removeEventListener('mousedown',   this.onMouseDown);
+    canvas.removeEventListener('mouseup',     this.onInputEnd);
+    canvas.removeEventListener('mousemove',   this.onMouseMove);
+    window.removeEventListener('resize',      this.onResize);
   }
 
   update() {

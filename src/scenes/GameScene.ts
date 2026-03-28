@@ -1645,45 +1645,20 @@ export default class GameScene extends BaseScene {
       menuButtonText.setScale(1);
     });
 
-    // 0.5초 지연 후 클릭 이벤트 활성화 (의도치 않은 즉시 클릭 방지)
-    this.time.delayedCall(500, () => {
-      // 다시 하기 버튼 클릭
-      retryButtonBg.on('pointerdown', () => {
-        // HTML input이 남아있으면 제거
-        const existingInput = document.querySelector('input');
-        if (existingInput) {
-          document.body.removeChild(existingInput);
-        }
+    retryButtonBg.on('pointerdown', () => {
+      const existingInput = document.querySelector('input');
+      if (existingInput) document.body.removeChild(existingInput);
+      this.sound.stopAll();
+      if (this.player) this.player.cleanupEffects();
+      this.scene.restart({ gameMode: this.gameMode, difficulty: this.difficulty, purePhysical: this.purePhysical });
+    });
 
-        // 모든 사운드 정리
-        this.sound.stopAll();
-        // 플레이어 효과 정리
-        if (this.player) {
-          this.player.cleanupEffects();
-        }
-
-        // 같은 게임 모드와 난이도로 재시작
-        this.scene.restart({ gameMode: this.gameMode, difficulty: this.difficulty, purePhysical: this.purePhysical });
-      });
-
-      // 메인 메뉴 버튼 클릭
-      menuButtonBg.on('pointerdown', () => {
-        // HTML input이 남아있으면 제거
-        const existingInput = document.querySelector('input');
-        if (existingInput) {
-          document.body.removeChild(existingInput);
-        }
-
-        // 모든 사운드 정리
-        this.sound.stopAll();
-        // 플레이어 효과 정리
-        if (this.player) {
-          this.player.cleanupEffects();
-        }
-
-        // 모드 선택 씬으로 돌아가기
-        this.scene.start('ModeSelectScene');
-      });
+    menuButtonBg.on('pointerdown', () => {
+      const existingInput = document.querySelector('input');
+      if (existingInput) document.body.removeChild(existingInput);
+      this.sound.stopAll();
+      if (this.player) this.player.cleanupEffects();
+      this.scene.start('ModeSelectScene');
     });
   }
 }
