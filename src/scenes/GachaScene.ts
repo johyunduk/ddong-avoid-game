@@ -35,6 +35,7 @@ export default class GachaScene extends BaseScene {
   private revealItems: Array<{ kind: 'character'; data: PulledCharacter } | { kind: 'wallpaper'; data: PulledWallpaper }> = [];
   private revealItemIndex = 0;
   private terminalTexts: Phaser.GameObjects.Text[] = [];
+  private terminalBaseY: number = 276;
   private skipTerminal = false;
 
   // ── 로비 슬라이드쇼 상태 ──
@@ -224,6 +225,7 @@ export default class GachaScene extends BaseScene {
     const title       = isUR ? 'root@krypt — [EMERGENCY OVERRIDE]' : 'root@krypt — entity_summon';
     const cx = this.scale.width / 2;
     const yOff = (this.scale.height - 600) / 2;
+    this.terminalBaseY = 276 + yOff;
 
     this.add.rectangle(cx, 342 + yOff, 370, 172, 0x000000)
       .setStrokeStyle(1, borderColor, 0.8);
@@ -940,10 +942,10 @@ export default class GachaScene extends BaseScene {
       // 최대 6줄 유지 (스크롤 효과)
       if (this.terminalTexts.length >= 6) {
         this.terminalTexts.shift()?.destroy();
-        this.terminalTexts.forEach((t, i) => t.setY(276 + i * 22));
+        this.terminalTexts.forEach((t, i) => t.setY(this.terminalBaseY + i * 22));
       }
 
-      const y = 276 + this.terminalTexts.length * 22;
+      const y = this.terminalBaseY + this.terminalTexts.length * 22;
       const t = this.add.text(24, y, '', {
         fontSize: '13px', color, fontFamily: 'monospace',
       });
@@ -969,10 +971,10 @@ export default class GachaScene extends BaseScene {
 
       if (this.terminalTexts.length >= 6) {
         this.terminalTexts.shift()?.destroy();
-        this.terminalTexts.forEach((t, i) => t.setY(276 + i * 22));
+        this.terminalTexts.forEach((t, i) => t.setY(this.terminalBaseY + i * 22));
       }
 
-      const y = 276 + this.terminalTexts.length * 22;
+      const y = this.terminalBaseY + this.terminalTexts.length * 22;
       const bar = this.add.text(24, y, '> [          ]  0%', {
         fontSize: '13px', color, fontFamily: 'monospace',
       });
