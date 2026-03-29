@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "6489eb5eb850",
+  "strategy": "manual-commit",
+  "branch": "dev",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src/scenes/GachaScene.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/64/89eb5eb850/0/metadata.json",
+      "transcript": "/64/89eb5eb850/0/full.jsonl",
+      "context": "/64/89eb5eb850/0/context.md",
+      "content_hash": "/64/89eb5eb850/0/content_hash.txt",
+      "prompt": "/64/89eb5eb850/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 218,
+    "cache_creation_tokens": 243039,
+    "cache_read_tokens": 13491437,
+    "output_tokens": 42512,
+    "api_call_count": 160
+  }
+}
