@@ -1,0 +1,37 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "82dd17fe7e49",
+  "session_id": "c55ad625-5457-4f44-950d-8564702c68fd",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-29T02:27:34.085533Z",
+  "branch": "dev",
+  "checkpoints_count": 9,
+  "files_touched": [
+    "src/scenes/LeaderboardScene.ts",
+    "src/utils/leaderboard.ts",
+    "supabase/functions/claim-season-reward/index.ts",
+    "supabase/functions/leaderboard-submit/index.ts",
+    "supabase/functions/leaderboard-top/index.ts",
+    "supabase/migrations/20260401_leaderboard_season.sql"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "b715739e203f",
+  "transcript_identifier_at_start": "82bcd63c-83a8-4b9d-8660-af51298a44fb",
+  "token_usage": {
+    "input_tokens": 165,
+    "cache_creation_tokens": 217371,
+    "cache_read_tokens": 12209076,
+    "output_tokens": 90684,
+    "api_call_count": 122
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-29T02:27:33.708503Z",
+    "agent_lines": 670,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 670,
+    "agent_percentage": 100
+  },
+  "transcript_path": ".claude/projects/-Users-johyunduk-Projects-ddong-avoid-game/c55ad625-5457-4f44-950d-8564702c68fd.jsonl"
+}
