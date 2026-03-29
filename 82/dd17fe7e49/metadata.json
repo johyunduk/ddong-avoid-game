@@ -1,0 +1,31 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "82dd17fe7e49",
+  "strategy": "manual-commit",
+  "branch": "dev",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src/scenes/LeaderboardScene.ts",
+    "src/utils/leaderboard.ts",
+    "supabase/functions/claim-season-reward/index.ts",
+    "supabase/functions/leaderboard-submit/index.ts",
+    "supabase/functions/leaderboard-top/index.ts",
+    "supabase/migrations/20260401_leaderboard_season.sql"
+  ],
+  "sessions": [
+    {
+      "metadata": "/82/dd17fe7e49/0/metadata.json",
+      "transcript": "/82/dd17fe7e49/0/full.jsonl",
+      "context": "/82/dd17fe7e49/0/context.md",
+      "content_hash": "/82/dd17fe7e49/0/content_hash.txt",
+      "prompt": "/82/dd17fe7e49/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 218,
+    "cache_creation_tokens": 243039,
+    "cache_read_tokens": 13491437,
+    "output_tokens": 42512,
+    "api_call_count": 160
+  }
+}
