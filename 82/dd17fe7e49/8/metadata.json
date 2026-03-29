@@ -1,0 +1,39 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "82dd17fe7e49",
+  "session_id": "6cf8e78b-577f-477f-8f17-299d56335c18",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-29T02:27:31.70701Z",
+  "branch": "dev",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "supabase/functions/leaderboard-submit/index.ts",
+    "supabase/functions/leaderboard-top/index.ts",
+    "supabase/migrations/20260401_leaderboard_season.sql",
+    "src/scenes/LeaderboardScene.ts",
+    "src/utils/leaderboard.ts",
+    "supabase/functions/claim-season-reward/index.ts"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "b7ccded68f3b",
+  "transcript_identifier_at_start": "3cb6826e-cd42-45c4-9690-01a69dfbbc54",
+  "checkpoint_transcript_start": 890,
+  "transcript_lines_at_start": 890,
+  "token_usage": {
+    "input_tokens": 259,
+    "cache_creation_tokens": 348322,
+    "cache_read_tokens": 19959672,
+    "output_tokens": 158917,
+    "api_call_count": 204
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-29T02:27:30.556643Z",
+    "agent_lines": 670,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 670,
+    "agent_percentage": 100
+  },
+  "transcript_path": ".claude/projects/-Users-johyunduk-Projects-ddong-avoid-game/6cf8e78b-577f-477f-8f17-299d56335c18.jsonl"
+}
