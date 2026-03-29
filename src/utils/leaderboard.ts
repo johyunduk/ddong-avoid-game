@@ -19,15 +19,33 @@ export interface SubmitScoreResponse {
   message?: string;
 }
 
+export interface PrevSeasonReward {
+  yearMonth: string;       // 'YYYY-MM' (직전 달)
+  rank: number | null;     // null이면 해당 달 기록 없음
+  skorAwarded: number;     // 0이면 100위 밖
+  alreadyClaimed: boolean;
+}
+
 export interface LeaderboardResponse {
   success: boolean;
   difficulty: string;
+  yearMonth: string;       // 현재 시즌 'YYYY-MM'
+  season: number;          // 시즌 번호
   leaderboard: LeaderboardEntry[];
   currentUserRank: {
     rank: number;
     score: number;
   } | null;
   totalEntries: number;
+  prevSeasonReward: PrevSeasonReward | null;
+}
+
+export interface ClaimRewardResponse {
+  success: boolean;
+  alreadyClaimed: boolean;
+  rank: number | null;
+  skorAwarded: number;
+  newBalance?: number;
 }
 
 /**
@@ -141,4 +159,102 @@ export async function getLeaderboard(
   }
 
   return data as LeaderboardResponse;
+}
+
+// ── 시즌 보상 수령 캐시 (localStorage) ──────────────────────────────────
+// 수령 완료된 시즌/난이도는 localStorage에 캐시해 불필요한 서버 조회 방지
+// 보안: djb2 서명으로 변조 방지 (실제 이중 수령은 서버 UNIQUE 제약이 방어)
+
+const _CLAIMS_KEY = 'seasonRewardClaims';
+const _CLAIMS_SIG_KEY = 'seasonRewardClaimsSig';
+const _CLAIMS_SALT = 'ddong-reward-\u0076\u0031';
+
+function _djb2(str: string): string {
+  let h = 5381;
+  for (let i = 0; i < str.length; i++) {
+    h = ((h << 5) + h) ^ str.charCodeAt(i);
+    h = h >>> 0;
+  }
+  return h.toString(36);
+}
+
+function _signClaims(claims: Record<string, number>): string {
+  const str = Object.entries(claims)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([k, v]) => `${k}:${v}`)
+    .join(',') + _CLAIMS_SALT;
+  return _djb2(str);
+}
+
+/** 현재 달 + 직전 달 외의 오래된 캐시 항목 제거 */
+function _pruneOldClaims(claims: Record<string, number>): Record<string, number> {
+  const now = new Date();
+  const cur = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const prev = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
+  const keep = new Set([cur, prev]);
+  return Object.fromEntries(
+    Object.entries(claims).filter(([k]) => keep.has(k.slice(0, 7)))
+  );
+}
+
+function _loadClaimedCache(): Record<string, number> {
+  try {
+    const raw = localStorage.getItem(_CLAIMS_KEY);
+    const sig = localStorage.getItem(_CLAIMS_SIG_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, number>;
+    if (sig && sig !== _signClaims(parsed)) {
+      // 서명 불일치 → 변조로 판단, 초기화
+      localStorage.removeItem(_CLAIMS_KEY);
+      localStorage.removeItem(_CLAIMS_SIG_KEY);
+      return {};
+    }
+    return parsed;
+  } catch {
+    return {};
+  }
+}
+
+function _saveClaimedCache(claims: Record<string, number>): void {
+  const pruned = _pruneOldClaims(claims);
+  localStorage.setItem(_CLAIMS_KEY, JSON.stringify(pruned));
+  localStorage.setItem(_CLAIMS_SIG_KEY, _signClaims(pruned));
+}
+
+/**
+ * 해당 달/난이도의 보상을 이미 수령했는지 localStorage에서 확인
+ * @returns 수령한 SKOR 양 (없으면 null)
+ */
+export function getCachedClaimAmount(yearMonth: string, difficulty: string): number | null {
+  const cache = _loadClaimedCache();
+  const key = `${yearMonth}_${difficulty}`;
+  return key in cache ? cache[key] : null;
+}
+
+/**
+ * 직전 달 시즌 보상 수령
+ */
+export async function claimSeasonReward(difficulty: Difficulty): Promise<ClaimRewardResponse> {
+  const { data, error } = await supabase.functions.invoke('claim-season-reward', {
+    body: { difficulty },
+  });
+
+  if (error) {
+    throw new Error(error.message || 'Failed to claim reward');
+  }
+
+  const result = data as ClaimRewardResponse;
+
+  // 수령 성공(또는 이미 수령) 시 localStorage 캐시 갱신
+  if (result.success && result.skorAwarded && result.skorAwarded > 0) {
+    const now = new Date();
+    const prevDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
+    const prevYearMonth = `${prevDate.getUTCFullYear()}-${String(prevDate.getUTCMonth() + 1).padStart(2, '0')}`;
+    const cache = _loadClaimedCache();
+    cache[`${prevYearMonth}_${difficulty}`] = result.skorAwarded;
+    _saveClaimedCache(cache);
+  }
+
+  return result;
 }

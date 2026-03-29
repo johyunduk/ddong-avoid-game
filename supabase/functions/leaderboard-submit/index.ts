@@ -1,5 +1,19 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
+/** 현재 달 'YYYY-MM' 반환 (UTC 기준) */
+function getCurrentYearMonth(): string {
+  const now = new Date();
+  const y = now.getUTCFullYear();
+  const m = String(now.getUTCMonth() + 1).padStart(2, '0');
+  return `${y}-${m}`;
+}
+
+/** 시즌 번호: 2026-01 = 1, 2026-02 = 2, ... */
+function calcSeason(yearMonth: string): number {
+  const [y, m] = yearMonth.split('-').map(Number) as [number, number];
+  return (y - 2026) * 12 + m;
+}
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -200,12 +214,16 @@ Deno.serve(async (req: Request) => {
       .update({ initials: userName })
       .eq('id', user.id);
 
-    // 기존 점수 조회
+    const yearMonth = getCurrentYearMonth();
+    const season = calcSeason(yearMonth);
+
+    // 현재 시즌 기존 점수 조회
     const { data: existing } = await supabaseAdmin
       .from('leaderboard')
       .select('score')
       .eq('user_id', user.id)
       .eq('difficulty', difficulty)
+      .eq('year_month', yearMonth)
       .single();
 
     const previousScore = existing?.score ?? null;
@@ -229,9 +247,11 @@ Deno.serve(async (req: Request) => {
             difficulty,
             score,
             character_type: safeCharacterType,
+            year_month: yearMonth,
+            season,
             updated_at: new Date().toISOString(),
           },
-          { onConflict: 'user_id,difficulty' }
+          { onConflict: 'user_id,difficulty,year_month' }
         );
 
       if (upsertError) {
@@ -243,11 +263,12 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // 현재 순위 계산
+    // 현재 시즌 순위 계산
     const { count: rank } = await supabaseAdmin
       .from('leaderboard')
       .select('*', { count: 'exact', head: true })
       .eq('difficulty', difficulty)
+      .eq('year_month', yearMonth)
       .gt('score', isNewRecord ? score : (previousScore ?? 0));
 
     return new Response(

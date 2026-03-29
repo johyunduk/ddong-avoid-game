@@ -1,6 +1,12 @@
 import type Phaser from 'phaser';
 import { Difficulty, Difficulty as DifficultyEnum } from '../types/GameMode';
-import { getLeaderboard, type LeaderboardEntry } from '../utils/leaderboard';
+import {
+  getLeaderboard,
+  claimSeasonReward,
+  getCachedClaimAmount,
+  type LeaderboardEntry,
+  type PrevSeasonReward,
+} from '../utils/leaderboard';
 import BaseScene from './BaseScene';
 
 export default class LeaderboardScene extends BaseScene {
@@ -9,8 +15,16 @@ export default class LeaderboardScene extends BaseScene {
   private leaderboardTexts: Phaser.GameObjects.Text[] = [];
   private loadingText?: Phaser.GameObjects.Text;
   private errorText?: Phaser.GameObjects.Text;
-  private currentRequestId: number = 0; // 요청 추적용 ID
+  private currentRequestId: number = 0;
   private difficultyButtons = new Map<Difficulty, Phaser.GameObjects.Rectangle>();
+
+  // 시즌 UI 요소
+  private seasonText?: Phaser.GameObjects.Text;
+  private prevSeasonReward: PrevSeasonReward | null = null;
+
+  // 보상수령 버튼 (create에서 1회 생성, updateRewardUI에서 상태 변경)
+  private rewardBtnBg?: Phaser.GameObjects.Rectangle;
+  private rewardBtnLabel?: Phaser.GameObjects.Text;
 
   constructor() {
     super('LeaderboardScene');
@@ -52,6 +66,14 @@ export default class LeaderboardScene extends BaseScene {
       padding: { top: 6 },
     }).setOrigin(0.5);
 
+    // 시즌 월 표시 (데이터 로드 후 갱신)
+    this.seasonText = this.add.text(cx, 70 + yOff, '', {
+      fontSize: '13px',
+      color: '#aaddff',
+      stroke: '#000',
+      strokeThickness: 3,
+    }).setOrigin(0.5);
+
     // 난이도 선택 버튼들
     this.createDifficultyButtons(cx, yOff);
 
@@ -63,8 +85,20 @@ export default class LeaderboardScene extends BaseScene {
       strokeThickness: 3
     }).setOrigin(0.5);
 
-    // 뒤로가기 버튼
-    this.createBackButton(cx, H - 40);
+    // 보상수령 버튼 (하단 왼쪽, 뒤로가기와 나란히)
+    const rbY = H - 40;
+    this.rewardBtnBg = this.add.rectangle(cx - 80, rbY, 150, 40, 0x555555, 1);
+    this.rewardBtnBg.setStrokeStyle(3, 0x333333);
+    this.rewardBtnLabel = this.add.text(cx - 80, rbY, '보상수령', {
+      fontSize: '18px',
+      color: '#999999',
+      fontStyle: 'bold',
+      stroke: '#000',
+      strokeThickness: 4,
+    }).setOrigin(0.5);
+
+    // 뒤로가기 버튼 (하단 오른쪽)
+    this.createBackButton(cx + 80, H - 40);
 
     // 초기 데이터 로드
     this.loadLeaderboard();
@@ -84,7 +118,7 @@ export default class LeaderboardScene extends BaseScene {
     const buttonWidth = 70;
     const spacing = 85;
     const startX = cx - (spacing * 1.5);
-    const y = 95 + yOff;
+    const y = 108 + yOff;
 
     difficulties.forEach((difficulty, index) => {
       const x = startX + (index * spacing);
@@ -154,6 +188,7 @@ export default class LeaderboardScene extends BaseScene {
     // 기존 랭킹 텍스트 제거
     this.leaderboardTexts.forEach(text => text.destroy());
     this.leaderboardTexts = [];
+    this.prevSeasonReward = null;
 
     if (this.errorText) {
       this.errorText.destroy();
@@ -183,11 +218,40 @@ export default class LeaderboardScene extends BaseScene {
 
       this.leaderboardData = response.leaderboard;
 
+      // 시즌 텍스트 갱신
+      if (this.seasonText && response.yearMonth) {
+        const [y, m] = response.yearMonth.split('-');
+        const daysLeft = this.calcDaysUntilMonthEnd();
+        this.seasonText.setText(`${y}년 ${parseInt(m)}월 시즌  |  시즌 종료까지 D-${daysLeft}`);
+      }
+
+      // 직전 달 보상 상태 결정 (localStorage 캐시 우선)
+      if (response.yearMonth) {
+        const [y, m] = response.yearMonth.split('-').map(Number) as [number, number];
+        const prevDate = new Date(Date.UTC(y, m - 2, 1));
+        const prevYM = `${prevDate.getUTCFullYear()}-${String(prevDate.getUTCMonth() + 1).padStart(2, '0')}`;
+        const cached = getCachedClaimAmount(prevYM, this.selectedDifficulty);
+        if (cached !== null) {
+          // localStorage 캐시 히트 → 서버 응답의 prevSeasonReward 무시하고 캐시 사용
+          this.prevSeasonReward = {
+            yearMonth: prevYM,
+            rank: response.prevSeasonReward?.rank ?? null,
+            skorAwarded: cached,
+            alreadyClaimed: true,
+          };
+        } else {
+          this.prevSeasonReward = response.prevSeasonReward;
+        }
+      } else {
+        this.prevSeasonReward = null;
+      }
+
       if (this.loadingText) {
         this.loadingText.setVisible(false);
       }
 
       this.displayLeaderboard();
+      this.updateRewardUI();
     } catch (error) {
       // 에러가 발생했을 때도 최신 요청인지 확인
       if (requestId !== this.currentRequestId) {
@@ -214,7 +278,7 @@ export default class LeaderboardScene extends BaseScene {
   private displayLeaderboard() {
     const yOff = (this.scale.height - 600) / 2;
     const cx = this.scale.width / 2;
-    const startY = 150 + yOff;
+    const startY = 163 + yOff;
     const lineHeight = 35;
 
     // 헤더
@@ -269,6 +333,95 @@ export default class LeaderboardScene extends BaseScene {
 
       this.leaderboardTexts.push(text);
     });
+  }
+
+  /** 이번 달 말일까지 남은 일수 */
+  private calcDaysUntilMonthEnd(): number {
+    const now = new Date();
+    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    const diff = lastDay.getTime() - now.getTime();
+    return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+  }
+
+  /** 보상수령 버튼 상태 갱신 */
+  private updateRewardUI() {
+    if (!this.rewardBtnBg || !this.rewardBtnLabel) return;
+
+    const btn = this.rewardBtnBg;
+    const label = this.rewardBtnLabel;
+    const reward = this.prevSeasonReward;
+
+    btn.removeAllListeners();
+    btn.disableInteractive();
+
+    if (!reward || reward.rank === null || reward.skorAwarded === 0) {
+      // 비활성: 기록 없음 또는 100위 밖
+      btn.setFillStyle(0x555555).setStrokeStyle(3, 0x333333);
+      label.setColor('#999999');
+
+    } else if (reward.alreadyClaimed) {
+      // 비활성: 수령 완료 (초록)
+      btn.setFillStyle(0x336633).setStrokeStyle(3, 0x224422);
+      label.setColor('#88ff88');
+
+    } else {
+      // 활성: 수령 가능 (노란색)
+      btn.setFillStyle(0xffcc00).setStrokeStyle(3, 0xaa8800);
+      label.setColor('#000000');
+      btn.setInteractive({ useHandCursor: true });
+      btn.on('pointerover', () => btn.setFillStyle(0xffe566));
+      btn.on('pointerout', () => btn.setFillStyle(0xffcc00));
+      btn.on('pointerdown', () => this.handleClaimReward());
+    }
+  }
+
+  /** 보상받기 버튼 클릭 처리 */
+  private async handleClaimReward() {
+    if (!this.rewardBtnBg || !this.rewardBtnLabel) return;
+
+    // 처리 중 표시 (중복 클릭 방지)
+    this.rewardBtnBg.disableInteractive();
+    this.rewardBtnLabel.setText('처리중...');
+
+    try {
+      const result = await claimSeasonReward(this.selectedDifficulty);
+
+      if (result.success && (result.skorAwarded ?? 0) > 0) {
+        if (this.prevSeasonReward) {
+          this.prevSeasonReward = { ...this.prevSeasonReward, alreadyClaimed: true };
+        }
+        this.updateRewardUI();
+
+        // 획득 플래시 연출
+        const flashText = this.add.text(
+          this.scale.width / 2, this.scale.height / 2 - 60,
+          `+${result.skorAwarded} SKOR 획득!`, {
+            fontSize: '24px',
+            color: '#ffcc00',
+            fontStyle: 'bold',
+            stroke: '#000',
+            strokeThickness: 5,
+          }
+        ).setOrigin(0.5);
+
+        this.tweens.add({
+          targets: flashText,
+          alpha: { from: 1, to: 0 },
+          y: flashText.y - 40,
+          duration: 1500,
+          ease: 'Cubic.easeOut',
+          onComplete: () => flashText.destroy(),
+        });
+      } else {
+        if (this.prevSeasonReward && result.alreadyClaimed) {
+          this.prevSeasonReward = { ...this.prevSeasonReward, alreadyClaimed: true };
+        }
+        this.updateRewardUI();
+      }
+    } catch {
+      // 실패 시 원래 상태로 복구
+      this.updateRewardUI();
+    }
   }
 
   private createBackButton(cx: number, y: number) {
