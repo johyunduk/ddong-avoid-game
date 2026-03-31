@@ -1,0 +1,39 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "d536c58c612f",
+  "session_id": "4cdc23e6-a766-4df9-a59f-f56ca521f2c4",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-31T11:34:27.169892Z",
+  "branch": "feature/story",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "src/main.ts",
+    "src/objects/DataFragment.ts",
+    "src/scenes/GameScene.ts",
+    "src/scenes/MemoryVaultScene.ts",
+    "src/scenes/ModeSelectScene.ts",
+    "src/utils/storyProgress.ts"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "54639eb1d30a",
+  "transcript_identifier_at_start": "c7e7fa82-462d-4f5a-bc07-9404424e53e3",
+  "checkpoint_transcript_start": 751,
+  "transcript_lines_at_start": 751,
+  "token_usage": {
+    "input_tokens": 183,
+    "cache_creation_tokens": 691190,
+    "cache_read_tokens": 12783923,
+    "output_tokens": 155637,
+    "api_call_count": 138
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-31T11:34:26.472595Z",
+    "agent_lines": 0,
+    "human_added": 489,
+    "human_modified": 1,
+    "human_removed": 0,
+    "total_committed": 489,
+    "agent_percentage": 0
+  },
+  "transcript_path": ".claude/projects/-Users-johyunduk-Projects-ddong-avoid-game/4cdc23e6-a766-4df9-a59f-f56ca521f2c4.jsonl"
+}
