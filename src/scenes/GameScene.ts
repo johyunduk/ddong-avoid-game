@@ -10,6 +10,8 @@ import GoldPoop from '../objects/GoldPoop';
 import DiamondPoop from '../objects/DiamondPoop';
 import TopazPoop from '../objects/TopazPoop';
 import RainbowPoop from '../objects/RainbowPoop';
+import DataFragment from '../objects/DataFragment';
+import { addFragment, checkAndUnlockLogs } from '../utils/storyProgress';
 import { GameMode, Difficulty, DIFFICULTIES, DIFFICULTY_SCALING, type DifficultyConfig } from '../types/GameMode';
 import { FEVER_TIME_CONFIG } from '../config/feverTime';
 import { POOP_CONFIG } from '../config/poop';
@@ -35,6 +37,8 @@ export default class GameScene extends BaseScene {
   private diamondPoops!: Phaser.Physics.Arcade.Group;
   private topazPoops!: Phaser.Physics.Arcade.Group;
   private rainbowPoops!: Phaser.Physics.Arcade.Group;
+  private dataFragments!: Phaser.Physics.Arcade.Group;
+  private lastFragmentScore: number = 0;
   protected score: number = 0;
   protected scoreText!: Phaser.GameObjects.Text;
   private highScore: number = 0;
@@ -117,6 +121,7 @@ export default class GameScene extends BaseScene {
     this.lastGoldPoopScore = 0;
     this.lastDiamondPoopScore = 0;
     this.lastTopazPoopScore = 0;
+    this.lastFragmentScore = 0;
     this.gameStartTime = realNow();
     this.phaserStartTime = 0; // create()에서 설정
     this.lastScoreTime = realNow();
@@ -339,6 +344,26 @@ export default class GameScene extends BaseScene {
       maxSize: 30,
     });
 
+    // 데이터 파편 텍스처 생성 (파일 없음 → 동적 그래픽)
+    if (!this.textures.exists('data_fragment')) {
+      const g = this.make.graphics({ x: 0, y: 0 });
+      g.fillStyle(0x00ffcc, 1);
+      g.fillRect(0, 0, 28, 28);
+      g.fillStyle(0x00aaff, 0.8);
+      g.fillRect(4, 4, 20, 20);
+      g.fillStyle(0xffffff, 0.9);
+      g.fillRect(10, 10, 8, 8);
+      g.generateTexture('data_fragment', 28, 28);
+      g.destroy();
+    }
+
+    // 데이터 파편 그룹 생성
+    this.dataFragments = this.physics.add.group({
+      classType: DataFragment,
+      runChildUpdate: true,
+      maxSize: 10,
+    });
+
     // 풀 사전 할당 — create() 시점에 오브젝트를 미리 생성해 게임 중 런타임 생성 히치 방지
     const prewarm = (group: Phaser.Physics.Arcade.Group, count: number) => {
       for (let i = 0; i < count; i++) {
@@ -355,6 +380,7 @@ export default class GameScene extends BaseScene {
     prewarm(this.diamondPoops, 5);
     prewarm(this.topazPoops, 4);
     prewarm(this.rainbowPoops, 4);
+    prewarm(this.dataFragments, 4);
 
     // 충돌 감지
     this.physics.add.overlap(
@@ -397,6 +423,15 @@ export default class GameScene extends BaseScene {
       this.player,
       this.rainbowPoops,
       this.collectRainbowPoop as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback,
+      undefined,
+      this
+    );
+
+    // 데이터 파편 충돌 감지 (수집)
+    this.physics.add.overlap(
+      this.player,
+      this.dataFragments,
+      this.collectDataFragment as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback,
       undefined,
       this
     );
@@ -869,6 +904,12 @@ export default class GameScene extends BaseScene {
           this.spawnTopazPoop();
           this.lastTopazPoopScore = score;
         }
+
+        // 데이터 파편: 25점마다 등장
+        if (score % 25 === 0 && score > this.lastFragmentScore) {
+          this.spawnDataFragment();
+          this.lastFragmentScore = score;
+        }
       }
 
       // 점수 기반 난이도 증가
@@ -1329,6 +1370,46 @@ export default class GameScene extends BaseScene {
     _diamondPoop: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile
   ) {
     this.handleDiamondCollected(_diamondPoop as DiamondPoop);
+  }
+
+  private spawnDataFragment() {
+    if (this.gameOver) return;
+    const x = Phaser.Math.Between(50, this.scale.width - 50);
+    const y = -50;
+    const frag = this.dataFragments.get() as DataFragment;
+    if (!frag) return;
+    frag.reinit(x, y);
+    if (frag.body) {
+      const fallSpeed = this.difficultyConfig.baseSpeed + (this.difficultyLevel * POOP_CONFIG.normal.speedIncrement) - 80;
+      frag.body.velocity.y = Math.max(80, fallSpeed);
+    }
+  }
+
+  private collectDataFragment(
+    _player: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile,
+    _frag: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile
+  ) {
+    if (this.gameOver) return;
+    const frag = _frag as DataFragment;
+    (frag as import('../objects/PoolablePoopBase').default).recycle();
+
+    const newCount = addFragment(1);
+    const newLogs = checkAndUnlockLogs(newCount);
+
+    // 파편 수집 플래시 메시지
+    const msg = newLogs.length > 0
+      ? `📡 파편 수집! [${newLogs[0].title}] 해금!`
+      : `📡 데이터 파편 수집! (${newCount}개)`;
+
+    const t = this.add.text(this.scale.width / 2, 60, msg, {
+      fontSize: '16px',
+      color: '#00ffcc',
+      fontStyle: 'bold',
+      stroke: '#000',
+      strokeThickness: 3,
+      padding: { top: 4 },
+    }).setOrigin(0.5).setDepth(20);
+    this.time.delayedCall(1500, () => t.destroy());
   }
 
   /**

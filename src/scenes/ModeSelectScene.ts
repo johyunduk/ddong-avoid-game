@@ -2,6 +2,7 @@ import type Phaser from 'phaser';
 import { GameMode, GAME_MODES, type GameModeConfig } from '../types/GameMode';
 import { getSkorBalance, getCachedSkorBalance, cacheSkorBalance } from '../utils/skor';
 import { setBgmMuted } from '../utils/settings';
+import { getFragmentCount } from '../utils/storyProgress';
 import BaseScene from './BaseScene';
 
 export default class ModeSelectScene extends BaseScene {
@@ -53,6 +54,9 @@ export default class ModeSelectScene extends BaseScene {
     // 하단 버튼 행: 캐릭터 선택 + 랭킹
     this.createCharacterButton(cx - 80, 435 + yOff);
     this.createLeaderboardButton(cx + 80, 435 + yOff);
+
+    // MEMORY VAULT 버튼
+    this.createMemoryVaultButton(cx, 520 + yOff);
 
     // 릴리즈 노트 링크
     this.createReleaseNotesLink(cx, H - 80);
@@ -204,6 +208,34 @@ export default class ModeSelectScene extends BaseScene {
     button.on('pointerout',  () => button.setFillStyle(0x4a90e2));
     button.on('pointerdown', () => {
       this.scene.start('LeaderboardScene');
+    });
+  }
+
+  private createMemoryVaultButton(x: number, y: number) {
+    const fragmentCount = getFragmentCount();
+    const button = this.add.rectangle(x, y, 300, 46, 0x001a22, 1);
+    button.setStrokeStyle(2, 0x00ffcc);
+
+    this.add.text(x, y, `📡 MEMORY VAULT  (파편 ${fragmentCount}개)`, {
+      fontSize: '15px',
+      color: '#00ffcc',
+      fontStyle: 'bold',
+      stroke: '#000',
+      strokeThickness: 3,
+      padding: { top: 3 },
+    }).setOrigin(0.5);
+
+    button.setInteractive({ useHandCursor: true });
+    button.on('pointerover', () => {
+      button.setFillStyle(0x003322);
+      button.setStrokeStyle(2, 0x44ffdd);
+    });
+    button.on('pointerout', () => {
+      button.setFillStyle(0x001a22);
+      button.setStrokeStyle(2, 0x00ffcc);
+    });
+    button.on('pointerdown', () => {
+      this.scene.start('MemoryVaultScene');
     });
   }
 
