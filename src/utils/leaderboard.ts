@@ -1,6 +1,7 @@
 import { type Difficulty } from '../types/GameMode';
 import { getCurrentUserId } from './auth';
 import { supabase } from './supabase';
+import { getCurrentYearMonth } from './localStorage';
 
 export interface LeaderboardEntry {
   userId: string;
@@ -189,9 +190,9 @@ function _signClaims(claims: Record<string, number>): string {
 /** 현재 달 + 직전 달 외의 오래된 캐시 항목 제거 */
 function _pruneOldClaims(claims: Record<string, number>): Record<string, number> {
   const now = new Date();
-  const cur = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const prev = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
+  const cur = getCurrentYearMonth();
+  const prevDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
+  const prev = `${prevDate.getUTCFullYear()}-${String(prevDate.getUTCMonth() + 1).padStart(2, '0')}`;
   const keep = new Set([cur, prev]);
   return Object.fromEntries(
     Object.entries(claims).filter(([k]) => keep.has(k.slice(0, 7)))

@@ -357,17 +357,17 @@ export default class LeaderboardScene extends BaseScene {
     if (!reward || reward.rank === null || reward.skorAwarded === 0) {
       // 비활성: 기록 없음 또는 100위 밖
       btn.setFillStyle(0x555555).setStrokeStyle(3, 0x333333);
-      label.setColor('#999999');
+      label.setText('보상수령').setColor('#999999');
 
     } else if (reward.alreadyClaimed) {
       // 비활성: 수령 완료 (초록)
       btn.setFillStyle(0x336633).setStrokeStyle(3, 0x224422);
-      label.setColor('#88ff88');
+      label.setText('수령완료').setColor('#88ff88');
 
     } else {
       // 활성: 수령 가능 (노란색)
       btn.setFillStyle(0xffcc00).setStrokeStyle(3, 0xaa8800);
-      label.setColor('#000000');
+      label.setText('보상수령').setColor('#000000');
       btn.setInteractive({ useHandCursor: true });
       btn.on('pointerover', () => btn.setFillStyle(0xffe566));
       btn.on('pointerout', () => btn.setFillStyle(0xffcc00));
@@ -381,7 +381,7 @@ export default class LeaderboardScene extends BaseScene {
 
     // 처리 중 표시 (중복 클릭 방지)
     this.rewardBtnBg.disableInteractive();
-    this.rewardBtnLabel.setText('처리중...');
+    this.rewardBtnLabel.setText('처리중...').setColor('#aaaaaa');
 
     try {
       const result = await claimSeasonReward(this.selectedDifficulty);
