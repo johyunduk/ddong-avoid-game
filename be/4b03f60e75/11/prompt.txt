@@ -1,0 +1,220 @@
+Implement the following plan:
+
+# 대전 모드 전적/랭킹 시스템 구현 계획
+
+## Context
+
+1대1 대전 모드가 구현됐지만 전적이 저장되지 않아 리플레이 동기가 부족하다. 승/패/부전승을 Supabase에 기록하고 전적 랭킹 씬을 추가한다. 기존 솔로 리더보드(leaderboard 테이블 + Edge Function 패턴)를 재활용해 구조를 일관되게 유지한다.
+
+## 핵심 설계 결정
+
+- **랭킹 기준**: 총 승리수(wins + disconnects) DESC → 승률 DESC (동점 처리)
+- **전적 단위**: 유저당 1행 (`battle_records`), 승/패/부전승 카운터만 증가
+- **부전승(DISCONNECT)**: `disconnects` 별도 저장, 랭킹에서는 승리로 취급
+- **안티치트 수준**: MVP — 클라이언트 신뢰 방식 (솔로 모드의 세션 타임 검증 불필요, 경제적 이득 없음)
+- **중복 제출 방지**: `BattleResultScene`에 `resultSubmitted` 플래그
+- **기존 패턴 재사용**: Edge Function 구조/배포 플래그는 `leaderboard-submit`과 동일
+
+## 구현 순서
+
+### Step 1: DB Migration — `supabase/migrations/20260321_battle_records.sql`
+
+```sql
+-- 전적 테이블 (유저당 1행)
+CREATE TABLE public.battle_records (
+  user_id     UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  wins        INTEGER NOT NULL DEFAULT 0,
+  losses      INTEGER NOT NULL DEFAULT 0,
+  disconnects INTEGER NOT NULL DEFAULT 0,
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE public.battle_records ENABLE ROW LEVEL SECURITY;
+-- 읽기 공개 (랭킹 조회), 쓰기는 service_role만 (정책 없음)
+CREATE POLICY "battle_records_select_public"
+  ON public.battle_records FOR SELECT USING (true);
+
+-- 원자적 upsert + rank 반환 함수
+-- (Supabase JS SDK로 wins+disconnects 복합 정렬/집계 불가 → DB 함수로 해결)
+CREATE OR REPLACE FUNCTION increment_battle_record(p_user_id UUID, p_column TEXT)
+RETURNS TABLE(wins INTEGER, losses INTEGER, disconnects INTEGER, rank BIGINT)
+LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE v_wins INT; v_losses INT; v_disconnects INT; v_rank BIGINT;
+BEGIN
+  INSERT INTO public.battle_records (user_id) VALUES (p_user_id)
+  ON CONFLICT (user_id) DO NOTHING;
+  EXECUTE format('UPDATE public.battle_records SET %I = %I + 1, updated_at = NOW() WHERE user_id = $1', p_column, p_column) USING p_user_id;
+  SELECT br.wins, br.losses, br.disconnects INTO v_wins, v_losses, v_disconnects
+  FROM public.battle_records br WHERE br.user_id = p_user_id;
+  SELECT COUNT(*) + 1 INTO v_rank
+  FROM public.battle_records br WHERE (br.wins + br.disconnects) > (v_wins + v_disconnects);
+  RETURN QUERY SELECT v_wins, v_losses, v_disconnects, v_rank;
+END; $$;
+
+REVOKE ALL ON FUNCTION increment_battle_record FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION increment_battle_record TO service_role;
+
+-- 랭킹 뷰 (복합 정렬 + win_rate 계산 포함)
+CREATE OR REPLACE VIEW public.battle_leaderboard_view AS
+SELECT
+  br.user_id,
+  br.wins, br.losses, br.disconnects,
+  (br.wins + br.disconnects) AS total_wins,
+  CASE WHEN (br.wins + br.losses + br.disconnects) = 0 THEN 0.0
+    ELSE ROUND((br.wins + br.disconnects)::NUMERIC / (br.wins + br.losses + br.disconnects)::NUMERIC * 100, 1)
+  END AS win_rate,
+  p.initials
+FROM public.battle_records br
+JOIN public.profiles p ON p.id = br.user_id
+ORDER BY (br.wins + br.disconnects) DESC,
+  CASE WHEN (br.wins + br.losses + br.disconnects) = 0 THEN 0.0
+    ELSE (br.wins + br.disconnects)::NUMERIC / (br.wins + br.losses + br.disconnects)::NUMERIC
+  END DESC;
+
+GRANT SELECT ON public.battle_leaderboard_view TO anon, authenticated;
+
+-- 현재 유저 rank 계산용 함수
+CREATE OR REPLACE FUNCTION get_battle_rank(p_total_wins INTEGER)
+RETURNS BIGINT LANGUAGE sql STABLE AS $$
+  SELECT COUNT(*) FROM public.battle_records WHERE (wins + disconnects) > p_total_wins;
+$$;
+GRANT EXECUTE ON FUNCTION get_battle_rank TO anon, authenticated, service_role;
+```
+
+### Step 2: Edge Function — `supabase/functions/battle-result-submit/index.ts`
+
+패턴: `leaderboard-submit`과 동일 (JWT 수동 검증 → service_role로 DB 작업)
+
+- Input: `{ result: 'win' | 'lose' | 'disconnect' }`
+- 검증: JWT 필수, result 값 검증
+- DB: `supabaseAdmin.rpc('increment_battle_record', { p_user_id, p_column })`
+- 반환: `{ success, wins, losses, disconnects, winRate, rank }`
+
+배포: `supabase functions deploy battle-result-submit --no-verify-jwt`
+
+### Step 3: Edge Function — `supabase/functions/battle-leaderboard-top/index.ts`
+
+패턴: `leaderboard-top`과 동일 (JWT 선택적)
+
+- Input: `{ limit?: number }` (기본 20, 최대 100)
+- DB: `from('battle_leaderboard_view').select('*').limit(limit)`
+- 현재 유저 순위: `rpc('get_battle_rank', { p_total_wins })` 로 계산
+- 반환: `{ success, leaderboard: BattleRecordEntry[], currentUserRank }`
+
+배포: `supabase functions deploy battle-leaderboard-top --no-verify-jwt`
+
+### Step 4: `src/utils/battleLeaderboard.ts` (신규)
+
+`skor.ts`의 `getSession()` → `access_token` 주입 패턴 재사용.
+
+```typescript
+export async function submitBattleResult(result: BattleResult): Promise<SubmitResponse>
+export async function getBattleLeaderboard(limit?: number): Promise<LeaderboardResponse>
+```
+
+인터페이스:
+```typescript
+export interface BattleRecordEntry {
+  rank: number; userId: string; userName: string;
+  wins: number; losses: number; disconnects: number;
+  totalWins: number; winRate: number;
+}
+```
+
+### Step 5: `src/scenes/BattleLeaderboardScene.ts` (신규)
+
+`LeaderboardScene.ts`를 템플릿으로 사용 (requestId 중복 요청 방지 패턴 불필요 — 탭 없는 단일 뷰).
+
+**UI 레이아웃:**
+```
+y=40   🏆 배틀 전적
+y=90   내 전적: W승 L패 D부전승 | 승률 XX% (currentUserRank 있을 때)
+y=115  ─── 구분선 ───
+y=140  헤더: 순위 | 이름 | 승 | 패 | 승률
+y=175~ 항목 (35px 간격, 최대 20행) — 현재 유저 행은 노란 배경 하이라이트
+y=555  ← 뒤로가기 → BattleMatchScene
+```
+
+`supabase.auth.getUser().then(...)` 로 userId 백그라운드 조회 (create()는 동기).
+로딩/오류 상태 텍스트 표시 (`LeaderboardScene` 동일 패턴).
+
+### Step 6: `src/scenes/BattleResultScene.ts` 수정
+
+1. 클래스에 `private resultSubmitted = false` 추가
+2. `init()`에서 `this.resultSubmitted = false` 초기화
+3. `create()` 끝에 fire-and-forget 제출:
+```typescript
+if (!this.resultSubmitted) {
+  this.resultSubmitted = true;
+  submitBattleResult(this.result).catch((err) => console.warn('Battle result submit failed:', err));
+}
+```
+4. 버튼 레이아웃 조정 (3버튼):
+   - y=450: ⚔️ 재대전 (height 50)
+   - y=510: 🏆 전적 보기 → BattleLeaderboardScene (height 50, 초록 0x27ae60)
+   - y=565: 메인 메뉴 (텍스트 링크 스타일)
+
+### Step 7: `src/scenes/BattleMatchScene.ts` 수정
+
+`showMenu()` 내 y=450에 텍스트 링크 추가 (`this.ui(...)` 래퍼로 uiGroup 등록):
+```typescript
+const rankLink = this.ui(this.add.text(200, 450, '🏆 전적 보기', { ... }));
+rankLink.on('pointerdown', () => this.scene.start('BattleLeaderboardScene'));
+```
+
+### Step 8: `src/main.ts` 수정
+
+`BattleLeaderboardScene` import 및 scene 배열 끝에 추가.
+
+## 핵심 파일 참조
+
+| 파일 | 역할 |
+|------|------|
+| `supabase/functions/leaderboard-submit/index.ts` | JWT 수동 검증 + service_role upsert 패턴 |
+| `supabase/functions/leaderboard-top/index.ts` | 선택적 JWT + 랭킹 쿼리 패턴 |
+| `src/utils/skor.ts` | `getSession()` → `access_token` 주입 패턴 |
+| `src/scenes/LeaderboardScene.ts` | BattleLeaderboardScene 구조 템플릿 |
+| `src/scenes/BattleResultScene.ts` | 수정 대상 (버튼 3개로 재배치 + 결과 제출) |
+| `src/scenes/BattleMatchScene.ts` | 수정 대상 (전적 링크 추가) |
+| `src/main.ts` | 수정 대상 (씬 등록) |
+
+## TypeScript 준수
+
+- `BattleResult`, `BattleRecordEntry` 등 모든 타입 import는 `import { type ... }` 사용
+- enum 없음 — 기존 `BattleResult`는 이미 `as const`
+- 변경 후 `npx tsc --noEmit` 필수
+
+## 검증
+
+1. DB migration 실행 → `battle_records` 테이블 + 함수 생성 확인
+2. Edge Function 두 개 배포
+3. 대전 1판 → 결과 씬에서 자동 제출 → `battle_records` 행 확인
+4. `BattleLeaderboardScene` → 전적 표시 확인
+5. DISCONNECT 시 부전승자만 `disconnects++` 되는지 확인
+
+
+If you need specific details from before exiting plan mode (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/johyunduk/.REDACTED.jsonl
+
+---
+
+점수로 티어 시스템을 적용하고 싶은데
+
+---
+
+일단 배틀모드만 그리고 나머지는 어떻게 하면 좋을지 알려줘
+
+---
+
+[Request interrupted by user for tool use]
+
+---
+
+음 승리시 포인트 획득 패배시 점수 하락 이런식으로 불가능하니?
+
+---
+
+1. 티어 차이에 따라. 2. 내려가서 등급 하락도 있어야 해. 3. 아이디어 좀 내줘. 4. 해야지
+
+---
+
+[Request interrupted by user for tool use]
