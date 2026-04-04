@@ -137,6 +137,7 @@ Deno.serve(async (req: Request) => {
         // 이 슬롯은 캐릭터
         const char = pullOne();
         characters.push({ id: char.id, grade: char.grade, isNew: !ownedSet.has(char.id) });
+        ownedSet.add(char.id); // 같은 pull 내 중복 isNew 방지
       }
     }
 
@@ -160,7 +161,7 @@ Deno.serve(async (req: Request) => {
     });
 
     const newBalance = balance - cost;
-    const [charResult, , , skorResult] = await Promise.all([
+    const [charResult, , wpResult, skorResult] = await Promise.all([
       newChars.length > 0
         ? supabaseAdmin.from('user_characters').upsert(newChars, { onConflict: 'user_id,character_id' })
         : Promise.resolve({ error: null }),
@@ -188,6 +189,13 @@ Deno.serve(async (req: Request) => {
       console.error('user_characters upsert 실패:', charResult.error);
       return new Response(
         JSON.stringify({ error: 'Failed to save characters', detail: charResult.error }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    if (wpResult && 'error' in wpResult && wpResult.error) {
+      console.error('user_wallpapers upsert 실패:', wpResult.error);
+      return new Response(
+        JSON.stringify({ error: 'Failed to save wallpapers', detail: wpResult.error }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }

@@ -5,8 +5,9 @@ ALTER TABLE leaderboard
   ADD COLUMN IF NOT EXISTS year_month TEXT NOT NULL DEFAULT to_char(now(), 'YYYY-MM'),
   ADD COLUMN IF NOT EXISTS season     INTEGER NOT NULL DEFAULT 1;
 
--- 기존 PK (user_id, difficulty) → (user_id, difficulty, year_month)
+-- 기존 PK + UNIQUE 제약 제거 후 (user_id, difficulty, year_month)로 교체
 ALTER TABLE leaderboard DROP CONSTRAINT IF EXISTS leaderboard_pkey;
+ALTER TABLE leaderboard DROP CONSTRAINT IF EXISTS leaderboard_user_id_difficulty_key;
 ALTER TABLE leaderboard ADD PRIMARY KEY (user_id, difficulty, year_month);
 
 -- 기존 행의 season 값을 year_month 기준으로 올바르게 재계산
