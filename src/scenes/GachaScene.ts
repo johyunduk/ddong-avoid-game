@@ -871,24 +871,42 @@ export default class GachaScene extends BaseScene {
       fontSize: '14px', color: '#00ff41', fontFamily: 'monospace',
     }).setOrigin(0.5);
 
-    // 한 번 더 / 메인으로 버튼
-    // btn1Y: skor 텍스트 하단(skorY+11) + 여백(14) + 버튼 반높이(26) = skorY+51
-    const btn1Y = Math.min(skorY + 51, 470 + _yOff);
-    const btn2Y = Math.min(btn1Y + 68, 550 + _yOff);
+    // 1회 / 10회 다시뽑기 (한 줄) + 메인으로 버튼
+    const pullRowY = Math.min(skorY + 42, 458 + _yOff);
+    const mainBtnY = Math.min(pullRowY + 54, 520 + _yOff);
+    const btnW = 122;
+    const gap = 8;
+    const singleX = _cx - btnW / 2 - gap / 2;
+    const multiX  = _cx + btnW / 2 + gap / 2;
 
-    const againBtn = this.add.rectangle(_cx, btn1Y, 260, 52, 0x080818)
-      .setStrokeStyle(1, 0x00ff41).setInteractive({ useHandCursor: true });
-    this.add.text(_cx, btn1Y, '한 번 더', {
-      fontSize: '19px', color: '#00ff41', fontStyle: 'bold', fontFamily: 'monospace',
+    const single = this.add.rectangle(singleX, pullRowY, btnW, 44, 0x000000, 0.72)
+      .setStrokeStyle(1.5, 0xddaa00).setInteractive({ useHandCursor: true });
+    this.add.text(singleX, pullRowY - 7, '1회 뽑기', {
+      fontSize: '13px', color: '#ffffff', fontStyle: 'bold',
     }).setOrigin(0.5);
-    againBtn.on('pointerover', () => againBtn.setFillStyle(0x081808));
-    againBtn.on('pointerout',  () => againBtn.setFillStyle(0x080818));
-    againBtn.on('pointerdown', () => this.buildLobby());
+    this.add.text(singleX, pullRowY + 9, '100 SKOR', {
+      fontSize: '10px', color: '#ddaa00',
+    }).setOrigin(0.5);
+    single.on('pointerover', () => single.setStrokeStyle(2.5, 0xddaa00));
+    single.on('pointerout',  () => single.setStrokeStyle(1.5, 0xddaa00));
+    single.on('pointerdown', () => this.startPull('single'));
 
-    const mainBtn = this.add.rectangle(_cx, btn2Y, 260, 52, 0x1a1a1a)
+    const multi = this.add.rectangle(multiX, pullRowY, btnW, 44, 0x000000, 0.72)
+      .setStrokeStyle(1.5, 0x7b2fff).setInteractive({ useHandCursor: true });
+    this.add.text(multiX, pullRowY - 7, '10회 뽑기', {
+      fontSize: '13px', color: '#ffffff', fontStyle: 'bold',
+    }).setOrigin(0.5);
+    this.add.text(multiX, pullRowY + 9, '900 SKOR', {
+      fontSize: '10px', color: '#aa88ff',
+    }).setOrigin(0.5);
+    multi.on('pointerover', () => multi.setStrokeStyle(2.5, 0x7b2fff));
+    multi.on('pointerout',  () => multi.setStrokeStyle(1.5, 0x7b2fff));
+    multi.on('pointerdown', () => this.startPull('multi'));
+
+    const mainBtn = this.add.rectangle(_cx, mainBtnY, 260, 40, 0x1a1a1a)
       .setStrokeStyle(1, 0x444444).setInteractive({ useHandCursor: true });
-    this.add.text(_cx, btn2Y, '메인으로', {
-      fontSize: '19px', color: '#888888', fontStyle: 'bold', fontFamily: 'monospace',
+    this.add.text(_cx, mainBtnY, '메인으로', {
+      fontSize: '16px', color: '#888888', fontStyle: 'bold', fontFamily: 'monospace',
     }).setOrigin(0.5);
     mainBtn.on('pointerover', () => mainBtn.setFillStyle(0x282828));
     mainBtn.on('pointerout',  () => mainBtn.setFillStyle(0x1a1a1a));
