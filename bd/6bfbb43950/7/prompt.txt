@@ -1,0 +1,640 @@
+Implement the following plan:
+
+# 월별 시즌 시스템 구현 플랜
+
+## Context
+클래식 랭킹(난이도별)과 배틀 RP 랭킹이 영구 누적 방식이라 초반 고득점자가 영원히 1위를 유지하고, 신규 유저 동기부여가 없는 문제. 월별 시즌제를 도입해 매월 초기화 + SKOR 보상 배분을 하도록 변경. 기존 데이터는 프리시즌(season_id=0)으로 보관.
+
+**요구사항 확정**:
+- 시즌 단위: 월별
+- 클래식 + 배틀 동시 같은 시즌
+- 시즌 종료 시 SKOR 보상 지급
+- 기존 데이터 → 프리시즌(Season 0)
+
+---
+
+## Phase 1: DB 마이그레이션
+
+### Step 1 — `seasons` 테이블 + 헬퍼 함수
+파일: `supabase/migrations/20260324_seasons.sql`
+
+```sql
+CREATE TABLE public.seasons (
+  id         INTEGER PRIMARY KEY,   -- 0=프리시즌, 1=2026-04, ...
+  name       TEXT    NOT NULL,
+  starts_at  TIMESTAMPTZ NOT NULL,
+  ends_at    TIMESTAMPTZ,           -- NULL = 현재 진행 중
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 프리시즌
+INSERT INTO public.seasons (id, name, starts_at) VALUES
+  (0, '프리시즌',        '2000-01-01T00:00:00Z'),
+  (1, '2026년 4월 시즌', '2026-04-01T00:00:00+09:00');
+
+CREATE OR REPLACE FUNCTION get_current_season_id()
+RETURNS INTEGER LANGUAGE sql STABLE AS $$
+  SELECT id FROM public.seasons
+  WHERE starts_at <= NOW()
+    AND (ends_at IS NULL OR ends_at > NOW())
+  ORDER BY id DESC LIMIT 1;
+$$;
+GRANT EXECUTE ON FUNCTION get_current_season_id TO anon, authenticated, service_role;
+```
+
+### Step 2 — `leaderboard` 테이블 season_id 추가
+파일: `supabase/migrations/20260324_leaderboard_season.sql`
+
+```sql
+ALTER TABLE public.leaderboard
+  ADD COLUMN IF NOT EXISTS season_id INTEGER NOT NULL DEFAULT 0
+    REFERENCES public.seasons(id);
+
+ALTER TABLE public.leaderboard
+  DROP CONSTRAINT IF EXISTS leaderboard_user_id_difficulty_key;
+
+ALTER TABLE public.leaderboard
+  ADD CONSTRAINT leaderboard_user_id_difficulty_season_key
+  UNIQUE (user_id, difficulty, season_id);
+
+CREATE INDEX IF NOT EXISTS idx_leaderboard_season_difficulty_score
+  ON public.leaderboard (season_id, difficulty, score DESC);
+```
+기존 행은 DEFAULT 0으로 자동 프리시즌 처리.
+
+### Step 3 — `battle_records` 시즌화 + 친선전 분리
+파일: `supabase/migrations/20260324_battle_season.sql`
+
+친선전(`friendly_*`)은 시즌 무관 누적이므로 별도 테이블로 분리.
+
+```sql
+-- 1. 친선전 전용 테이블
+CREATE TABLE public.battle_friendly_records (
+  user_id              UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  friendly_wins        INTEGER NOT NULL DEFAULT 0,
+  friendly_losses      INTEGER NOT NULL DEFAULT 0,
+  friendly_disconnects INTEGER NOT NULL DEFAULT 0,
+  updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+ALTER TABLE public.battle_friendly_records ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "bfr_select_public" ON public.battle_friendly_records FOR SELECT USING (true);
+
+-- 2. 기존 친선전 데이터 이전
+INSERT INTO public.battle_friendly_records
+  (user_id, friendly_wins, friendly_losses, friendly_disconnects)
+SELECT user_id, friendly_wins, friendly_losses, friendly_disconnects
+FROM public.battle_records
+WHERE friendly_wins > 0 OR friendly_losses > 0 OR friendly_disconnects > 0
+ON CONFLICT (user_id) DO UPDATE SET
+  friendly_wins = EXCLUDED.friendly_wins,
+  friendly_losses = EXCLUDED.friendly_losses,
+  friendly_disconnects = EXCLUDED.friendly_disconnects;
+
+-- 3. battle_records PK 재구성
+ALTER TABLE public.battle_records DROP CONSTRAINT battle_records_pkey;
+ALTER TABLE public.battle_records
+  ADD COLUMN IF NOT EXISTS season_id INTEGER NOT NULL DEFAULT 0
+    REFERENCES public.seasons(id);
+ALTER TABLE public.battle_records
+  ADD CONSTRAINT battle_records_pkey PRIMARY KEY (user_id, season_id);
+ALTER TABLE public.battle_records
+  DROP COLUMN IF EXISTS friendly_wins,
+  DROP COLUMN IF EXISTS friendly_losses,
+  DROP COLUMN IF EXISTS friendly_disconnects;
+
+CREATE INDEX IF NOT EXISTS idx_battle_records_season_rp
+  ON public.battle_records (season_id, rating_points DESC);
+
+-- 4. 뷰 교체 (현재 시즌 필터)
+DROP VIEW IF EXISTS public.battle_leaderboard_view;
+CREATE OR REPLACE VIEW public.battle_leaderboard_view AS
+SELECT br.user_id, br.season_id, br.rating_points,
+       br.wins, br.losses, br.disconnects,
+       CASE WHEN (br.wins+br.losses+br.disconnects)=0 THEN 0.0
+            ELSE ROUND((br.wins+br.disconnects)::NUMERIC
+                       /(br.wins+br.losses+br.disconnects)::NUMERIC*100,1)
+       END AS win_rate,
+       p.initials
+FROM public.battle_records br
+JOIN public.profiles p ON p.id = br.user_id
+WHERE br.season_id = get_current_season_id()
+ORDER BY br.rating_points DESC;
+GRANT SELECT ON public.battle_leaderboard_view TO anon, authenticated;
+```
+
+### Step 4 — `submit_battle_record` 함수 재정의
+파일: `supabase/migrations/20260324_submit_battle_record_v3.sql`
+
+```sql
+DROP FUNCTION IF EXISTS submit_battle_record(UUID, TEXT, INTEGER, BOOLEAN);
+
+CREATE OR REPLACE FUNCTION submit_battle_record(
+  p_user_id     UUID,
+  p_result      TEXT,
+  p_point_delta INTEGER,
+  p_is_ranked   BOOLEAN  DEFAULT TRUE,
+  p_season_id   INTEGER  DEFAULT NULL  -- NULL이면 get_current_season_id()
+)
+RETURNS TABLE(
+  out_rating_points        INTEGER,
+  out_wins                 INTEGER,
+  out_losses               INTEGER,
+  out_disconnects          INTEGER,
+  out_friendly_wins        INTEGER,
+  out_friendly_losses      INTEGER,
+  out_friendly_disconnects INTEGER,
+  out_rank                 BIGINT
+)
+LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE
+  v_sid INTEGER := COALESCE(p_season_id, get_current_season_id());
+  v_rp INT; v_w INT; v_l INT; v_d INT;
+  v_fw INT; v_fl INT; v_fd INT; v_rank BIGINT;
+BEGIN
+  IF p_is_ranked THEN
+    INSERT INTO public.battle_records (user_id, season_id, rating_points)
+    VALUES (p_user_id, v_sid, 0) ON CONFLICT (user_id, season_id) DO NOTHING;
+
+    SELECT br.rating_points, br.wins, br.losses, br.disconnects
+      INTO v_rp, v_w, v_l, v_d
+      FROM public.battle_records br WHERE br.user_id=p_user_id AND br.season_id=v_sid;
+
+    v_rp := GREATEST(0, COALESCE(v_rp,0) + p_point_delta);
+    v_w  := COALESCE(v_w,0) + CASE WHEN p_result='win'        THEN 1 ELSE 0 END;
+    v_l  := COALESCE(v_l,0) + CASE WHEN p_result='lose'       THEN 1 ELSE 0 END;
+    v_d  := COALESCE(v_d,0) + CASE WHEN p_result='disconnect' THEN 1 ELSE 0 END;
+
+    UPDATE public.battle_records SET
+      rating_points=v_rp, wins=v_w, losses=v_l, disconnects=v_d, updated_at=NOW()
+    WHERE user_id=p_user_id AND season_id=v_sid;
+
+    SELECT COUNT(*)+1 INTO v_rank FROM public.battle_records br2
+    WHERE br2.season_id=v_sid AND br2.rating_points > v_rp;
+
+    SELECT bfr.friendly_wins, bfr.friendly_losses, bfr.friendly_disconnects
+      INTO v_fw, v_fl, v_fd
+      FROM public.battle_friendly_records bfr WHERE bfr.user_id=p_user_id;
+    v_fw:=COALESCE(v_fw,0); v_fl:=COALESCE(v_fl,0); v_fd:=COALESCE(v_fd,0);
+  ELSE
+    INSERT INTO public.battle_friendly_records (user_id) VALUES (p_user_id)
+    ON CONFLICT (user_id) DO NOTHING;
+
+    SELECT bfr.friendly_wins, bfr.friendly_losses, bfr.friendly_disconnects
+      INTO v_fw, v_fl, v_fd
+      FROM public.battle_friendly_records bfr WHERE bfr.user_id=p_user_id;
+
+    v_fw:=COALESCE(v_fw,0)+CASE WHEN p_result='win'        THEN 1 ELSE 0 END;
+    v_fl:=COALESCE(v_fl,0)+CASE WHEN p_result='lose'       THEN 1 ELSE 0 END;
+    v_fd:=COALESCE(v_fd,0)+CASE WHEN p_result='disconnect' THEN 1 ELSE 0 END;
+
+    UPDATE public.battle_friendly_records SET
+      friendly_wins=v_fw, friendly_losses=v_fl,
+      friendly_disconnects=v_fd, updated_at=NOW()
+    WHERE user_id=p_user_id;
+
+    SELECT COALESCE(br.rating_points,0), COALESCE(br.wins,0),
+           COALESCE(br.losses,0), COALESCE(br.disconnects,0)
+      INTO v_rp, v_w, v_l, v_d
+      FROM public.battle_records br WHERE br.user_id=p_user_id AND br.season_id=v_sid;
+    v_rp:=COALESCE(v_rp,0);
+
+    SELECT COUNT(*)+1 INTO v_rank FROM public.battle_records br2
+    WHERE br2.season_id=v_sid AND br2.rating_points > v_rp;
+  END IF;
+
+  RETURN QUERY SELECT v_rp,v_w,v_l,v_d,v_fw,v_fl,v_fd,v_rank;
+END; $$;
+
+REVOKE ALL ON FUNCTION submit_battle_record FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION submit_battle_record TO service_role;
+
+-- get_battle_rank_by_rp에 season_id 파라미터 추가
+DROP FUNCTION IF EXISTS get_battle_rank_by_rp(INTEGER);
+CREATE OR REPLACE FUNCTION get_battle_rank_by_rp(p_rp INTEGER, p_season_id INTEGER DEFAULT NULL)
+RETURNS BIGINT LANGUAGE sql STABLE AS $$
+  SELECT COUNT(*) FROM public.battle_records
+  WHERE season_id = COALESCE(p_season_id, get_current_season_id())
+    AND rating_points > p_rp;
+$$;
+GRANT EXECUTE ON FUNCTION get_battle_rank_by_rp TO anon, authenticated, service_role;
+```
+
+---
+
+## Phase 2: Edge Functions 수정
+
+### `leaderboard-submit` 변경 포인트
+파일: `supabase/functions/leaderboard-submit/index.ts`
+
+```typescript
+// 상단: 현재 시즌 조회 추가
+const { data: seasonId } = await supabaseAdmin.rpc('get_current_season_id');
+const currentSeasonId: number = seasonId ?? 0;
+
+// 기존 점수 조회에 추가
+.eq('season_id', currentSeasonId)
+
+// upsert payload에 추가
+season_id: currentSeasonId,
+// onConflict 변경
+{ onConflict: 'user_id,difficulty,season_id' }
+
+// 순위 계산에 추가
+.eq('season_id', currentSeasonId)
+```
+
+### `leaderboard-top` 변경 포인트
+파일: `supabase/functions/leaderboard-top/index.ts`
+
+```typescript
+// body에서 seasonId 수신 (없으면 현재 시즌)
+const { difficulty, limit: limitParam, seasonId: seasonIdParam } = await req.json();
+const { data: currentId } = await supabaseAdmin.rpc('get_current_season_id');
+const seasonId = typeof seasonIdParam === 'number' ? seasonIdParam : (currentId ?? 0);
+
+// 쿼리에 추가
+.eq('season_id', seasonId)
+
+// 응답에 추가
+seasonId, seasonName: /* seasons 테이블에서 name 조회 */
+```
+
+### `battle-result-submit` 변경 포인트
+파일: `supabase/functions/battle-result-submit/index.ts`
+
+```typescript
+// 현재 시즌 조회
+const { data: seasonData } = await supabaseAdmin.rpc('get_current_season_id');
+const currentSeasonId: number = seasonData ?? 0;
+
+// 내 RP 조회에 season_id 필터 추가
+.eq('season_id', currentSeasonId)
+
+// RPC 호출에 p_season_id 추가
+{ p_user_id, p_result, p_point_delta, p_is_ranked, p_season_id: currentSeasonId }
+
+// 친선전 조회를 battle_records → battle_friendly_records로 변경
+.from('battle_friendly_records')
+.select('friendly_wins, friendly_losses, friendly_disconnects')
+.eq('user_id', user.id)
+```
+
+### `battle-leaderboard-top` 변경 포인트
+파일: `supabase/functions/battle-leaderboard-top/index.ts`
+
+```typescript
+// 현재 시즌 조회 (뷰가 이미 필터하지만 currentUserRank 계산에도 필요)
+const { data: seasonData } = await supabaseAdmin.rpc('get_current_season_id');
+const currentSeasonId: number = seasonData ?? 0;
+
+// currentUserRank 계산: battle_records에 season_id 필터 추가
+.eq('season_id', currentSeasonId)
+
+// 친선전 조회를 battle_friendly_records에서 병렬로
+const [recordResp, friendlyResp] = await Promise.all([
+  supabaseAdmin.from('battle_records').select('wins,losses,disconnects,rating_points')
+    .eq('user_id', currentUserId).eq('season_id', currentSeasonId).maybeSingle(),
+  supabaseAdmin.from('battle_friendly_records')
+    .select('friendly_wins,friendly_losses,friendly_disconnects')
+    .eq('user_id', currentUserId).maybeSingle(),
+]);
+
+// 응답에 추가
+seasonId: currentSeasonId, seasonName: ...
+```
+
+### 신규 `season-end` Edge Function
+파일: `supabase/functions/season-end/index.ts`
+
+인증: `x-admin-secret` 헤더 = env `SEASON_END_SECRET`
+
+**흐름**:
+1. 현재 진행 중인 시즌 조회
+2. 클래식 보상 지급 (난이도별 독립, 상위 50명)
+3. 배틀 보상 지급 (상위 100명)
+4. `seasons.ends_at = NOW()` 업데이트
+5. 다음 달 시즌 row 자동 생성
+6. 결과 반환
+
+**보상 테이블**:
+
+| 순위 | normal | hard | extreme | physical |
+|------|--------|------|---------|----------|
+| 1위  | 200    | 300  | 500     | 800      |
+| 2위  | 120    | 180  | 300     | 500      |
+| 3위  | 80     | 120  | 200     | 350      |
+| 4~10위 | 40  | 60   | 100     | 200      |
+| 11~50위 | 10 | 15   | 25      | 50       |
+
+| 순위 | 배틀 보상 |
+|------|----------|
+| 1위  | 1000     |
+| 2위  | 600      |
+| 3위  | 400      |
+| 4~10위 | 200   |
+| 11~50위 | 80   |
+| 51~100위 | 30  |
+
+SKOR 일괄 지급 헬퍼 (`bulkAddSkor`):
+```typescript
+// user_skor에서 현재 balance를 IN 쿼리로 일괄 조회 후 upsert
+async function bulkAddSkor(admin, rewardMap: Record<string, number>) {
+  const userIds = Object.keys(rewardMap);
+  const { data: existing } = await admin.from('user_skor').select('user_id,balance').in('user_id', userIds);
+  const balanceMap = Object.fromEntries((existing ?? []).map(r => [r.user_id, r.balance]));
+  await admin.from('user_skor').upsert(
+    userIds.map(uid => ({ user_id: uid, balance: Math.floor((balanceMap[uid] ?? 0) + rewardMap[uid]), updated_at: new Date().toISOString() })),
+    { onConflict: 'user_id' }
+  );
+}
+```
+
+다음 시즌 자동 생성:
+```typescript
+function nextSeasonFromCurrent(current: { id: number; starts_at: string }) {
+  const d = new Date(current.starts_at);
+  d.setMonth(d.getMonth() + 1); d.setDate(1);
+  const [y, m] = [d.getFullYear(), d.getMonth() + 1];
+  return { id: current.id + 1, name: `${y}년 ${m}월 시즌`, starts_at: d.toISOString(), ends_at: null };
+}
+```
+
+배포: `supabase functions deploy season-end` (verify-jwt 필요 없음, 자체 시크릿 헤더)
+
+---
+
+## Phase 3: 클라이언트 업데이트
+
+### 신규 타입 파일
+파일: `src/types/Season.ts`
+
+```typescript
+export interface SeasonInfo {
+  id: number;
+  name: string;
+  startsAt: string;
+  endsAt: string | null;
+}
+```
+
+### `src/utils/leaderboard.ts` 수정
+- `LeaderboardResponse`에 `seasonId: number`, `seasonName: string` 추가
+- `getLeaderboard(difficulty, limit, seasonId?)` — seasonId 선택 파라미터 추가
+
+### `src/utils/battleLeaderboard.ts` 수정
+- `BattleLeaderboardResponse`에 `seasonId`, `seasonName` 추가
+- 캐시 키를 시즌별로 분리: `battleRatingCache` → `battleRatingCache_s${seasonId}`
+  - 시즌 변경 시 자동 캐시 무효화됨
+
+### `src/scenes/LeaderboardScene.ts` UI 수정
+타이틀 아래 시즌 배지 표시 (y+18 정도 확보):
+```typescript
+private showSeasonBadge(name: string, endsAt: string | null) {
+  let label = name;
+  if (endsAt) {
+    const days = Math.ceil((new Date(endsAt).getTime() - Date.now()) / 86400000);
+    label += ` | 종료까지 ${days}일`;
+  }
+  this.add.text(200, 68, label, { fontSize: '13px', color: '#88ccff', stroke: '#000', strokeThickness: 3 }).setOrigin(0.5);
+}
+```
+난이도 버튼 y좌표 10px 아래로 이동.
+
+### `src/scenes/BattleLeaderboardScene.ts` UI 수정
+타이틀 아래 시즌 배지 동일 패턴 적용. 기존 전적 summary y좌표 10px 아래로 이동.
+
+### `src/scenes/BattleMatchScene.ts`
+`getCachedMyRating(seasonId)` 인터페이스 업데이트 (시즌 파라미터 전달).
+
+---
+
+## 구현 순서 (안전한 배포 순서)
+
+```
+[DB - 의존성 순서대로]
+1. 20260324_seasons.sql              → seasons 테이블 + get_current_season_id()
+2. 20260324_leaderboard_season.sql   → leaderboard season_id 추가
+3. 20260324_battle_season.sql        → battle_friendly_records 분리 + battle_records PK 재구성
+4. 20260324_submit_battle_record_v3.sql → DB 함수 교체
+
+[Edge Functions - DB 완료 후]
+5. leaderboard-submit   (season_id 필터 + onConflict 변경)
+6. leaderboard-top      (season_id 필터 + 응답에 seasonName)
+7. battle-result-submit (season_id + 친선전 분리 조회)
+8. battle-leaderboard-top (season_id + 친선전 분리 조회)
+9. season-end           (신규 배포)
+
+[클라이언트]
+10. src/types/Season.ts 추가
+11. leaderboard.ts / battleLeaderboard.ts 타입 + 파라미터 업데이트
+12. LeaderboardScene.ts / BattleLeaderboardScene.ts 시즌 배지 UI
+13. BattleMatchScene.ts 캐시 키 업데이트
+14. npx tsc --noEmit 검증
+```
+
+---
+
+## 검증
+
+1. **DB**: `SELECT * FROM seasons;` → 프리시즌(0) + 시즌1(1) 확인
+2. **DB**: `SELECT get_current_season_id();` → 1 반환 확인 (2026-04-01 이후 기준)
+3. **DB**: 기존 leaderboard 행의 season_id = 0 확인
+4. **Edge Function**: 점수 제출 후 leaderboard에 season_id=1인 행 생성 확인
+5. **Edge Function**: `battle-result-submit` 후 battle_records에 season_id=1인 행 생성 확인
+6. **Edge Function**: `season-end` 호출 → seasons 테이블에 시즌 종료 + 다음 시즌 생성 확인
+7. **UI**: LeaderboardScene에 "2026년 4월 시즌 | 종료까지 N일" 배지 표시 확인
+8. **UI**: BattleLeaderboardScene 동일 확인
+9. **타입**: `npx tsc --noEmit` 에러 없음
+
+
+If you need specific details from before exiting plan mode (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/johyunduk/.REDACTED.jsonl
+
+---
+
+시즌 끝났을 때 스코르가 자동으로 들어오는건가?
+
+---
+
+음 자동이 아니라 대전 모드는 대전 모드 화면에 수령하는 버튼을 별도로 만들면 좋을거 같고 클래식 모드는 리더보드에서 보면 좋을거 같아
+
+---
+
+[Request interrupted by user]
+
+---
+
+음 자동이 아니라 대전 모드는 대전 모드 화면에 수령하는 버튼을 별도로 만들면 좋을거 같고 클래식 모드는 리더보드에서 수령하는 버튼이 있으면 좋을거 같아
+
+---
+
+# Simplify: Code Review and Cleanup
+
+Review all changed files for reuse, quality, and efficiency. Fix any issues found.
+
+## Phase 1: Identify Changes
+
+Run `git diff` (or `git diff HEAD` if there are staged changes) to see what changed. If there are no git changes, review the most recently modified files that the user mentioned or that you edited earlier in this conversation.
+
+## Phase 2: Launch Three Review Agents in Parallel
+
+Use the Agent tool to launch all three agents concurrently in a single message. Pass each agent the full diff so it has the complete context.
+
+### Agent 1: Code Reuse Review
+
+For each change:
+
+1. **Search for existing utilities and helpers** that could replace newly written code. Look for similar patterns elsewhere in the codebase — common locations are utility directories, shared modules, and files adjacent to the changed ones.
+2. **Flag any new function that duplicates existing functionality.** Suggest the existing function to use instead.
+3. **Flag any inline logic that could use an existing utility** — hand-rolled string manipulation, manual path handling, custom environment checks, ad-hoc type guards, and similar patterns are common candidates.
+
+### Agent 2: Code Quality Review
+
+Review the same changes for hacky patterns:
+
+1. **Redundant state**: state that duplicates existing state, cached values that could be derived, observers/effects that could be direct calls
+2. **Parameter sprawl**: adding new parameters to a function instead of generalizing or restructuring existing ones
+3. **Copy-paste with slight variation**: near-duplicate code blocks that should be unified with a shared abstraction
+4. **Leaky abstractions**: exposing internal details that should be encapsulated, or breaking existing abstraction boundaries
+5. **Stringly-typed code**: using raw strings where constants, enums (string unions), or branded types already exist in the codebase
+6. **Unnecessary JSX nesting**: wrapper Boxes/elements that add no layout value — check if inner component props (flexShrink, alignItems, etc.) already provide the needed behavior
+
+### Agent 3: Efficiency Review
+
+Review the same changes for efficiency:
+
+1. **Unnecessary work**: redundant computations, repeated file reads, duplicate network/API calls, N+1 patterns
+2. **Missed concurrency**: independent operations run sequentially when they could run in parallel
+3. **Hot-path bloat**: new blocking work added to startup or per-request/per-render hot paths
+4. **Recurring no-op updates**: state/store updates inside polling loops, intervals, or event handlers that fire unconditionally — add a change-detection guard so downstream consumers aren't notified when nothing changed. Also: if a wrapper function takes an updater/reducer callback, verify it honors same-reference returns (or whatever the "no change" signal is) — otherwise callers' early-return no-ops are silently defeated
+5. **Unnecessary existence checks**: pre-checking file/resource existence before operating (TOCTOU anti-pattern) — operate directly and handle the error
+6. **Memory**: unbounded data structures, missing cleanup, event listener leaks
+7. **Overly broad operations**: reading entire files when only a portion is needed, loading all items when filtering for one
+
+## Phase 3: Fix Issues
+
+Wait for all three agents to complete. Aggregate their findings and fix each issue directly. If a finding is a false positive or not worth addressing, note it and move on — do not argue with the finding, just skip it.
+
+When done, briefly summarize what was fixed (or confirm the code was already clean).
+
+---
+
+전체 변경 내용을 정리해줘. 그리고 SQL 뭐 해야 하는지 알려주고
+
+---
+
+SQL 만 적용해도 코드 변경전 내용에 영향을 주는건 없나? 개발환경 프로덕 환경 둘 다 같은 디비를 보고 있거든
+
+---
+
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+Summary:
+1. Primary Request and Intent:
+   - **Main request**: Implement a monthly season system for both classic leaderboard and battle RP rankings. The goal was to reset rankings monthly, preserve old data as "프리시즌 (Season 0)", and distribute SKOR rewards to top players.
+   - **Follow-up**: User clarified SKOR rewards should NOT be auto-distributed — instead, a manual claim button should appear in: (1) LeaderboardScene for classic rewards, (2) BattleMatchScene for battle rewards.
+   - **Code review**: User invoked `/simplify` to review all changes for reuse, quality, and efficiency issues.
+   - **Final questions**: User asked for a full summary of all changes and what SQL needs to be executed. Additionally asked: **"SQL만 적용해도 코드 변경전 내용에 영향을 주는건 없나? 개발환경 프로덕 환경 둘 다 같은 디비를 보고 있거든"** — whether applying SQL migrations alone (before code/Edge Function deployment) would break the existing running code, given dev and prod share the same DB.
+
+2. Key Technical Concepts:
+   - Supabase PostgreSQL migrations (FK dependencies, PK reconstruction, RLS)
+   - Supabase Edge Functions (Deno, service role client, `--no-verify-jwt`)
+   - `get_current_season_id()` PostgreSQL helper function
+   - `battle_friendly_records` table split from `battle_records`
+   - `season_rewards` table with pending/claimed pattern (pull-based reward collection)
+   - `battle_leaderboard_view` recreation filtered to current season
+   - `Promise.all` parallelization of DB queries in Edge Functions
+   - Module-level cache with TTL for `getPendingRewards`
+   - `BaseScene.showSeasonBadge()` shared method to eliminate duplication
+   - djb2-signed localStorage cache for battle rating (`seasonId` now included)
+   - Guard flag pattern (`battleRewardChecked`) to prevent duplicate async calls
+
+3. Files and Code Sections:
+
+   **New DB Migration Files:**
+   - `supabase/migrations/20260324_seasons.sql` — Creates `seasons` table (id 0=프리시즌, 1=2026년 4월), `get_current_season_id()` function
+   - `supabase/migrations/20260324_leaderboard_season.sql` — Adds `season_id INTEGER DEFAULT 0` to `leaderboard`, replaces UNIQUE constraint to `(user_id, difficulty, season_id)`
+   - `supabase/migrations/20260324_battle_season.sql` — **Breaking**: Creates `battle_friendly_records`, migrates friendly data, drops `battle_records` PK (`user_id`) → new PK `(user_id, season_id)`, drops `friendly_*` columns, recreates `battle_leaderboard_view`
+   - `supabase/migrations/20260324_submit_battle_record_v3.sql` — Replaces `submit_battle_record` DB function to support `p_season_id`, updates `get_battle_rank_by_rp` with season parameter
+   - `supabase/migrations/20260324_season_rewards.sql` — New table `(user_id, season_id, reward_type PK)`, `skor_amount`, `rank`, `claimed_at` (NULL=pending), RLS for own-record SELECT only
+
+   **New Edge Functions:**
+   - `supabase/functions/season-end/index.ts` — Admin-only (`x-admin-secret` header). Queries top 50 classic + top 100 battle. Creates `season_rewards` pending records (no immediate SKOR). Updates `seasons.ends_at`, auto-creates next month's season row.
+   - `supabase/functions/claim-season-reward/index.ts` — Auth required. Body: `{ category: 'classic' | 'battle' }`. Fetches unclaimed rewards, sums SKOR, upserts `user_skor`, batch-updates `claimed_at` with single UPDATE (not N+1 loop).
+
+   **Modified Edge Functions:**
+   - `supabase/functions/leaderboard-submit/index.ts` — Parallelizes `seasons` query + profiles UPDATE. Adds `season_id` to upsert and all filters. Changes `onConflict` to `user_id,difficulty,season_id`.
+   - `supabase/functions/leaderboard-top/index.ts` — Replaces RPC+SELECT pair with single `seasons` direct query, parallelized with auth. Accepts `seasonId` param. Returns `seasonId`, `seasonName`, `seasonEndsAt`.
+   - `supabase/functions/battle-result-submit/index.ts` — Queries current season, filters RP queries by `season_id`, passes `p_season_id` to RPC.
+   - `supabase/functions/battle-leaderboard-top/index.ts` — Auth + leaderboard view + seasons query all in one `Promise.all`. Reads from `battle_friendly_records` (separate table). Returns season info.
+
+   **New/Modified Client Files:**
+   - `src/types/Season.ts` — New: `SeasonInfo { id, name, startsAt, endsAt }`
+   - `src/utils/seasonReward.ts` — New: `getPendingRewards()` (60s module cache), `sumPending()`, `claimSeasonReward()` (invalidates cache on success), `invalidatePendingRewardsCache()`
+   - `src/utils/leaderboard.ts` — `LeaderboardResponse` + `seasonId/seasonName/seasonEndsAt`. `getLeaderboard()` accepts optional `seasonId`.
+   - `src/utils/battleLeaderboard.ts` — `BattleLeaderboardResponse` + season fields. `RatingCache` includes `seasonId`. `setCachedMyRating(rp, rank, seasonId)` — **default removed** (was `=0`). `getCachedMyRating(seasonId?)` validates season. `getMyRating()` now returns `{ stats, seasonId }`.
+   - `src/scenes/BaseScene.ts` — Added `protected showSeasonBadge(badge, name, endsAt)` shared method.
+   - `src/scenes/LeaderboardScene.ts` — Season badge (y=68), difficulty buttons shifted to y=105. `checkPendingRewards()` creates buttons locally (no class props), `handleClaim(bg, txt)` takes params. Both call BaseScene's `showSeasonBadge`.
+   - `src/scenes/BattleLeaderboardScene.ts` — Season badge (y=68), summary rows shifted +10px. Removed duplicate `showSeasonBadge`.
+   - `src/scenes/BattleMatchScene.ts` — `battleRewardChecked` guard flag (reset in `init`). `checkBattlePendingRewards()` with guard. `handleBattleClaim(bg, txt)`. `setCachedMyRating` now passes `seasonId`.
+   - `src/scenes/BattleResultScene.ts` — Imports `getCachedMyRating`. Reuses existing cache's `seasonId` when calling `setCachedMyRating`.
+
+4. Errors and fixes:
+   - **`setCachedMyRating(seasonId=0)` default value**: Identified as silent corruption risk. Fixed by removing the default, making `seasonId` required. `BattleResultScene` had a call site without seasonId — fixed by reading `getCachedMyRating()?.seasonId ?? 0` to reuse the season already stored in cache.
+   - **N+1 UPDATE loop in `claim-season-reward`**: Was iterating pending rewards and doing one UPDATE per record. Fixed by using a single batch UPDATE with the same filter conditions used for fetching (`LIKE 'classic_%'` or `eq('reward_type', 'battle')`).
+   - **Two sequential season queries in leaderboard functions**: Was calling `get_current_season_id()` RPC then `seasons` SELECT separately. Fixed by querying `seasons` table directly (one query replaces two), parallelized with auth check.
+   - **`showSeasonBadge` 100% duplicated** in `LeaderboardScene` and `BattleLeaderboardScene`. Moved to `BaseScene` as `protected showSeasonBadge(badge, name, endsAt)`.
+   - **`claimBtnBg/claimBtnTxt` as class properties**: Unnecessary class-level state. Refactored — buttons created locally in `checkPendingRewards()`, references passed to `handleClaim(bg, txt)` directly.
+   - **`checkBattlePendingRewards` race condition**: Called every `showMenu()` invocation, could add duplicate banners. Fixed with `battleRewardChecked` boolean flag, reset in `init()`.
+
+5. Problem Solving:
+   - **Season ID chicken-and-egg**: `leaderboard-top` needed seasonId before querying leaderboard. Solved by replacing the two-step RPC+SELECT with a direct `seasons` table query that returns `id + name + ends_at` in one call, runnable in parallel with auth.
+   - **BattleResultScene seasonId source**: `submitBattleResult` response doesn't include seasonId. Instead of adding a new field to the Edge Function, reused the seasonId already stored in the localStorage cache (which was set by `BattleMatchScene.fetchMyRating()`).
+   - **Shared same DB for dev+prod**: SQL migrations 1, 2, 5 are purely additive (new tables/columns with defaults) and safe to apply without code changes. Migrations 3 and 4 are **breaking** — they drop `friendly_*` columns from `battle_records` and change the PK. The old `battle-leaderboard-top` Edge Function selects `friendly_wins` etc. which would fail after migration 3 runs. Safe deployment order: run migrations 1+2 → deploy all new Edge Functions → run migrations 3+4+5.
+
+6. All user messages:
+   - "Implement the following plan: [월별 시즌 시스템 구현 플랜]" — full implementation plan with DB/Edge/client phases
+   - "시즌 끝났을 때 스코르가 자동으로 들어오는건가?" — asking if SKOR is auto-distributed on season end
+   - "음 자동이 아니라 대전 모드는 대전 모드 화면에 수령하는 버튼을 별도로 만들면 좋을거 같고 클래식 모드는 리더보드에서 수령하는 버튼이 있으면 좋을거 같아" — requesting manual claim buttons
+   - "/simplify" — invoked code review skill
+   - (empty message after /simplify results) — proceeded with fixing all identified issues
+   - "전체 변경 내용을 정리해줘. 그리고 SQL 뭐 해야 하는지 알려주고" — full summary + SQL instructions request
+   - "SQL 만 적용해도 코드 변경전 내용에 영향을 주는건 없나? 개발환경 프로덕 환경 둘 다 같은 디비를 보고 있거든" — safety question about applying migrations before code deployment in shared DB environment
+
+7. Pending Tasks:
+   - Answer the SQL safety question: applying migrations 3+4 before new Edge Functions are deployed **will break** existing running code because `battle_records.friendly_*` columns are dropped, which old Edge Functions still reference.
+   - The user needs to decide on deployment order: safest is to deploy Edge Functions before running the breaking migrations (3, 4).
+   - `SEASON_END_SECRET` environment variable needs to be set in Supabase Dashboard → Edge Function Secrets.
+   - Actual `season-end` admin call needs to be made monthly (manual or via GitHub Actions cron).
+
+8. Current Work:
+   The user asked the safety question: **"SQL 만 적용해도 코드 변경전 내용에 영향을 주는건 없나? 개발환경 프로덕 환경 둘 다 같은 디비를 보고 있거든"**
+
+   This needs a direct answer:
+   - **Migration 1** (`20260324_seasons.sql`): **Safe** — new table, no existing code touches it
+   - **Migration 2** (`20260324_leaderboard_season.sql`): **Safe** — `ADD COLUMN season_id DEFAULT 0`. Old code doesn't filter by season_id, so existing leaderboard queries still return all rows (just with a new column). UNIQUE constraint change could fail if duplicate `(user_id, difficulty)` rows exist, but shouldn't.
+   - **Migration 3** (`20260324_battle_season.sql`): **BREAKING** — drops `friendly_wins/losses/disconnects` from `battle_records`. Old `battle-leaderboard-top` selects these columns → immediate error. Also changes `battle_records` PK → old `submit_battle_record` function (still running) will fail on INSERT.
+   - **Migration 4** (`20260324_submit_battle_record_v3.sql`): **Required after migration 3** — replaces the DB function, but must run after migration 3.
+   - **Migration 5** (`20260324_season_rewards.sql`): **Safe** — new table, no old code touches it.
+
+   **Safe order for shared DB**: Run 1 → 2 → 5 first (fully safe). Then deploy all new Edge Functions. Then run 3 → 4 (during low-traffic window).
+
+9. Optional Next Step:
+   Answer the user's direct question about SQL migration safety. Specifically:
+   - Migrations 1, 2, 5 can be applied safely without any code changes
+   - Migrations 3 and 4 will break existing `battle-leaderboard-top` and `battle-result-submit` Edge Functions because they drop `friendly_*` columns from `battle_records`
+   - Recommended safe deployment order: `1 → 2 → 5 먼저 적용` → `새 Edge Functions 배포` → `3 → 4 적용`
+
+If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/johyunduk/.REDACTED.jsonl
+Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.
+
+---
+
+만약 이번 커밋을 버리게 된다면 쿼리랑 엣지 펑션도 달 돌려야 하는데 그런게 한번에 가능한가?
+
+---
+
+이어서 해줘
+
+---
+
+[Request interrupted by user for tool use]
