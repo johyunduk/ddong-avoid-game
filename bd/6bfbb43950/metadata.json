@@ -3,7 +3,7 @@
   "checkpoint_id": "bd6bfbb43950",
   "strategy": "manual-commit",
   "branch": "dev",
-  "checkpoints_count": 1,
+  "checkpoints_count": 3,
   "files_touched": [
     "src/scenes/GachaScene.ts"
   ],
@@ -84,13 +84,20 @@
       "context": "/bd/6bfbb43950/10/context.md",
       "content_hash": "/bd/6bfbb43950/10/content_hash.txt",
       "prompt": "/bd/6bfbb43950/10/prompt.txt"
+    },
+    {
+      "metadata": "/bd/6bfbb43950/11/metadata.json",
+      "transcript": "/bd/6bfbb43950/11/full.jsonl",
+      "context": "/bd/6bfbb43950/11/context.md",
+      "content_hash": "/bd/6bfbb43950/11/content_hash.txt",
+      "prompt": "/bd/6bfbb43950/11/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 1904,
-    "cache_creation_tokens": 3636162,
-    "cache_read_tokens": 122567627,
-    "output_tokens": 889509,
-    "api_call_count": 1350
+    "input_tokens": 1925,
+    "cache_creation_tokens": 3680709,
+    "cache_read_tokens": 123096378,
+    "output_tokens": 895313,
+    "api_call_count": 1365
   }
 }
