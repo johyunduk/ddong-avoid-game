@@ -36,7 +36,10 @@ export default class GachaScene extends BaseScene {
   private revealItemIndex = 0;
   private terminalTexts: Phaser.GameObjects.Text[] = [];
   private terminalBaseY: number = 276;
+  private terminalTextX: number = 24;
   private skipTerminal = false;
+  private videoSkipResolver: (() => void) | null = null;
+  private skipToSummary = false;
 
   // ── 로비 슬라이드쇼 상태 ──
   private slideshowIndex = 0;
@@ -226,10 +229,11 @@ export default class GachaScene extends BaseScene {
     const cx = this.scale.width / 2;
     const yOff = (this.scale.height - 600) / 2;
     this.terminalBaseY = 276 + yOff;
+    this.terminalTextX = cx - 176; // 박스 왼쪽 가장자리(cx-185) + 9px 패딩
 
-    this.add.rectangle(cx, 342 + yOff, 370, 172, 0x000000)
+    this.add.rectangle(cx, 346 + yOff, 370, 192, 0x000000)
       .setStrokeStyle(1, borderColor, 0.8);
-    this.add.text(26, 260 + yOff, '● ● ●', { fontSize: '11px', color: textColor });
+    this.add.text(cx - 179, 260 + yOff, '● ● ●', { fontSize: '11px', color: textColor });
     this.add.text(cx, 261 + yOff, title, {
       fontSize: '11px', color: titleColor, fontFamily: 'monospace',
     }).setOrigin(0.5);
@@ -303,10 +307,24 @@ export default class GachaScene extends BaseScene {
 
     try {
       // ① 영상(6초) + API 호출 병렬 실행 — 영상 보는 동안 응답 대기
-      const [result] = await Promise.all([
-        gachaPull(type),
-        this.playCommonVideo(),
-      ]);
+      // API가 먼저 완료되면 videoSkipResolver가 있을 경우 영상을 즉시 스킵
+      this.videoSkipResolver = null;
+      this.skipToSummary = false;
+      const apiPromise = gachaPull(type).then(r => {
+        // 영상이 아직 재생 중이면 스킵 버튼 표시
+        if (this.videoSkipResolver) {
+          const resolver = this.videoSkipResolver;
+          this.addSkipButton(() => {
+            if (resolver === this.videoSkipResolver) {
+              this.videoSkipResolver = null;
+              this.skipToSummary = true; // 터미널·리빌 건너뛰고 결과로 직행
+              resolver();
+            }
+          });
+        }
+        return r;
+      });
+      const [result] = await Promise.all([apiPromise, this.playCommonVideo()]);
 
       if (!this.scene.isActive()) return;
 
@@ -331,6 +349,14 @@ export default class GachaScene extends BaseScene {
       // ② 서버 DB 전체 동기화 (비동기, 에러 로그만)
       syncOwnedCharacters().catch(e => console.error('[GachaScene] syncOwnedCharacters 실패:', e));
       syncOwnedWallpapers().catch(e => console.error('[GachaScene] syncOwnedWallpapers 실패:', e));
+
+      // ② 영상 스킵 시 결과 화면으로 직행
+      if (this.skipToSummary) {
+        this.skipToSummary = false;
+        await this.loadWallpaperBgs(this.wpResults.map(w => w.id));
+        this.showSummary();
+        return;
+      }
 
       // ② 터미널 애니메이션 (UR이면 중반부터 빨간 에러 스타일로 전환)
       const isUR = result.video === 'red'
@@ -586,8 +612,17 @@ export default class GachaScene extends BaseScene {
       const vid = this.add.video(width / 2, height / 2, key);
       vid.play(false);
       this.fitVideoToCanvas(vid, width, height);
-      vid.on('complete', () => { vid.destroy(); resolve(); });
-      this.time.delayedCall(12000, resolve); // 12초 failsafe
+
+      // videoSkipResolver에 저장 → API 완료 후 addSkipButton에서 호출
+      const doResolve = () => {
+        this.videoSkipResolver = null;
+        if (vid.active) vid.destroy();
+        resolve();
+      };
+      this.videoSkipResolver = doResolve;
+      vid.on('complete', doResolve);
+      this.time.delayedCall(12000, doResolve); // 12초 failsafe
+      // 스킵 버튼은 API 응답 완료 후 startPull에서 추가됨
     });
   }
 
@@ -964,8 +999,9 @@ export default class GachaScene extends BaseScene {
       }
 
       const y = this.terminalBaseY + this.terminalTexts.length * 22;
-      const t = this.add.text(24, y, '', {
+      const t = this.add.text(this.terminalTextX, y, '', {
         fontSize: '13px', color, fontFamily: 'monospace',
+        wordWrap: { width: 352 },
       });
       this.terminalTexts.push(t);
 
@@ -993,8 +1029,9 @@ export default class GachaScene extends BaseScene {
       }
 
       const y = this.terminalBaseY + this.terminalTexts.length * 22;
-      const bar = this.add.text(24, y, '> [          ]  0%', {
+      const bar = this.add.text(this.terminalTextX, y, '> [          ]  0%', {
         fontSize: '13px', color, fontFamily: 'monospace',
+        wordWrap: { width: 352 },
       });
       this.terminalTexts.push(bar);
 
