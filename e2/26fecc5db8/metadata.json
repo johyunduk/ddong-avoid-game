@@ -3,7 +3,7 @@
   "checkpoint_id": "e226fecc5db8",
   "strategy": "manual-commit",
   "branch": "dev",
-  "checkpoints_count": 3,
+  "checkpoints_count": 4,
   "files_touched": [
     "public/assets/wallpapers/gold_mine_bg.webp",
     "public/assets/wallpapers/gold_mine_thumb.webp",
@@ -18,13 +18,20 @@
       "context": "/e2/26fecc5db8/0/context.md",
       "content_hash": "/e2/26fecc5db8/0/content_hash.txt",
       "prompt": "/e2/26fecc5db8/0/prompt.txt"
+    },
+    {
+      "metadata": "/e2/26fecc5db8/1/metadata.json",
+      "transcript": "/e2/26fecc5db8/1/full.jsonl",
+      "context": "/e2/26fecc5db8/1/context.md",
+      "content_hash": "/e2/26fecc5db8/1/content_hash.txt",
+      "prompt": "/e2/26fecc5db8/1/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 32,
-    "cache_creation_tokens": 43469,
-    "cache_read_tokens": 690689,
-    "output_tokens": 8612,
-    "api_call_count": 20
+    "input_tokens": 250,
+    "cache_creation_tokens": 286508,
+    "cache_read_tokens": 14182126,
+    "output_tokens": 51124,
+    "api_call_count": 180
   }
 }
