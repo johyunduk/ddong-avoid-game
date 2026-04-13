@@ -6,6 +6,14 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: 'v2.4.0',
+    date: '2026-04-13',
+    changes: [
+      '황금 광산 배경 이미지 고화질로 교체',
+      '광부 × 황금 광산 시너지 효과 추가 — 레인보우 피버 추가',
+    ],
+  },
+  {
     version: 'v2.3.0',
     date: '2026-03-22',
     changes: [

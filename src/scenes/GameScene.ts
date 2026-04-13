@@ -74,6 +74,9 @@ export default class GameScene extends BaseScene {
   private feverTimeColorOffset: number = 0; // 무지개 색상 회전 오프셋
   private feverTimeColorTimer?: Phaser.Time.TimerEvent; // 색상 애니메이션 타이머
   private lastFeverTimeScore: number = 0; // 마지막 피버 타임 발동 점수
+  private feverCount: number = 0;          // 피버 발동 횟수 누계 (레인보우 피버 조건 판정용)
+  private isRainbowFever: boolean = false; // 레인보우 피버 활성 여부 (광부×황금광산 시너지)
+  private get feverTimeLabel(): string { return this.isRainbowFever ? 'RAINBOW FEVER' : 'FEVER TIME'; }
   /** difficultyLevel 기반으로 현재 spawn 간격을 항상 최신값으로 계산 */
   private get currentSpawnDelay(): number {
     return Math.max(400, this.difficultyConfig.spawnDelay - (this.difficultyLevel * 80));
@@ -83,6 +86,12 @@ export default class GameScene extends BaseScene {
   private static readonly RAINBOW_COLORS = [
     '#ff0000', '#ff7f00', '#ffff00', '#00ff00', '#0000ff', '#4b0082', '#9400d3',
   ];
+  /** 레인보우 피버 전용 네온 컬러 — 더 선명하고 밝은 팔레트 */
+  private static readonly NEON_RAINBOW_COLORS = [
+    '#ff00cc', '#ff6600', '#ffee00', '#00ff88', '#00ccff', '#cc00ff', '#ffffff',
+  ];
+  /** 레인보우 피버 변환 시 방울 터짐 효과 색상 */
+  private static readonly BUBBLE_COLORS = [0xff00ff, 0x00ffff, 0xffee00, 0x00ff88, 0xff6600, 0xcc00ff];
   private selectedCharId: string = 'chibi'; // 선택된 캐릭터 ID
   private selectedCharGrade: string = '등급외'; // 선택된 캐릭터 등급
   private charAwakeLevel: number = 0; // 각성 단계 (init에서 계산, create에서 사용)
@@ -125,6 +134,8 @@ export default class GameScene extends BaseScene {
     this.isFeverTime = false;
     this.feverTimeRemaining = 0;
     this.lastFeverTimeScore = 0;
+    this.feverCount = 0;
+    this.isRainbowFever = false;
     // 캐릭터 선택 화면에서 저장한 캐릭터 & 배경화면 사용
     this.selectedCharId = getSafeSelectedCharacter();
     this.selectedWpId = getSafeSelectedWallpaper();
@@ -321,11 +332,11 @@ export default class GameScene extends BaseScene {
       maxSize: 10,
     });
 
-    // 무지개똥 그룹 생성
+    // 무지개똥 그룹 생성 (레인보우 피버 시 최대 30개 동시 활성 가능)
     this.rainbowPoops = this.physics.add.group({
       classType: RainbowPoop,
       runChildUpdate: true,
-      maxSize: 10,
+      maxSize: 30,
     });
 
     // 풀 사전 할당 — create() 시점에 오브젝트를 미리 생성해 게임 중 런타임 생성 히치 방지
@@ -881,7 +892,11 @@ export default class GameScene extends BaseScene {
 
   private increaseDifficulty() {
     this.difficultyLevel += DIFFICULTY_SCALING.levelIncrement;
-    this.resetSpawnTimer(this.isFeverTime ? this.spawnFeverPoop : this.spawnPoop);
+    this.resetSpawnTimer(
+      this.isFeverTime
+        ? (this.isRainbowFever ? this.spawnRainbowFeverPoop : this.spawnFeverPoop)
+        : this.spawnPoop
+    );
   }
 
   /**
@@ -918,64 +933,111 @@ export default class GameScene extends BaseScene {
     this.isFeverTime = true;
     this.feverTimeRemaining = FEVER_TIME_CONFIG.duration;
 
-    // 기존 일반 똥들을 금똥/다이아똥으로 변환
-    if (this.poops) {
-      const poopPositions: Array<{ x: number; y: number; velocity: number }> = [];
+    // 레인보우 피버: 시너지에 rainbowFever 플래그가 있고 2번째 피버부터 4회마다 (2, 6, 10...)
+    this.feverCount++;
+    const isRainbowFeverNow =
+      this.activeSynergy?.rainbowFever === true &&
+      this.feverCount >= 2 &&
+      (this.feverCount - 2) % 4 === 0;
+    this.isRainbowFever = isRainbowFeverNow;
 
-      // 모든 똥의 위치와 속도 저장 후 풀에 반환 (비활성화)
+    // 기존 화면 위 똥들 처리
+    if (isRainbowFeverNow) {
+      // 레인보우 피버: 모든 기존 똥(일반+금+다이아)을 무지개똥으로 변환
+      const positions: Array<{ x: number; y: number; velocity: number }> = [];
+
       this.poops.children.entries.forEach((poop) => {
-        const poopSprite = poop as Poop;
-        if (!poopSprite.active) return;
-        const body = poopSprite.body as Phaser.Physics.Arcade.Body;
+        const s = poop as Poop;
+        if (!s.active) return;
+        const body = s.body as Phaser.Physics.Arcade.Body;
         if (!body) return;
-        poopPositions.push({ x: poopSprite.x, y: poopSprite.y, velocity: body.velocity.y });
-        poopSprite.recycle();
+        positions.push({ x: s.x, y: s.y, velocity: body.velocity.y });
+        s.recycle();
+      });
+      [this.goldPoops, this.diamondPoops].forEach((group) => {
+        group.children.entries.forEach((item) => {
+          const s = item as PoolablePoopBase;
+          if (!s.active) return;
+          const body = s.body as Phaser.Physics.Arcade.Body;
+          if (!body) return;
+          positions.push({ x: s.x, y: s.y, velocity: body.velocity.y });
+          s.recycle();
+        });
       });
 
-      // 같은 위치에 금똥/다이아똥 생성 (50:50 확률)
-      poopPositions.forEach((pos) => {
-        const isGold = Math.random() < 0.5;
+      positions.forEach((pos) => {
+        for (let b = 0; b < 7; b++) {
+          const r = Phaser.Math.Between(3, 7);
+          const startX = pos.x + Phaser.Math.Between(-10, 10);
+          const bubble = this.add.circle(startX, pos.y, r, GameScene.BUBBLE_COLORS[b % GameScene.BUBBLE_COLORS.length], 0.9).setDepth(200);
+          this.tweens.add({
+            targets: bubble,
+            x: startX + Phaser.Math.Between(-18, 18),
+            y: pos.y - Phaser.Math.Between(28, 55),
+            alpha: 0,
+            scaleX: 0.2,
+            scaleY: 0.2,
+            duration: Phaser.Math.Between(280, 480),
+            ease: 'Sine.easeOut',
+            delay: b * 20,
+            onComplete: () => bubble.destroy(),
+          });
+        }
 
-        if (isGold) {
-          const goldPoop = this.goldPoops.get() as GoldPoop;
-          if (goldPoop) {
-            goldPoop.reinit(pos.x, pos.y);
-            if (goldPoop.body) {
-              goldPoop.body.velocity.y = pos.velocity * FEVER_TIME_CONFIG.speedMultiplier;
+        const rp = this.rainbowPoops.get() as RainbowPoop;
+        if (!rp) return;
+        rp.reinit(pos.x, pos.y);
+        if (rp.body) {
+          rp.body.velocity.y = pos.velocity * FEVER_TIME_CONFIG.speedMultiplier;
+        }
+      });
+    } else {
+      // 일반 피버: 기존 일반 똥 → 금똥/다이아똥 변환
+      if (this.poops) {
+        const poopPositions: Array<{ x: number; y: number; velocity: number }> = [];
+
+        this.poops.children.entries.forEach((poop) => {
+          const poopSprite = poop as Poop;
+          if (!poopSprite.active) return;
+          const body = poopSprite.body as Phaser.Physics.Arcade.Body;
+          if (!body) return;
+          poopPositions.push({ x: poopSprite.x, y: poopSprite.y, velocity: body.velocity.y });
+          poopSprite.recycle();
+        });
+
+        poopPositions.forEach((pos) => {
+          const isGold = Math.random() < 0.5;
+          if (isGold) {
+            const goldPoop = this.goldPoops.get() as GoldPoop;
+            if (goldPoop) {
+              goldPoop.reinit(pos.x, pos.y);
+              if (goldPoop.body) {
+                goldPoop.body.velocity.y = pos.velocity * FEVER_TIME_CONFIG.speedMultiplier;
+              }
+            }
+          } else {
+            const diamondPoop = this.diamondPoops.get() as DiamondPoop;
+            if (diamondPoop) {
+              diamondPoop.reinit(pos.x, pos.y);
+              if (diamondPoop.body) {
+                diamondPoop.body.velocity.y = pos.velocity * FEVER_TIME_CONFIG.speedMultiplier;
+              }
             }
           }
-        } else {
-          const diamondPoop = this.diamondPoops.get() as DiamondPoop;
-          if (diamondPoop) {
-            diamondPoop.reinit(pos.x, pos.y);
-            if (diamondPoop.body) {
-              diamondPoop.body.velocity.y = pos.velocity * FEVER_TIME_CONFIG.speedMultiplier;
-            }
-          }
-        }
-      });
-    }
+        });
+      }
 
-    // 기존 금똥/다이아똥 속도만 증가
-    if (this.goldPoops) {
-      this.goldPoops.children.entries.forEach((goldPoop) => {
-        const goldPoopSprite = goldPoop as GoldPoop;
-        if (goldPoopSprite.body) {
-          goldPoopSprite.body.velocity.y *= FEVER_TIME_CONFIG.speedMultiplier;
-        }
-      });
-    }
-    if (this.diamondPoops) {
-      this.diamondPoops.children.entries.forEach((diamondPoop) => {
-        const diamondPoopSprite = diamondPoop as DiamondPoop;
-        if (diamondPoopSprite.body) {
-          diamondPoopSprite.body.velocity.y *= FEVER_TIME_CONFIG.speedMultiplier;
-        }
+      // 기존 금똥/다이아똥 속도만 증가
+      [this.goldPoops, this.diamondPoops].forEach((group) => {
+        group.children.entries.forEach((item) => {
+          const s = item as PoolablePoopBase;
+          if (s.body) s.body.velocity.y *= FEVER_TIME_CONFIG.speedMultiplier;
+        });
       });
     }
 
     // spawnTimer를 피버 타임 생성 패턴으로 교체
-    this.resetSpawnTimer(this.spawnFeverPoop);
+    this.resetSpawnTimer(isRainbowFeverNow ? this.spawnRainbowFeverPoop : this.spawnFeverPoop);
 
     // UI 텍스트 생성 (각 글자별로 개별 Text 객체 생성)
     // 기존 텍스트 제거
@@ -984,21 +1046,28 @@ export default class GameScene extends BaseScene {
     this.feverTimeColorOffset = 0;
 
     const initialSeconds = Math.ceil(FEVER_TIME_CONFIG.duration / 1000);
-    const fullText = `FEVER TIME ${initialSeconds}초`;
+    const fullText = `${this.feverTimeLabel} ${initialSeconds}초`;
 
     // 각 글자별로 Text 객체 생성 (x=0에 먼저 배치 후 width 합산해 재정렬)
-    const colors = GameScene.RAINBOW_COLORS;
+    const colors = isRainbowFeverNow ? GameScene.NEON_RAINBOW_COLORS : GameScene.RAINBOW_COLORS;
+    const uiFontSize = isRainbowFeverNow ? '22px' : FEVER_TIME_CONFIG.ui.fontSize;
+    const uiStroke  = isRainbowFeverNow ? '#cc00ff' : FEVER_TIME_CONFIG.ui.stroke;
+    const uiStrokeThickness = isRainbowFeverNow ? 5 : FEVER_TIME_CONFIG.ui.strokeThickness;
+
     for (let i = 0; i < fullText.length; i++) {
       const charText = this.add.text(
         0,
         FEVER_TIME_CONFIG.ui.position.y,
         fullText[i],
         {
-          fontSize: FEVER_TIME_CONFIG.ui.fontSize,
+          fontSize: uiFontSize,
           color: colors[i % colors.length],
           fontStyle: 'bold',
-          stroke: FEVER_TIME_CONFIG.ui.stroke,
-          strokeThickness: FEVER_TIME_CONFIG.ui.strokeThickness
+          stroke: uiStroke,
+          strokeThickness: uiStrokeThickness,
+          shadow: isRainbowFeverNow
+            ? { offsetX: 0, offsetY: 0, color: colors[i % colors.length], blur: 8, stroke: true, fill: true }
+            : undefined,
         }
       ).setOrigin(0, 0.5).setDepth(FEVER_TIME_CONFIG.ui.depth);
       this.feverTimeUITexts.push(charText);
@@ -1010,6 +1079,21 @@ export default class GameScene extends BaseScene {
     for (const charText of this.feverTimeUITexts) {
       charText.setX(currentX);
       currentX += charText.width;
+    }
+
+    // 레인보우 피버: 글자마다 파도치는 bounce 애니메이션
+    if (isRainbowFeverNow) {
+      this.feverTimeUITexts.forEach((charText, i) => {
+        this.tweens.add({
+          targets: charText,
+          y: FEVER_TIME_CONFIG.ui.position.y - 10,
+          duration: 260,
+          ease: 'Sine.easeInOut',
+          yoyo: true,
+          repeat: -1,
+          delay: i * 38,
+        });
+      });
     }
 
 
@@ -1030,7 +1114,7 @@ export default class GameScene extends BaseScene {
       this.feverTimeColorTimer.remove();
     }
     this.feverTimeColorTimer = this.time.addEvent({
-      delay: 200,
+      delay: isRainbowFeverNow ? 80 : 200,
       callback: this.updateFeverTimeColors,
       callbackScope: this,
       loop: true
@@ -1044,7 +1128,7 @@ export default class GameScene extends BaseScene {
     this.feverTimeRemaining -= 100; // 0.1초씩 감소
 
     const secondsRemaining = Math.ceil(this.feverTimeRemaining / 1000);
-    const newText = `FEVER TIME ${secondsRemaining}초`;
+    const newText = `${this.feverTimeLabel} ${secondsRemaining}초`;
 
     // 각 글자의 텍스트 내용 업데이트
     for (let i = 0; i < this.feverTimeUITexts.length; i++) {
@@ -1074,7 +1158,7 @@ export default class GameScene extends BaseScene {
    * 피버 타임 색상 애니메이션 업데이트
    */
   private updateFeverTimeColors() {
-    const colors = GameScene.RAINBOW_COLORS;
+    const colors = this.isRainbowFever ? GameScene.NEON_RAINBOW_COLORS : GameScene.RAINBOW_COLORS;
     this.feverTimeColorOffset = (this.feverTimeColorOffset - 1 + colors.length) % colors.length;
     for (let i = 0; i < this.feverTimeUITexts.length; i++) {
       this.feverTimeUITexts[i].setColor(colors[(i + this.feverTimeColorOffset) % colors.length]);
@@ -1088,9 +1172,10 @@ export default class GameScene extends BaseScene {
   private clearFeverTimeUI() {
     if (!this.isFeverTime) return;
     this.isFeverTime = false;
+    this.isRainbowFever = false;
     this.feverTimeTimer?.remove();
     this.feverTimeColorTimer?.remove();
-    this.feverTimeUITexts.forEach(t => t.destroy());
+    this.feverTimeUITexts.forEach(t => { this.tweens.killTweensOf(t); t.destroy(); });
     this.feverTimeUITexts = [];
   }
 
@@ -1150,6 +1235,28 @@ export default class GameScene extends BaseScene {
     }
 
     this.ability.onAfterSpawnPoop(this.abilityAPI);
+  }
+
+  /**
+   * 레인보우 피버 생성 패턴 — 무지개똥만 소환 (광부×황금광산 시너지)
+   */
+  private spawnRainbowFeverPoop() {
+    if (this.gameOver) return;
+
+    const baseFallSpeed = this.difficultyConfig.baseSpeed + (this.difficultyLevel * POOP_CONFIG.normal.speedIncrement);
+    const fallSpeed = baseFallSpeed * FEVER_TIME_CONFIG.speedMultiplier;
+    const totalCount = FEVER_TIME_CONFIG.normalPoopCount + FEVER_TIME_CONFIG.bonusPoopCount;
+
+    for (let i = 0; i < totalCount; i++) {
+      const x = Phaser.Math.Between(50, this.scale.width - 50);
+      const y = Phaser.Math.Between(-200, -20);
+      const rp = this.rainbowPoops.get() as RainbowPoop;
+      if (!rp) continue;
+      rp.reinit(x, y);
+      if (rp.body) {
+        rp.body.velocity.y = fallSpeed;
+      }
+    }
   }
 
   protected hitPoop(

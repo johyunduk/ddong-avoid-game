@@ -2,6 +2,7 @@ export interface WallpaperSynergy {
   label: string;        // UI 뱃지 텍스트
   speedBonus: number;   // 이동 속도 추가 (px/s)
   collectBonus: number; // 특수 똥 수집마다 추가 점수
+  rainbowFever?: boolean; // true → 특정 피버마다 레인보우 피버로 교체
 }
 
 // 모든 시너지의 고정 보너스 값
@@ -9,7 +10,7 @@ const SYNERGY_BONUSES = { speedBonus: 5, collectBonus: 2 } as const;
 
 // 'wallpaperId:characterId' → WallpaperSynergy
 export const SYNERGY_MAP: Record<string, WallpaperSynergy> = {
-  'wp_gold_mine:miner': { label: '황금 광산 × 광부', ...SYNERGY_BONUSES },
+  'wp_gold_mine:miner': { label: '황금 광산 × 광부', ...SYNERGY_BONUSES, rainbowFever: true },
   'wp_hanok:maehwa':    { label: '한옥 × 매화',      ...SYNERGY_BONUSES },
   'wp_lake:archieve':   { label: '호수 × 아카이브',  ...SYNERGY_BONUSES },
   'wp_maehwa:maehwa':   { label: '매화 × 매화',      ...SYNERGY_BONUSES },
