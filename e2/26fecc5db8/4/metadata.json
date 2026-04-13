@@ -1,0 +1,38 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "e226fecc5db8",
+  "session_id": "2c79c564-0af6-4832-8000-f31ccf1018c4",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-13T12:44:07.686549Z",
+  "branch": "dev",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "public/assets/wallpapers/gold_mine_bg.webp",
+    "public/assets/wallpapers/gold_mine_thumb.webp",
+    "src/config/synergyMap.ts",
+    "src/data/releaseNotes.ts",
+    "src/scenes/GameScene.ts"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "b694667e9982",
+  "transcript_identifier_at_start": "9fe52313-0f26-43e7-b967-f6ddd02a56bc",
+  "checkpoint_transcript_start": 882,
+  "transcript_lines_at_start": 882,
+  "token_usage": {
+    "input_tokens": 344,
+    "cache_creation_tokens": 595296,
+    "cache_read_tokens": 23121784,
+    "output_tokens": 187350,
+    "api_call_count": 262
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-13T12:44:06.702475Z",
+    "agent_lines": 173,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 173,
+    "agent_percentage": 100
+  },
+  "transcript_path": ".claude/projects/-Users-johyunduk-Projects-ddong-avoid-game/2c79c564-0af6-4832-8000-f31ccf1018c4.jsonl"
+}
