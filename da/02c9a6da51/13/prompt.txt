@@ -1,0 +1,420 @@
+@public/assets/players/knight_front.png @public/assets/players/knight_left.png 이 두 이미지 추가를 했는데 다른 애들 처럼 webp로 만들어주고 오른쪽으로 달리는 왼쪽 좌우 반전 이미지 추가해줘.
+
+---
+
+크기가 다른 애들과 다른거 같은데 맞춰줄 수 있나?
+
+---
+
+@../illustrations/knight.png 이것도 나머지 일러스트 처럼 변환해줘.
+
+---
+
+자 이제 비디오 까지 추가를 했어. 다른 애들처럼 뽑기에도 나오게 처리해주고 캐릭터 목록 등 추가해야 하는곳 전부 추가해줘.
+
+---
+
+1. SR, 2. 200점 마다 검기를 발사하여 검기에 닿은 일반 똥은 사라지게 만들어줘. 기본 능력은 추천해서 작성해줘.
+
+---
+
+일단 지금만 나이트의 확률을 100퍼로 만들어줘.
+
+---
+
+테스트 됐어 다시 돌려줘.
+
+---
+
+나이트를 선택했는데 왜 치비 캐릭터로 플레이가 되지?
+
+---
+
+다른곳도 빠진곳 있는지 봐줘.
+
+---
+
+여기랑 캐릭터 목록에서 SR들 . 가장 앞에 나오게 바꿔줘.
+
+---
+
+나이트 검기 이거 초승달 모양의 기가 앞으로 발사되게 바꿔줘.
+
+---
+
+연녹색 느낌으로 바꿔주고 검기 주변이 뭔가 일렁일렁 거리는 느낌으로 만들어줘. 그리고 세방향으로 3개의 검기가 나가게 바꿔줘.
+
+---
+
+좋아 근데 네온 주황으로 바꿔줄 수 있나?
+
+---
+
+기본 효과는 이동속도가 아니라 검기로 제거한 일반 똥 1개에 2점 추가 점수로 바꿔줘.
+
+---
+
+검기가 약간 너무 그냥 초승달 같아. 일렁일렁 거리는 느낌이 없는데?
+
+---
+
+# Simplify: Code Review and Cleanup
+
+Review all changed files for reuse, quality, and efficiency. Fix any issues found.
+
+## Phase 1: Identify Changes
+
+Run `git diff` (or `git diff HEAD` if there are staged changes) to see what changed. If there are no git changes, review the most recently modified files that the user mentioned or that you edited earlier in this conversation.
+
+## Phase 2: Launch Three Review Agents in Parallel
+
+Use the Agent tool to launch all three agents concurrently in a single message. Pass each agent the full diff so it has the complete context.
+
+### Agent 1: Code Reuse Review
+
+For each change:
+
+1. **Search for existing utilities and helpers** that could replace newly written code. Look for similar patterns elsewhere in the codebase — common locations are utility directories, shared modules, and files adjacent to the changed ones.
+2. **Flag any new function that duplicates existing functionality.** Suggest the existing function to use instead.
+3. **Flag any inline logic that could use an existing utility** — hand-rolled string manipulation, manual path handling, custom environment checks, ad-hoc type guards, and similar patterns are common candidates.
+
+### Agent 2: Code Quality Review
+
+Review the same changes for hacky patterns:
+
+1. **Redundant state**: state that duplicates existing state, cached values that could be derived, observers/effects that could be direct calls
+2. **Parameter sprawl**: adding new parameters to a function instead of generalizing or restructuring existing ones
+3. **Copy-paste with slight variation**: near-duplicate code blocks that should be unified with a shared abstraction
+4. **Leaky abstractions**: exposing internal details that should be encapsulated, or breaking existing abstraction boundaries
+5. **Stringly-typed code**: using raw strings where constants, enums (string unions), or branded types already exist in the codebase
+6. **Unnecessary JSX nesting**: wrapper Boxes/elements that add no layout value — check if inner component props (flexShrink, alignItems, etc.) already provide the needed behavior
+7. **Unnecessary comments**: comments explaining WHAT the code does (well-named identifiers already do that), narrating the change, or referencing the task/caller — delete; keep only non-obvious WHY (hidden constraints, subtle invariants, workarounds)
+
+### Agent 3: Efficiency Review
+
+Review the same changes for efficiency:
+
+1. **Unnecessary work**: redundant computations, repeated file reads, duplicate network/API calls, N+1 patterns
+2. **Missed concurrency**: independent operations run sequentially when they could run in parallel
+3. **Hot-path bloat**: new blocking work added to startup or per-request/per-render hot paths
+4. **Recurring no-op updates**: state/store updates inside polling loops, intervals, or event handlers that fire unconditionally — add a change-detection guard so downstream consumers aren't notified when nothing changed. Also: if a wrapper function takes an updater/reducer callback, verify it honors same-reference returns (or whatever the "no change" signal is) — otherwise callers' early-return no-ops are silently defeated
+5. **Unnecessary existence checks**: pre-checking file/resource existence before operating (TOCTOU anti-pattern) — operate directly and handle the error
+6. **Memory**: unbounded data structures, missing cleanup, event listener leaks
+7. **Overly broad operations**: reading entire files when only a portion is needed, loading all items when filtering for one
+
+## Phase 3: Fix Issues
+
+Wait for all three agents to complete. Aggregate their findings and fix each issue directly. If a finding is a false positive or not worth addressing, note it and move on — do not argue with the finding, just skip it.
+
+When done, briefly summarize what was fixed (or confirm the code was already clean).
+
+---
+
+<task-notification>
+<task-id>a530a30e48f23670d</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>REDACTED.output</output-file>
+<status>completed</status>
+<summary>Agent "Code quality review" completed</summary>
+<result>## Code Quality Findings for KnightAbility.ts
+
+### 1. **Redundant State: `lastBeamScore`** (Line 13)
+The `lastBeamScore` field tracks the last score milestone already processed. However, this is derivable from the condition `score % KNIGHT_PARAMS.beamInterval === 0 && score > this.lastBeamScore`. Since milestones fire at interval boundaries and are only called once per score increase, you could eliminate this by storing `previousScore` instead and comparing `Math.floor(score / beamInterval) > Math.floor(previousScore / beamInterval)`. This adds unnecessary state mutation for a simple threshold check.
+
+### 2. **Parameter Sprawl in `wavyPoints()`** (Lines 50–57)
+The method accepts 6 parameters with 4 having defaults:
+```
+base, time, scale = 1, speed = 0.008, amp = 3.5, phase = 0
+```
+These could be grouped into a config object: `{scale, speed, amp, phase}` to improve readability and reduce positional coupling. Callers (lines 121, 126, 131, 136) pass numerous inline values, making the call sites harder to scan.
+
+### 3. **Copy-Paste Pattern: `emitEdgeSpark` vs `spawnHitSpark`** (Lines 159–174 & 177–195)
+Both methods:
+- Create a graphics object at a position
+- Set a fill color and draw a circle
+- Add a tween with `alpha: 0` and `Quad.easeOut`
+- Destroy on completion
+
+The differences (spark count, size ranges, movement deltas) are minor. A shared `spawnSpark(x, y, config)` helper accepting color, radius, drift, duration would eliminate duplication. Lines 159–173 and 180–193 are structurally identical scaffolding.
+
+### 4. **Unnecessary Comments** (Multiple)
+- Line 22: "정적 초승달 꼭짓점 (로컬 좌표)" — the method name `buildCrescentPoints()` already conveys this
+- Lines 89–90: "── 가장자리 파티클 방출 타이머 ────────────────────────────────" and 105: "── 이동 & 매 프레임 재드로우 & 충돌 ──────────────────────────" — section dividers with Korean text that duplicate what the code layout already shows
+- Lines 158, 176: Comment block headers that simply describe what the next method does (redundant with Korean method names)
+
+### 5. **Magic Numbers Not in KNIGHT_PARAMS**
+Multiple hardcoded values lacking justification:
+- **0.32** (Line 60): Spacing multiplier in wave phase calculation
+- **0.007, 0.011, 0.013, 0.014** (Lines 120–121, 125–126, 131, 136): Time scale factors for each glow layer
+- **1.65, 1.25, 1.0** (Lines 121, 126, 131): Scale factors for outer/mid/body glows
+- **5.5, 3.5, 2.5** (Lines 121, 126, 131): Wave amplitudes per layer
+- **0.12, 0.07, 0.28, 0.1** (Lines 120, 125): Alpha base and variance
+- **12, 18, 4** (Lines 165–166): Edge spark drift ranges
+- **180, 320** (Line 170): Edge spark duration range
+- **7** (Line 179): Hit spark count
+- **2, 5, 10, 28** (Lines 182, 184): Hit spark size and distance ranges
+- **180, 380** (Line 190): Hit spark duration range
+
+These are visual/timing tuning parameters that should live in `KNIGHT_PARAMS` for easy tweaking and clarity.
+
+### 6. **`makeGfx` Helper Worth Keeping?** (Lines 80–81)
+The helper eliminates 4 lines of boilerplate (`.setDepth()`, `.setPosition()`, `.setRotation()`), improving consistency across the four graphics layers (lines 83–86). This is justified for DRY and preventing typos, especially since depth assignments are order-dependent (118→121 sequence). **Worth keeping.**
+
+### Summary
+- **High priority:** Extract magic numbers to `KNIGHT_PARAMS`; consolidate spark-emission logic
+- **Medium priority:** Replace `lastBeamScore` state; group `wavyPoints()` parameters into config object
+- **Low priority:** Remove redundant comments and section dividers</result>
+<usage><total_tokens>14751</total_tokens><tool_uses>1</tool_uses><duration_ms>18439</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>af7afe7db25dc39c2</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>REDACTED.output</output-file>
+<status>completed</status>
+<summary>Agent "Code reuse review" completed</summary>
+<result>Now let me review my findings. I have all the information I need. Let me create a comprehensive report:
+
+## CODE REUSE ANALYSIS: KnightAbility
+
+Based on my review of the diff and comparison with existing ability files, here are the code reuse issues found:
+
+### 1. **Geometry/Math Utilities: `buildCrescentPoints()` and `wavyPoints()`**
+
+**Finding:** These are bespoke implementations unique to KnightAbility.
+
+- `buildCrescentPoints()` (lines 23-40): Computes crescent geometry using dual circular arcs with trigonometry. This is a specialized, one-off implementation.
+- `wavyPoints()` (lines 50-64): Takes a point array and applies sinusoidal radial distortion per-point.
+
+**Comparison:** 
+- LegacyAbility has static geometry helpers (`flamePts()`, `starPts()`) but these are specific to flame/star shapes and hardcoded.
+- No centralized geometry utility file exists in `/src/utils/`.
+- This pattern of "custom per-ability geometry" is consistent with the codebase design (each ability owns its visuals).
+
+**Verdict:** NOT a reuse issue — these are legitimately shape-specific and no shared geometry abstraction exists elsewhere.
+
+---
+
+### 2. **Particle Emission Logic: `emitEdgeSpark()` and `spawnHitSpark()`**
+
+**Finding:** Strong duplication with particle patterns in MaehwaAbility and HackerAbility.
+
+**MaehwaAbility.spawnPetals()** (lines 80-108):
+```
+for (let i = 0; i < count; i++) {
+  const particle = scene.add.graphics();
+  // randomize color, position, rotation
+  scene.tweens.add({
+    targets: particle,
+    x, y, alpha, scale, duration,
+    ease: 'Quad.easeOut',
+    onComplete: () => particle.destroy(),
+  });
+}
+```
+
+**HackerAbility.playTerminalEffect()** (lines 60-81):
+```
+for (let i = 0; i < PIXEL_COUNT; i++) {
+  const px = scene.add.graphics();
+  // fill rect with random angle, speed
+  scene.tweens.add({
+    targets: px,
+    x, y, alpha, duration,
+    ease: 'Quad.easeOut',
+    onComplete: () => px.destroy(),
+  });
+}
+```
+
+**KnightAbility.spawnHitSpark()** (lines 177-195):
+```
+for (let i = 0; i < 7; i++) {
+  const spark = scene.add.graphics().setDepth(122);
+  spark.fillCircle(0, 0, ...);
+  scene.tweens.add({
+    targets: spark,
+    x, y, alpha, duration,
+    ease: 'Quad.easeOut',
+    onComplete: () => spark.destroy(),
+  });
+}
+```
+
+**Pattern:** All three share identical structure:
+1. Loop N times
+2. Create graphics object with `scene.add.graphics()`
+3. Draw shape (circle, rect, polygon)
+4. Tween to fade + move + destroy
+
+**Verdict:** REUSE ISSUE — This particle spawning loop pattern is repeated across multiple abilities. A utility function like `spawnParticles(scene, positions, config)` could abstract this.
+
+---
+
+### 3. **Looping Timer Pattern: `scene.time.addEvent` with `loop: true`**
+
+**Finding:** KnightAbility (lines 90-103) is the ONLY ability using `scene.time.addEvent({ delay, loop: true, callback })`.
+
+**Pattern in KnightAbility:**
+```typescript
+const particleTimer = scene.time.addEvent({
+  delay: 45,
+  loop: true,
+  callback: () => {
+    if (!body.active) return;
+    // emit spark
+  },
+});
+```
+
+**Comparison with other abilities:**
+- **LegacyAbility:** Uses `addEvent({ delay, repeat: REPEAT, callback })` and `delayedCall()` (lines 330, 67, 305)
+- **GlitchAbility:** Uses `delayedCall()` exclusively (line 91)
+- **SentinelAbility:** Uses `delayedCall()` exclusively (lines 238, 244)
+
+**Pattern:** Most abilities prefer `delayedCall()` for one-shot timers. The `loop: true` pattern in KnightAbility is inconsistent.
+
+**Verdict:** INCONSISTENCY ISSUE — Not necessarily duplication, but differs from codebase convention. LegacyAbility's `repeat: -1` + `delayedCall()` cleanup (line 305) is the established pattern for persistent looping effects.
+
+---
+
+### 4. **Projectile/Crescent Firing: `fireSingleCrescent()`**
+
+**Finding:** The helper function follows an established pattern but isn't duplicated elsewhere.
+
+**KnightAbility.fireSingleCrescent()** (lines 66-156):
+- Spawns 4 layered graphics objects (outerGlow, midGlow, body, edge)
+- Uses `scene.tweens.add()` with `onUpdate` callback for per-frame collision detection
+- Tracks hit targets in a Set to avoid re-collision
+
+**Comparison:**
+- MaehwaAbility: Uses discrete effects (`drawSlashEffect()`, `spawnPetals()`)
+- HackerAbility: Uses single `playTerminalEffect()` per target
+- LegacyAbility: Uses pre-rendered geometry effects
+
+**Verdict:** NOT a reuse issue — This is a novel projectile implementation specific to Knight's sword beam mechanic.
+
+---
+
+## SUMMARY OF ISSUES
+
+| Issue | Type | Severity | Details |
+|-------|------|----------|---------|
+| Particle spawn loops (spawnHitSpark, spawnPetals, playTerminalEffect) | Code duplication | **MEDIUM** | Same for-loop + graphics + tween pattern repeated across 3+ abilities |
+| `scene.time.addEvent({ loop: true })` | Inconsistency | **LOW** | Differs from LegacyAbility's established `repeat: -1` + cleanup pattern |
+| buildCrescentPoints, wavyPoints | Custom geometry | None | Legitimately shape-specific; no abstraction exists |
+| fireSingleCrescent | Novel pattern | None | Unique projectile mechanic; not duplicated |
+
+**Recommended refactoring:** Extract a shared particle utility function (e.g., in `src/utils/particles.ts`) to handle multi-particle spawning loops.</result>
+<usage><total_tokens>42692</total_tokens><tool_uses>20</tool_uses><duration_ms>42753</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a9d87c797e433de75</task-id>
+<tool-use-id>toolu_01G4GsmUC6XLx8cG352fo758</tool-use-id>
+<output-file>REDACTED.output</output-file>
+<status>completed</status>
+<summary>Agent "Efficiency review" completed</summary>
+<result>Now I have all the context I need. Let me prepare the efficiency review report.
+
+## EFFICIENCY REVIEW: KnightAbility.ts
+
+### 1. **`buildCrescentPoints()` NOT CACHED across 3 crescents**
+**ISSUE**: Line 78 calls `this.buildCrescentPoints()` once per crescent, creating 3 separate arrays (each with 62 points: 31 outer + 31 inner). The result is NOT reused across the three `-30°, 0°, 30°` calls.
+- Per call: ~62 point allocations + 30+ trig calculations
+- Total: 186 points allocated per beam trigger (3 crescents × 62 points)
+- **FIX OPPORTUNITY**: Memoize or store `buildCrescentPoints()` as a static constant since the shape never changes.
+
+---
+
+### 2. **DUPLICATE `wavyPoints()` computation for body AND edge**
+**ISSUE**: Lines 131 and 136 both call `this.wavyPoints(base, t, 1.0, 0.013, 2.5, 2.1)` with **identical arguments**, generating the same point array twice per frame per crescent.
+- Occurs in `onUpdate` callback (every ~16ms for ~1-2 second tween duration)
+- 3 crescents × 2 calls = 6 redundant array allocations per frame during travel
+- **Per-frame cost**: 3 crescents × 2 redundant `wavyPoints` × 62 points = 372 unnecessary point objects per frame
+- **FIX OPPORTUNITY**: Cache the result of the body wave and reuse for edge drawing.
+
+---
+
+### 3. **`api.poops.getChildren()` called every frame without filtering**
+**ISSUE**: Line 141 calls `api.poops.getChildren()` in the `onUpdate` callback every ~16ms.
+- Returns ALL poop children, then filters in forEach (line 141-149)
+- Per-frame cost in onUpdate: 3 crescents × 1 getChildren call (3 total per frame)
+- **FIX OPPORTUNITY**: Use `api.poops.getChildren().filter(s => s.active)` once, or cache+slice the result to avoid full array copy per call. Consider `Physics.overlap()` instead of manual distance checks if available.
+
+---
+
+### 4. **Timer + Tween cleanup on early game-over NOT GUARANTEED**
+**ISSUE**: KnightAbility has NO `onDestroy()` method.
+- **Problem**: If game ends mid-tween, `particleTimer` (created line 90) and `scene.tweens.add()` (line 109) are never explicitly destroyed.
+- The tween's `onComplete` (line 151-154) will not fire if scene is destroyed before tween duration.
+- **Missing cleanup**: timers, tweens, and 4 Graphics objects per crescent remain in memory.
+- **COMPARISON**: `SentinelAbility` (line 93-97) and `LegacyAbility` (line 410-417) both implement `onDestroy()` to remove timers and Graphics.
+- **FIX OPPORTUNITY**: Add `onDestroy()` that stops all active tweens for Knight and removes all Graphics created in `fireSingleCrescent`.
+
+---
+
+### 5. **12 Graphics operations per frame for 400×600 mobile device**
+**ISSUE**: Lines 119-136 in `onUpdate` perform:
+- 4 graphics objects × (1 `clear()` + 1 `fillStyle()` + 1 `fillPoints(true)`) = 12 calls per frame
+- 3 crescents × 12 calls = **36 graphics operations per frame** (every 16ms)
+- Mobile GPU pressure: clearing + re-rendering 4 layered shapes every frame for a 400×600 canvas is borderline expensive.
+- **Concern**: If multiple abilities fire simultaneously, this can spike GPU cost.
+- **OBSERVATION**: This is the nature of real-time Graphics rendering; no trivial fix without changing design (e.g., sprite-based instead of Graphics).
+
+---
+
+### 6. **Memory: Graphics and TimerEvents NOT fully cleaned up**
+**ISSUE**: No `onDestroy()` implementation.
+- **Graphics**: 4 objects per crescent (`outerGlow, midGlow, body, edge`) stored in `all` array (line 87). Destroyed on `onComplete` (line 153) only if tween finishes naturally.
+- **TimerEvent**: `particleTimer` (line 90) uses `loop: true` and is only destroyed in tween's `onComplete` (line 152). If tween is interrupted, timer loops forever.
+- **Spark Graphics**: `emitEdgeSpark()` creates ephemeral Graphics (line 160) that have tweens with `onComplete` destroy handlers — these ARE cleaned up, but only if tweens complete.
+- **Impact**: Early game-over + active Knight ability = 4 Graphics + 1 looping timer leak per active crescent.
+
+---
+
+### Summary Table
+
+| Issue | Severity | Frequency | Impact |
+|-------|----------|-----------|--------|
+| `buildCrescentPoints()` not cached | Low | Once per 50 points | 186 point allocations per trigger |
+| `wavyPoints()` called twice with same args | Medium | Every 16ms (tween) | 372 redundant points/frame × 2 sec = 46k allocs |
+| `getChildren()` called every frame | Medium | Every 16ms × 3 | Repeated array iteration, no filtering |
+| No `onDestroy()` cleanup | **High** | Game-over event | 4 Graphics + 1 looping timer leak per crescent |
+| 12 graphics ops/frame × 3 crescents | Medium | Every 16ms | GPU pressure, but expected for 2D Graphics API |
+
+**Primary concern**: Lack of `onDestroy()` causes resource leaks on game-over. **Secondary concern**: `wavyPoints()` duplicate computation and repeated `getChildren()` calls are redundant but low-impact individually.</result>
+<usage><total_tokens>35117</total_tokens><tool_uses>8</tool_uses><duration_ms>30868</duration_ms></usage>
+</task-notification>
+
+---
+
+메모리 문제는 없나?
+
+---
+
+이렇게 깃 푸시 해줘
+
+---
+
+@public/assets/wallpapers/fantasy.png 이거 추가했는데 다른 배경들 처럼 webp 로 만들고 배경화면 목록, 뽑기에 추가, 그리고 knight 캐릭터와 시너지 추가해줘. 배경 추가했을 때 추가해야 되는데 빠진거 있으면 알려주고
+
+---
+
+그러면 엣지 함수 배포만 하면 되나?
+
+---
+
+일단 저 배경 확률 100퍼로 만들어줘봐
+
+---
+
+다시 돌려줘.
+
+---
+
+깃 푸시해줘.

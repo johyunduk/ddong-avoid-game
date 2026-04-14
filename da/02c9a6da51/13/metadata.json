@@ -1,0 +1,38 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "da02c9a6da51",
+  "session_id": "ced84858-0c5f-4ebc-8411-1dd429f60e91",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-14T13:33:43.258156Z",
+  "branch": "dev",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "public/assets/wallpapers/fantasy_bg.webp",
+    "public/assets/wallpapers/fantasy_thumb.webp",
+    "src/config/synergyMap.ts",
+    "src/utils/wallpaper.ts",
+    "supabase/functions/gacha-pull/index.ts"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "13736e31f1d9",
+  "transcript_identifier_at_start": "1c25ae5b-3c7c-4da0-b313-6803f2527c0e",
+  "checkpoint_transcript_start": 318,
+  "transcript_lines_at_start": 318,
+  "token_usage": {
+    "input_tokens": 29,
+    "cache_creation_tokens": 12842,
+    "cache_read_tokens": 2658655,
+    "output_tokens": 5233,
+    "api_call_count": 19
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-14T13:33:42.825085Z",
+    "agent_lines": 11,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 11,
+    "agent_percentage": 100
+  },
+  "transcript_path": ".claude/projects/-Users-johyunduk-Projects-ddong-avoid-game/ced84858-0c5f-4ebc-8411-1dd429f60e91.jsonl"
+}
