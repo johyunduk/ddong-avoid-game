@@ -1,0 +1,45 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "af81a196f0b6",
+  "session_id": "2c79c564-0af6-4832-8000-f31ccf1018c4",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-14T13:23:56.351744Z",
+  "branch": "dev",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "src/config/abilityParams.ts",
+    "public/assets/illustrations/knight.webp",
+    "public/assets/players/knight_left.webp",
+    "public/assets/players/knight_right.webp",
+    "src/abilities/index.ts",
+    "src/scenes/GachaScene.ts",
+    "src/scenes/GameScene.ts",
+    "src/utils/character.ts",
+    "supabase/functions/gacha-pull/index.ts",
+    "public/assets/players/knight_front.webp",
+    "public/assets/vids/knight.mp4",
+    "src/abilities/KnightAbility.ts"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "b694667e9982",
+  "transcript_identifier_at_start": "9fe52313-0f26-43e7-b967-f6ddd02a56bc",
+  "checkpoint_transcript_start": 882,
+  "transcript_lines_at_start": 882,
+  "token_usage": {
+    "input_tokens": 344,
+    "cache_creation_tokens": 595296,
+    "cache_read_tokens": 23121784,
+    "output_tokens": 187350,
+    "api_call_count": 262
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-14T13:23:55.359157Z",
+    "agent_lines": 0,
+    "human_added": 233,
+    "human_modified": 6,
+    "human_removed": 0,
+    "total_committed": 233,
+    "agent_percentage": 0
+  },
+  "transcript_path": ".claude/projects/-Users-johyunduk-Projects-ddong-avoid-game/2c79c564-0af6-4832-8000-f31ccf1018c4.jsonl"
+}
