@@ -7,7 +7,7 @@ import BaseScene from './BaseScene';
 
 // vids/ 디렉토리에 개인 영상이 존재하는 캐릭터 목록
 const CHARS_WITH_VIDS = new Set([
-  'chibi', 'hacker', 'miner', 'maehwa', 'archieve', 'glitch', 'noise', 'sentinel', 'legacy',
+  'chibi', 'hacker', 'miner', 'maehwa', 'archieve', 'glitch', 'noise', 'sentinel', 'legacy', 'knight',
 ]);
 
 const GRADE_COLORS: Record<string, number> = {
@@ -25,7 +25,7 @@ const CURRENT_BANNER = {
 };
 
 // 로비 슬라이드쇼 순서: UR 우선(sentinel → legacy), 이후 SR 순
-const SLIDESHOW_IDS = ['sentinel', 'legacy', 'hacker', 'miner', 'maehwa', 'archieve', 'glitch', 'noise'];
+const SLIDESHOW_IDS = ['sentinel', 'legacy', 'knight', 'hacker', 'miner', 'maehwa', 'archieve', 'glitch', 'noise'];
 
 export default class GachaScene extends BaseScene {
   private skorBalance = 0;

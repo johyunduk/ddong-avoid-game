@@ -21,8 +21,8 @@ function pullWallpaper(): { id: string } {
 }
 
 // ── 뽑기 풀 정의 ────────────────────────────────────────────────────────
-// R 80% (10종 균등 배분), SR 19.3% (6종 균등 배분), UR 0.7% (2종 균등 배분)
-const SR_W  = 19.3 / 6;   // ≈ 3.217%
+// R 80% (10종 균등 배분), SR 19.3% (7종 균등 배분), UR 0.7% (2종 균등 배분)
+const SR_W  = 19.3 / 7;   // ≈ 2.757%
 const POOL = [
   // ── R등급 ──
   { id: 'log',     grade: 'R',  weight: 8 },
@@ -42,6 +42,7 @@ const POOL = [
   { id: 'archieve', grade: 'SR', weight: SR_W },
   { id: 'glitch',   grade: 'SR', weight: SR_W },
   { id: 'noise',    grade: 'SR', weight: SR_W },
+  { id: 'knight',   grade: 'SR', weight: SR_W },
   // ── UR등급 ──
   { id: 'sentinel', grade: 'UR', weight: 0.35 },
   { id: 'legacy',   grade: 'UR', weight: 0.35 },

@@ -9,6 +9,7 @@ import { GlitchAbility } from './GlitchAbility';
 import { NoiseAbility } from './NoiseAbility';
 import { SentinelAbility } from './SentinelAbility';
 import { LegacyAbility } from './LegacyAbility';
+import { KnightAbility } from './KnightAbility';
 
 const R_IDS = ['log', 'swap', 'sum', 'fork', 'seed', 'session', 'branch', 'hook', 'socket', 'index'];
 
@@ -24,6 +25,7 @@ export function getCharacterAbility(id: string, awakeningLevel = 0): CharacterAb
     case 'noise':    return new NoiseAbility(awakeningLevel);
     case 'sentinel': return new SentinelAbility(awakeningLevel);
     case 'legacy':   return new LegacyAbility(awakeningLevel);
+    case 'knight':   return new KnightAbility(awakeningLevel);
     default:         return new BaseAbility(); // chibi 및 미등록 캐릭터
   }
 }

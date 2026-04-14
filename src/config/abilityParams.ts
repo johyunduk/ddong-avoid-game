@@ -93,6 +93,17 @@ export const SENTINEL_DESC = {
   specialAbility: `${SENTINEL_PARAMS.chargeInterval}점마다 보호막 1개 충전 (최대 ${SENTINEL_PARAMS.maxShields}개)`,
 } as const;
 
+// ── 나이트 (Knight / SR) ──────────────────────────────────────────────
+export const KNIGHT_PARAMS = {
+  beamKillBonus: 2,        // 검기로 제거한 일반 똥 1개당 추가 점수
+  beamInterval: 50,        // 검기 발사 점수 간격
+} as const;
+
+export const KNIGHT_DESC = {
+  basicEffect: `검기로 제거한 일반 똥 1개당 +${KNIGHT_PARAMS.beamKillBonus}점`,
+  specialAbility: `${KNIGHT_PARAMS.beamInterval}점마다 3방향 검기 발사 — 경로 위 일반 똥 전부 소멸`,
+} as const;
+
 // ── 레거시 (Legacy / UR) ──────────────────────────────────────────────
 export const LEGACY_PARAMS = {
   feverDuration: 6000,        // 시작 피버 지속 시간 (ms)

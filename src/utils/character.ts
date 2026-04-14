@@ -1,7 +1,7 @@
 import {
   HACKER_DESC, MINER_DESC, MAEHWA_DESC,
   ARCHIEVE_DESC, GLITCH_DESC, NOISE_DESC,
-  SENTINEL_DESC, LEGACY_DESC,
+  SENTINEL_DESC, LEGACY_DESC, KNIGHT_DESC,
 } from '../config/abilityParams';
 
 export interface CharacterDef {
@@ -70,6 +70,20 @@ export const CHARACTERS: CharacterDef[] = [
     specialAbility: LEGACY_DESC.specialAbility,
   },
   // ── SR등급 ─────────────────────────────────────────────────────────────
+  {
+    id: 'knight',
+    name: '나이트',
+    grade: 'SR',
+    gradeColor: '#4488ff',
+    imageKey: 'knight_front',
+    imagePath: 'assets/players/knight_front.webp',
+    illustKey: 'illust_knight',
+    illustPath: 'assets/illustrations/knight.webp',
+    videoKey: 'vid_knight',
+    videoPath: 'assets/vids/knight.mp4',
+    basicEffect: KNIGHT_DESC.basicEffect,
+    specialAbility: KNIGHT_DESC.specialAbility,
+  },
   {
     id: 'hacker',
     name: '루트',

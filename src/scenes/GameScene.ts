@@ -82,7 +82,7 @@ export default class GameScene extends BaseScene {
     return Math.max(400, this.difficultyConfig.spawnDelay - (this.difficultyLevel * 80));
   }
 
-  private static readonly CHARS_WITH_SPRITES = ['miner', 'maehwa', 'hacker', 'archieve', 'glitch', 'noise', 'sentinel', 'legacy', 'log', 'swap', 'sum', 'fork', 'seed', 'session', 'branch', 'hook', 'socket', 'index'];
+  private static readonly CHARS_WITH_SPRITES = ['miner', 'maehwa', 'hacker', 'archieve', 'glitch', 'noise', 'sentinel', 'legacy', 'log', 'swap', 'sum', 'fork', 'seed', 'session', 'branch', 'hook', 'socket', 'index', 'knight'];
   private static readonly RAINBOW_COLORS = [
     '#ff0000', '#ff7f00', '#ffff00', '#00ff00', '#0000ff', '#4b0082', '#9400d3',
   ];
