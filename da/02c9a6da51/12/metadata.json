@@ -1,0 +1,34 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "da02c9a6da51",
+  "session_id": "b3f1302c-8da4-466f-882a-e15beab1b6d0",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-14T13:33:42.408164Z",
+  "branch": "dev",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "src/utils/wallpaper.ts"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "ae415f1178b8",
+  "transcript_identifier_at_start": "2a30d945-1e57-48a0-9f55-83a65e6956ea",
+  "checkpoint_transcript_start": 319,
+  "transcript_lines_at_start": 319,
+  "token_usage": {
+    "input_tokens": 172,
+    "cache_creation_tokens": 137618,
+    "cache_read_tokens": 7630798,
+    "output_tokens": 49018,
+    "api_call_count": 96
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-14T13:33:40.787505Z",
+    "agent_lines": 9,
+    "human_added": 2,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 11,
+    "agent_percentage": 81.81818181818183
+  },
+  "transcript_path": ".claude/projects/-Users-johyunduk-Projects-ddong-avoid-game/b3f1302c-8da4-466f-882a-e15beab1b6d0.jsonl"
+}
