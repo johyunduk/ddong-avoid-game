@@ -1,0 +1,31 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "48e630463dd3",
+  "session_id": "2b008b8f-9644-4770-bf5d-d27a0f5a6248",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-14T13:41:12.691317Z",
+  "branch": "dev",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "public/assets/wallpapers/fantasy_bg.webp"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "68d0af474ae4",
+  "token_usage": {
+    "input_tokens": 218,
+    "cache_creation_tokens": 243039,
+    "cache_read_tokens": 13491437,
+    "output_tokens": 42512,
+    "api_call_count": 160
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-14T13:41:11.744036Z",
+    "agent_lines": 0,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 0,
+    "agent_percentage": 0
+  },
+  "transcript_path": ".claude/projects/-Users-johyunduk-Projects-ddong-avoid-game/2b008b8f-9644-4770-bf5d-d27a0f5a6248.jsonl"
+}
