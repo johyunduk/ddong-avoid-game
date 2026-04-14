@@ -82,6 +82,15 @@ export const WALLPAPERS: BackgroundDef[] = [
     bgPath: 'assets/wallpapers/gold_mine_bg.webp',
     description: '반짝이는 금맥이 흐르는 지하 광산',
   },
+  {
+    id: 'wp_fantasy',
+    name: '판타지 왕국',
+    thumbKey: 'wp_fantasy_thumb',
+    thumbPath: 'assets/wallpapers/fantasy_thumb.webp',
+    bgKey: 'wp_fantasy_bg',
+    bgPath: 'assets/wallpapers/fantasy_bg.webp',
+    description: '깃발 휘날리는 성채 앞 기사들의 진영',
+  },
 ];
 
 /** 가챠로 획득 가능한 배경화면 ID — WALLPAPERS에서 자동 파생, 직접 수정 불필요 */

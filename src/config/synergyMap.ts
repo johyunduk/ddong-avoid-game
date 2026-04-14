@@ -14,6 +14,7 @@ export const SYNERGY_MAP: Record<string, WallpaperSynergy> = {
   'wp_hanok:maehwa':    { label: '한옥 × 매화',      ...SYNERGY_BONUSES },
   'wp_lake:archieve':   { label: '호수 × 아카이브',  ...SYNERGY_BONUSES },
   'wp_maehwa:maehwa':   { label: '매화 × 매화',      ...SYNERGY_BONUSES },
+  'wp_fantasy:knight':  { label: '판타지 왕국 × 나이트', ...SYNERGY_BONUSES },
   // 추후 새 배경화면 추가 시 여기에만 항목 추가
 };
 

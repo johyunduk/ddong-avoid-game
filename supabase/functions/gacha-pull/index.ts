@@ -14,6 +14,7 @@ const WP_POOL = [
   { id: 'wp_lake'      },
   { id: 'wp_maehwa'    },
   { id: 'wp_gold_mine' },
+  { id: 'wp_fantasy'   },
 ];
 
 function pullWallpaper(): { id: string } {
