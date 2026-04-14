@@ -1,0 +1,30 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "da02c9a6da51",
+  "strategy": "manual-commit",
+  "branch": "dev",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "public/assets/wallpapers/fantasy_bg.webp",
+    "public/assets/wallpapers/fantasy_thumb.webp",
+    "src/config/synergyMap.ts",
+    "src/utils/wallpaper.ts",
+    "supabase/functions/gacha-pull/index.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/da/02c9a6da51/0/metadata.json",
+      "transcript": "/da/02c9a6da51/0/full.jsonl",
+      "context": "/da/02c9a6da51/0/context.md",
+      "content_hash": "/da/02c9a6da51/0/content_hash.txt",
+      "prompt": "/da/02c9a6da51/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 32,
+    "cache_creation_tokens": 43469,
+    "cache_read_tokens": 690689,
+    "output_tokens": 8612,
+    "api_call_count": 20
+  }
+}
