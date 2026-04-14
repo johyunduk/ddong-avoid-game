@@ -3,7 +3,7 @@
   "checkpoint_id": "af81a196f0b6",
   "strategy": "manual-commit",
   "branch": "dev",
-  "checkpoints_count": 2,
+  "checkpoints_count": 17,
   "files_touched": [
     "public/assets/illustrations/knight.webp",
     "public/assets/players/knight_front.webp",
@@ -109,13 +109,20 @@
       "context": "/af/81a196f0b6/12/context.md",
       "content_hash": "/af/81a196f0b6/12/content_hash.txt",
       "prompt": "/af/81a196f0b6/12/prompt.txt"
+    },
+    {
+      "metadata": "/af/81a196f0b6/13/metadata.json",
+      "transcript": "/af/81a196f0b6/13/full.jsonl",
+      "context": "/af/81a196f0b6/13/context.md",
+      "content_hash": "/af/81a196f0b6/13/content_hash.txt",
+      "prompt": "/af/81a196f0b6/13/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 2183,
-    "cache_creation_tokens": 3995993,
-    "cache_read_tokens": 134059910,
-    "output_tokens": 972122,
-    "api_call_count": 1514
+    "input_tokens": 2314,
+    "cache_creation_tokens": 4128862,
+    "cache_read_tokens": 140800487,
+    "output_tokens": 1030736,
+    "api_call_count": 1602
   }
 }
