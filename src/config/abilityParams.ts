@@ -95,8 +95,8 @@ export const SENTINEL_DESC = {
 
 // ── 나이트 (Knight / SR) ──────────────────────────────────────────────
 export const KNIGHT_PARAMS = {
-  beamKillBonus: 2,        // 검기로 제거한 일반 똥 1개당 추가 점수
-  beamInterval: 50,        // 검기 발사 점수 간격
+  beamKillBonus: 1,        // 검기로 제거한 일반 똥 1개당 추가 점수
+  beamInterval: 100,       // 검기 발사 점수 간격
 } as const;
 
 export const KNIGHT_DESC = {

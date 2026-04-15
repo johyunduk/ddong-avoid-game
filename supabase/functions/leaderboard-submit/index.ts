@@ -24,8 +24,8 @@ const SCORE_CAPS: Record<string, number> = {
   easy: 10000,
   normal: 15000,
   hard: 20000,
-  extreme: 30000,
-  physical: 30000,
+  extreme: 99999,
+  physical: 99999,
 };
 
 // 어빌리티 보너스 상한: 점수의 이 비율까지 허용 (나머지는 최소한 시간 기반이어야 함)
