@@ -3,6 +3,7 @@ import { BaseAbility } from './BaseAbility';
 import type { GameSceneAPI } from './types';
 import type PoolablePoopBase from '../objects/PoolablePoopBase';
 import { KNIGHT_PARAMS } from '../config/abilityParams';
+import { ensureGlowDot } from '../utils/glowDot';
 
 const R_OUT  = 26;
 const R_IN   = 20;
@@ -184,17 +185,21 @@ export class KnightAbility extends BaseAbility {
     x: number, y: number,
     opts: { color: number; radius: number; tx: number; ty: number; duration: number; endScale?: number },
   ): void {
-    const g = scene.add.graphics().setDepth(122).setPosition(x, y);
-    g.fillStyle(opts.color, 1);
-    g.fillCircle(0, 0, opts.radius);
+    ensureGlowDot(scene);
+    const initScale = opts.radius / 10;
+    const img = scene.add.image(x, y, 'glow_dot')
+      .setDepth(122)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setTint(opts.color)
+      .setScale(initScale);
+
     const tween: Phaser.Types.Tweens.TweenBuilderConfig = {
-      targets: g, x: opts.tx, y: opts.ty, alpha: 0,
+      targets: img, x: opts.tx, y: opts.ty, alpha: 0,
       duration: opts.duration, ease: 'Quad.easeOut',
-      onComplete: () => g.destroy(),
+      onComplete: () => img.destroy(),
     };
     if (opts.endScale !== undefined) {
-      (tween as Record<string, unknown>).scaleX = opts.endScale;
-      (tween as Record<string, unknown>).scaleY = opts.endScale;
+      (tween as Record<string, unknown>).scale = opts.endScale * initScale;
     }
     scene.tweens.add(tween);
   }
