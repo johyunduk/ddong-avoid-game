@@ -1,0 +1,35 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "3961e074ad39",
+  "session_id": "9467af67-6b2b-4edc-a7c3-6049d38d0c2b",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-15T11:32:21.638496Z",
+  "branch": "dev",
+  "checkpoints_count": 9,
+  "files_touched": [
+    "src/abilities/KnightAbility.ts",
+    "src/utils/glowDot.ts"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "a85387165a11",
+  "transcript_identifier_at_start": "e16c7eca-5509-40eb-a3d4-007f6a468fa9",
+  "checkpoint_transcript_start": 62,
+  "transcript_lines_at_start": 62,
+  "token_usage": {
+    "input_tokens": 118,
+    "cache_creation_tokens": 82347,
+    "cache_read_tokens": 8041081,
+    "output_tokens": 39776,
+    "api_call_count": 90
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-15T11:32:21.300402Z",
+    "agent_lines": 30,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 30,
+    "agent_percentage": 100
+  },
+  "transcript_path": ".claude/projects/-Users-johyunduk-Projects-ddong-avoid-game/9467af67-6b2b-4edc-a7c3-6049d38d0c2b.jsonl"
+}
