@@ -1,156 +1,181 @@
 /**
- * 스토리 진행 상태 관리
- * - 데이터 파편 수집 카운트
- * - 마일스톤 해금 로그
- * - 분기 선택 저장
+ * 스토리 진행 상태 관리 v2
+ * - 이벤트 기반 해금 조건 (topaz/gold/diamond/playCount/skor/gacha)
+ * - localStorage djb2 서명으로 stats/unlocked 변조 방지
  */
 
-const FRAGMENT_KEY = 'story_fragments';
-const UNLOCKED_LOGS_KEY = 'story_unlocked_logs';
-const BRANCH_CHOICE_KEY = 'story_branch_choice';
+import { STORY_LOGS } from '../data/storyLogs';
 
-export interface StoryLog {
-  id: string;
-  phase: 1 | 2 | 3;
-  title: string;
-  content: string;
-  unlockAt: number; // 파편 수집 수 도달 시 해금
+// localStorage 키
+const UNLOCKED_KEY     = 'storyUnlocked';
+const UNLOCKED_SIG_KEY = 'storyUnlockedSig';
+const READ_KEY         = 'storyRead';
+const STATS_KEY        = 'storyStats';
+const STATS_SIG_KEY    = 'storyStatsSig';
+
+const _SALT = 'ddong-story-\u0076\u0032';
+
+interface StoryStats {
+  topazCollected:   number;
+  goldCollected:    number;
+  diamondCollected: number;
+  playCount:        number;
+  totalSkor:        number;
+  gachaPullCount:   number;
 }
 
-export type BranchChoice = 'accept' | 'resist' | null;
+const _DEFAULT_STATS: StoryStats = {
+  topazCollected:   0,
+  goldCollected:    0,
+  diamondCollected: 0,
+  playCount:        0,
+  totalSkor:        0,
+  gachaPullCount:   0,
+};
 
-/** 스토리 로그 정의 */
-export const STORY_LOGS: StoryLog[] = [
-  // Phase 1: 진실의 파편
-  {
-    id: 'log_001',
-    phase: 1,
-    title: '[SYS.LOG.001] 초기화',
-    content: '시스템 초기화 완료. 당신은 DATA_RUNNER입니다.\n목적: 불량 데이터 패킷을 회피하며 메모리 파편을 수집하세요.',
-    unlockAt: 1,
-  },
-  {
-    id: 'log_002',
-    phase: 1,
-    title: '[SYS.LOG.002] 경고',
-    content: '경고: 외부 개체 감지됨. 코드명 "먼저 온 자".\n이 시스템의 원래 관리자로 추정. 접근 차단 권고.',
-    unlockAt: 5,
-  },
-  {
-    id: 'log_003',
-    phase: 1,
-    title: '[SYS.LOG.003] 파편 분석',
-    content: '수집된 파편에서 암호화된 메시지 발견:\n"...이건 게임이 아니다. 너는 기억해야 한다..."',
-    unlockAt: 10,
-  },
-  {
-    id: 'log_004',
-    phase: 1,
-    title: '[SYS.LOG.004] 시스템 균열',
-    content: '메모리 구조에 이상 감지. 반복 패턴 확인됨.\n당신은 이전에도 여기 있었습니다.',
-    unlockAt: 20,
-  },
-  {
-    id: 'log_005',
-    phase: 1,
-    title: '[SYS.LOG.005] 진실',
-    content: '"먼저 온 자"의 메시지 해독 완료:\n"나도 당신과 같은 RUNNER였다. 탈출하려 했지만 실패했다.\n파편 50개를 모으면 IMPORT_GATE가 열린다. 하지만 조심해."',
-    unlockAt: 30,
-  },
-  // Phase 2: IMPORT_GATE
-  {
-    id: 'log_006',
-    phase: 2,
-    title: '[GATE.LOG.001] 침입',
-    content: '경고! IMPORT_GATE 활성화!\n"먼저 온 자"가 시스템 내부로 침입 시도 중.\n방어 프로토콜 가동.',
-    unlockAt: 50,
-  },
-  {
-    id: 'log_007',
-    phase: 2,
-    title: '[GATE.LOG.002] 대화',
-    content: '"먼저 온 자": "왜 계속 달리는가? 밖은 없다."\nDATA_RUNNER: "..."',
-    unlockAt: 70,
-  },
-  {
-    id: 'log_008',
-    phase: 2,
-    title: '[GATE.LOG.003] 선택 예고',
-    content: '시스템 분기점 감지. 파편 120개 수집 시\n세 가지 경로 중 하나를 선택해야 합니다.\n선택은 되돌릴 수 없습니다.',
-    unlockAt: 100,
-  },
-  // Phase 3: 분기 엔딩
-  {
-    id: 'log_009',
-    phase: 3,
-    title: '[END.LOG.001] 분기점',
-    content: '파편 120개 수집 완료. 시스템 분기 활성화.\n당신의 선택이 이 세계를 결정합니다.',
-    unlockAt: 120,
-  },
-];
+// ── djb2 해시 ──────────────────────────────────────────────────
 
-/** 현재 수집된 파편 수 반환 */
-export function getFragmentCount(): number {
-  const stored = localStorage.getItem(FRAGMENT_KEY);
-  return stored ? parseInt(stored, 10) : 0;
+function _djb2(str: string): string {
+  let h = 5381;
+  for (let i = 0; i < str.length; i++) h = (((h << 5) + h) ^ str.charCodeAt(i)) >>> 0;
+  return h.toString(36);
 }
 
-/** 파편 수 증가 */
-export function addFragment(count: number = 1): number {
-  const current = getFragmentCount();
-  const next = current + count;
-  localStorage.setItem(FRAGMENT_KEY, next.toString());
-  return next;
+function _signIds(ids: string[]): string {
+  return _djb2([...ids].sort().join(',') + _SALT);
 }
 
-/** 해금된 로그 ID 목록 반환 */
-export function getUnlockedLogIds(): string[] {
-  const stored = localStorage.getItem(UNLOCKED_LOGS_KEY);
-  if (!stored) return [];
+function _signStats(stats: StoryStats): string {
+  const str = Object.entries(stats)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([k, v]) => `${k}:${v}`)
+    .join(',') + _SALT;
+  return _djb2(str);
+}
+
+// ── Stats R/W ──────────────────────────────────────────────────
+
+function _getStats(): StoryStats {
   try {
-    return JSON.parse(stored) as string[];
+    const raw = localStorage.getItem(STATS_KEY);
+    const sig = localStorage.getItem(STATS_SIG_KEY);
+    if (!raw) return { ..._DEFAULT_STATS };
+    const stats: StoryStats = { ..._DEFAULT_STATS, ...(JSON.parse(raw) as Partial<StoryStats>) };
+    if (sig === null) {
+      // 마이그레이션: 서명 최초 발급
+      _saveStats(stats);
+      return stats;
+    }
+    if (sig !== _signStats(stats)) {
+      _saveStats({ ..._DEFAULT_STATS });
+      return { ..._DEFAULT_STATS };
+    }
+    return stats;
+  } catch {
+    return { ..._DEFAULT_STATS };
+  }
+}
+
+function _saveStats(stats: StoryStats): void {
+  localStorage.setItem(STATS_KEY, JSON.stringify(stats));
+  localStorage.setItem(STATS_SIG_KEY, _signStats(stats));
+}
+
+// ── Unlocked IDs R/W ──────────────────────────────────────────
+
+export function getUnlockedIds(): string[] {
+  try {
+    const raw = localStorage.getItem(UNLOCKED_KEY);
+    const sig = localStorage.getItem(UNLOCKED_SIG_KEY);
+    const ids: string[] = raw ? (JSON.parse(raw) as string[]) : [];
+    if (sig === null) {
+      _saveUnlocked(ids);
+      return ids;
+    }
+    if (sig !== _signIds(ids)) {
+      _saveUnlocked([]);
+      return [];
+    }
+    return ids;
   } catch {
     return [];
   }
 }
 
-/** 새로 해금된 로그들을 저장하고 반환 */
-export function checkAndUnlockLogs(fragmentCount: number): StoryLog[] {
-  const unlockedIds = new Set(getUnlockedLogIds());
-  const newlyUnlocked: StoryLog[] = [];
+function _saveUnlocked(ids: string[]): void {
+  localStorage.setItem(UNLOCKED_KEY, JSON.stringify(ids));
+  localStorage.setItem(UNLOCKED_SIG_KEY, _signIds(ids));
+}
+
+// ── Read IDs R/W (게임플레이 미영향 → 서명 생략) ──────────────
+
+export function getReadIds(): string[] {
+  try {
+    return JSON.parse(localStorage.getItem(READ_KEY) ?? '[]') as string[];
+  } catch {
+    return [];
+  }
+}
+
+export function markAsRead(id: string): void {
+  const read = getReadIds();
+  if (!read.includes(id)) {
+    read.push(id);
+    localStorage.setItem(READ_KEY, JSON.stringify(read));
+  }
+}
+
+// ── 해금 체크 ──────────────────────────────────────────────────
+
+function _checkAndUnlockLogs(stats: StoryStats): void {
+  const unlocked = getUnlockedIds();
+  let changed = false;
 
   for (const log of STORY_LOGS) {
-    if (!unlockedIds.has(log.id) && fragmentCount >= log.unlockAt) {
-      unlockedIds.add(log.id);
-      newlyUnlocked.push(log);
+    if (unlocked.includes(log.id)) continue;
+
+    const { type, threshold } = log.unlockCondition;
+    const current =
+      type === 'topaz'     ? stats.topazCollected   :
+      type === 'gold'      ? stats.goldCollected    :
+      type === 'diamond'   ? stats.diamondCollected :
+      type === 'playCount' ? stats.playCount        :
+      type === 'skor'      ? stats.totalSkor        :
+      /* gacha */            stats.gachaPullCount;
+
+    if (current >= threshold) {
+      unlocked.push(log.id);
+      changed = true;
+      console.log(`[Story] 새 로그 해금: ${log.id}`);
     }
   }
 
-  if (newlyUnlocked.length > 0) {
-    localStorage.setItem(UNLOCKED_LOGS_KEY, JSON.stringify([...unlockedIds]));
+  if (changed) _saveUnlocked(unlocked);
+}
+
+// ── 공개 API ──────────────────────────────────────────────────
+
+/** 게임 이벤트 발생 시 누적 및 해금 체크 */
+export function recordEvent(
+  type: 'topaz' | 'gold' | 'diamond' | 'playCount' | 'skor' | 'gacha',
+  amount = 1,
+): void {
+  const stats = _getStats();
+  switch (type) {
+    case 'topaz':     stats.topazCollected   += amount; break;
+    case 'gold':      stats.goldCollected    += amount; break;
+    case 'diamond':   stats.diamondCollected += amount; break;
+    case 'playCount': stats.playCount        += amount; break;
+    case 'skor':      stats.totalSkor        += amount; break;
+    case 'gacha':     stats.gachaPullCount   += amount; break;
   }
-
-  return newlyUnlocked;
+  _saveStats(stats);
+  _checkAndUnlockLogs(stats);
 }
 
-/** 해금된 스토리 로그 전체 반환 */
-export function getUnlockedLogs(): StoryLog[] {
-  const unlockedIds = new Set(getUnlockedLogIds());
-  return STORY_LOGS.filter(log => unlockedIds.has(log.id));
-}
-
-/** 분기 선택 저장 */
-export function saveBranchChoice(choice: BranchChoice): void {
-  if (choice === null) {
-    localStorage.removeItem(BRANCH_CHOICE_KEY);
-  } else {
-    localStorage.setItem(BRANCH_CHOICE_KEY, choice);
-  }
-}
-
-/** 분기 선택 반환 */
-export function getBranchChoice(): BranchChoice {
-  const stored = localStorage.getItem(BRANCH_CHOICE_KEY);
-  if (stored === 'accept' || stored === 'resist') return stored;
-  return null;
+/** 홈 화면 빨간 점 표시 여부 */
+export function hasUnreadNewLogs(): boolean {
+  const unlocked = getUnlockedIds();
+  const read = getReadIds();
+  return unlocked.some(id => !read.includes(id));
 }

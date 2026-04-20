@@ -2,7 +2,7 @@ import type Phaser from 'phaser';
 import { GameMode, GAME_MODES, type GameModeConfig } from '../types/GameMode';
 import { getSkorBalance, getCachedSkorBalance, cacheSkorBalance } from '../utils/skor';
 import { setBgmMuted } from '../utils/settings';
-import { getFragmentCount } from '../utils/storyProgress';
+import { hasUnreadNewLogs } from '../utils/storyProgress';
 import BaseScene from './BaseScene';
 
 export default class ModeSelectScene extends BaseScene {
@@ -55,8 +55,8 @@ export default class ModeSelectScene extends BaseScene {
     this.createCharacterButton(cx - 80, 435 + yOff);
     this.createLeaderboardButton(cx + 80, 435 + yOff);
 
-    // MEMORY VAULT 버튼
-    this.createMemoryVaultButton(cx, 520 + yOff);
+    // 기록 로그 버튼
+    this.createStoryLogButton(cx, 520 + yOff);
 
     // 릴리즈 노트 링크
     this.createReleaseNotesLink(cx, H - 80);
@@ -211,31 +211,36 @@ export default class ModeSelectScene extends BaseScene {
     });
   }
 
-  private createMemoryVaultButton(x: number, y: number) {
-    const fragmentCount = getFragmentCount();
-    const button = this.add.rectangle(x, y, 300, 46, 0x001a22, 1);
-    button.setStrokeStyle(2, 0x00ffcc);
+  private createStoryLogButton(x: number, y: number) {
+    const hasNew = hasUnreadNewLogs();
+    const button = this.add.rectangle(x, y, 300, 46, 0x001a0d, 1);
+    button.setStrokeStyle(2, 0x00ff41);
 
-    this.add.text(x, y, `📡 MEMORY VAULT  (파편 ${fragmentCount}개)`, {
+    this.add.text(x, y, '📁 기록 로그 아카이브', {
       fontSize: '15px',
-      color: '#00ffcc',
+      color: '#00ff41',
       fontStyle: 'bold',
       stroke: '#000',
       strokeThickness: 3,
       padding: { top: 3 },
     }).setOrigin(0.5);
 
+    // 새 로그 빨간 점
+    if (hasNew) {
+      this.add.circle(x + 106, y - 14, 5, 0xff4444).setDepth(1);
+    }
+
     button.setInteractive({ useHandCursor: true });
     button.on('pointerover', () => {
-      button.setFillStyle(0x003322);
-      button.setStrokeStyle(2, 0x44ffdd);
+      button.setFillStyle(0x002a10);
+      button.setStrokeStyle(2, 0x44ff66);
     });
     button.on('pointerout', () => {
-      button.setFillStyle(0x001a22);
-      button.setStrokeStyle(2, 0x00ffcc);
+      button.setFillStyle(0x001a0d);
+      button.setStrokeStyle(2, 0x00ff41);
     });
     button.on('pointerdown', () => {
-      this.scene.start('MemoryVaultScene');
+      this.scene.start('StoryLogScene');
     });
   }
 

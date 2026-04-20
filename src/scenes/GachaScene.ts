@@ -3,6 +3,7 @@ import { gachaPull, syncOwnedCharacters, syncOwnedWallpapers, type PulledCharact
 import { CHARACTERS, getCharacterDef, addOwnedCharacter, getDuplicateCount, setDuplicateCount, getGradeImgKey, type CharacterDef } from '../utils/character';
 import { WALLPAPERS, getWallpaperDef, addOwnedWallpaper, WP_ACCENT_INT, WP_ACCENT_HEX, type BackgroundDef } from '../utils/wallpaper';
 import { getSkorBalance, getCachedSkorBalance, cacheSkorBalance } from '../utils/skor';
+import { recordEvent } from '../utils/storyProgress';
 import BaseScene from './BaseScene';
 
 // vids/ 디렉토리에 개인 영상이 존재하는 캐릭터 목록
@@ -327,6 +328,10 @@ export default class GachaScene extends BaseScene {
       const [result] = await Promise.all([apiPromise, this.playCommonVideo()]);
 
       if (!this.scene.isActive()) return;
+
+      // 스토리 이벤트 기록
+      recordEvent('gacha', type === 'multi' ? 10 : 1);
+      recordEvent('skor', cost);
 
       this.pullResults = result.characters;
       this.wpResults = result.wallpapers ?? [];
