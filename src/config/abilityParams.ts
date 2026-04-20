@@ -36,6 +36,8 @@ export const MAEHWA_PARAMS = {
   slashInterval: 100,       // 칼 베기 점수 간격
   slashCount: 3,            // 한 번에 베는 똥 개수
   awake2SpecialBonus: 5,    // ★2+ 특수 똥 수집 추가 점수
+  synergyBurstInterval: 2000,
+  synergyBurstBonus: 150,    // 매화×매화 버스트 발동 시 고정 보너스 점수
 } as const;
 
 export const MAEHWA_DESC = {

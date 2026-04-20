@@ -12,6 +12,7 @@ import TopazPoop from '../objects/TopazPoop';
 import RainbowPoop from '../objects/RainbowPoop';
 import { GameMode, Difficulty, DIFFICULTIES, DIFFICULTY_SCALING, type DifficultyConfig } from '../types/GameMode';
 import { FEVER_TIME_CONFIG } from '../config/feverTime';
+import { MAEHWA_PARAMS } from '../config/abilityParams';
 import { POOP_CONFIG } from '../config/poop';
 import { getHighScore, updateHighScore } from '../utils/localStorage';
 import { submitScore, getUserInitials, setUserInitials, startGameSession } from '../utils/leaderboard';
@@ -76,6 +77,7 @@ export default class GameScene extends BaseScene {
   private lastFeverTimeScore: number = 0; // 마지막 피버 타임 발동 점수
   private feverCount: number = 0;          // 피버 발동 횟수 누계 (레인보우 피버 조건 판정용)
   private isRainbowFever: boolean = false; // 레인보우 피버 활성 여부 (광부×황금광산 시너지)
+  private lastClearPoopsScore: number = 0; // 마지막 전체 똥 제거 발동 점수 (매화×매화 시너지)
   private get feverTimeLabel(): string { return this.isRainbowFever ? 'RAINBOW FEVER' : 'FEVER TIME'; }
   /** difficultyLevel 기반으로 현재 spawn 간격을 항상 최신값으로 계산 */
   private get currentSpawnDelay(): number {
@@ -136,6 +138,7 @@ export default class GameScene extends BaseScene {
     this.lastFeverTimeScore = 0;
     this.feverCount = 0;
     this.isRainbowFever = false;
+    this.lastClearPoopsScore = 0;
     // 캐릭터 선택 화면에서 저장한 캐릭터 & 배경화면 사용
     this.selectedCharId = getSafeSelectedCharacter();
     this.selectedWpId = getSafeSelectedWallpaper();
@@ -874,6 +877,16 @@ export default class GameScene extends BaseScene {
       // 점수 기반 난이도 증가
       if (score % DIFFICULTY_SCALING.scoreInterval === 0) this.increaseDifficulty();
 
+      // 매화×매화 시너지: 설정된 간격마다 화면의 모든 똥 제거
+      if (
+        this.activeSynergy?.clearPoops === true &&
+        score % MAEHWA_PARAMS.synergyBurstInterval === 0 &&
+        score > this.lastClearPoopsScore
+      ) {
+        this.lastClearPoopsScore = score;
+        this.clearAllPoopsWithEffect();
+      }
+
       // 캐릭터 능력 마일스톤 (광부 무지개똥, 루트 똥 제거, 매화 슬래시 등)
       this.ability.onScoreMilestone(score, this.abilityAPI);
     }
@@ -1257,6 +1270,135 @@ export default class GameScene extends BaseScene {
         rp.body.velocity.y = fallSpeed;
       }
     }
+  }
+
+  /**
+   * 매화×매화 시너지: 화면의 모든 똥 제거 + 매화 꽃잎 폭발 이펙트
+   */
+  private clearAllPoopsWithEffect(): void {
+    if (this.gameOver) return;
+
+    // 모든 그룹의 활성 오브젝트 수집 (위치 기록 후 제거)
+    const positions: Array<{ x: number; y: number }> = [];
+
+    const collectGroup = (group: Phaser.Physics.Arcade.Group, handler: (sp: Phaser.Physics.Arcade.Sprite) => void) => {
+      [...group.children.entries].forEach(obj => {
+        const sp = obj as Phaser.Physics.Arcade.Sprite;
+        if (sp.active) { positions.push({ x: sp.x, y: sp.y }); handler(sp); }
+      });
+    };
+
+    // 모든 똥 recycle (점수는 개별이 아닌 고정 보너스로 일괄 지급)
+    const recycleAll = (sp: Phaser.Physics.Arcade.Sprite) => (sp as unknown as PoolablePoopBase).recycle();
+    collectGroup(this.poops, recycleAll);
+    collectGroup(this.goldPoops, recycleAll);
+    collectGroup(this.diamondPoops, recycleAll);
+    collectGroup(this.topazPoops, recycleAll);
+
+    this.updateScore(MAEHWA_PARAMS.synergyBurstBonus);
+
+    const effectPositions = positions.length > 0 ? positions : [{ x: 200, y: 300 }];
+    effectPositions.forEach(pos => this.spawnMaehwaBurst(pos.x, pos.y));
+    this.spawnMaehwaStorm();
+
+    // 화면 전체 분홍빛 플래시 — setScrollFactor(0)으로 카메라 독립, 오브젝트 alpha로 fade 제어
+    const flash = this.add.graphics().setDepth(200).setAlpha(0.3).setScrollFactor(0);
+    flash.fillStyle(0xff6699, 1);
+    flash.fillRect(0, 0, this.scale.width, this.scale.height);
+    this.tweens.add({
+      targets: flash,
+      alpha: 0,
+      duration: 500,
+      ease: 'Quad.easeIn',
+      onComplete: () => flash.destroy(),
+    });
+  }
+
+  /** 매화 꽃잎 폭발 — 한 지점에서 칼날 이펙트 + 꽃잎 여러 장 사방으로 비산 */
+  private spawnMaehwaBurst(cx: number, cy: number): void {
+    // 칼날 이펙트 (↗ 방향 마름모꼴)
+    const slash = this.add.graphics().setDepth(195);
+    const len = 26, wid = 7;
+    slash.fillStyle(0xff3366, 0.9);
+    slash.fillPoints([
+      new Phaser.Geom.Point(cx - len, cy + len),
+      new Phaser.Geom.Point(cx - wid * 0.4, cy + wid),
+      new Phaser.Geom.Point(cx + len, cy - len),
+      new Phaser.Geom.Point(cx + wid * 0.4, cy - wid),
+    ], true);
+    slash.lineStyle(3, 0xffffff, 0.5);
+    slash.lineBetween(cx - len, cy + len, cx + len, cy - len);
+    this.tweens.add({ targets: slash, alpha: 0, duration: 300, onComplete: () => slash.destroy() });
+
+    const COUNT = 10;
+    for (let i = 0; i < COUNT; i++) {
+      const petal = this.add.graphics().setDepth(190);
+      petal.setPosition(cx, cy);
+      const w = Phaser.Math.Between(4, 8);
+      const h = Phaser.Math.Between(7, 12);
+      petal.fillStyle(0xff3377, 0.9);
+      petal.fillEllipse(0, 0, w, h);
+      petal.setAngle(Phaser.Math.Between(0, 360));
+
+      const angle = Phaser.Math.Between(0, 360);
+      const dist  = Phaser.Math.Between(40, 90);
+      this.tweens.add({
+        targets: petal,
+        x: cx + Math.cos(Phaser.Math.DegToRad(angle)) * dist,
+        y: cy + Math.sin(Phaser.Math.DegToRad(angle)) * dist + Phaser.Math.Between(20, 50),
+        angle: petal.angle + Phaser.Math.Between(-180, 180),
+        alpha: 0,
+        duration: Phaser.Math.Between(500, 900),
+        ease: 'Quad.easeOut',
+        onComplete: () => petal.destroy(),
+      });
+    }
+  }
+
+  /** 꽃잎 눈보라 — 위에서 바람에 날려 쏟아지는 폭풍 이펙트 */
+  private spawnMaehwaStorm(): void {
+    const W = this.scale.width;
+    const H = this.scale.height;
+    const COUNT = 55;
+    const DURATION = 2200;
+
+    const petals = Array.from({ length: COUNT }, () => {
+      const gfx = this.add.graphics().setDepth(194);
+      const size = Phaser.Math.Between(3, 8);
+      gfx.fillStyle(Math.random() > 0.45 ? 0xff3377 : 0xff99bb, 0.65 + Math.random() * 0.35);
+      gfx.fillEllipse(0, 0, size, Math.round(size * 1.7));
+      return {
+        gfx,
+        startX:      Phaser.Math.Between(-30, W + 30),
+        startY:      Phaser.Math.Between(-120, -5),
+        fallSpeed:   0.35 + Math.random() * 0.65,  // 속도 차이 → 원근감
+        windDrift:   Phaser.Math.Between(30, 80),   // 오른쪽으로 흘려보내는 바람 거리
+        wobbleFreq:  1.5 + Math.random() * 2.5,
+        wobbleAmp:   12 + Math.random() * 22,
+        wobblePhase: Math.random() * Math.PI * 2,
+        delay:       Math.random() * 0.35,
+      };
+    });
+
+    this.tweens.addCounter({
+      from: 0,
+      to: 1,
+      duration: DURATION,
+      onUpdate: (tween) => {
+        const g = tween.getValue() ?? 0;
+        for (const p of petals) {
+          const t = Math.max(0, (g - p.delay) / (1 - p.delay));
+          const ft = Math.min(t * p.fallSpeed, 1);
+          const sinW = Math.sin(ft * Math.PI * 2 * p.wobbleFreq + p.wobblePhase);
+          const x = p.startX + ft * p.windDrift + sinW * p.wobbleAmp;
+          const y = p.startY + ft * (H + 140);
+          p.gfx.setPosition(x, y);
+          p.gfx.setAngle(sinW * 35);
+          p.gfx.setAlpha(ft > 0.78 ? 1 - (ft - 0.78) / 0.22 : 1);
+        }
+      },
+      onComplete: () => petals.forEach(p => p.gfx.destroy()),
+    });
   }
 
   protected hitPoop(
