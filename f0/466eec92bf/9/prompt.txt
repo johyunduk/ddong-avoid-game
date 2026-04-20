@@ -1,0 +1,308 @@
+매화 x 매화 시너지에 500점마다 전체 똥 없애는 효과 추가해줘.
+
+---
+
+# Simplify: Code Review and Cleanup
+
+Review all changed files for reuse, quality, and efficiency. Fix any issues found.
+
+## Phase 1: Identify Changes
+
+Run `git diff` (or `git diff HEAD` if there are staged changes) to see what changed. If there are no git changes, review the most recently modified files that the user mentioned or that you edited earlier in this conversation.
+
+## Phase 2: Launch Three Review Agents in Parallel
+
+Use the Agent tool to launch all three agents concurrently in a single message. Pass each agent the full diff so it has the complete context.
+
+### Agent 1: Code Reuse Review
+
+For each change:
+
+1. **Search for existing utilities and helpers** that could replace newly written code. Look for similar patterns elsewhere in the codebase — common locations are utility directories, shared modules, and files adjacent to the changed ones.
+2. **Flag any new function that duplicates existing functionality.** Suggest the existing function to use instead.
+3. **Flag any inline logic that could use an existing utility** — hand-rolled string manipulation, manual path handling, custom environment checks, ad-hoc type guards, and similar patterns are common candidates.
+
+### Agent 2: Code Quality Review
+
+Review the same changes for hacky patterns:
+
+1. **Redundant state**: state that duplicates existing state, cached values that could be derived, observers/effects that could be direct calls
+2. **Parameter sprawl**: adding new parameters to a function instead of generalizing or restructuring existing ones
+3. **Copy-paste with slight variation**: near-duplicate code blocks that should be unified with a shared abstraction
+4. **Leaky abstractions**: exposing internal details that should be encapsulated, or breaking existing abstraction boundaries
+5. **Stringly-typed code**: using raw strings where constants, enums (string unions), or branded types already exist in the codebase
+6. **Unnecessary JSX nesting**: wrapper Boxes/elements that add no layout value — check if inner component props (flexShrink, alignItems, etc.) already provide the needed behavior
+7. **Unnecessary comments**: comments explaining WHAT the code does (well-named identifiers already do that), narrating the change, or referencing the task/caller — delete; keep only non-obvious WHY (hidden constraints, subtle invariants, workarounds)
+
+### Agent 3: Efficiency Review
+
+Review the same changes for efficiency:
+
+1. **Unnecessary work**: redundant computations, repeated file reads, duplicate network/API calls, N+1 patterns
+2. **Missed concurrency**: independent operations run sequentially when they could run in parallel
+3. **Hot-path bloat**: new blocking work added to startup or per-request/per-render hot paths
+4. **Recurring no-op updates**: state/store updates inside polling loops, intervals, or event handlers that fire unconditionally — add a change-detection guard so downstream consumers aren't notified when nothing changed. Also: if a wrapper function takes an updater/reducer callback, verify it honors same-reference returns (or whatever the "no change" signal is) — otherwise callers' early-return no-ops are silently defeated
+5. **Unnecessary existence checks**: pre-checking file/resource existence before operating (TOCTOU anti-pattern) — operate directly and handle the error
+6. **Memory**: unbounded data structures, missing cleanup, event listener leaks
+7. **Overly broad operations**: reading entire files when only a portion is needed, loading all items when filtering for one
+
+## Phase 3: Fix Issues
+
+Wait for all three agents to complete. Aggregate their findings and fix each issue directly. If a finding is a false positive or not worth addressing, note it and move on — do not argue with the finding, just skip it.
+
+When done, briefly summarize what was fixed (or confirm the code was already clean).
+
+---
+
+지금 구현된게 뭐지?
+
+---
+
+Base directory for this skill: /Users/johyunduk/.claude/skills/obsidian
+
+# Obsidian CLI
+
+## Syntax Rules
+
+```bash
+obsidian <command> [key=value ...]
+```
+
+- `file=<name>` — 노트 이름으로 해석 (위키링크처럼)
+- `path=<path>` — 정확한 경로로 해석 (예: `folder/note.md`)
+- file/path 생략 시 **현재 활성 파일** 기본값
+- `vault=<name>` — 특정 vault 지정 (생략 시 활성 vault)
+- 공백 포함 값은 따옴표 사용: `name="My Note"`
+- 내용 내 줄바꿈: `\n`, 탭: `\t`
+
+## 자주 쓰는 패턴
+
+### 노트 읽기 / 생성 / 편집
+```bash
+obsidian read file="Note Name"
+obsidian read path="folder/note.md"
+
+obsidian create name="New Note" content="첫 내용"
+obsidian create name="New Note" template="My Template" open
+
+obsidian append file="Note Name" content="추가할 내용"
+obsidian prepend file="Note Name" content="앞에 붙일 내용\n"
+```
+
+### Daily Note
+```bash
+obsidian daily:read
+obsidian daily:append content="- [ ] 오늘 할 일"
+obsidian daily:path
+```
+
+### 검색
+```bash
+obsidian search query="검색어"
+obsidian search query="키워드" path="folder" limit=10
+obsidian search:context query="검색어"   # 매칭 라인 컨텍스트 포함
+```
+
+### Tasks
+```bash
+obsidian tasks todo                          # 미완료 작업 목록
+obsidian tasks done file="Note Name"         # 특정 파일의 완료 작업
+obsidian task toggle path="folder/note.md" line=5
+obsidian task done daily                     # 데일리 노트 작업 완료 처리
+```
+
+### Properties (Frontmatter)
+```bash
+obsidian property:read name="status" file="Note Name"
+obsidian property:set name="status" value="done" file="Note Name"
+obsidian property:set name="tags" value="project, active" type=list file="Note Name"
+obsidian property:remove name="draft" file="Note Name"
+```
+
+### Vault 구조 점검
+```bash
+obsidian orphans          # 인커밍 링크 없는 파일
+obsidian deadends         # 아웃고잉 링크 없는 파일
+obsidian unresolved       # 깨진 위키링크
+obsidian backlinks file="Note Name"
+```
+
+## 유용한 플래그
+
+| 플래그 | 용도 |
+|--------|------|
+| `total` | 개수만 반환: `obsidian files total` |
+| `verbose` | 상세 정보 추가 |
+| `format=json` | JSON 출력: `obsidian search query="x" format=json` |
+| `format=csv\|tsv` | CSV/TSV 출력 |
+
+## 전체 명령어 참조
+
+카테고리별 전체 명령어 목록: [references/commands.md](references/commands.md)
+
+
+ARGUMENTS: read "1. Projects/똥피하기/구현 현황.md"
+
+---
+
+아니아니 지금 마지막 커밋과 다른부분만 보고 뭐가 구현된건지 말여
+
+---
+
+최대 5곳이 아니라 제거된 똥에 전부 나오게 해줘봐 그리고 분홍빛 플래시 연출은 안보이는거 같은데?
+
+---
+
+음 분홍 플래시 다시 좀 낮춰주고 꽃잎 버스트시 칼날 효과도 여전히 추가해줘.
+
+---
+
+플래시가 근데 전체화면이 아니라 한쪽으로 쏠린거 같은데? 그리고 버스트시 특수똥 점수는 안모이는거 같은데 확인해줘
+
+---
+
+# Simplify: Code Review and Cleanup
+
+Review all changed files for reuse, quality, and efficiency. Fix any issues found.
+
+## Phase 1: Identify Changes
+
+Run `git diff` (or `git diff HEAD` if there are staged changes) to see what changed. If there are no git changes, review the most recently modified files that the user mentioned or that you edited earlier in this conversation.
+
+## Phase 2: Launch Three Review Agents in Parallel
+
+Use the Agent tool to launch all three agents concurrently in a single message. Pass each agent the full diff so it has the complete context.
+
+### Agent 1: Code Reuse Review
+
+For each change:
+
+1. **Search for existing utilities and helpers** that could replace newly written code. Look for similar patterns elsewhere in the codebase — common locations are utility directories, shared modules, and files adjacent to the changed ones.
+2. **Flag any new function that duplicates existing functionality.** Suggest the existing function to use instead.
+3. **Flag any inline logic that could use an existing utility** — hand-rolled string manipulation, manual path handling, custom environment checks, ad-hoc type guards, and similar patterns are common candidates.
+
+### Agent 2: Code Quality Review
+
+Review the same changes for hacky patterns:
+
+1. **Redundant state**: state that duplicates existing state, cached values that could be derived, observers/effects that could be direct calls
+2. **Parameter sprawl**: adding new parameters to a function instead of generalizing or restructuring existing ones
+3. **Copy-paste with slight variation**: near-duplicate code blocks that should be unified with a shared abstraction
+4. **Leaky abstractions**: exposing internal details that should be encapsulated, or breaking existing abstraction boundaries
+5. **Stringly-typed code**: using raw strings where constants, enums (string unions), or branded types already exist in the codebase
+6. **Unnecessary JSX nesting**: wrapper Boxes/elements that add no layout value — check if inner component props (flexShrink, alignItems, etc.) already provide the needed behavior
+7. **Unnecessary comments**: comments explaining WHAT the code does (well-named identifiers already do that), narrating the change, or referencing the task/caller — delete; keep only non-obvious WHY (hidden constraints, subtle invariants, workarounds)
+
+### Agent 3: Efficiency Review
+
+Review the same changes for efficiency:
+
+1. **Unnecessary work**: redundant computations, repeated file reads, duplicate network/API calls, N+1 patterns
+2. **Missed concurrency**: independent operations run sequentially when they could run in parallel
+3. **Hot-path bloat**: new blocking work added to startup or per-request/per-render hot paths
+4. **Recurring no-op updates**: state/store updates inside polling loops, intervals, or event handlers that fire unconditionally — add a change-detection guard so downstream consumers aren't notified when nothing changed. Also: if a wrapper function takes an updater/reducer callback, verify it honors same-reference returns (or whatever the "no change" signal is) — otherwise callers' early-return no-ops are silently defeated
+5. **Unnecessary existence checks**: pre-checking file/resource existence before operating (TOCTOU anti-pattern) — operate directly and handle the error
+6. **Memory**: unbounded data structures, missing cleanup, event listener leaks
+7. **Overly broad operations**: reading entire files when only a portion is needed, loading all items when filtering for one
+
+## Phase 3: Fix Issues
+
+Wait for all three agents to complete. Aggregate their findings and fix each issue directly. If a finding is a false positive or not worth addressing, note it and move on — do not argue with the finding, just skip it.
+
+When done, briefly summarize what was fixed (or confirm the code was already clean).
+
+---
+
+1000점 간격으로 바꿔줘
+
+---
+
+2000점으로 바꿔줘
+
+---
+
+버스트시 특수똥 점수 절반으로 줄여줘
+
+---
+
+버스트시 뭔가 꽃잎 회오리 같은게 나오면 좋을거 같은데
+
+---
+
+음 좀 다른 느낌의 회오리는?
+
+---
+
+음 회오리는 별로인거 같고 꽃잎 폭풍 같은 느낌은 어떨까? 누보라 마냥
+
+---
+
+오 좋아 이거는 좋은데 버스트시 점수 한번만 더 절반으로 줄여줘
+
+---
+
+버스트 간격을 3000점으로 바꿔줘
+
+---
+
+매화 시너지 2000점으로 간격 다시 바꾸고 버스트시 똥에따라 점수를 얻는게 아니라 고정으로 150점 추가로 해줘
+
+---
+
+Create an Agent with subagent_type "statusline-setup" and the prompt "Configure my statusLine from my shell PS1 configuration"
+
+---
+
+# Simplify: Code Review and Cleanup
+
+Review all changed files for reuse, quality, and efficiency. Fix any issues found.
+
+## Phase 1: Identify Changes
+
+Run `git diff` (or `git diff HEAD` if there are staged changes) to see what changed. If there are no git changes, review the most recently modified files that the user mentioned or that you edited earlier in this conversation.
+
+## Phase 2: Launch Three Review Agents in Parallel
+
+Use the Agent tool to launch all three agents concurrently in a single message. Pass each agent the full diff so it has the complete context.
+
+### Agent 1: Code Reuse Review
+
+For each change:
+
+1. **Search for existing utilities and helpers** that could replace newly written code. Look for similar patterns elsewhere in the codebase — common locations are utility directories, shared modules, and files adjacent to the changed ones.
+2. **Flag any new function that duplicates existing functionality.** Suggest the existing function to use instead.
+3. **Flag any inline logic that could use an existing utility** — hand-rolled string manipulation, manual path handling, custom environment checks, ad-hoc type guards, and similar patterns are common candidates.
+
+### Agent 2: Code Quality Review
+
+Review the same changes for hacky patterns:
+
+1. **Redundant state**: state that duplicates existing state, cached values that could be derived, observers/effects that could be direct calls
+2. **Parameter sprawl**: adding new parameters to a function instead of generalizing or restructuring existing ones
+3. **Copy-paste with slight variation**: near-duplicate code blocks that should be unified with a shared abstraction
+4. **Leaky abstractions**: exposing internal details that should be encapsulated, or breaking existing abstraction boundaries
+5. **Stringly-typed code**: using raw strings where constants, enums (string unions), or branded types already exist in the codebase
+6. **Unnecessary JSX nesting**: wrapper Boxes/elements that add no layout value — check if inner component props (flexShrink, alignItems, etc.) already provide the needed behavior
+7. **Unnecessary comments**: comments explaining WHAT the code does (well-named identifiers already do that), narrating the change, or referencing the task/caller — delete; keep only non-obvious WHY (hidden constraints, subtle invariants, workarounds)
+
+### Agent 3: Efficiency Review
+
+Review the same changes for efficiency:
+
+1. **Unnecessary work**: redundant computations, repeated file reads, duplicate network/API calls, N+1 patterns
+2. **Missed concurrency**: independent operations run sequentially when they could run in parallel
+3. **Hot-path bloat**: new blocking work added to startup or per-request/per-render hot paths
+4. **Recurring no-op updates**: state/store updates inside polling loops, intervals, or event handlers that fire unconditionally — add a change-detection guard so downstream consumers aren't notified when nothing changed. Also: if a wrapper function takes an updater/reducer callback, verify it honors same-reference returns (or whatever the "no change" signal is) — otherwise callers' early-return no-ops are silently defeated
+5. **Unnecessary existence checks**: pre-checking file/resource existence before operating (TOCTOU anti-pattern) — operate directly and handle the error
+6. **Memory**: unbounded data structures, missing cleanup, event listener leaks
+7. **Overly broad operations**: reading entire files when only a portion is needed, loading all items when filtering for one
+
+## Phase 3: Fix Issues
+
+Wait for all three agents to complete. Aggregate their findings and fix each issue directly. If a finding is a false positive or not worth addressing, note it and move on — do not argue with the finding, just skip it.
+
+When done, briefly summarize what was fixed (or confirm the code was already clean).
+
+---
+
+깃 푸시해줘
