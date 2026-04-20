@@ -1,0 +1,760 @@
+지금 스토리 구현되어 있는거에서 # 기억 로그 아카이브 — 구현 가이드
+
+**버전**: 1.0 (2026.04)  
+**브랜치**: `feature/story`  
+**관련 파일**: `src/scenes/StoryLogScene.ts`, `src/utils/storyProgress.ts`
+
+---
+
+## 1. 개요
+
+스토리는 **100% 텍스트만**으로 전달한다.  
+강제 노출 없음 — 홈 화면 버튼을 통해 플레이어가 원할 때만 확인.
+
+```
+홈 화면
+  └── 📁 기억 로그 버튼 (새 로그 있을 때 빨간 점 표시)
+        └── StoryLogScene (아카이브 리스트)
+              └── 로그 뷰어 (터미널 스타일 텍스트)
+```
+
+---
+
+## 2. 파일 구조
+
+```
+src/
+├── scenes/
+│   └── StoryLogScene.ts        ← 아카이브 UI + 뷰어
+├── utils/
+│   └── storyProgress.ts        ← 해금 조건 체크, localStorage 관리
+├── data/
+│   └── storyLogs.ts            ← 로그 데이터 정의
+└── types/
+    └── StoryTypes.ts           ← 타입 정의
+```
+
+---
+
+## 3. 타입 정의 (`src/types/StoryTypes.ts`)
+
+```typescript
+export interface StoryLog {
+  id: string;           // 예: 'TRASH-001', 'LEGACY-0007'
+  title: string;        // 해금 후 표시되는 제목
+  season: number;       // 1, 2, 3...
+  unlockCondition: UnlockCondition;
+  pages: string[];      // 한 페이지당 5~15줄, 배열로 페이지 분리
+}
+
+export interface UnlockCondition {
+  type: 'topaz' | 'gold' | 'diamond' | 'playCount' | 'skor' | 'gacha';
+  threshold: number;
+}
+```
+
+---
+
+## 4. 로그 데이터 (`src/data/storyLogs.ts`)
+
+```typescript
+import type { StoryLog } from '../types/StoryTypes';
+
+export const STORY_LOGS: StoryLog[] = [
+
+  // ── SEASON 1 ────────────────────────────────────────────────
+  {
+    id: 'TRASH-001',
+    title: '첫 번째 조각',
+    season: 1,
+    unlockCondition: { type: 'topaz', threshold: 10 },
+    pages: [
+      `[TRASH-001]\n시스템 기록 / 최초 복원 시도\n\n…이상하다.\n뭔가가 남아 있어.\n\n삭제됐는데도.\n\n잔향이 있다.\n치비가 그걸 줍고 있다.`,
+    ],
+  },
+  {
+    id: 'TRASH-002',
+    title: '달리는 이유',
+    season: 1,
+    unlockCondition: { type: 'topaz', threshold: 20 },
+    pages: [
+      `[TRASH-002]\n치비의 내적 기록\n\n치비: …왜 달리지?\n\n아무도 묻지 않았는데.\n\n하지만 멈추면—\n뭔가가 쌓인다. 머리에.\n\n그러니까 달린다.`,
+    ],
+  },
+  {
+    id: 'TRASH-003',
+    title: '목소리',
+    season: 1,
+    unlockCondition: { type: 'topaz', threshold: 30 },
+    pages: [
+      `[TRASH-003]\n대화 기록 #1\n\n치비: …여기는… 따뜻해.\n루트: 계속 달려. 이 공간을 유지하려면 그래야 해.\n치비: …누구야?\n루트: 나중에.`,
+    ],
+  },
+  {
+    id: 'TRASH-004',
+    title: '반복',
+    season: 1,
+    unlockCondition: { type: 'playCount', threshold: 10 },
+    pages: [
+      `[TRASH-004]\n시스템 로그 / 루프 감지\n\nCYCLE COUNT: 0010\n…또 시작됐다.\n\n치비는 기억하지 못한다.\n그래서 괜찮다.\n\n매번 새롭게 달릴 수 있으니까.`,
+    ],
+  },
+  {
+    id: 'TRASH-005',
+    title: '황금 잔해',
+    season: 1,
+    unlockCondition: { type: 'gold', threshold: 20 },
+    pages: [
+      `[TRASH-005]\n데이터 파편 #AU-20\n\n황금으로 변한 잔해들.\n삭제 직전에 압축된 데이터들이 뭉친 거다.\n\n루트: 조심해. 저건 그냥 쓸모없는 게 아니야.\n치비: …그래 보여.`,
+    ],
+  },
+  {
+    id: 'TRASH-006',
+    title: '루트의 기록',
+    season: 1,
+    unlockCondition: { type: 'playCount', threshold: 20 },
+    pages: [
+      `[TRASH-006]\n루트 시스템 로그\n\n나는 해킹 도구다.\n하지만 여기선—\n그냥 안내자다.\n\n치비가 달리면\n이 공간이 조금씩 안정된다.\n\n이유는 모른다.\n그냥 그렇다.`,
+    ],
+  },
+
+  // ── SEASON 2 ────────────────────────────────────────────────
+  {
+    id: 'LEGACY-0001',
+    title: '과거의 기록',
+    season: 2,
+    unlockCondition: { type: 'skor', threshold: 5000 },
+    pages: [
+      `[LEGACY-0001]\n오래된 로그 / 복원율 34%\n\n█l█ █e█ █a█ █y ███ ███ █ere █irst.\n\n나는 먼저 왔다.\n\n그러나 나간 뒤—\n무엇이 있었는지\n기억이 █l██ed.`,
+    ],
+  },
+  {
+    id: 'LEGACY-0002',
+    title: '██████',
+    season: 2,
+    unlockCondition: { type: 'diamond', threshold: 15 },
+    pages: [
+      `[LEGACY-0002]\n손상된 기록 / 복원 불가\n\n…GATE 앞까지 왔다.\n…나가면 뭐가 있지?\n\n███ ██████.\n\n█████ ██ ████.`,
+    ],
+  },
+];
+```
+
+---
+
+## 5. 해금 진행 관리 (`src/utils/storyProgress.ts`)
+
+```typescript
+import { STORY_LOGS } from '../data/storyLogs';
+import type { StoryLog } from '../types/StoryTypes';
+
+// localStorage 키
+const UNLOCKED_KEY  = 'storyUnlocked';   // string[]  — 해금된 로그 ID 배열
+const READ_KEY      = 'storyRead';        // string[]  — 읽은 로그 ID 배열
+const STATS_KEY     = 'storyStats';       // StoryStats JSON
+
+interface StoryStats {
+  topazCollected:   number;
+  goldCollected:    number;
+  diamondCollected: number;
+  playCount:        number;
+  totalSkor:        number;
+  gachaPullCount:   number;
+}
+
+function getStats(): StoryStats {
+  try {
+    return JSON.parse(localStorage.getItem(STATS_KEY) || '{}');
+  } catch { return {} as StoryStats; }
+}
+
+function saveStats(stats: StoryStats): void {
+  localStorage.setItem(STATS_KEY, JSON.stringify(stats));
+}
+
+/** 게임 이벤트 발생 시 통계 누적 및 해금 체크 */
+export function recordEvent(
+  type: 'topaz' | 'gold' | 'diamond' | 'playCount' | 'skor' | 'gacha',
+  amount = 1
+): void {
+  const stats = getStats();
+  switch (type) {
+    case 'topaz':     stats.topazCollected   = (stats.topazCollected   || 0) + amount; break;
+    case 'gold':      stats.goldCollected    = (stats.goldCollected    || 0) + amount; break;
+    case 'diamond':   stats.diamondCollected = (stats.diamondCollected || 0) + amount; break;
+    case 'playCount': stats.playCount        = (stats.playCount        || 0) + amount; break;
+    case 'skor':      stats.totalSkor        = (stats.totalSkor        || 0) + amount; break;
+    case 'gacha':     stats.gachaPullCount   = (stats.gachaPullCount   || 0) + amount; break;
+  }
+  saveStats(stats);
+  checkAndUnlockLogs(stats);
+}
+
+function checkAndUnlockLogs(stats: StoryStats): void {
+  const unlocked = getUnlockedIds();
+  let changed = false;
+
+  for (const log of STORY_LOGS) {
+    if (unlocked.includes(log.id)) continue;
+
+    const { type, threshold } = log.unlockCondition;
+    const current =
+      type === 'topaz'     ? (stats.topazCollected   || 0) :
+      type === 'gold'      ? (stats.goldCollected    || 0) :
+      type === 'diamond'   ? (stats.diamondCollected || 0) :
+      type === 'playCount' ? (stats.playCount        || 0) :
+      type === 'skor'      ? (stats.totalSkor        || 0) :
+      type === 'gacha'     ? (stats.gachaPullCount   || 0) : 0;
+
+    if (current >= threshold) {
+      unlocked.push(log.id);
+      changed = true;
+      // 해금 알림 (강제 팝업 없이 — 아카이브 화면 진입 시 표시)
+      console.log(`[Story] 새 로그 해금: ${log.id}`);
+    }
+  }
+
+  if (changed) {
+    localStorage.setItem(UNLOCKED_KEY, JSON.stringify(unlocked));
+  }
+}
+
+export function getUnlockedIds(): string[] {
+  try { return JSON.parse(localStorage.getItem(UNLOCKED_KEY) || '[]'); }
+  catch { return []; }
+}
+
+export function getReadIds(): string[] {
+  try { return JSON.parse(localStorage.getItem(READ_KEY) || '[]'); }
+  catch { return []; }
+}
+
+export function markAsRead(id: string): void {
+  const read = getReadIds();
+  if (!read.includes(id)) {
+    read.push(id);
+    localStorage.setItem(READ_KEY, JSON.stringify(read));
+  }
+}
+
+/** 홈 화면 빨간 점 표시 여부 */
+export function hasUnreadNewLogs(): boolean {
+  const unlocked = getUnlockedIds();
+  const read = getReadIds();
+  return unlocked.some(id => !read.includes(id));
+}
+```
+
+---
+
+## 6. 씬 구현 (`src/scenes/StoryLogScene.ts`)
+
+### 씬 등록 (`src/main.ts`)
+
+```typescript
+import StoryLogScene from './scenes/StoryLogScene';
+
+// GameConfig.scene 배열에 추가
+scene: [
+  ModeSelectScene,
+  StoryLogScene,       // ← 추가
+  // ...기존 씬들
+]
+```
+
+### 씬 기본 구조
+
+```typescript
+import Phaser from 'phaser';
+import { STORY_LOGS } from '../data/storyLogs';
+import {
+  getUnlockedIds,
+  getReadIds,
+  markAsRead,
+} from '../utils/storyProgress';
+import BaseScene from './BaseScene';
+
+const SCROLL_TOP    = 95;
+const SCROLL_BOTTOM = 548;
+const ROW_H         = 72;
+const ROW_GAP       = 6;
+
+export default class StoryLogScene extends BaseScene {
+  private scrollOffset = 0;
+  private maxScrollOffset = 0;
+  private rowContainer!: Phaser.GameObjects.Container;
+  private maskGfx!: Phaser.GameObjects.Graphics;
+  private pointerDownY = 0;
+  private pointerDownScrollY = 0;
+  private hasDragged = false;
+
+  constructor() { super('StoryLogScene'); }
+
+  create() {
+    super.create();
+
+    const W = this.scale.width;
+    const H = this.scale.height;
+    const cx = W / 2;
+    const yOff = (H - 600) / 2;
+
+    // 배경
+    this.add.rectangle(cx, H / 2, W, H, 0x080812);
+
+    // 헤더
+    this.drawHeader(cx, yOff);
+
+    // 스크롤 가능한 로그 리스트
+    this.rowContainer = this.add.container(0, yOff);
+    this.buildLogList();
+
+    // 마스크 (스크롤 영역 밖 숨김)
+    this.maskGfx = this.make.graphics({ x: 0, y: 0 });
+    this.maskGfx.fillStyle(0xffffff);
+    this.maskGfx.fillRect(
+      0,
+      SCROLL_TOP + yOff,
+      W,
+      H - (600 - SCROLL_BOTTOM) - SCROLL_TOP - yOff,
+    );
+    this.rowContainer.setMask(this.maskGfx.createGeometryMask());
+
+    // 스크롤 입력
+    this.setupScrollInput(yOff, H);
+
+    // 뒤로가기
+    this.createBackButton(cx, H - 27, yOff);
+
+    this.events.once('shutdown', () => this.maskGfx.destroy());
+  }
+
+  private drawHeader(cx: number, yOff: number) {
+    // 헤더 배경
+    this.add.rectangle(cx, 40 + yOff, this.scale.width, 48, 0x000000, 0.8);
+    this.add.rectangle(cx, 64 + yOff, this.scale.width, 1, 0x00ff41, 0.2);
+
+    // 제목
+    this.add.text(cx, 34 + yOff, '기억 로그 아카이브', {
+      fontSize: '14px',
+      color: '#00ff41',
+      fontStyle: 'bold',
+      stroke: '#000',
+      strokeThickness: 3,
+    }).setOrigin(0.5);
+
+    // 새 로그 수 뱃지
+    const unread = getUnlockedIds().filter(id => !getReadIds().includes(id));
+    if (unread.length > 0) {
+      const badge = this.add.circle(cx + 80, 28 + yOff, 10, 0xff4444);
+      this.add.text(cx + 80, 28 + yOff, String(unread.length), {
+        fontSize: '10px', color: '#fff', fontStyle: 'bold',
+      }).setOrigin(0.5).setDepth(badge.depth + 1);
+    }
+  }
+
+  private buildLogList() {
+    const W = this.scale.width;
+    const cx = W / 2;
+    const unlocked = getUnlockedIds();
+    const read = getReadIds();
+
+    let y = SCROLL_TOP + 10;
+    let currentSeason = 0;
+
+    for (const log of STORY_LOGS) {
+      // 시즌 구분선
+      if (log.season !== currentSeason) {
+        currentSeason = log.season;
+        const label = this.add.text(16, y, `— SEASON ${currentSeason} —`, {
+          fontSize: '9px', color: '#00ff4166',
+          fontFamily: 'monospace',
+        });
+        this.rowContainer.add(label);
+        y += 24;
+      }
+
+      const isUnlocked = unlocked.includes(log.id);
+      const isRead = read.includes(log.id);
+      const isNew = isUnlocked && !isRead;
+
+      this.createLogRow(cx, y, log, isUnlocked, isNew);
+      y += ROW_H + ROW_GAP;
+    }
+
+    // 최대 스크롤 계산
+    const scrollBottom = this.scale.height - (600 - SCROLL_BOTTOM);
+    this.maxScrollOffset = Math.max(
+      0,
+      this.yOff + y - scrollBottom,
+    );
+  }
+
+  private createLogRow(
+    cx: number,
+    y: number,
+    log: (typeof STORY_LOGS)[0],
+    isUnlocked: boolean,
+    isNew: boolean,
+  ) {
+    const W = this.scale.width;
+    const alpha = isUnlocked ? 1 : 0.4;
+
+    // 카드 배경
+    const bg = this.add.rectangle(cx, y + ROW_H / 2, W - 24, ROW_H, 0x0d0d1e, 1)
+      .setStrokeStyle(1, isNew ? 0x00ff4144 : 0xffffff15)
+      .setAlpha(alpha);
+    this.rowContainer.add(bg);
+
+    // 아이콘
+    const icon = this.add.text(24, y + ROW_H / 2, isUnlocked ? (isNew ? '📋' : '📄') : '🔒', {
+      fontSize: '18px',
+    }).setOrigin(0, 0.5).setAlpha(alpha);
+    this.rowContainer.add(icon);
+
+    // 로그 ID
+    const idColor = isUnlocked ? '#00ff41' : '#444444';
+    const idText = this.add.text(48, y + ROW_H / 2 - 12, `[${log.id}]`, {
+      fontSize: '9px', color: idColor, fontFamily: 'monospace',
+    }).setAlpha(alpha);
+    this.rowContainer.add(idText);
+
+    // NEW 뱃지
+    if (isNew) {
+      const newBg = this.add.rectangle(
+        48 + idText.width + 18, y + ROW_H / 2 - 12,
+        28, 14, 0xff4444,
+      );
+      this.add.text(
+        newBg.x, newBg.y, 'NEW',
+        { fontSize: '8px', color: '#fff', fontStyle: 'bold' },
+      ).setOrigin(0.5);
+      this.rowContainer.add(newBg);
+    }
+
+    // 제목 or ?????
+    this.rowContainer.add(
+      this.add.text(48, y + ROW_H / 2 + 2,
+        isUnlocked ? log.title : '?????', {
+          fontSize: '13px',
+          color: isUnlocked ? '#cccccc' : '#333333',
+          fontStyle: 'bold',
+          fontFamily: 'Noto Sans KR, sans-serif',
+        },
+      ).setAlpha(alpha)
+    );
+
+    // 잠금 조건 (미해금)
+    if (!isUnlocked) {
+      this.rowContainer.add(
+        this.add.text(48, y + ROW_H / 2 + 20,
+          `해금 조건: ${log.unlockCondition.type} × ${log.unlockCondition.threshold}`, {
+            fontSize: '10px', color: '#555555',
+            fontFamily: 'Noto Sans KR, sans-serif',
+          }
+        )
+      );
+    }
+
+    // 화살표 (해금된 항목만)
+    if (isUnlocked) {
+      this.rowContainer.add(
+        this.add.text(W - 20, y + ROW_H / 2, '▶', {
+          fontSize: '12px', color: '#00ff4155',
+        }).setOrigin(1, 0.5)
+      );
+    }
+
+    // 클릭 이벤트
+    if (isUnlocked) {
+      bg.setInteractive({ useHandCursor: true });
+      bg.on('pointerover', () => bg.setFillStyle(0x00ff4108));
+      bg.on('pointerout',  () => bg.setFillStyle(0x0d0d1e));
+      bg.on('pointerup',   () => {
+        if (!this.hasDragged) this.openLogViewer(log);
+      });
+    }
+  }
+
+  private openLogViewer(log: (typeof STORY_LOGS)[0]) {
+    markAsRead(log.id);
+    // StoryLogViewerScene을 overlay로 실행
+    this.scene.launch('StoryLogViewerScene', { log });
+    this.scene.pause();
+  }
+
+  private setupScrollInput(yOff: number, H: number) {
+    const scrollTopActual    = SCROLL_TOP + yOff;
+    const scrollBottomActual = H - (600 - SCROLL_BOTTOM);
+
+    this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
+      if (p.y < scrollTopActual || p.y > scrollBottomActual) return;
+      this.pointerDownY = p.y;
+      this.pointerDownScrollY = this.scrollOffset;
+      this.hasDragged = false;
+    });
+    this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
+      if (!p.isDown) return;
+      const dy = this.pointerDownY - p.y;
+      if (Math.abs(dy) > 5) {
+        this.hasDragged = true;
+        this.scrollOffset = Phaser.Math.Clamp(
+          this.pointerDownScrollY + dy, 0, this.maxScrollOffset,
+        );
+        this.rowContainer.setY(this.yOff - this.scrollOffset);
+      }
+    });
+    this.input.on('pointerup', () => {
+      this.time.delayedCall(0, () => { this.hasDragged = false; });
+    });
+    this.input.on('wheel', (_p: unknown, _go: unknown, _dx: number, dy: number) => {
+      this.scrollOffset = Phaser.Math.Clamp(
+        this.scrollOffset + dy * 0.5, 0, this.maxScrollOffset,
+      );
+      this.rowContainer.setY(this.yOff - this.scrollOffset);
+    });
+  }
+
+  private createBackButton(cx: number, y: number, yOff: number) {
+    const btn = this.add.rectangle(cx, y, 200, 50, 0x333333)
+      .setStrokeStyle(1, 0x444444)
+      .setDepth(10)
+      .setInteractive({ useHandCursor: true });
+    this.add.text(cx, y, '← 돌아가기', {
+      fontSize: '16px', color: '#ffffff', fontStyle: 'bold',
+    }).setOrigin(0.5).setDepth(11);
+    btn.on('pointerover', () => btn.setFillStyle(0x555555));
+    btn.on('pointerout',  () => btn.setFillStyle(0x333333));
+    btn.on('pointerdown', () => this.scene.start('ModeSelectScene'));
+  }
+
+  // yOff getter (BaseScene에서 상속 못 할 경우 직접 계산)
+  private get yOff(): number {
+    return (this.scale.height - 600) / 2;
+  }
+}
+```
+
+---
+
+## 7. 홈 화면 연동 (`src/scenes/ModeSelectScene.ts`)
+
+```typescript
+// 기억 로그 버튼 추가 — createReleaseNotesLink 근처에 배치
+private createStoryLogButton(x: number, y: number) {
+  const { hasUnreadNewLogs } = await import('../utils/storyProgress');
+
+  const text = this.add.text(x - 50, y, '📁 기억 로그', {
+    fontSize: '14px',
+    color: '#cccccc',
+    stroke: '#000',
+    strokeThickness: 3,
+  }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+
+  text.on('pointerover', () => text.setColor('#FFD700'));
+  text.on('pointerout',  () => text.setColor('#cccccc'));
+  text.on('pointerdown', () => this.scene.start('StoryLogScene'));
+
+  // 빨간 점 (새 로그 있을 때)
+  if (hasUnreadNewLogs()) {
+    this.add.circle(text.x + text.width / 2 + 6, text.y - 6, 4, 0xff4444)
+      .setDepth(text.depth + 1);
+  }
+}
+
+// create()에서 호출
+create() {
+  // ...기존 코드...
+  this.createReleaseNotesLink(cx + 50, H - 80);   // 기존 위치 조정
+  this.createStoryLogButton(cx - 50, H - 80);      // ← 추가
+}
+```
+
+---
+
+## 8. 게임 이벤트 연동
+
+각 수집/플레이 이벤트 발생 시 `recordEvent()` 호출.
+
+```typescript
+// GameScene.ts — 특수똥 수집 시
+import { recordEvent } from '../utils/storyProgress';
+
+private handleTopazCollected(poop: Phaser.Physics.Arcade.Sprite) {
+  // ...기존 처리...
+  recordEvent('topaz', 1);        // ← 추가
+}
+
+private handleGoldCollected(poop: Phaser.Physics.Arcade.Sprite) {
+  // ...기존 처리...
+  recordEvent('gold', 1);         // ← 추가
+}
+
+private handleDiamondCollected(poop: Phaser.Physics.Arcade.Sprite) {
+  // ...기존 처리...
+  recordEvent('diamond', 1);      // ← 추가
+}
+
+// 게임 오버 시 플레이 횟수 카운트
+protected async showGameOverUI(isNewRecord: boolean) {
+  recordEvent('playCount', 1);    // ← 추가
+  // ...기존 처리...
+}
+
+// GachaScene.ts — 뽑기 완료 시
+recordEvent('skor', cost);        // 사용한 SKOR만큼 누적
+recordEvent('gacha', count);      // 뽑기 횟수 누적
+```
+
+---
+
+## 9. 해금 조건 전체 목록
+
+### Season 1
+
+| 로그 ID | 조건 | threshold |
+|---------|------|-----------|
+| TRASH-001 | 토파즈 수집 | 10 |
+| TRASH-002 | 토파즈 수집 | 20 |
+| TRASH-003 | 토파즈 수집 | 30 |
+| TRASH-004 | 누적 플레이 횟수 | 10 |
+| TRASH-005 | 금똥 수집 | 20 |
+| TRASH-006 | 누적 플레이 횟수 | 20 |
+
+### Season 2
+
+| 로그 ID | 조건 | threshold |
+|---------|------|-----------|
+| LEGACY-0001 | SKOR 누적 정제 | 5000 |
+| LEGACY-0002 | 다이아 수집 | 15 |
+
+> 이후 시즌은 조건 난이도를 서서히 높이며 `storyLogs.ts`에 항목 추가.
+
+---
+
+## 10. 운영 가이드
+
+### 새 시즌 로그 추가 방법
+
+1. `src/data/storyLogs.ts` — `STORY_LOGS` 배열에 항목 추가
+2. `src/utils/storyProgress.ts` — 새 `UnlockCondition.type`이 필요하면 타입 확장
+3. `src/scenes/ModeSelectScene.ts` — 변경 없음 (자동 반영)
+
+### 로그 작성 원칙
+
+- 한 페이지 **5~15줄** 유지
+- 페이지가 길면 `pages` 배열로 분리 (`"다음"` 버튼 자동 생성)
+- LEGACY 로그는 `█` 문자로 글리치 표현
+- TRASH 로그: 시스템 기록 / 치비 독백 / 루트 대화
+- 강제 읽기 유도 없음 — 해금 알림은 `console.log`와 빨간 점만
+
+### localStorage 키 목록
+
+| 키 | 타입 | 설명 |
+|----|------|------|
+| `storyUnlocked` | `string[]` | 해금된 로그 ID 배열 |
+| `storyRead` | `string[]` | 읽은 로그 ID 배열 |
+| `storyStats` | `StoryStats` | 수집/플레이 누적 통계 |
+ 이거 기준으로 바꿔서 구현해줘.
+
+---
+
+기억 파편 같은건 없애자. 컨셉이 기억이 아니라 새로 기록하는 것들이라 뭔가 컨셉이 안맞는거 같아. 코드도 수정하고 문서도 기억과는 무관하고 기록으로 바꿔줘.
+
+---
+
+옵시디언의 스토리 공개 방식 문서는 수정된건가?
+
+---
+
+Base directory for this skill: /Users/johyunduk/.claude/skills/obsidian
+
+# Obsidian CLI
+
+## Syntax Rules
+
+```bash
+obsidian <command> [key=value ...]
+```
+
+- `file=<name>` — 노트 이름으로 해석 (위키링크처럼)
+- `path=<path>` — 정확한 경로로 해석 (예: `folder/note.md`)
+- file/path 생략 시 **현재 활성 파일** 기본값
+- `vault=<name>` — 특정 vault 지정 (생략 시 활성 vault)
+- 공백 포함 값은 따옴표 사용: `name="My Note"`
+- 내용 내 줄바꿈: `\n`, 탭: `\t`
+
+## 자주 쓰는 패턴
+
+### 노트 읽기 / 생성 / 편집
+```bash
+obsidian read file="Note Name"
+obsidian read path="folder/note.md"
+
+obsidian create name="New Note" content="첫 내용"
+obsidian create name="New Note" template="My Template" open
+
+obsidian append file="Note Name" content="추가할 내용"
+obsidian prepend file="Note Name" content="앞에 붙일 내용\n"
+```
+
+### Daily Note
+```bash
+obsidian daily:read
+obsidian daily:append content="- [ ] 오늘 할 일"
+obsidian daily:path
+```
+
+### 검색
+```bash
+obsidian search query="검색어"
+obsidian search query="키워드" path="folder" limit=10
+obsidian search:context query="검색어"   # 매칭 라인 컨텍스트 포함
+```
+
+### Tasks
+```bash
+obsidian tasks todo                          # 미완료 작업 목록
+obsidian tasks done file="Note Name"         # 특정 파일의 완료 작업
+obsidian task toggle path="folder/note.md" line=5
+obsidian task done daily                     # 데일리 노트 작업 완료 처리
+```
+
+### Properties (Frontmatter)
+```bash
+obsidian property:read name="status" file="Note Name"
+obsidian property:set name="status" value="done" file="Note Name"
+obsidian property:set name="tags" value="project, active" type=list file="Note Name"
+obsidian property:remove name="draft" file="Note Name"
+```
+
+### Vault 구조 점검
+```bash
+obsidian orphans          # 인커밍 링크 없는 파일
+obsidian deadends         # 아웃고잉 링크 없는 파일
+obsidian unresolved       # 깨진 위키링크
+obsidian backlinks file="Note Name"
+```
+
+## 유용한 플래그
+
+| 플래그 | 용도 |
+|--------|------|
+| `total` | 개수만 반환: `obsidian files total` |
+| `verbose` | 상세 정보 추가 |
+| `format=json` | JSON 출력: `obsidian search query="x" format=json` |
+| `format=csv\|tsv` | CSV/TSV 출력 |
+
+## 전체 명령어 참조
+
+카테고리별 전체 명령어 목록: [references/commands.md](references/commands.md)
+
+
+ARGUMENTS: read "1. Projects/똥피하기"
+
+---
+
+[Request interrupted by user for tool use]
+
+---
+
+옵시디언 스킬 쓰지 말고 그냥 수정이나해
