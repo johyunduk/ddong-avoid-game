@@ -2,6 +2,7 @@ import {
   HACKER_DESC, MINER_DESC, MAEHWA_DESC,
   ARCHIEVE_DESC, GLITCH_DESC, NOISE_DESC,
   SENTINEL_DESC, LEGACY_DESC, KNIGHT_DESC,
+  GUMI_DESC,
 } from '../config/abilityParams';
 
 export interface CharacterDef {
@@ -17,6 +18,10 @@ export interface CharacterDef {
   videoPath?: string;   // public/ 기준 경로 (선택)
   basicEffect: string;  // 기본 효과 설명 (상세 팝업용)
   specialAbility: string; // 특수 능력 설명 (없으면 '없음')
+  /** 인게임 플레이어 표시 크기 [w, h]. 생략 시 [50, 80] */
+  playerDisplaySize?: [number, number];
+  /** 캐릭터 선택 카드 표시 크기 [w, h]. 생략 시 [58, 85] */
+  cardDisplaySize?: [number, number];
 }
 
 /** 등급 이미지 텍스처 키 반환. 등급외 → null */
@@ -41,6 +46,22 @@ export const CHARACTERS: CharacterDef[] = [
     specialAbility: '없음',
   },
   // ── UR등급 ─────────────────────────────────────────────────────────────
+  {
+    id: 'gumi',
+    name: '구미',
+    grade: 'UR',
+    gradeColor: '#ffaa00',
+    imageKey: 'gumi_front',
+    imagePath: 'assets/players/gumi_front.webp',
+    illustKey: 'illust_gumi',
+    illustPath: 'assets/illustrations/gumi.webp',
+    videoKey: 'vid_gumi',
+    videoPath: 'assets/vids/gumi.mp4',
+    basicEffect: GUMI_DESC.basicEffect,
+    specialAbility: GUMI_DESC.specialAbility,
+    playerDisplaySize: [44, 70],
+    cardDisplaySize: [51, 74],
+  },
   {
     id: 'sentinel',
     name: '센티넬',

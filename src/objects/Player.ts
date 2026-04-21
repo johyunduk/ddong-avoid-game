@@ -32,7 +32,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
   private speedBoostTimer?: Phaser.Time.TimerEvent;
   private rainbowTimer?: Phaser.Time.TimerEvent;
 
-  constructor(scene: Phaser.Scene, x: number, y: number, speed: number = 300, texturePrefix: string = '') {
+  constructor(scene: Phaser.Scene, x: number, y: number, speed: number = 300, texturePrefix: string = '', displayW: number = 50, displayH: number = 80) {
     // 기본 텍스처는 front (정면)
     super(scene, x, y, `${texturePrefix}front`);
     this.speed = speed;
@@ -44,15 +44,15 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     scene.physics.add.existing(this);
 
     // 캐릭터 크기 설정
-    this.setDisplaySize(50, 80);
+    this.setDisplaySize(displayW, displayH);
 
     // 히트박스: 텍스처 해상도와 무관하게 world pixel 크기 고정
     // setSize/setOffset 은 frame pixel 단위이므로 scaleX/Y 로 역산
-    // 목표 world 크기: 20×40 px (display 50×80 의 40%/50%), 중앙 정렬
-    const sx = this.scaleX;  // = 50 / textureWidth
-    const sy = this.scaleY;  // = 80 / textureHeight
+    // 목표 world 크기: 16×40 px, 중앙 정렬
+    const sx = this.scaleX;
+    const sy = this.scaleY;
     this.setSize(16 / sx, 40 / sy);
-    this.setOffset((50 - 16) / 2 / sx, (80 - 40) / 2 / sy);
+    this.setOffset((displayW - 16) / 2 / sx, (displayH - 40) / 2 / sy);
 
     // 물리 설정
     this.setCollideWorldBounds(true);

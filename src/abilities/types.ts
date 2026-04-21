@@ -20,6 +20,7 @@ export interface GameSceneAPI {
   /** 어빌리티 자체 보너스 점수 추가 — updateScore와 동일하지만 abilityBonusTotal에 누적됨 */
   addAbilityBonus(amount: number): void;
   spawnGoldPoop(): void;
+  spawnGoldPoopAt(x: number, y: number): void;
   spawnDiamondPoop(): void;
   spawnTopazPoop(): void;
   spawnRainbowPoop(): void;

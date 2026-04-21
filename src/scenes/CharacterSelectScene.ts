@@ -649,7 +649,8 @@ export default class CharacterSelectScene extends BaseScene {
 
     // 캐릭터 이미지
     const img = this.add.image(x, y - 12, char.imageKey);
-    img.setDisplaySize(58, 85);
+    const [cw, ch] = char.cardDisplaySize ?? [58, 85];
+    img.setDisplaySize(cw, ch);
     this.cardsContainer.add(img);
 
     if (!isOwned) {

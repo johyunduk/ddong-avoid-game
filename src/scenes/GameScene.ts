@@ -84,7 +84,7 @@ export default class GameScene extends BaseScene {
     return Math.max(400, this.difficultyConfig.spawnDelay - (this.difficultyLevel * 80));
   }
 
-  private static readonly CHARS_WITH_SPRITES = ['miner', 'maehwa', 'hacker', 'archieve', 'glitch', 'noise', 'sentinel', 'legacy', 'log', 'swap', 'sum', 'fork', 'seed', 'session', 'branch', 'hook', 'socket', 'index', 'knight'];
+  private static readonly CHARS_WITH_SPRITES = ['miner', 'maehwa', 'hacker', 'archieve', 'glitch', 'noise', 'sentinel', 'legacy', 'log', 'swap', 'sum', 'fork', 'seed', 'session', 'branch', 'hook', 'socket', 'index', 'knight', 'gumi'];
   private static readonly RAINBOW_COLORS = [
     '#ff0000', '#ff7f00', '#ffff00', '#00ff00', '#0000ff', '#4b0082', '#9400d3',
   ];
@@ -305,7 +305,8 @@ export default class GameScene extends BaseScene {
       : this.charAwakeLevel >= 2 ? _gs(10, 15, 20)
       : this.charAwakeLevel >= 1 ? _gs(5, 10, 15)
       : 0;
-    this.player = new Player(this, cx, H - 80, this.difficultyConfig.playerSpeed + this.ability.getPlayerSpeedBonus() + gradeAwakeSpeed + (this.activeSynergy?.speedBonus ?? 0), playerTexturePrefix);
+    const [playerW, playerH] = getCharacterDef(this.selectedCharId).playerDisplaySize ?? [50, 80];
+    this.player = new Player(this, cx, H - 80, this.difficultyConfig.playerSpeed + this.ability.getPlayerSpeedBonus() + gradeAwakeSpeed + (this.activeSynergy?.speedBonus ?? 0), playerTexturePrefix, playerW, playerH);
 
     // 💩 그룹 생성 (Object Pool: maxSize로 상한 설정)
     this.poops = this.physics.add.group({
@@ -592,6 +593,7 @@ export default class GameScene extends BaseScene {
       updateScore:    (n) => self.updateScore(n),
       addAbilityBonus: (n) => { self.abilityBonusTotal += n; self.updateScore(n); },
       spawnGoldPoop:    () => self.spawnGoldPoop(),
+      spawnGoldPoopAt:  (x, y) => self.spawnGoldPoop(x, y),
       spawnDiamondPoop: () => self.spawnDiamondPoop(),
       spawnTopazPoop:   () => self.spawnTopazPoop(),
       spawnRainbowPoop: () => self.spawnRainbowPoop(),
@@ -704,12 +706,11 @@ export default class GameScene extends BaseScene {
     this.ability.onAfterSpawnPoop(this.abilityAPI);
   }
 
-  private spawnGoldPoop() {
+  private spawnGoldPoop(atX?: number, atY?: number) {
     if (this.gameOver) return;
 
-    // 금똥 1개를 화면 중앙 상단에서 생성 (더 잘 보이도록)
-    const x = Phaser.Math.Between(50, this.scale.width - 50);
-    const y = -50;
+    const x = atX ?? Phaser.Math.Between(50, this.scale.width - 50);
+    const y = atY ?? -50;
     const goldPoop = this.goldPoops.get() as GoldPoop;
     if (!goldPoop) return;
     goldPoop.reinit(x, y);

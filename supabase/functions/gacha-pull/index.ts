@@ -22,8 +22,9 @@ function pullWallpaper(): { id: string } {
 }
 
 // ── 뽑기 풀 정의 ────────────────────────────────────────────────────────
-// R 80% (10종 균등 배분), SR 19.3% (7종 균등 배분), UR 0.7% (2종 균등 배분)
-const SR_W  = 19.3 / 7;   // ≈ 2.757%
+// R 80% (10종 균등 배분), SR 19.3% (7종 균등 배분), UR 0.7% (3종 균등 배분)
+const SR_W  = 19.3 / 7;         // ≈ 2.757%
+const UR_W  = 0.7  / 3;         // ≈ 0.233%
 const POOL = [
   // ── R등급 ──
   { id: 'log',     grade: 'R',  weight: 8 },
@@ -45,13 +46,15 @@ const POOL = [
   { id: 'noise',    grade: 'SR', weight: SR_W },
   { id: 'knight',   grade: 'SR', weight: SR_W },
   // ── UR등급 ──
-  { id: 'sentinel', grade: 'UR', weight: 0.35 },
-  { id: 'legacy',   grade: 'UR', weight: 0.35 },
+  { id: 'gumi',     grade: 'UR', weight: UR_W },
+  { id: 'sentinel', grade: 'UR', weight: UR_W },
+  { id: 'legacy',   grade: 'UR', weight: UR_W },
 ];
 
+const POOL_TOTAL = POOL.reduce((s, c) => s + c.weight, 0);
+
 function pullOne(): { id: string; grade: string } {
-  const total = POOL.reduce((s, c) => s + c.weight, 0);
-  let r = Math.random() * total;
+  let r = Math.random() * POOL_TOTAL;
   for (const c of POOL) {
     r -= c.weight;
     if (r <= 0) return { id: c.id, grade: c.grade };

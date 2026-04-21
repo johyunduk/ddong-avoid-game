@@ -106,6 +106,18 @@ export const KNIGHT_DESC = {
   specialAbility: `${KNIGHT_PARAMS.beamInterval}점마다 3방향 검기 발사 — 경로 위 일반 똥 전부 소멸`,
 } as const;
 
+// ── 구미 (Gumi / UR) ──────────────────────────────────────────────────
+export const GUMI_PARAMS = {
+  collectBonus:    15,   // 금똥·다이아똥 수집 추가 점수
+  foxFireInterval: 200,  // 여우불 발동 점수 간격
+  foxFireCount:    9,    // 구미호 꼬리 수 = 여우불 수 = 소환 금똥 수
+} as const;
+
+export const GUMI_DESC = {
+  basicEffect:    `금똥·다이아똥 수집 시 +${GUMI_PARAMS.collectBonus}점 추가 (구미호의 황금 친화력)`,
+  specialAbility: `${GUMI_PARAMS.foxFireInterval}점마다 여우불 ${GUMI_PARAMS.foxFireCount}개 소환 — 꼬리마다 금똥 1개`,
+} as const;
+
 // ── 레거시 (Legacy / UR) ──────────────────────────────────────────────
 export const LEGACY_PARAMS = {
   feverDuration: 6000,        // 시작 피버 지속 시간 (ms)
