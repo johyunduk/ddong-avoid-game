@@ -3,7 +3,7 @@
   "checkpoint_id": "eb08f76b8f62",
   "strategy": "manual-commit",
   "branch": "dev",
-  "checkpoints_count": 2,
+  "checkpoints_count": 17,
   "files_touched": [
     "docs/HOW_TO_ADD_CHARACTER.md",
     "public/assets/illustrations/gumi.webp",
@@ -119,13 +119,20 @@
       "context": "",
       "content_hash": "/eb/08f76b8f62/13/content_hash.txt",
       "prompt": ""
+    },
+    {
+      "metadata": "/eb/08f76b8f62/14/metadata.json",
+      "transcript": "/eb/08f76b8f62/14/full.jsonl",
+      "context": "/eb/08f76b8f62/14/context.md",
+      "content_hash": "/eb/08f76b8f62/14/content_hash.txt",
+      "prompt": "/eb/08f76b8f62/14/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 1505,
-    "cache_creation_tokens": 2021336,
-    "cache_read_tokens": 94161603,
-    "output_tokens": 617139,
-    "api_call_count": 1087
+    "input_tokens": 1721,
+    "cache_creation_tokens": 2318072,
+    "cache_read_tokens": 107761806,
+    "output_tokens": 703375,
+    "api_call_count": 1247
   }
 }
