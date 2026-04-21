@@ -1,0 +1,48 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "eb08f76b8f62",
+  "session_id": "6cf8e78b-577f-477f-8f17-299d56335c18",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-21T12:32:25.440587Z",
+  "branch": "dev",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "public/assets/illustrations/gumi.webp",
+    "public/assets/players/gumi_left.webp",
+    "src/abilities/index.ts",
+    "supabase/functions/gacha-pull/index.ts",
+    "public/assets/vids/gumi.mp4",
+    "src/config/abilityParams.ts",
+    "src/scenes/CharacterSelectScene.ts",
+    "src/scenes/GameScene.ts",
+    "public/assets/players/gumi_front.webp",
+    "src/abilities/types.ts",
+    "src/objects/Player.ts",
+    "docs/HOW_TO_ADD_CHARACTER.md",
+    "public/assets/players/gumi_right.webp",
+    "src/abilities/GumiAbility.ts",
+    "src/utils/character.ts"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "b7ccded68f3b",
+  "transcript_identifier_at_start": "3cb6826e-cd42-45c4-9690-01a69dfbbc54",
+  "checkpoint_transcript_start": 890,
+  "transcript_lines_at_start": 890,
+  "token_usage": {
+    "input_tokens": 259,
+    "cache_creation_tokens": 348322,
+    "cache_read_tokens": 19959672,
+    "output_tokens": 158917,
+    "api_call_count": 204
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-21T12:32:24.272983Z",
+    "agent_lines": 433,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 433,
+    "agent_percentage": 100
+  },
+  "transcript_path": ".claude/projects/-Users-johyunduk-Projects-ddong-avoid-game/6cf8e78b-577f-477f-8f17-299d56335c18.jsonl"
+}
