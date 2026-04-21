@@ -1,0 +1,40 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "eb08f76b8f62",
+  "strategy": "manual-commit",
+  "branch": "dev",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "docs/HOW_TO_ADD_CHARACTER.md",
+    "public/assets/illustrations/gumi.webp",
+    "public/assets/players/gumi_front.webp",
+    "public/assets/players/gumi_left.webp",
+    "public/assets/players/gumi_right.webp",
+    "public/assets/vids/gumi.mp4",
+    "src/abilities/GumiAbility.ts",
+    "src/abilities/index.ts",
+    "src/abilities/types.ts",
+    "src/config/abilityParams.ts",
+    "src/objects/Player.ts",
+    "src/scenes/CharacterSelectScene.ts",
+    "src/scenes/GameScene.ts",
+    "src/utils/character.ts",
+    "supabase/functions/gacha-pull/index.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/eb/08f76b8f62/0/metadata.json",
+      "transcript": "/eb/08f76b8f62/0/full.jsonl",
+      "context": "/eb/08f76b8f62/0/context.md",
+      "content_hash": "/eb/08f76b8f62/0/content_hash.txt",
+      "prompt": "/eb/08f76b8f62/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 32,
+    "cache_creation_tokens": 43469,
+    "cache_read_tokens": 690689,
+    "output_tokens": 8612,
+    "api_call_count": 20
+  }
+}
