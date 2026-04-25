@@ -1,0 +1,36 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "58e2ae759821",
+  "session_id": "9467af67-6b2b-4edc-a7c3-6049d38d0c2b",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-25T07:57:27.517125Z",
+  "branch": "dev",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "src/abilities/GumiAbility.ts",
+    "src/config/abilityParams.ts",
+    "src/objects/Player.ts"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "790a67eb14b3",
+  "transcript_identifier_at_start": "e16c7eca-5509-40eb-a3d4-007f6a468fa9",
+  "checkpoint_transcript_start": 343,
+  "transcript_lines_at_start": 343,
+  "token_usage": {
+    "input_tokens": 150,
+    "cache_creation_tokens": 126952,
+    "cache_read_tokens": 9139478,
+    "output_tokens": 43208,
+    "api_call_count": 112
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-25T07:57:27.188389Z",
+    "agent_lines": 409,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 409,
+    "agent_percentage": 100
+  },
+  "transcript_path": ".claude/projects/-Users-johyunduk-Projects-ddong-avoid-game/9467af67-6b2b-4edc-a7c3-6049d38d0c2b.jsonl"
+}
