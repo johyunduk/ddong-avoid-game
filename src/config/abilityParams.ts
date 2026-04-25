@@ -108,13 +108,19 @@ export const KNIGHT_DESC = {
 
 // ── 구미 (Gumi / UR) ──────────────────────────────────────────────────
 export const GUMI_PARAMS = {
-  collectBonus:    15,   // 금똥·다이아똥 수집 추가 점수
-  foxFireInterval: 200,  // 여우불 발동 점수 간격
-  foxFireCount:    9,    // 구미호 꼬리 수 = 여우불 수 = 소환 금똥 수
+  foxFireInterval:    200,  // 여우불 발동 점수 간격
+  foxFireCount:       9,    // 여우불 수 = 소환 금똥 수
+  tailInterval:       150,  // 꼬리 1개 추가 점수 간격
+  maxTails:           9,    // 최대 꼬리 수 (9개 = 무적 발동)
+  invincibleDuration: 3000, // 무적 지속 시간 (ms)
+  zapRadius:          320,  // 무적 종료 시 똥 제거 반경
+  tailSpecialBonus:   5,    // 1,4,7번 꼬리: 특수 똥 수집 추가 점수
+  tailSpeedBonus:     5,    // 2,5,8번 꼬리: 이동 속도 증가 (px/s)
+  tailSpawnReduction: 1,    // 3,6,9번 꼬리: 일반 똥 소환 감소 개수
 } as const;
 
 export const GUMI_DESC = {
-  basicEffect:    `금똥·다이아똥 수집 시 +${GUMI_PARAMS.collectBonus}점 추가 (구미호의 황금 친화력)`,
+  basicEffect:    `${GUMI_PARAMS.tailInterval}점마다 꼬리 추가 (1,4,7번: 특수 똥 +${GUMI_PARAMS.tailSpecialBonus}점 / 2,5,8번: 속도 +${GUMI_PARAMS.tailSpeedBonus} / 3,6,9번: 소환 -1개) — 9개 시 3초 무적`,
   specialAbility: `${GUMI_PARAMS.foxFireInterval}점마다 여우불 ${GUMI_PARAMS.foxFireCount}개 소환 — 꼬리마다 금똥 1개`,
 } as const;
 

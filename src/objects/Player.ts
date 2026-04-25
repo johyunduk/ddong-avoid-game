@@ -166,6 +166,12 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     }
   }
 
+  // 영구 기본 속도 보너스 추가 (구미 꼬리 능력 등)
+  addPermanentSpeed(amount: number) {
+    this.baseSpeed += amount;
+    this.speed = this.speedBoostActive ? this.baseSpeed * 2 : this.baseSpeed;
+  }
+
   // 헤르메스 신발 효과: 10초간 속도 2배 증가
   activateSpeedBoost(duration: number = 10000) {
     // 기존 타이머가 있으면 제거
