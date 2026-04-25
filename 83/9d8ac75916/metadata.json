@@ -3,7 +3,7 @@
   "checkpoint_id": "839d8ac75916",
   "strategy": "manual-commit",
   "branch": "dev",
-  "checkpoints_count": 11,
+  "checkpoints_count": 13,
   "files_touched": [
     "src/abilities/GumiAbility.ts"
   ],
@@ -119,13 +119,20 @@
       "context": "/83/9d8ac75916/15/context.md",
       "content_hash": "/83/9d8ac75916/15/content_hash.txt",
       "prompt": "/83/9d8ac75916/15/prompt.txt"
+    },
+    {
+      "metadata": "/83/9d8ac75916/16/metadata.json",
+      "transcript": "/83/9d8ac75916/16/full.jsonl",
+      "context": "/83/9d8ac75916/16/context.md",
+      "content_hash": "/83/9d8ac75916/16/content_hash.txt",
+      "prompt": "/83/9d8ac75916/16/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 1324,
-    "cache_creation_tokens": 1798413,
-    "cache_read_tokens": 77410269,
-    "output_tokens": 524011,
-    "api_call_count": 939
+    "input_tokens": 1340,
+    "cache_creation_tokens": 1804868,
+    "cache_read_tokens": 78453629,
+    "output_tokens": 530232,
+    "api_call_count": 950
   }
 }

@@ -1,0 +1,341 @@
+구미의 기본효과 이펙트는 유지를 하는데 기본 효과는 좀 변경하고 싶은데 뭐 좋은거 없을까?
+
+---
+
+방어막은 너무 센티넬이 있어서 별로인거 같고. 꼬리마다 능력 부여를 하는건 어떨까?
+
+---
+
+1,3,5는 특수 똥 점수 +5 씩으로 하고 2,4,6은 이동속도 +5 씩으로 그리고 나머지는 뭐로 할지 추천해줘봐
+
+---
+
+1,4,7 을 특수 똥 점수 5씩, 2,5,8 을 이동속도 +5씩, 그리고 나머지는 일반똥 소환시 -1 개씩 되게 처리해줘.
+
+---
+
+이거 뭔가 체감이 많이 크지는 않으니 일단 임시로 게임화면에서 적용이 되는지 텍스트로 좀 표기되게 해줄 수 있나? 왼쪽 상단이나 뭐 그런곳에
+
+---
+
+아 저거 완전히 계속 누적이 되고 있는 방식인가? 그게 아니라 9개 되서 터지면 저것들도 초기화해서 다시 0으로 바뀌어야 해
+
+---
+
+# Simplify: Code Review and Cleanup
+
+Review all changed files for reuse, quality, and efficiency. Fix any issues found.
+
+## Phase 1: Identify Changes
+
+Run `git diff` (or `git diff HEAD` if there are staged changes) to see what changed. If there are no git changes, review the most recently modified files that the user mentioned or that you edited earlier in this conversation.
+
+## Phase 2: Launch Three Review Agents in Parallel
+
+Use the Agent tool to launch all three agents concurrently in a single message. Pass each agent the full diff so it has the complete context.
+
+### Agent 1: Code Reuse Review
+
+For each change:
+
+1. **Search for existing utilities and helpers** that could replace newly written code. Look for similar patterns elsewhere in the codebase — common locations are utility directories, shared modules, and files adjacent to the changed ones.
+2. **Flag any new function that duplicates existing functionality.** Suggest the existing function to use instead.
+3. **Flag any inline logic that could use an existing utility** — hand-rolled string manipulation, manual path handling, custom environment checks, ad-hoc type guards, and similar patterns are common candidates.
+
+### Agent 2: Code Quality Review
+
+Review the same changes for hacky patterns:
+
+1. **Redundant state**: state that duplicates existing state, cached values that could be derived, observers/effects that could be direct calls
+2. **Parameter sprawl**: adding new parameters to a function instead of generalizing or restructuring existing ones
+3. **Copy-paste with slight variation**: near-duplicate code blocks that should be unified with a shared abstraction
+4. **Leaky abstractions**: exposing internal details that should be encapsulated, or breaking existing abstraction boundaries
+5. **Stringly-typed code**: using raw strings where constants, enums (string unions), or branded types already exist in the codebase
+6. **Unnecessary JSX nesting**: wrapper Boxes/elements that add no layout value — check if inner component props (flexShrink, alignItems, etc.) already provide the needed behavior
+7. **Unnecessary comments**: comments explaining WHAT the code does (well-named identifiers already do that), narrating the change, or referencing the task/caller — delete; keep only non-obvious WHY (hidden constraints, subtle invariants, workarounds)
+
+### Agent 3: Efficiency Review
+
+Review the same changes for efficiency:
+
+1. **Unnecessary work**: redundant computations, repeated file reads, duplicate network/API calls, N+1 patterns
+2. **Missed concurrency**: independent operations run sequentially when they could run in parallel
+3. **Hot-path bloat**: new blocking work added to startup or per-request/per-render hot paths
+4. **Recurring no-op updates**: state/store updates inside polling loops, intervals, or event handlers that fire unconditionally — add a change-detection guard so downstream consumers aren't notified when nothing changed. Also: if a wrapper function takes an updater/reducer callback, verify it honors same-reference returns (or whatever the "no change" signal is) — otherwise callers' early-return no-ops are silently defeated
+5. **Unnecessary existence checks**: pre-checking file/resource existence before operating (TOCTOU anti-pattern) — operate directly and handle the error
+6. **Memory**: unbounded data structures, missing cleanup, event listener leaks
+7. **Overly broad operations**: reading entire files when only a portion is needed, loading all items when filtering for one
+
+## Phase 3: Fix Issues
+
+Wait for all three agents to complete. Aggregate their findings and fix each issue directly. If a finding is a false positive or not worth addressing, note it and move on — do not argue with the finding, just skip it.
+
+When done, briefly summarize what was fixed (or confirm the code was already clean).
+
+---
+
+<task-notification>
+<task-id>a380553f6f1c6e3df</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>REDACTED.output</output-file>
+<status>completed</status>
+<summary>Agent "Code Reuse Review" completed</summary>
+<result>I have enough information for a thorough analysis. Here's the report:
+
+---
+
+## Code Reuse Analysis
+
+### 1. Real Duplication: `_spawnBreakEffect` vs `SentinelAbility.playShieldBreakEffect`
+
+This is the most significant duplication. `GumiAbility._spawnBreakEffect` is a near-identical copy of `SentinelAbility.playShieldBreakEffect` (both in `/src/abilities/`). The structure is identical: `camera.flash` → two expanding ellipse rings with `[{delay:0, maxScale:4.3}, {delay:80, maxScale:3.4}]` → fill ellipse → 8 shards flying outward. The only differences are the tint color (`0xffcc44` gold vs `0xff6666` red) and the `camera.flash` color parameters.
+
+`LegacyAbility` also has a third copy of the same two-ring ellipse burst pattern (lines ~213–223 in LegacyAbility.ts).
+
+**Recommendation**: Extract to a shared utility, e.g. `src/utils/effects.ts`:
+```typescript
+export function spawnBurstEffect(scene, cx, cy, color, opts?)
+```
+Callers pass a color; the geometry (74×98 ellipse, 8 shards, timing) stays shared.
+
+---
+
+### 2. Real Duplication: `_zapAllPoops` vs `SentinelAbility.zapNearbyPoops`
+
+Both methods filter `api.poops.getChildren()` by distance squared, call `.recycle()` on matches, then draw expanding ring graphics with a `glow_dot` flash in the center. The logic is structurally identical. `GumiAbility._zapAllPoops` additionally draws two rings (the sentinel version draws one), but the pattern is the same.
+
+**Recommendation**: Extract to `GameSceneAPI` or a shared utility:
+```typescript
+export function zapPoopsInRadius(api, radius, ringColor)
+```
+
+---
+
+### 3. Inconsistent Import Pattern: Inline `import('./types').SpecialPoopType`
+
+`MaehwaAbility` and `GumiAbility` both use the inline dynamic-import style in the override signature:
+```typescript
+override onCollectSpecial(_type: import('./types').SpecialPoopType): number {
+```
+But `MinerAbility` and `RGradeAbility` use the proper top-level import:
+```typescript
+import type { GameSceneAPI, SpecialPoopType } from './types';
+```
+`GumiAbility` already imports `GameSceneAPI` from `'./types'` at the top. The inline import in the override is inconsistent and unnecessary — `SpecialPoopType` should simply be added to the existing top-level import.
+
+---
+
+### 4. `addPermanentSpeed` vs `getPlayerSpeedBonus` — Not a Duplication, but Worth Noting
+
+`getPlayerSpeedBonus()` (used by `MaehwaAbility`) is read once at `Player` construction time in `GameScene`. The new `addPermanentSpeed()` mutates the player's `baseSpeed` mid-game and is required for Gumi's dynamic speed grants — these serve genuinely different use cases. No consolidation needed.
+
+---
+
+### 5. "Reset state on trigger" pattern — Unique to Gumi
+
+No other ability has a multi-stack state that resets on trigger (`tailCount`, `speedBonus`, `spawnReduction` all zeroing in `_endInvincibility`). Sentinel's `shieldCount` decrements but never fully resets in a batch. There's no shared abstraction to extract here.
+
+---
+
+### Summary
+
+| Issue | Priority | Files |
+|---|---|---|
+| `_spawnBreakEffect` / `playShieldBreakEffect` / LegacyAbility burst — 3 near-identical copies | High | GumiAbility.ts, SentinelAbility.ts, LegacyAbility.ts |
+| `_zapAllPoops` / `zapNearbyPoops` — 2 near-identical radius-zap+effect routines | Medium | GumiAbility.ts, SentinelAbility.ts |
+| Inline `import('./types').SpecialPoopType` in override — should use top-level import | Low | GumiAbility.ts (MaehwaAbility.ts has the same issue) |</result>
+<usage><total_tokens>49866</total_tokens><tool_uses>16</tool_uses><duration_ms>50575</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a79b059e0b1e3a4f3</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>REDACTED.output</output-file>
+<status>completed</status>
+<summary>Agent "Code Quality Review" completed</summary>
+<result>I now have everything needed for a thorough review. Here are the findings:
+
+---
+
+## Code Review Findings
+
+### 1. Bug: `_endInvincibility` — speed rollback uses zeroed value (line 307)
+
+```typescript
+this.specialBonus  = 0;
+player.addPermanentSpeed(-this.speedBonus); // ← speedBonus is still set here
+this.speedBonus    = 0;
+```
+
+The order here is actually correct — `speedBonus` is still non-zero when `addPermanentSpeed` is called, and zeroed after. However the comment on line 305 says "꼬리별 누적 효과 초기화" and `specialBonus` is zeroed *before* `speedBonus` is used, which is fine. No actual bug here, but the ordering is fragile and non-obvious. A future refactor that reorders these lines would silently zero the speed rollback. A safer pattern: capture the value first.
+
+```typescript
+const speedToRemove = this.speedBonus;
+this.specialBonus = 0;
+this.speedBonus = 0;
+this.spawnReduction = 0;
+player.addPermanentSpeed(-speedToRemove);
+```
+
+### 2. Redundant `speedBonus` field (line 103)
+
+`speedBonus` is always `Math.floor(tailCount_of_type1 * GUMI_PARAMS.tailSpeedBonus)` — it mirrors a computable value. It's kept only because `_endInvincibility` needs to undo the total. This is a valid reason to store it (avoiding a recount), but it should be clearly documented. The current comment on line 99–104 block says *what* the modulo pattern does but not *why* `speedBonus` is stored separately from just recomputing it. At minimum, add a line explaining it's the rollback accumulator.
+
+That said: it is genuinely not derivable without also tracking how many type-1 tails were added (since `tailCount` is reset before `_endInvincibility` is called), so keeping it as a field is justified. No change required, but the comment should say "무적 종료 시 원복용 누산값" rather than just the slot description.
+
+### 3. Inline import in `onCollectSpecial` override (line 408)
+
+```typescript
+override onCollectSpecial(_type: import('./types').SpecialPoopType): number {
+```
+
+This is inconsistent with the established codebase pattern. `MinerAbility` and `BaseAbility` both use a top-level `import type { SpecialPoopType } from './types'`. `MaehwaAbility` also uses the inline form — so `GumiAbility` copied from the wrong file. The correct fix is to add `SpecialPoopType` to the existing import on line 3:
+
+```typescript
+import type { GameSceneAPI, SpecialPoopType } from './types';
+```
+
+then use it directly in the signature, matching `MinerAbility`'s style. This is the cleaner, established pattern.
+
+### 4. `debugText` left in production code (lines 107–128, 112–119)
+
+`debugText` is declared as `private debugText: Phaser.GameObjects.Text | null = null` with a comment saying "임시 (temporary)". It is wired into `onCreate`, `_addTail`, `_endInvincibility`, and `onDestroy`. This is shipped production code, not a dev-only toggle. Either:
+- Remove it entirely if it is truly temporary, or
+- Gate it behind a `DEBUG` constant so it does not render in production
+
+The `🦊` emoji in the displayed text also would be visible to players.
+
+### 5. Redundant "WHAT" comments throughout `_addTail` (lines 175–187)
+
+```typescript
+// ── 꼬리 번호별 패시브 효과 적용 ──────────────────────────────
+// i = 현재 추가되는 꼬리의 0-indexed 번호 (0=1번째, 1=2번째 ...)
+if (i % 3 === 0) {
+  // 1, 4, 7번째: 특수 똥 수집 +5점
+  this.specialBonus += GUMI_PARAMS.tailSpecialBonus;
+} else if (i % 3 === 1) {
+  // 2, 5, 8번째: 이동 속도 +5px/s
+  this.speedBonus += GUMI_PARAMS.tailSpeedBonus;
+  player.addPermanentSpeed(GUMI_PARAMS.tailSpeedBonus);
+} else {
+  // 3, 6, 9번째: 일반 똥 소환 -1개
+  this.spawnReduction += 1;
+}
+```
+
+The inline comments repeat exactly what the code says. Given that the field-level block comment at lines 99–104 already explains the full `% 3` pattern, these inline comments in the `if`-branches are redundant. Remove them; the block comment above the class fields is the right place for this documentation.
+
+Similarly the comment `// i = 현재 추가되는 꼬리의 0-indexed 번호 (0=1번째, 1=2번째 ...)` explains a trivially named variable.
+
+### 6. `spawnReduction` hardcodes `+= 1` instead of using a param (line 187)
+
+```typescript
+this.spawnReduction += 1;
+```
+
+All other per-tail values come from `GUMI_PARAMS` (`tailSpecialBonus`, `tailSpeedBonus`), but the spawn reduction amount is hardcoded to `1`. The `abilityParams.ts` even has a comment calling it out: `// 3,6,9번 꼬리: 일반 똥 소환 -1개 (고정값, 파라미터 불필요)`. This is inconsistent — if the other two are parameterized, this should be too (e.g., `GUMI_PARAMS.tailSpawnReduction = 1`), especially since `GUMI_DESC` would need updating if this value ever changes. Low priority, but worth noting for consistency.
+
+---
+
+### Summary by priority
+
+| # | Issue | Severity |
+|---|-------|----------|
+| 3 | `import('./types').SpecialPoopType` inline — use top-level `import type` | Low (style) |
+| 4 | `debugText` left in production path without `DEBUG` guard | Medium |
+| 1 | `speedBonus` rollback ordering is fragile — capture before zeroing | Low (future-proof) |
+| 5 | Redundant WHAT-comments in `_addTail` branches | Low (style) |
+| 6 | `spawnReduction += 1` not parameterized, unlike the other two | Low (consistency) |
+| 2 | `speedBonus` field justification comment missing | Trivial |</result>
+<usage><total_tokens>34383</total_tokens><tool_uses>6</tool_uses><duration_ms>51103</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a7d3f23046c911493</task-id>
+<tool-use-id>toolu_01BmuH8DXozuJkKj5Pte64Qj</tool-use-id>
+<output-file>REDACTED.output</output-file>
+<status>completed</status>
+<summary>Agent "Efficiency Review" completed</summary>
+<result>Now I have all the information needed for a thorough review.
+
+---
+
+Here are the findings, item by item:
+
+**1. `_updateDebugText()` — unnecessary calls**
+
+No real issue. It's called twice total per tail acquisition (once in `_addTail`, once if invincibility triggers immediately after the 9th tail, from `_endInvincibility`). It's also called once on invincibility end. The cost is a single `setText` on a Phaser Text object, which is cheap. There is no path where it's called with unchanged content — each call site represents a state change. No fix needed.
+
+**2. `_updateTailPositions()` — missing early exit when `tails.length === 0`**
+
+This is a real, cheap optimization worth adding. Every frame, even before the first tail is earned (score 0–149), the method is called, enters the `for (const tail of this.tails)` loop body, and immediately exits because `this.tails` is empty — but `scene.time.now * 0.001`, `player.x`, and `player.y` are still read unnecessarily. More importantly, once invincibility ends, `this.tails` is reset to `[]` and `tailCount` to `0`, but `_updateTailPositions` keeps running every frame for the rest of the game. Adding `if (this.tails.length === 0) return;` at the top of `_updateTailPositions` eliminates all of that overhead with one line:
+
+```typescript
+private _updateTailPositions(api: GameSceneAPI): void {
+  if (this.tails.length === 0) return;   // ← add this
+  ...
+}
+```
+
+**3. `getSpawnCountReduction()` — no-reset approach**
+
+Intentional and correct. `spawnReduction` represents a permanent passive that accumulates as 3rd/6th/9th tails are added and is zeroed in `_endInvincibility` along with all other tail state. GameScene reads it every spawn tick via `ability.getSpawnCountReduction()` and applies it as a live subtraction from `poopCount`. There is no double-application risk. No issue.
+
+**4. `Player.addPermanentSpeed()` — no issues**
+
+The implementation is correct. It updates `baseSpeed` and immediately recalculates `speed` respecting the speed boost multiplier. No issue.
+
+**5. `debugText` memory leak on scene restart**
+
+This is a real bug. The scene restart path (`scene.restart(...)`) triggers Phaser's `shutdown` event, which destroys all scene game objects — but `debugText` is a Phaser `Text` object added to the scene, so Phaser will destroy it automatically on shutdown. However, `GumiAbility.debugText` still holds the (now-dead) reference, and critically, `onDestroy` is **not called** on the restart path.
+
+Looking at the code:
+- `onDestroy` is called explicitly in `hitPoop` (game over) and `handleCheatDetected` — but **not** on `scene.restart()`.
+- On restart, Phaser destroys the scene's display list (including `debugText`), then calls `init` → `create`. `ability.onCreate` runs again, creating a new `debugText` — but `onDestroy` was never called, so `tails`' segment images are also leaked (they were on the old scene's display list, so Phaser destroys them, but `this.tails` array is never cleared, meaning stale `TailObj` references persist into the new game session).
+
+The actual leak: after a restart, `this.tails` contains `TailObj` entries whose `si.img` objects are destroyed Phaser objects. If the player earns tails again in the new session, `_updateTailPositions` iterates the stale tails from the previous session (their `si.img.active` will be `false` so the `setPosition` call is skipped, but the objects are still iterated). More dangerously, `_endInvincibility` calls `si.img.destroy()` on them again (double-destroy).
+
+The fix is to hook the scene's `shutdown` event in `onCreate` and call `onDestroy` from it:
+
+```typescript
+override onCreate(api: GameSceneAPI): void {
+  api.player.setDepth(5);
+  // ... debugText setup ...
+  api.scene.events.once('shutdown', () =&gt; this.onDestroy(api));
+}
+```
+
+Or alternatively, reset `this.tails = []` and null `this.debugText` in `onCreate` before creating new objects (so that a second `onCreate` after restart doesn't operate on stale state). The shutdown-hook approach is cleaner and consistent with how GameScene already handles other `shutdown` cleanup.
+
+**Summary of real issues to fix:**
+
+| # | Issue | Severity | Fix |
+|---|-------|----------|-----|
+| 2 | `_updateTailPositions` runs every frame even with 0 tails | Minor perf | Add `if (this.tails.length === 0) return` |
+| 5 | `onDestroy` not called on `scene.restart()` — stale `tails` array persists into next session, risks double-destroy | Real bug | Subscribe to `shutdown` event in `onCreate` to call `onDestroy`, or reset state at the top of `onCreate` |</result>
+<usage><total_tokens>33035</total_tokens><tool_uses>11</tool_uses><duration_ms>64375</duration_ms></usage>
+</task-notification>
+
+---
+
+자 그러면 아까 구미 꼬리에 따른 디버그 수치 확인용 그거 안보이게 해줄 수 있나?
+
+---
+
+깃 푸시해줘
+
+---
+
+아니 근데 구미 꼬리 나오는 순서를 좀 변경하고 싶은데. 일단 꼬리가 9개 전부 나왔을 때 기준으로는 흰, 빨, 주, 노, 초, 파, 남, 보, 검 이렇게 인데 나타나는 순서는 흰, 검, 빨, 보, 주, 남, 노, 파, 초 로 나오게 해줘
+
+---
+
+아니 흰색이 맨 오른쪽에 있다니까 지금
+
+---
+
+위치는 이제 맞네. 근데 이 위치는 유지하고 생성 순서만 흰 → 검 → 빨 → 보 → 주 → 남 → 노 → 파 → 초 이거에서 빨 → 보 → 주 → 남 → 노 → 파 → 초 → 흰 → 검 순서로 바꿔줘.
