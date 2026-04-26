@@ -24,8 +24,8 @@ const CURRENT_BANNER = {
   label: '신규 출시',
 };
 
-// 로비 슬라이드쇼 순서: UR 우선(sentinel → legacy), 이후 SR 순
-const SLIDESHOW_IDS = ['sentinel', 'legacy', 'knight', 'hacker', 'miner', 'maehwa', 'archieve', 'glitch', 'noise'];
+// 로비 슬라이드쇼 순서: UR 우선(gumi → sentinel → legacy), 이후 SR 순
+const SLIDESHOW_IDS = ['gumi', 'sentinel', 'legacy', 'knight', 'hacker', 'miner', 'maehwa', 'archieve', 'glitch', 'noise'];
 
 export default class GachaScene extends BaseScene {
   private skorBalance = 0;

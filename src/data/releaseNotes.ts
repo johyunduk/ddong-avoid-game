@@ -6,6 +6,13 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: 'v2.5.0',
+    date: '2026-04-26',
+    changes: [
+      'UR 캐릭터 구미 추가',
+    ],
+  },
+  {
     version: 'v2.4.0',
     date: '2026-04-13',
     changes: [
