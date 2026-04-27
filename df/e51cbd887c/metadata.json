@@ -3,7 +3,7 @@
   "checkpoint_id": "dfe51cbd887c",
   "strategy": "manual-commit",
   "branch": "dev",
-  "checkpoints_count": 1,
+  "checkpoints_count": 2,
   "files_touched": [
     "public/assets/illustrations/hacker.webp"
   ],
@@ -14,6 +14,13 @@
       "context": "/df/e51cbd887c/0/context.md",
       "content_hash": "/df/e51cbd887c/0/content_hash.txt",
       "prompt": "/df/e51cbd887c/0/prompt.txt"
+    },
+    {
+      "metadata": "/df/e51cbd887c/1/metadata.json",
+      "transcript": "/df/e51cbd887c/1/full.jsonl",
+      "context": "",
+      "content_hash": "/df/e51cbd887c/1/content_hash.txt",
+      "prompt": ""
     }
   ],
   "token_usage": {
