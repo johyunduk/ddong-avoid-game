@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "dfe51cbd887c",
+  "session_id": "4cdc23e6-a766-4df9-a59f-f56ca521f2c4",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-27T13:01:14.732916Z",
+  "branch": "dev",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "public/assets/illustrations/hacker.webp"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "54639eb1d30a",
+  "transcript_identifier_at_start": "c7e7fa82-462d-4f5a-bc07-9404424e53e3",
+  "initial_attribution": {
+    "calculated_at": "2026-04-27T13:01:14.71326Z",
+    "agent_lines": 0,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 0,
+    "agent_percentage": 0
+  },
+  "transcript_path": ".claude/projects/-Users-johyunduk-Projects-ddong-avoid-game/4cdc23e6-a766-4df9-a59f-f56ca521f2c4.jsonl"
+}
