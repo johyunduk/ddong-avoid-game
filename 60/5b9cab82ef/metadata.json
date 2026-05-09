@@ -3,7 +3,7 @@
   "checkpoint_id": "605b9cab82ef",
   "strategy": "manual-commit",
   "branch": "dev",
-  "checkpoints_count": 5,
+  "checkpoints_count": 6,
   "files_touched": [
     "src/abilities/LegacyAbility.ts",
     "src/abilities/SentinelAbility.ts",
@@ -23,6 +23,13 @@
       "context": "/60/5b9cab82ef/1/context.md",
       "content_hash": "/60/5b9cab82ef/1/content_hash.txt",
       "prompt": "/60/5b9cab82ef/1/prompt.txt"
+    },
+    {
+      "metadata": "/60/5b9cab82ef/2/metadata.json",
+      "transcript": "/60/5b9cab82ef/2/full.jsonl",
+      "context": "",
+      "content_hash": "/60/5b9cab82ef/2/content_hash.txt",
+      "prompt": ""
     }
   ],
   "token_usage": {
