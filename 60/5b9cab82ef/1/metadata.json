@@ -1,0 +1,33 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "605b9cab82ef",
+  "session_id": "2a70d81a-06a0-4072-bd35-2e1e4bb26592",
+  "strategy": "manual-commit",
+  "created_at": "2026-05-09T14:14:25.266822Z",
+  "branch": "dev",
+  "checkpoints_count": 4,
+  "files_touched": [
+    "src/abilities/SentinelAbility.ts",
+    "src/config/abilityParams.ts"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "bf65efdcd3f9",
+  "transcript_identifier_at_start": "d939c55b-28f7-4487-8d46-04754e2b43c3",
+  "token_usage": {
+    "input_tokens": 33,
+    "cache_creation_tokens": 76122,
+    "cache_read_tokens": 738613,
+    "output_tokens": 4314,
+    "api_call_count": 21
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-05-09T14:14:25.202256Z",
+    "agent_lines": 25,
+    "human_added": 6,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 31,
+    "agent_percentage": 80.64516129032258
+  },
+  "transcript_path": ".claude/projects/-Users-johyunduk-Projects-ddong-avoid-game/2a70d81a-06a0-4072-bd35-2e1e4bb26592.jsonl"
+}
