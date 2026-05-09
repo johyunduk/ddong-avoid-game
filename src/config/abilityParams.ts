@@ -91,7 +91,7 @@ export const SENTINEL_PARAMS = {
 } as const;
 
 export const SENTINEL_DESC = {
-  basicEffect: `시작 시 보호막 ${SENTINEL_PARAMS.startShields}개 보유 (피격 흡수 시 주변 똥 전기로 제거)`,
+  basicEffect: `시작 시 보호막 ${SENTINEL_PARAMS.startShields}개 보유 (피격 흡수 시 주변 똥 전기로 제거, 제거된 똥 1개당 +10점)`,
   specialAbility: `${SENTINEL_PARAMS.chargeInterval}점마다 보호막 1개 충전 (최대 ${SENTINEL_PARAMS.maxShields}개)`,
 } as const;
 

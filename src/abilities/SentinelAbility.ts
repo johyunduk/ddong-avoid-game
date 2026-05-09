@@ -208,6 +208,10 @@ export class SentinelAbility extends BaseAbility {
     const positions = targets.map(p => ({ x: p.x, y: p.y }));
     targets.forEach(p => (p as PoolablePoopBase).recycle());
 
+    const bonus = targets.length * 10;
+    api.addAbilityBonus(bonus);
+    this.showZapBonusText(api, bonus);
+
     // 단일 Graphics에 모든 위치 그리기 → 3회 redraw로 지글 효과
     const zapG = api.scene.add.graphics().setDepth(155);
     let frame   = 0;
@@ -254,6 +258,26 @@ export class SentinelAbility extends BaseAbility {
   // ─────────────────────────────────────────────────────────────
   // 이펙트
   // ─────────────────────────────────────────────────────────────
+
+  private showZapBonusText(api: GameSceneAPI, bonus: number): void {
+    const scene = api.scene;
+    const txt = scene.add.text(api.player.x, api.player.y - 40, `+${bonus}`, {
+      fontSize: '20px',
+      fontFamily: 'Arial Black, sans-serif',
+      color: '#ff6666',
+      stroke: '#000000',
+      strokeThickness: 4,
+    }).setOrigin(0.5).setDepth(200);
+
+    scene.tweens.add({
+      targets: txt,
+      y: txt.y - 50,
+      alpha: 0,
+      duration: 800,
+      ease: 'Quad.easeOut',
+      onComplete: () => txt.destroy(),
+    });
+  }
 
   private playShieldBreakEffect(api: GameSceneAPI): void {
     const scene = api.scene;

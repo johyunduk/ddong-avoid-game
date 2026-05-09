@@ -200,9 +200,9 @@ export class LegacyAbility extends BaseAbility {
     const cy    = api.player.y;
 
     // ─ 반투명 플래시 ──────────────────────────────────────────────
-    const flashOverlay = scene.add.graphics().setDepth(200);
+    const flashOverlay = scene.add.graphics().setDepth(200).setScrollFactor(0);
     flashOverlay.fillStyle(0xffee00, 1);
-    flashOverlay.fillRect(0, 0, 400, 600);
+    flashOverlay.fillRect(0, 0, scene.scale.width, scene.scale.height);
     flashOverlay.setAlpha(0.38);
     scene.tweens.add({
       targets: flashOverlay, alpha: 0, duration: 220, ease: 'Quad.easeOut',
@@ -264,7 +264,7 @@ export class LegacyAbility extends BaseAbility {
       gfx.fillStyle(0xffee88, Phaser.Math.FloatBetween(0.28, 0.55));
       gfx.fillPoints(LegacyAbility.flamePts(w * 0.4, h * 0.5), true);
 
-      gfx.setPosition(Phaser.Math.Between(20, 380), Phaser.Math.Between(40, 560));
+      gfx.setPosition(Phaser.Math.Between(20, scene.scale.width - 20), Phaser.Math.Between(40, scene.scale.height - 40));
       gfx.setRotation(Phaser.Math.DegToRad(Phaser.Math.Between(-180, 180)));
       gfx.setDepth(158).setAlpha(0);
 
@@ -286,8 +286,8 @@ export class LegacyAbility extends BaseAbility {
     // ─ 상단 노란빛 그라데이션 ────────────────────────────────────
     this.legacyTopGlow = scene.add.graphics();
     this.legacyTopGlow.fillGradientStyle(0xffee00, 0xffee00, 0xffee00, 0xffee00, 0.28, 0.28, 0, 0);
-    this.legacyTopGlow.fillRect(0, 0, 400, 220);
-    this.legacyTopGlow.setDepth(148);
+    this.legacyTopGlow.fillRect(0, 0, scene.scale.width, Math.round(scene.scale.height * 0.37));
+    this.legacyTopGlow.setDepth(148).setScrollFactor(0);
 
     this.legacyPulseTween = scene.tweens.add({
       targets: [this.legacyTopGlow], alpha: 0.55,
@@ -352,7 +352,7 @@ export class LegacyAbility extends BaseAbility {
       gfx.fillStyle(0xffffff, aMax > 0.85 ? 0.65 : 0.50); // 레거시 모드는 하이라이트도 강하게
       gfx.fillCircle(0, 0, s * 0.32);
 
-      gfx.setPosition(Phaser.Math.Between(10, 390), -15);
+      gfx.setPosition(Phaser.Math.Between(10, scene.scale.width - 10), -15);
       gfx.setRotation(Phaser.Math.DegToRad(Phaser.Math.Between(0, 360)));
       gfx.setDepth(85);
 
