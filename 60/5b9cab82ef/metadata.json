@@ -3,7 +3,7 @@
   "checkpoint_id": "605b9cab82ef",
   "strategy": "manual-commit",
   "branch": "dev",
-  "checkpoints_count": 6,
+  "checkpoints_count": 9,
   "files_touched": [
     "src/abilities/LegacyAbility.ts",
     "src/abilities/SentinelAbility.ts",
@@ -100,13 +100,20 @@
       "context": "",
       "content_hash": "/60/5b9cab82ef/12/content_hash.txt",
       "prompt": ""
+    },
+    {
+      "metadata": "/60/5b9cab82ef/13/metadata.json",
+      "transcript": "/60/5b9cab82ef/13/full.jsonl",
+      "context": "/60/5b9cab82ef/13/context.md",
+      "content_hash": "/60/5b9cab82ef/13/content_hash.txt",
+      "prompt": "/60/5b9cab82ef/13/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 215,
-    "cache_creation_tokens": 246543,
-    "cache_read_tokens": 10568780,
-    "output_tokens": 56134,
-    "api_call_count": 153
+    "input_tokens": 242,
+    "cache_creation_tokens": 300563,
+    "cache_read_tokens": 11477335,
+    "output_tokens": 68517,
+    "api_call_count": 174
   }
 }
