@@ -1,0 +1,24 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "012b28fdcc9c",
+  "session_id": "d5b82f13-5970-41d4-b99e-2952744a5e36",
+  "strategy": "manual-commit",
+  "created_at": "2026-05-10T12:13:13.807255Z",
+  "branch": "dev",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "src/abilities/MugiAbility.ts"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "52b105606037",
+  "initial_attribution": {
+    "calculated_at": "2026-05-10T12:13:13.78453Z",
+    "agent_lines": 17,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 17,
+    "agent_percentage": 100
+  },
+  "transcript_path": ".claude/projects/-Users-johyunduk-Projects-ddong-avoid-game/d5b82f13-5970-41d4-b99e-2952744a5e36.jsonl"
+}
