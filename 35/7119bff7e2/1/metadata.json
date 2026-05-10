@@ -1,0 +1,39 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "357119bff7e2",
+  "session_id": "2b008b8f-9644-4770-bf5d-d27a0f5a6248",
+  "strategy": "manual-commit",
+  "created_at": "2026-05-10T08:02:16.474432Z",
+  "branch": "dev",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src/utils/character.ts",
+    "public/assets/players/gold_mugi_front.webp",
+    "public/assets/players/mugi_left.webp",
+    "public/assets/vids/mugi.mp4",
+    "src/abilities/index.ts",
+    "src/scenes/GachaScene.ts",
+    "public/assets/illustrations/mugi.webp",
+    "public/assets/players/gold_mugi_left.webp",
+    "src/config/abilityParams.ts",
+    "src/objects/Player.ts",
+    "public/assets/players/mugi_right.webp",
+    "src/data/releaseNotes.ts",
+    "public/assets/players/gold_mugi_right.webp",
+    "public/assets/players/mugi_front.webp",
+    "src/abilities/MugiAbility.ts",
+    "src/scenes/GameScene.ts"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "68d0af474ae4",
+  "initial_attribution": {
+    "calculated_at": "2026-05-10T08:02:16.449593Z",
+    "agent_lines": 719,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 719,
+    "agent_percentage": 100
+  },
+  "transcript_path": ".claude/projects/-Users-johyunduk-Projects-ddong-avoid-game/2b008b8f-9644-4770-bf5d-d27a0f5a6248.jsonl"
+}

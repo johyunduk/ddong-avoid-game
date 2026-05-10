@@ -3,7 +3,7 @@
   "checkpoint_id": "357119bff7e2",
   "strategy": "manual-commit",
   "branch": "dev",
-  "checkpoints_count": 1,
+  "checkpoints_count": 2,
   "files_touched": [
     "public/assets/illustrations/mugi.webp",
     "public/assets/players/gold_mugi_front.webp",
@@ -29,6 +29,13 @@
       "context": "/35/7119bff7e2/0/context.md",
       "content_hash": "/35/7119bff7e2/0/content_hash.txt",
       "prompt": "/35/7119bff7e2/0/prompt.txt"
+    },
+    {
+      "metadata": "/35/7119bff7e2/1/metadata.json",
+      "transcript": "/35/7119bff7e2/1/full.jsonl",
+      "context": "",
+      "content_hash": "/35/7119bff7e2/1/content_hash.txt",
+      "prompt": ""
     }
   ],
   "token_usage": {
