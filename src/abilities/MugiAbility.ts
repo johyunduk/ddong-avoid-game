@@ -395,11 +395,12 @@ export class MugiAbility extends BaseAbility {
 
     const g = scene.add.graphics().setDepth(310);
 
-    const makeRedPts = (startX: number) => {
+    // _strikeThunder와 동일한 형태, 색만 검붉은 팔레트
+    const makePts = (startX: number) => {
       const pts: { x: number; y: number }[] = [{ x: startX, y: -10 }];
-      for (let i = 1; i < 14; i++) {
-        const t = i / 14;
-        const spread = 55 * (1 - t * 0.6);
+      for (let i = 1; i < 17; i++) {
+        const t = i / 17;
+        const spread = 70 * (1 - t * 0.65);
         pts.push({ x: tx + Phaser.Math.Between(-spread, spread), y: (ty + 20) * t - 10 });
       }
       pts.push({ x: tx, y: ty + 8 });
@@ -408,25 +409,25 @@ export class MugiAbility extends BaseAbility {
 
     const drawRed = () => {
       g.clear();
-      const pts = makeRedPts(tx + Phaser.Math.Between(-20, 20));
-      g.lineStyle(16, 0x000000, 0.55); this._drawPolyline(g, pts); // 검정 테두리
-      g.lineStyle(10, 0x1a0000, 0.50); this._drawPolyline(g, pts); // 검붉 전환
-      g.lineStyle(6,  0x550000, 0.60); this._drawPolyline(g, pts); // 짙은 적
-      g.lineStyle(3,  0xaa1100, 0.90); this._drawPolyline(g, pts); // 검붉은 코어
-      g.lineStyle(1.5, 0xff3311, 1.00); this._drawPolyline(g, pts); // 심지
-      [3, 8].forEach(bi => {
+      const pts = makePts(tx + Phaser.Math.Between(-25, 25));
+      g.lineStyle(30, 0x440000, 0.09); this._drawPolyline(g, pts);
+      g.lineStyle(14, 0x880000, 0.32); this._drawPolyline(g, pts);
+      g.lineStyle(6,  0x080000, 0.92); this._drawPolyline(g, pts); // 코어 바로 외곽 — 진한 검정
+      g.lineStyle(2,  0xff3311, 1.00); this._drawPolyline(g, pts);
+      [3, 7, 11].forEach(bi => {
         if (bi >= pts.length - 1) return;
         const bp = pts[bi]!;
         const dir = Math.random() < 0.5 ? 1 : -1;
-        const len = Phaser.Math.Between(40, 80);
+        const len = Phaser.Math.Between(55, 105);
         const bPts = [
           { x: bp.x, y: bp.y },
-          { x: bp.x + dir * len * 0.4 + Phaser.Math.Between(-12, 12), y: bp.y + len * 0.4 },
+          { x: bp.x + dir * len * 0.35 + Phaser.Math.Between(-18, 18), y: bp.y + len * 0.33 },
+          { x: bp.x + dir * len * 0.68 + Phaser.Math.Between(-12, 12), y: bp.y + len * 0.65 },
           { x: bp.x + dir * len + Phaser.Math.Between(-8, 8),          y: bp.y + len },
         ];
-        g.lineStyle(4,   0x000000, 0.50); this._drawPolyline(g, bPts);
-        g.lineStyle(2.5, 0x660000, 0.70); this._drawPolyline(g, bPts);
-        g.lineStyle(1,   0xcc2200, 0.95); this._drawPolyline(g, bPts);
+        g.lineStyle(6,   0x880000, 0.40); this._drawPolyline(g, bPts);
+        g.lineStyle(2,   0x080000, 0.88); this._drawPolyline(g, bPts);
+        g.lineStyle(1,   0xff3311, 0.90); this._drawPolyline(g, bPts);
       });
     };
 
