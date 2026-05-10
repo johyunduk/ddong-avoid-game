@@ -1,0 +1,41 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "357119bff7e2",
+  "strategy": "manual-commit",
+  "branch": "dev",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "public/assets/illustrations/mugi.webp",
+    "public/assets/players/gold_mugi_front.webp",
+    "public/assets/players/gold_mugi_left.webp",
+    "public/assets/players/gold_mugi_right.webp",
+    "public/assets/players/mugi_front.webp",
+    "public/assets/players/mugi_left.webp",
+    "public/assets/players/mugi_right.webp",
+    "public/assets/vids/mugi.mp4",
+    "src/abilities/MugiAbility.ts",
+    "src/abilities/index.ts",
+    "src/config/abilityParams.ts",
+    "src/data/releaseNotes.ts",
+    "src/objects/Player.ts",
+    "src/scenes/GachaScene.ts",
+    "src/scenes/GameScene.ts",
+    "src/utils/character.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/35/7119bff7e2/0/metadata.json",
+      "transcript": "/35/7119bff7e2/0/full.jsonl",
+      "context": "/35/7119bff7e2/0/context.md",
+      "content_hash": "/35/7119bff7e2/0/content_hash.txt",
+      "prompt": "/35/7119bff7e2/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 32,
+    "cache_creation_tokens": 43469,
+    "cache_read_tokens": 690689,
+    "output_tokens": 8612,
+    "api_call_count": 20
+  }
+}
