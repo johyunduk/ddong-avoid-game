@@ -3,7 +3,7 @@
   "checkpoint_id": "012b28fdcc9c",
   "strategy": "manual-commit",
   "branch": "dev",
-  "checkpoints_count": 4,
+  "checkpoints_count": 5,
   "files_touched": [
     "src/abilities/MugiAbility.ts"
   ],
@@ -98,13 +98,20 @@
       "context": "",
       "content_hash": "/01/2b28fdcc9c/12/content_hash.txt",
       "prompt": ""
+    },
+    {
+      "metadata": "/01/2b28fdcc9c/13/metadata.json",
+      "transcript": "/01/2b28fdcc9c/13/full.jsonl",
+      "context": "/01/2b28fdcc9c/13/context.md",
+      "content_hash": "/01/2b28fdcc9c/13/content_hash.txt",
+      "prompt": "/01/2b28fdcc9c/13/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 201,
-    "cache_creation_tokens": 215879,
-    "cache_read_tokens": 10308143,
-    "output_tokens": 56482,
-    "api_call_count": 145
+    "input_tokens": 256,
+    "cache_creation_tokens": 286465,
+    "cache_read_tokens": 12893513,
+    "output_tokens": 75595,
+    "api_call_count": 187
   }
 }
