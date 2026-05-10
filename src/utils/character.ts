@@ -2,7 +2,7 @@ import {
   HACKER_DESC, MINER_DESC, MAEHWA_DESC,
   ARCHIEVE_DESC, GLITCH_DESC, NOISE_DESC,
   SENTINEL_DESC, LEGACY_DESC, KNIGHT_DESC,
-  GUMI_DESC,
+  GUMI_DESC, MUGI_DESC,
 } from '../config/abilityParams';
 
 export interface CharacterDef {
@@ -46,6 +46,21 @@ export const CHARACTERS: CharacterDef[] = [
     specialAbility: '없음',
   },
   // ── UR등급 ─────────────────────────────────────────────────────────────
+  {
+    id: 'mugi',
+    name: '무기',
+    grade: 'UR',
+    gradeColor: '#ffaa00',
+    imageKey: 'mugi_front',
+    imagePath: 'assets/players/mugi_front.webp',
+    illustKey: 'illust_mugi',
+    illustPath: 'assets/illustrations/mugi.webp',
+    videoKey: 'vid_mugi',
+    videoPath: 'assets/vids/mugi.mp4',
+    basicEffect: MUGI_DESC.basicEffect,
+    specialAbility: MUGI_DESC.specialAbility,
+    cardDisplaySize: [48, 85],
+  },
   {
     id: 'gumi',
     name: '구미',

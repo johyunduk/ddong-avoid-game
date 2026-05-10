@@ -84,7 +84,7 @@ export default class GameScene extends BaseScene {
     return Math.max(400, this.difficultyConfig.spawnDelay - (this.difficultyLevel * 80));
   }
 
-  private static readonly CHARS_WITH_SPRITES = ['miner', 'maehwa', 'hacker', 'archieve', 'glitch', 'noise', 'sentinel', 'legacy', 'log', 'swap', 'sum', 'fork', 'seed', 'session', 'branch', 'hook', 'socket', 'index', 'knight', 'gumi'];
+  private static readonly CHARS_WITH_SPRITES = ['miner', 'maehwa', 'hacker', 'archieve', 'glitch', 'noise', 'sentinel', 'legacy', 'log', 'swap', 'sum', 'fork', 'seed', 'session', 'branch', 'hook', 'socket', 'index', 'knight', 'gumi', 'mugi'];
   private static readonly RAINBOW_COLORS = [
     '#ff0000', '#ff7f00', '#ffff00', '#00ff00', '#0000ff', '#4b0082', '#9400d3',
   ];
@@ -199,6 +199,11 @@ export default class GameScene extends BaseScene {
       if (!this.textures.exists(`${p}front`)) this.load.image(`${p}front`, `assets/players/${p}front.webp`);
       if (!this.textures.exists(`${p}left`)) this.load.image(`${p}left`, `assets/players/${p}left.webp`);
       if (!this.textures.exists(`${p}right`)) this.load.image(`${p}right`, `assets/players/${p}right.webp`);
+      if (this.selectedCharId === 'mugi') {
+        if (!this.textures.exists('gold_mugi_front')) this.load.image('gold_mugi_front', 'assets/players/gold_mugi_front.webp');
+        if (!this.textures.exists('gold_mugi_left'))  this.load.image('gold_mugi_left',  'assets/players/gold_mugi_left.webp');
+        if (!this.textures.exists('gold_mugi_right')) this.load.image('gold_mugi_right', 'assets/players/gold_mugi_right.webp');
+      }
     } else {
       // chibi (기본) 또는 플레이어 스프라이트가 없는 UR 캐릭터 → 치비로 fallback
       if (!this.textures.exists('front')) this.load.image('front', 'assets/players/chibi_front.webp');

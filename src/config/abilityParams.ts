@@ -140,3 +140,16 @@ export const LEGACY_DESC = {
   basicEffect: `시작 ${LEGACY_PARAMS.feverDuration / 1000}초 금똥 피버 + 황금 빗줄기 / 스폰마다 ${LEGACY_PARAMS.burnChanceNormal * 100}% 확률로 똥 ${LEGACY_PARAMS.burnCountNormal}개 불태워 소멸 (+10점)`,
   specialAbility: `${LEGACY_PARAMS.legacyInterval}점마다 ${LEGACY_PARAMS.legacyDuration / 1000}초간 레거시 모드: 점수 ${1 + LEGACY_PARAMS.scoreExtra}배 · 황금 빗줄기 강화 · 불태우기 ${LEGACY_PARAMS.burnChanceLegacy * 100}% 확률 ${LEGACY_PARAMS.burnCountLegacy}개 소멸`,
 } as const;
+
+// ── 무기 (Mugi / UR) — 검붉은 여의주 & 황금 변신 ──────────────────────
+export const MUGI_PARAMS = {
+  yeoijuInterval:      50,    // 여의주 생성 점수 간격 (변신 전)
+  yeoijuGoldInterval:  200,   // 여의주 생성 점수 간격 (변신 후)
+  yeoijuCollectRadius: 28,    // 여의주 수집 반경 (px)
+  goldThreshold:       50,    // 황금 변신 필요 여의주 수
+} as const;
+
+export const MUGI_DESC = {
+  basicEffect:    `${MUGI_PARAMS.yeoijuInterval}점마다 검붉은 여의주 낙하 — 매 수집마다 검붉은 번개 (경로 위 똥 제거 +10점) · ${MUGI_PARAMS.goldThreshold}개 달성 시 황금 변신 (이후 여의주마다 황금 번개, 전체 삭제 +20점)`,
+  specialAbility: `부활 최대 1회 보유 / 총 3회 사용 · 게임 시작 시 1회 충전 · 여의주 ${MUGI_PARAMS.goldThreshold}개로 재충전 · 피격 시 연꽃 발현 후 소생 (변신 중이면 변신 해제)`,
+} as const;

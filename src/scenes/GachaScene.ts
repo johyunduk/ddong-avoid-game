@@ -7,7 +7,7 @@ import BaseScene from './BaseScene';
 
 // vids/ 디렉토리에 개인 영상이 존재하는 캐릭터 목록
 const CHARS_WITH_VIDS = new Set([
-  'chibi', 'hacker', 'miner', 'maehwa', 'archieve', 'glitch', 'noise', 'sentinel', 'legacy', 'knight',
+  'chibi', 'hacker', 'miner', 'maehwa', 'archieve', 'glitch', 'noise', 'sentinel', 'legacy', 'knight', 'mugi',
 ]);
 
 const GRADE_COLORS: Record<string, number> = {
@@ -20,12 +20,12 @@ const GRADE_COLORS: Record<string, number> = {
 
 // 현재 픽업 배너 설정 — 출시 캐릭터 변경 시 characterId만 수정
 const CURRENT_BANNER = {
-  characterId: 'legacy',
+  characterId: 'mugi',
   label: '신규 출시',
 };
 
-// 로비 슬라이드쇼 순서: UR 우선(gumi → sentinel → legacy), 이후 SR 순
-const SLIDESHOW_IDS = ['gumi', 'sentinel', 'legacy', 'knight', 'hacker', 'miner', 'maehwa', 'archieve', 'glitch', 'noise'];
+// 로비 슬라이드쇼 순서: 신규 UR 우선(mugi → gumi → sentinel → legacy), 이후 SR 순
+const SLIDESHOW_IDS = ['mugi', 'gumi', 'sentinel', 'legacy', 'knight', 'hacker', 'miner', 'maehwa', 'archieve', 'glitch', 'noise'];
 
 export default class GachaScene extends BaseScene {
   private skorBalance = 0;

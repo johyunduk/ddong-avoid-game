@@ -166,6 +166,16 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     }
   }
 
+  // 텍스처 프리픽스 변경 (골드 스프라이트 전환 등)
+  setTexturePrefix(prefix: string): void {
+    this.texturePrefix = prefix;
+    this.setTexture(`${prefix}${this.currentDir}`);
+  }
+
+  getTexturePrefix(): string {
+    return this.texturePrefix;
+  }
+
   // 영구 기본 속도 보너스 추가 (구미 꼬리 능력 등)
   addPermanentSpeed(amount: number) {
     this.baseSpeed += amount;

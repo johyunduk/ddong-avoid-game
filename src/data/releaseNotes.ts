@@ -6,6 +6,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: 'v2.6.0',
+    date: '2026-05-10',
+    changes: [
+      'UR 캐릭터 무기 추가',
+      '무기 기본 능력 — 붉은 여의주 낙하 · 수집마다 검붉은 번개(경로 위 똥 제거 +10점) · 50개 달성 시 황금 변신 · 변신 후 여의주마다 황금 번개(전체 삭제 +20점)',
+      '무기 특수 능력 — 부활 최대 3회 사용 · 게임 시작 시 1회 충전 · 여의주 50개로 재충전 · 피격 시 화면 중앙 이동 후 연꽃 발현 소생',
+    ],
+  },
+  {
     version: 'v2.5.0',
     date: '2026-04-26',
     changes: [

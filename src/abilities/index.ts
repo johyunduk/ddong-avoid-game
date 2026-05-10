@@ -11,6 +11,7 @@ import { SentinelAbility } from './SentinelAbility';
 import { LegacyAbility } from './LegacyAbility';
 import { KnightAbility } from './KnightAbility';
 import { GumiAbility } from './GumiAbility';
+import { MugiAbility } from './MugiAbility';
 
 const R_IDS = ['log', 'swap', 'sum', 'fork', 'seed', 'session', 'branch', 'hook', 'socket', 'index'];
 
@@ -28,6 +29,7 @@ export function getCharacterAbility(id: string, awakeningLevel = 0): CharacterAb
     case 'legacy':   return new LegacyAbility(awakeningLevel);
     case 'knight':   return new KnightAbility(awakeningLevel);
     case 'gumi':     return new GumiAbility(awakeningLevel);
+    case 'mugi':     return new MugiAbility(awakeningLevel);
     default:         return new BaseAbility(); // chibi 및 미등록 캐릭터
   }
 }
