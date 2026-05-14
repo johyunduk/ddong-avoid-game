@@ -1,0 +1,238 @@
+게임 전체적으로 하다보면 프레임 드랍이나 메모리 사용량이 많아지는거 같은데 그런 부분들 전부 찾아서 수정해줘.
+
+---
+
+다른 캐릭터들도 그렇던데 확인해봐
+
+---
+
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+Summary:
+1. Primary Request and Intent:
+   - **Request 1**: "게임 전체적으로 하다보면 프레임 드랍이나 메모리 사용량이 많아지는거 같은데 그런 부분들 전부 찾아서 수정해줘" — Find and fix ALL performance issues (frame drops, memory usage) across the entire game.
+   - **Request 2**: "다른 캐릭터들도 그렇던데 확인해봐" — After initial GameScene fixes were applied, user asked to also check character ability files for similar performance problems.
+
+2. Key Technical Concepts:
+   - **Phaser 3 WebGL draw calls**: Each `Graphics` object in Phaser requires a separate WebGL draw call per frame. Batching many objects into a single `Graphics` (clear+redraw each frame) dramatically reduces GPU overhead.
+   - **Object pooling**: Game already uses `prewarm` pattern for poop groups; new objects should follow same pattern.
+   - **O(1) cached fever trigger**: `checkFeverTime` was O(k) per-call while-loop; replaced with cached `nextFeverScore`/`feverScoreK`.
+   - **Single Graphics pattern**: Replace N individual Graphics objects (N draw calls/frame) with 1 persistent Graphics that `clear()`s + redraws all shapes each frame (1 draw call).
+   - **glow_dot Image vs Graphics**: `glow_dot` Images with ADD blend mode are far cheaper than Graphics fillCircle for tiny particle effects; Images batch efficiently in WebGL.
+   - **TypeScript strict**: `verbatimModuleSyntax=true` (type imports need `import type`), `erasableSyntaxOnly=true` (no enums; use `as const`).
+   - **Rotation buffer**: For batching rotated star shapes without per-frame GC, use a static `{x,y}[]` buffer that's overwritten in-place.
+
+3. Files and Code Sections:
+
+   - **`src/scenes/GameScene.ts`** — Main game scene; multiple performance fixes applied.
+     - **Added properties**:
+       ```typescript
+       // Fever trigger score cache — checkFeverTime O(k)→O(1)
+       private nextFeverScore: number = 0;
+       private feverScoreK: number = 1;
+       private lastDisplayedFeverSecond: number = -1;
+       ```
+     - **Removed property**: `private lastFeverTimeScore: number = 0;` (was only written, never read after optimization)
+     - **`init()` additions**:
+       ```typescript
+       this.nextFeverScore = FEVER_TIME_CONFIG.firstTriggerScore;
+       this.feverScoreK = 1;
+       this.lastDisplayedFeverSecond = -1;
+       ```
+     - **`checkFeverTime` rewrite** (O(k) → O(1)):
+       ```typescript
+       private checkFeverTime(score: number) {
+         if (score < this.nextFeverScore) return;
+         this.startFeverTime();
+         const { baseInterval, intervalIncrement, intervalIncreaseEvery } = FEVER_TIME_CONFIG;
+         const gap = baseInterval + Math.floor((this.feverScoreK - 1) / intervalIncreaseEvery) * intervalIncrement;
+         this.nextFeverScore += gap;
+         this.feverScoreK++;
+       }
+       ```
+     - **`startFeverTime` addition**: `this.lastDisplayedFeverSecond = -1;`
+     - **`updateFeverTime` rewrite** (skip recalc when second unchanged, fix length mismatch bug):
+       ```typescript
+       private updateFeverTime() {
+         this.feverTimeRemaining -= 100;
+         if (this.feverTimeRemaining <= 0) { this.endFeverTime(); return; }
+         const secondsRemaining = Math.ceil(this.feverTimeRemaining / 1000);
+         if (secondsRemaining === this.lastDisplayedFeverSecond) return;
+         this.lastDisplayedFeverSecond = secondsRemaining;
+         const newText = `${this.feverTimeLabel} ${secondsRemaining}초`;
+         for (let i = 0; i < this.feverTimeUITexts.length; i++) {
+           if (i < newText.length) {
+             this.feverTimeUITexts[i].setText(newText[i]).setVisible(true);
+           } else {
+             this.feverTimeUITexts[i].setVisible(false);
+           }
+         }
+         let totalWidth = 0;
+         for (let i = 0; i < Math.min(this.feverTimeUITexts.length, newText.length); i++) {
+           totalWidth += this.feverTimeUITexts[i].width;
+         }
+         let currentX = this.scale.width / 2 - totalWidth / 2;
+         for (let i = 0; i < Math.min(this.feverTimeUITexts.length, newText.length); i++) {
+           this.feverTimeUITexts[i].setX(currentX);
+           currentX += this.feverTimeUITexts[i].width;
+         }
+       }
+       ```
+     - **`spawnMaehwaStorm` rewrite** (55 Graphics → 1 Graphics):
+       ```typescript
+       private spawnMaehwaStorm(): void {
+         const W = this.scale.width;
+         const H = this.scale.height;
+         const COUNT = 55;
+         const DURATION = 2200;
+         const gfx = this.add.graphics().setDepth(194);
+         const petals = Array.from({ length: COUNT }, () => ({
+           startX:     Phaser.Math.Between(-30, W + 30),
+           startY:     Phaser.Math.Between(-120, -5),
+           fallSpeed:  0.35 + Math.random() * 0.65,
+           windDrift:  Phaser.Math.Between(30, 80),
+           wobbleFreq: 1.5 + Math.random() * 2.5,
+           wobbleAmp:  12 + Math.random() * 22,
+           wobblePhase: Math.random() * Math.PI * 2,
+           delay:      Math.random() * 0.35,
+           size:       Phaser.Math.Between(3, 8) as number,
+           color:      (Math.random() > 0.45 ? 0xff3377 : 0xff99bb) as number,
+           baseAlpha:  0.65 + Math.random() * 0.35,
+         }));
+         this.tweens.addCounter({
+           from: 0, to: 1, duration: DURATION,
+           onUpdate: (tween) => {
+             const g = tween.getValue() ?? 0;
+             gfx.clear();
+             for (const p of petals) {
+               const t = Math.max(0, (g - p.delay) / (1 - p.delay));
+               const ft = Math.min(t * p.fallSpeed, 1);
+               const sinW = Math.sin(ft * Math.PI * 2 * p.wobbleFreq + p.wobblePhase);
+               const x = p.startX + ft * p.windDrift + sinW * p.wobbleAmp;
+               const y = p.startY + ft * (H + 140);
+               const alpha = (ft > 0.78 ? 1 - (ft - 0.78) / 0.22 : 1) * p.baseAlpha;
+               if (alpha <= 0) continue;
+               gfx.fillStyle(p.color, alpha);
+               gfx.fillEllipse(x, y, p.size, Math.round(p.size * 1.7));
+             }
+           },
+           onComplete: () => gfx.destroy(),
+         });
+       }
+       ```
+
+   - **`src/scenes/GachaScene.ts`** — Gacha scene; slideshow grade image optimization.
+     - **`updateSlideshowText` fix** (reuse Image via `setTexture` instead of destroy+create):
+       ```typescript
+       const gradeKey = getGradeImgKey(def.grade);
+       if (gradeKey && this.slideshowGradeImg?.active) {
+         this.slideshowGradeImg.setTexture(gradeKey).setAlpha(0);
+         this.tweens.add({ targets: this.slideshowGradeImg, alpha: 1, duration: 150 });
+       } else if (gradeKey) {
+         const _yOff = (this.scale.height - 600) / 2;
+         this.slideshowGradeImg = this.add.image(this.scale.width / 2, 344 + _yOff, gradeKey).setDisplaySize(40, 40).setOrigin(0.5).setAlpha(0);
+         this.tweens.add({ targets: this.slideshowGradeImg, alpha: 1, duration: 150 });
+       } else if (this.slideshowGradeImg?.active) {
+         this.slideshowGradeImg.setVisible(false);
+       }
+       ```
+
+   - **`src/abilities/LegacyAbility.ts`** — Read thoroughly; two CRITICAL performance issues identified but NOT YET FIXED:
+     - `spawnOraFlame`: Creates 2-7 tiny `Graphics` every 80ms (legacy mode). Steady state ~22-30 Graphics alive. Fix: Replace with `glow_dot` Images.
+     - `spawnRainStar`: Creates 3 `Graphics` every 120ms during legacy mode, life 2200-3600ms → ~67 Graphics alive simultaneously. Fix: Single persistent Graphics + array-based manual tracking in `onUpdate`.
+     - `playBurnEffect`: Creates 1+6+5+2=14 Graphics per burn (infrequent, skip for now).
+
+   - **`src/abilities/MugiAbility.ts`** — Read thoroughly; one performance issue identified but NOT YET FIXED:
+     - `_spawnAuraWisp`: Creates 1 Image + 1 Graphics per wisp. Gold form: 4 wisps × 2 objects every 120ms. Revival aura: 2 wisps × 2 objects every 180ms. Fix: Replace Graphics core with a second `glow_dot` Image (MugiAbility already imports `ensureGlowDot`).
+
+   - **`src/abilities/HackerAbility.ts`** — Read. Creates 1+6 Graphics per poop deletion (infrequent burst effect, acceptable).
+   - **`src/abilities/GlitchAbility.ts`** — Read. Creates Image for attack ghosts with timer; properly managed via `attackTimers` array.
+   - **`src/abilities/SentinelAbility.ts`** — Read. Already well-optimized: persistent `sparkGfx` with clear/redraw pattern; confirmed no issues.
+   - **`src/abilities/NoiseAbility.ts`** — Read. No graphics, pure stat changes.
+   - **`src/abilities/MinerAbility.ts`** — Read. No graphics issues.
+   - **`src/abilities/GumiAbility.ts`** — Read. `_spawnBurnEffect` creates 7 Images per poop burn during invincibility (acceptable). Well-structured overall.
+   - **`src/abilities/KnightAbility.ts`** — Read. Already uses persistent Graphics with wavyPoints + static `_bufs` buffer (pre-allocated Point objects); uses `glow_dot` Images for sparks. Well-optimized.
+   - **`src/config/feverTime.ts`** — Read. `FEVER_TIME_CONFIG`: firstTriggerScore=250, baseInterval=1100, intervalIncrement=100, intervalIncreaseEvery=3, duration=4500ms.
+   - **`src/config/abilityParams.ts`** (partial) — Read. `LEGACY_PARAMS`: feverDuration=6000, legacyDuration=6000.
+
+   - **`src/main.ts`** — Read. Global event listeners (visibilitychange, pagehide, pageshow, touchstart, mousedown) never explicitly removed, but since the game lives as long as the page these are acceptable in practice. Not fixed.
+   - **`src/objects/Player.ts`** — Read. Uses `scene.events.once('shutdown', this.removeListeners, this)` which properly cleans up all 10 DOM listeners on scene shutdown. Confirmed safe.
+
+4. Errors and Fixes:
+   - **TypeScript error**: After removing the read usage of `lastFeverTimeScore` (by rewriting `checkFeverTime`), the compiler reported `'lastFeverTimeScore' is declared but its value is never read` (TS6133).
+     - **Fix**: Removed the property declaration (`private lastFeverTimeScore: number = 0`), its `init()` reset (`this.lastFeverTimeScore = 0`), and the now-redundant write in `checkFeverTime` (`this.lastFeverTimeScore = this.nextFeverScore`).
+     - `npx tsc --noEmit` passed cleanly after fix.
+
+5. Problem Solving:
+   - **Completed**:
+     - `checkFeverTime` O(k)→O(1): Eliminates while-loop recomputing fever trigger from scratch every point increment. At high scores with large bonus collections (e.g., rainbow poop +90), this was causing major CPU spikes.
+     - `spawnMaehwaStorm` 55→1 Graphics: Eliminates 55 WebGL draw calls/frame during 매화×매화 synergy burst. Now 1 draw call with clear+redraw.
+     - `updateFeverTime` text skip: Reduces setText/reflow from 10×/second (every 100ms) to 1×/second (when displayed second changes). Also fixes length mismatch bug hiding orphaned characters.
+     - `slideshowGradeImg` reuse: Eliminates destroy+recreate GC churn every 2 seconds in gacha lobby.
+   - **Identified, not yet implemented**:
+     - LegacyAbility `spawnOraFlame` → glow_dot Images
+     - LegacyAbility `spawnRainStar` → single Graphics + array tracking
+     - MugiAbility `_spawnAuraWisp` core → glow_dot Image
+
+6. All User Messages:
+   - "게임 전체적으로 하다보면 프레임 드랍이나 메모리 사용량이 많아지는거 같은데 그런 부분들 전부 찾아서 수정해줘."
+   - "다른 캐릭터들도 그렇던데 확인해봐"
+
+7. Pending Tasks:
+   - **Fix LegacyAbility `spawnOraFlame`**: Replace 2-7 tiny Graphics circles (created every 80ms in legacy mode) with `glow_dot` Images. Must add `ensureGlowDot` import to LegacyAbility.ts.
+   - **Fix LegacyAbility `spawnRainStar`**: Batch ~67 simultaneous Graphics objects into a single persistent Graphics with manual position tracking in `onUpdate`. Requires adding `RainStarData` interface, `rainStarGfx` property, `rainStars` array, static rotation buffer, and modifying `onCreate`/`onUpdate`/`onDestroy`/`spawnRainStar`.
+   - **Fix MugiAbility `_spawnAuraWisp`**: Replace Graphics core (two fillCircle calls) with a second `glow_dot` Image, eliminating Graphics creation per wisp. `ensureGlowDot` already imported.
+   - Run `npx tsc --noEmit` after all ability changes.
+
+8. Current Work:
+   The conversation was in the middle of analyzing all character ability files after the user said "다른 캐릭터들도 그렇던데 확인해봐". The Explore agent completed its audit and the user's full ability directory was read. The analysis revealed three pending fixes:
+
+   **LegacyAbility `spawnOraFlame`** (most frequent offender in legacy mode):
+   ```typescript
+   // CURRENT (creates 5-7 Graphics every 80ms):
+   for (let i = 0; i < count; i++) {
+     const gfx = scene.add.graphics();
+     const r = Phaser.Math.FloatBetween(0.8, rMax);
+     gfx.fillStyle(col, a);
+     gfx.fillCircle(0, 0, r);
+     gfx.setPosition(x, y).setDepth(88);
+     scene.tweens.add({ targets: gfx, y: ..., alpha: 0, scaleX: 0.15, scaleY: 0.15, onComplete: () => gfx.destroy() });
+   }
+   
+   // PLANNED FIX (glow_dot Image, no Graphics):
+   ensureGlowDot(scene);
+   const img = scene.add.image(x, y, 'glow_dot')
+     .setBlendMode(Phaser.BlendModes.ADD).setTint(col).setScale(r * 0.04).setAlpha(a).setDepth(88);
+   scene.tweens.add({ targets: img, y: ..., alpha: 0, scale: 0, onComplete: () => img.destroy() });
+   ```
+
+   **LegacyAbility `spawnRainStar`** (biggest issue: ~67 Graphics alive simultaneously):
+   - Currently: each star is its own `Graphics` with `fillPoints` (8-pt star) + tween lasting 2200-3600ms
+   - Planned: single `rainStarGfx: Phaser.GameObjects.Graphics`, `rainStars: RainStarData[]` array, update in `onUpdate` with rotation handled via cos/sin transform of base points, static `_starBuf` for zero-GC rotation
+
+   **MugiAbility `_spawnAuraWisp` core** (Graphics → Image):
+   ```typescript
+   // CURRENT:
+   const core = scene.add.graphics().setDepth(7).setPosition(ox, oy);
+   core.fillStyle(color, 0.85); core.fillCircle(0, 0, Math.max(2, sz * 0.45));
+   core.fillStyle(0xffffff, 0.9); core.fillCircle(0, 0, Math.max(1, sz * 0.22));
+   
+   // PLANNED FIX:
+   const core = scene.add.image(ox, oy, 'glow_dot')
+     .setDepth(7).setBlendMode(Phaser.BlendModes.ADD).setTint(0xffffff).setScale(glowScale * 0.32);
+   ```
+
+9. Optional Next Step:
+   Continue implementing the pending character ability performance fixes, starting with the most impactful ones. Based on the user's request "다른 캐릭터들도 그렇던데 확인해봐" and the analysis completed just before compaction:
+
+   1. **Fix `MugiAbility._spawnAuraWisp`** (simpler change, medium impact): Replace the Graphics core with a `glow_dot` Image in `src/abilities/MugiAbility.ts`.
+   2. **Fix `LegacyAbility.spawnOraFlame`** (easy change, high impact in legacy mode): Replace Graphics with `glow_dot` Images, add `ensureGlowDot` import in `src/abilities/LegacyAbility.ts`.
+   3. **Fix `LegacyAbility.spawnRainStar`** (complex, highest impact): Convert to single persistent Graphics with manual array tracking in `src/abilities/LegacyAbility.ts`.
+   4. Run `npx tsc --noEmit` to verify no TypeScript errors.
+
+If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/johyunduk/.REDACTED.jsonl
+Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.
+
+---
+
+깃 푸시해줘.

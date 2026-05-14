@@ -3,7 +3,7 @@
   "checkpoint_id": "d3045f14212f",
   "strategy": "manual-commit",
   "branch": "dev",
-  "checkpoints_count": 5,
+  "checkpoints_count": 7,
   "files_touched": [
     "src/abilities/LegacyAbility.ts",
     "src/abilities/MugiAbility.ts",
@@ -101,13 +101,20 @@
       "context": "",
       "content_hash": "/d3/045f14212f/12/content_hash.txt",
       "prompt": ""
+    },
+    {
+      "metadata": "/d3/045f14212f/13/metadata.json",
+      "transcript": "/d3/045f14212f/13/full.jsonl",
+      "context": "/d3/045f14212f/13/context.md",
+      "content_hash": "/d3/045f14212f/13/content_hash.txt",
+      "prompt": "/d3/045f14212f/13/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 227,
-    "cache_creation_tokens": 401175,
-    "cache_read_tokens": 14243945,
-    "output_tokens": 103087,
-    "api_call_count": 169
+    "input_tokens": 277,
+    "cache_creation_tokens": 630694,
+    "cache_read_tokens": 17809210,
+    "output_tokens": 160427,
+    "api_call_count": 209
   }
 }
