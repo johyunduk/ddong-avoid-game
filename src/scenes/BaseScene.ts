@@ -19,8 +19,17 @@ export default class BaseScene extends Phaser.Scene {
   create() {
     if (this.inputGuardMs > 0) {
       this.input.enabled = false;
+
       this.time.delayedCall(this.inputGuardMs, () => {
-        this.input.enabled = true;
+        if (!this.scene.isActive()) return;
+        if (this.input.manager.pointers.some(p => p.isDown)) {
+          // 손가락이 아직 닿아 있으면 뗄 때까지 input 재활성화 연기
+          window.addEventListener('pointerup', () => {
+            if (this.scene.isActive()) this.input.enabled = true;
+          }, { once: true });
+        } else {
+          this.input.enabled = true;
+        }
       });
     }
   }
