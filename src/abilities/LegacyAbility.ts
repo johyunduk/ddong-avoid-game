@@ -2,6 +2,7 @@ import { BaseAbility } from './BaseAbility';
 import type { GameSceneAPI } from './types';
 import type PoolablePoopBase from '../objects/PoolablePoopBase';
 import { LEGACY_PARAMS } from '../config/abilityParams';
+import { ensureGlowDot } from '../utils/glowDot';
 
 /**
  * 레거시 (UR) — 피버 + 레거시 모드
@@ -10,6 +11,16 @@ import { LEGACY_PARAMS } from '../config/abilityParams';
  * ★2: 10초 / 40%/3개 70%/4개 / 400점마다 / 12초 / 1.30배
  * ★3: 12초 / 45%/3개 75%/4개 / 350점마다 / 15초 / 1.35배 + 모드 종료 직후 3초 미니 피버
  */
+
+interface RainStarData {
+  startX: number; startY: number;
+  travelX: number; travelY: number;
+  startRot: number; rotDelta: number;
+  alpha: number; whiteAlpha: number;
+  s: number; col: number;
+  startTime: number; endTime: number; duration: number;
+}
+
 export class LegacyAbility extends BaseAbility {
   private startFeverActive = false;
   private legacyModeActive = false;
@@ -19,20 +30,34 @@ export class LegacyAbility extends BaseAbility {
   private legacyTopGlow?:       Phaser.GameObjects.Graphics;
   private legacyPulseTween?:    Phaser.Tweens.Tween;
   private legacyRainTimer?:     Phaser.Time.TimerEvent;
-  private legacyEndTimer?:      Phaser.Time.TimerEvent; // activateLegacyMode 종료 delayedCall
-  private startFeverTimer?:     Phaser.Time.TimerEvent; // startFeverRain addEvent
-  private startFeverEndTimer?:  Phaser.Time.TimerEvent; // onCreate 피버 종료 delayedCall
+  private legacyEndTimer?:      Phaser.Time.TimerEvent;
+  private startFeverTimer?:     Phaser.Time.TimerEvent;
+  private startFeverEndTimer?:  Phaser.Time.TimerEvent;
 
   // A: 상시 불꽃 오라
   private oraTimer = 0;
-  private static readonly ORA_INTERVAL_NORMAL = 180; // ms
-  private static readonly ORA_INTERVAL_LEGACY =  80; // ms
+  private static readonly ORA_INTERVAL_NORMAL = 180;
+  private static readonly ORA_INTERVAL_LEGACY =  80;
   private static readonly ORA_COLS_NORMAL = [0xff3300, 0xff6600, 0xffaa00];
   private static readonly ORA_COLS_LEGACY = [0xffaa00, 0xffcc00, 0xffee44, 0xffffff];
 
   // D: 빗줄기 색상
   private static readonly RAIN_COLS_FEVER  = [0xff8800, 0xffaa00, 0xffcc00, 0xffee00];
   private static readonly RAIN_COLS_LEGACY = [0xff5500, 0xff8800, 0xffaa00, 0xffcc00];
+
+  // D: 빗줄기 별 배치 — 단일 Graphics + 데이터 배열로 N개 draw call → 1개로 축소
+  private rainStarGfx: Phaser.GameObjects.Graphics | null = null;
+  private rainStars: RainStarData[] = [];
+
+  // 8각 별 정규화 좌표 (크기=1) — 프레임당 재사용하는 회전 버퍼와 함께 GC 압력 제거
+  private static readonly _STAR_NORM: { x: number; y: number }[] = [
+    { x:  0,    y: -1    }, { x:  0.4, y: -0.4 },
+    { x:  1,    y:  0    }, { x:  0.4, y:  0.4 },
+    { x:  0,    y:  1    }, { x: -0.4, y:  0.4 },
+    { x: -1,    y:  0    }, { x: -0.4, y: -0.4 },
+  ];
+  private static readonly _STAR_BUF: { x: number; y: number }[] =
+    Array.from({ length: 8 }, () => ({ x: 0, y: 0 }));
 
   // ── 불꽃 물방울 다각형 좌표 ─────────────────────────────────────────
   private static flamePts(w: number, h: number) {
@@ -47,21 +72,15 @@ export class LegacyAbility extends BaseAbility {
     ];
   }
 
-  // ── 8각 별 좌표 (빗줄기 공용) ────────────────────────────────────────
-  private static starPts(s: number) {
-    return [
-      { x:  0,       y: -s       }, { x:  s * 0.4, y: -s * 0.4 },
-      { x:  s,       y:  0       }, { x:  s * 0.4, y:  s * 0.4 },
-      { x:  0,       y:  s       }, { x: -s * 0.4, y:  s * 0.4 },
-      { x: -s,       y:  0       }, { x: -s * 0.4, y: -s * 0.4 },
-    ];
-  }
-
   // ─────────────────────────────────────────────────────────────────
   // 생명주기
   // ─────────────────────────────────────────────────────────────────
 
   override onCreate(api: GameSceneAPI): void {
+    ensureGlowDot(api.scene);
+    this.rainStarGfx = api.scene.add.graphics().setDepth(85);
+    this.rainStars   = [];
+
     this.startFeverActive = true;
     this.startFeverRain(api);
     this.startFeverEndTimer = api.scene.time.delayedCall(LEGACY_PARAMS.feverDuration, () => {
@@ -78,6 +97,10 @@ export class LegacyAbility extends BaseAbility {
     if (this.oraTimer >= interval) {
       this.oraTimer -= interval;
       this.spawnOraFlame(api);
+    }
+
+    if (this.rainStars.length > 0) {
+      this._updateRainStars(api.scene);
     }
   }
 
@@ -114,7 +137,7 @@ export class LegacyAbility extends BaseAbility {
   }
 
   // ─────────────────────────────────────────────────────────────────
-  // A: 상시 불꽃 오라
+  // A: 상시 불꽃 오라 — glow_dot Image (Graphics → Image, 드로우콜 제거)
   // ─────────────────────────────────────────────────────────────────
 
   private spawnOraFlame(api: GameSceneAPI): void {
@@ -132,29 +155,28 @@ export class LegacyAbility extends BaseAbility {
     const lifeMax = leg ? 520 : 380;
 
     for (let i = 0; i < count; i++) {
-      const gfx = scene.add.graphics();
       const r   = Phaser.Math.FloatBetween(0.8, rMax);
       const col = Phaser.Utils.Array.GetRandom(cols) as number;
       const a   = Phaser.Math.FloatBetween(0.50, aMax);
+      const x   = px + Phaser.Math.Between(-10, 10);
+      const y   = py + Phaser.Math.Between(10, 24);
 
-      gfx.fillStyle(col, a);
-      gfx.fillCircle(0, 0, r);
-      gfx.setPosition(
-        px + Phaser.Math.Between(-10, 10),
-        py + Phaser.Math.Between(10, 24),
-      );
-      gfx.setDepth(88);
+      const img = scene.add.image(x, y, 'glow_dot')
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setTint(col)
+        .setScale(r / 10)
+        .setAlpha(a)
+        .setDepth(88);
 
       scene.tweens.add({
-        targets:  gfx,
-        y:        gfx.y - Phaser.Math.Between(riseMin, riseMax),
-        x:        gfx.x + Phaser.Math.Between(-4, 4),
+        targets:  img,
+        y:        y - Phaser.Math.Between(riseMin, riseMax),
+        x:        x + Phaser.Math.Between(-4, 4),
         alpha:    0,
-        scaleX:   0.15,
-        scaleY:   0.15,
+        scale:    0,
         duration: Phaser.Math.Between(lifeMin, lifeMax),
         ease:     'Quad.easeOut',
-        onComplete: () => { gfx.destroy(); },
+        onComplete: () => { if (img.active) img.destroy(); },
       });
     }
   }
@@ -320,7 +342,7 @@ export class LegacyAbility extends BaseAbility {
   }
 
   // ─────────────────────────────────────────────────────────────────
-  // D: 황금 빗줄기
+  // D: 황금 빗줄기 — 단일 Graphics 배치 방식
   // ─────────────────────────────────────────────────────────────────
 
   private startFeverRain(api: GameSceneAPI): void {
@@ -334,7 +356,7 @@ export class LegacyAbility extends BaseAbility {
     });
   }
 
-  /** 빗줄기 별 1개 생성 — startFeverRain / legacyRainTimer 공용 */
+  /** 빗줄기 별 데이터를 배열에 추가 — 실제 렌더링은 _updateRainStars에서 단일 Graphics로 일괄 처리 */
   private spawnRainStar(
     scene: Phaser.Scene,
     cols: readonly number[],
@@ -342,31 +364,68 @@ export class LegacyAbility extends BaseAbility {
     aMax: number,
     count: number,
   ): void {
+    if (!this.rainStarGfx) return;
+    const now = scene.time.now;
     for (let i = 0; i < count; i++) {
-      const gfx = scene.add.graphics();
-      const s   = Phaser.Math.FloatBetween(2.5, 5.5);
-      const col = Phaser.Utils.Array.GetRandom(cols as number[]) as number;
-
-      gfx.fillStyle(col, Phaser.Math.FloatBetween(aMin, aMax));
-      gfx.fillPoints(LegacyAbility.starPts(s), true);
-      gfx.fillStyle(0xffffff, aMax > 0.85 ? 0.65 : 0.50); // 레거시 모드는 하이라이트도 강하게
-      gfx.fillCircle(0, 0, s * 0.32);
-
-      gfx.setPosition(Phaser.Math.Between(10, scene.scale.width - 10), -15);
-      gfx.setRotation(Phaser.Math.DegToRad(Phaser.Math.Between(0, 360)));
-      gfx.setDepth(85);
-
-      scene.tweens.add({
-        targets:  gfx,
-        y:        gfx.y + Phaser.Math.Between(450, 600),
-        x:        gfx.x + Phaser.Math.Between(-25, 25),
-        rotation: gfx.rotation + Phaser.Math.FloatBetween(1.5, 3.0),
-        alpha:    0,
-        duration: Phaser.Math.Between(2200, 3600),
-        ease:     'Linear',
-        onComplete: () => { gfx.destroy(); },
+      const s        = Phaser.Math.FloatBetween(2.5, 5.5);
+      const col      = Phaser.Utils.Array.GetRandom(cols as number[]) as number;
+      const alpha    = Phaser.Math.FloatBetween(aMin, aMax);
+      const duration = Phaser.Math.Between(2200, 3600);
+      this.rainStars.push({
+        startX:     Phaser.Math.Between(10, scene.scale.width - 10),
+        startY:     -15,
+        travelX:    Phaser.Math.Between(-25, 25),
+        travelY:    Phaser.Math.Between(450, 600),
+        startRot:   Phaser.Math.DegToRad(Phaser.Math.Between(0, 360)),
+        rotDelta:   Phaser.Math.FloatBetween(1.5, 3.0),
+        alpha,
+        whiteAlpha: aMax > 0.85 ? 0.65 : 0.50,
+        s, col,
+        startTime: now,
+        endTime:   now + duration,
+        duration,
       });
     }
+  }
+
+  /** 단일 Graphics를 clear → 전체 별 재드로우 (N draw call → 1) */
+  private _updateRainStars(scene: Phaser.Scene): void {
+    const gfx = this.rainStarGfx;
+    if (!gfx) return;
+    const now = scene.time.now;
+    gfx.clear();
+    const remaining: RainStarData[] = [];
+    for (const star of this.rainStars) {
+      if (now >= star.endTime) continue;
+      const t   = (now - star.startTime) / star.duration;
+      const cx  = star.startX + t * star.travelX;
+      const cy  = star.startY + t * star.travelY;
+      const rot = star.startRot + t * star.rotDelta;
+      const a   = star.alpha * (1 - t);
+      const wA  = star.whiteAlpha * (1 - t);
+
+      gfx.fillStyle(star.col, a);
+      gfx.fillPoints(this._rotatedStarPts(cx, cy, star.s, rot), true);
+      gfx.fillStyle(0xffffff, wA);
+      gfx.fillCircle(cx, cy, star.s * 0.32);
+
+      remaining.push(star);
+    }
+    this.rainStars = remaining;
+  }
+
+  /** 8각 별 좌표를 회전·스케일·이동 적용해 정적 버퍼에 in-place 기록 (GC 제로) */
+  private _rotatedStarPts(cx: number, cy: number, s: number, rot: number): { x: number; y: number }[] {
+    const buf  = LegacyAbility._STAR_BUF;
+    const norm = LegacyAbility._STAR_NORM;
+    const cos  = Math.cos(rot);
+    const sin  = Math.sin(rot);
+    for (let i = 0; i < 8; i++) {
+      const p  = norm[i]!;
+      buf[i]!.x = cx + (p.x * cos - p.y * sin) * s;
+      buf[i]!.y = cy + (p.x * sin + p.y * cos) * s;
+    }
+    return buf;
   }
 
   // ─────────────────────────────────────────────────────────────────
@@ -414,6 +473,9 @@ export class LegacyAbility extends BaseAbility {
     this.legacyRainTimer?.remove();
     this.legacyPulseTween?.stop();
     this.legacyTopGlow?.destroy();
+    this.rainStarGfx?.destroy();
+    this.rainStarGfx = null;
+    this.rainStars = [];
   }
 
   // ─────────────────────────────────────────────────────────────────

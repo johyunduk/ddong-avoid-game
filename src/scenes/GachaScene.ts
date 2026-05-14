@@ -204,16 +204,17 @@ export default class GachaScene extends BaseScene {
     this.slideshowBadgeBox?.setStrokeStyle(1.5, gradeColorInt);
     this.slideshowBadgeTxt?.setColor(def.gradeColor);
 
-    // 등급 이미지: 기존 이미지 교체 후 짧게 fade-in (150ms)
-    if (this.slideshowGradeImg?.active) {
-      this.slideshowGradeImg.destroy();
-      this.slideshowGradeImg = null;
-    }
+    // 등급 이미지: 기존 Image 객체를 재사용해 GC 압박 방지 (destroy+recreate 대신 setTexture)
     const gradeKey = getGradeImgKey(def.grade);
-    if (gradeKey) {
+    if (gradeKey && this.slideshowGradeImg?.active) {
+      this.slideshowGradeImg.setTexture(gradeKey).setAlpha(0);
+      this.tweens.add({ targets: this.slideshowGradeImg, alpha: 1, duration: 150 });
+    } else if (gradeKey) {
       const _yOff = (this.scale.height - 600) / 2;
       this.slideshowGradeImg = this.add.image(this.scale.width / 2, 344 + _yOff, gradeKey).setDisplaySize(40, 40).setOrigin(0.5).setAlpha(0);
       this.tweens.add({ targets: this.slideshowGradeImg, alpha: 1, duration: 150 });
+    } else if (this.slideshowGradeImg?.active) {
+      this.slideshowGradeImg.setVisible(false);
     }
     if (this.slideshowNameText?.active) {
       this.slideshowNameText.setText(def.name).setAlpha(0);

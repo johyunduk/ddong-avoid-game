@@ -218,12 +218,12 @@ export class MugiAbility extends BaseAbility {
       .setTint(color)
       .setScale(glowScale);
 
-    // 코어: 외곽 글로우색 → 중심 흰색으로 그라데이션 느낌
-    const core = scene.add.graphics().setDepth(7).setPosition(ox, oy);
-    core.fillStyle(color, 0.85);
-    core.fillCircle(0, 0, Math.max(2, sz * 0.45));
-    core.fillStyle(0xffffff, 0.9);
-    core.fillCircle(0, 0, Math.max(1, sz * 0.22));
+    // 코어: 흰색 glow_dot으로 중심 강조 (Graphics → Image, 드로우콜 제거)
+    const core = scene.add.image(ox, oy, 'glow_dot')
+      .setDepth(7)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setTint(0xffffff)
+      .setScale(glowScale * 0.32);
 
     const tx  = ox + Phaser.Math.Between(-14, 14);
     const ty  = oy - Phaser.Math.Between(22, 44);
@@ -235,7 +235,7 @@ export class MugiAbility extends BaseAbility {
       onComplete: () => { if (img.active) img.destroy(); },
     });
     scene.tweens.add({
-      targets: core, x: tx, y: ty, alpha: 0, scale: 0.3,
+      targets: core, x: tx, y: ty, alpha: 0, scale: 0,
       duration: dur, ease: 'Quad.easeOut',
       onComplete: () => { if (core.active) core.destroy(); },
     });

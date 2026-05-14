@@ -74,10 +74,13 @@ export default class GameScene extends BaseScene {
   private feverTimeUITexts: Phaser.GameObjects.Text[] = []; // 피버 타임 UI 텍스트 (각 글자별)
   private feverTimeColorOffset: number = 0; // 무지개 색상 회전 오프셋
   private feverTimeColorTimer?: Phaser.Time.TimerEvent; // 색상 애니메이션 타이머
-  private lastFeverTimeScore: number = 0; // 마지막 피버 타임 발동 점수
   private feverCount: number = 0;          // 피버 발동 횟수 누계 (레인보우 피버 조건 판정용)
   private isRainbowFever: boolean = false; // 레인보우 피버 활성 여부 (광부×황금광산 시너지)
   private lastClearPoopsScore: number = 0; // 마지막 전체 똥 제거 발동 점수 (매화×매화 시너지)
+  // 피버 트리거 점수 캐시 — checkFeverTime O(k)→O(1) 최적화
+  private nextFeverScore: number = 0;
+  private feverScoreK: number = 1;
+  private lastDisplayedFeverSecond: number = -1; // 이전에 표시한 초값 (변경 없으면 재계산 스킵)
   private get feverTimeLabel(): string { return this.isRainbowFever ? 'RAINBOW FEVER' : 'FEVER TIME'; }
   /** difficultyLevel 기반으로 현재 spawn 간격을 항상 최신값으로 계산 */
   private get currentSpawnDelay(): number {
@@ -135,10 +138,12 @@ export default class GameScene extends BaseScene {
     // 피버 타임 초기화
     this.isFeverTime = false;
     this.feverTimeRemaining = 0;
-    this.lastFeverTimeScore = 0;
     this.feverCount = 0;
     this.isRainbowFever = false;
     this.lastClearPoopsScore = 0;
+    this.nextFeverScore = FEVER_TIME_CONFIG.firstTriggerScore;
+    this.feverScoreK = 1;
+    this.lastDisplayedFeverSecond = -1;
     // 캐릭터 선택 화면에서 저장한 캐릭터 & 배경화면 사용
     this.selectedCharId = getSafeSelectedCharacter();
     this.selectedWpId = getSafeSelectedWallpaper();
@@ -919,28 +924,19 @@ export default class GameScene extends BaseScene {
   }
 
   /**
-   * 피버 타임 발동 조건 체크 (설정 기반)
+   * 피버 타임 발동 조건 체크 (O(1) — nextFeverScore 캐시 활용)
+   * checkMissedSpawnPoints에서 매 점수마다 호출되므로 while 루프 대신 캐시값 비교
    */
   private checkFeverTime(score: number) {
-    if (score < FEVER_TIME_CONFIG.firstTriggerScore) return;
+    if (score < this.nextFeverScore) return;
 
-    // 가변 간격으로 피버 트리거 점수 누산
-    // gap(k) = baseInterval + floor((k-1) / intervalIncreaseEvery) * intervalIncrement
-    const { firstTriggerScore, baseInterval, intervalIncrement, intervalIncreaseEvery } = FEVER_TIME_CONFIG;
-    let feverScore = firstTriggerScore;
-    let lastFeverScore = feverScore;
-    let k = 1;
-    while (feverScore <= score) {
-      lastFeverScore = feverScore;
-      const gap = baseInterval + Math.floor((k - 1) / intervalIncreaseEvery) * intervalIncrement;
-      feverScore += gap;
-      k++;
-    }
+    this.startFeverTime();
 
-    if (this.lastFeverTimeScore < lastFeverScore) {
-      this.startFeverTime();
-      this.lastFeverTimeScore = lastFeverScore;
-    }
+    // 다음 피버 트리거 점수 계산: gap(k) = baseInterval + floor((k-1)/intervalIncreaseEvery) * intervalIncrement
+    const { baseInterval, intervalIncrement, intervalIncreaseEvery } = FEVER_TIME_CONFIG;
+    const gap = baseInterval + Math.floor((this.feverScoreK - 1) / intervalIncreaseEvery) * intervalIncrement;
+    this.nextFeverScore += gap;
+    this.feverScoreK++;
   }
 
   /**
@@ -951,6 +947,7 @@ export default class GameScene extends BaseScene {
 
     this.isFeverTime = true;
     this.feverTimeRemaining = FEVER_TIME_CONFIG.duration;
+    this.lastDisplayedFeverSecond = -1; // 다음 updateFeverTime에서 반드시 렌더링하도록 초기화
 
     // 레인보우 피버: 시너지에 rainbowFever 플래그가 있고 2번째 피버부터 4회마다 (2, 6, 10...)
     this.feverCount++;
@@ -1142,34 +1139,40 @@ export default class GameScene extends BaseScene {
 
   /**
    * 피버 타임 카운트다운 업데이트
+   * 초(second) 값이 실제로 변경될 때만 텍스트/위치를 재계산해 setText 오버헤드 최소화
    */
   private updateFeverTime() {
-    this.feverTimeRemaining -= 100; // 0.1초씩 감소
+    this.feverTimeRemaining -= 100;
 
-    const secondsRemaining = Math.ceil(this.feverTimeRemaining / 1000);
-    const newText = `${this.feverTimeLabel} ${secondsRemaining}초`;
-
-    // 각 글자의 텍스트 내용 업데이트
-    for (let i = 0; i < this.feverTimeUITexts.length; i++) {
-      if (i < newText.length) {
-        this.feverTimeUITexts[i].setText(newText[i]);
-      }
-    }
-
-    // 텍스트 길이가 변경된 경우 (초 카운트 변경) 위치 재조정
-    if (this.feverTimeUITexts.length > 0) {
-      // setText() 후 width가 즉시 갱신되므로 별도 측정 객체 불필요
-      const totalWidth = this.feverTimeUITexts.reduce((sum, t) => sum + t.width, 0);
-      let currentX = this.scale.width / 2 - totalWidth / 2;
-      for (let i = 0; i < this.feverTimeUITexts.length && i < newText.length; i++) {
-        this.feverTimeUITexts[i].setX(currentX);
-        currentX += this.feverTimeUITexts[i].width;
-      }
-    }
-
-    // 시간이 다 떨어지면 피버 타임 종료
     if (this.feverTimeRemaining <= 0) {
       this.endFeverTime();
+      return;
+    }
+
+    const secondsRemaining = Math.ceil(this.feverTimeRemaining / 1000);
+    if (secondsRemaining === this.lastDisplayedFeverSecond) return; // 초 변화 없으면 스킵
+    this.lastDisplayedFeverSecond = secondsRemaining;
+
+    const newText = `${this.feverTimeLabel} ${secondsRemaining}초`;
+
+    // 텍스트 내용 업데이트 + 길이 초과분 숨기기
+    for (let i = 0; i < this.feverTimeUITexts.length; i++) {
+      if (i < newText.length) {
+        this.feverTimeUITexts[i].setText(newText[i]).setVisible(true);
+      } else {
+        this.feverTimeUITexts[i].setVisible(false);
+      }
+    }
+
+    // 보이는 글자들만 폭 합산해 중앙 정렬
+    let totalWidth = 0;
+    for (let i = 0; i < Math.min(this.feverTimeUITexts.length, newText.length); i++) {
+      totalWidth += this.feverTimeUITexts[i].width;
+    }
+    let currentX = this.scale.width / 2 - totalWidth / 2;
+    for (let i = 0; i < Math.min(this.feverTimeUITexts.length, newText.length); i++) {
+      this.feverTimeUITexts[i].setX(currentX);
+      currentX += this.feverTimeUITexts[i].width;
     }
   }
 
@@ -1361,30 +1364,31 @@ export default class GameScene extends BaseScene {
     }
   }
 
-  /** 꽃잎 눈보라 — 위에서 바람에 날려 쏟아지는 폭풍 이펙트 */
+  /**
+   * 꽃잎 눈보라 — 위에서 바람에 날려 쏟아지는 폭풍 이펙트
+   * 단일 Graphics 객체 사용: 55개 개별 객체(55 draw call/frame) → 1개(1 draw call/frame)
+   */
   private spawnMaehwaStorm(): void {
     const W = this.scale.width;
     const H = this.scale.height;
     const COUNT = 55;
     const DURATION = 2200;
 
-    const petals = Array.from({ length: COUNT }, () => {
-      const gfx = this.add.graphics().setDepth(194);
-      const size = Phaser.Math.Between(3, 8);
-      gfx.fillStyle(Math.random() > 0.45 ? 0xff3377 : 0xff99bb, 0.65 + Math.random() * 0.35);
-      gfx.fillEllipse(0, 0, size, Math.round(size * 1.7));
-      return {
-        gfx,
-        startX:      Phaser.Math.Between(-30, W + 30),
-        startY:      Phaser.Math.Between(-120, -5),
-        fallSpeed:   0.35 + Math.random() * 0.65,  // 속도 차이 → 원근감
-        windDrift:   Phaser.Math.Between(30, 80),   // 오른쪽으로 흘려보내는 바람 거리
-        wobbleFreq:  1.5 + Math.random() * 2.5,
-        wobbleAmp:   12 + Math.random() * 22,
-        wobblePhase: Math.random() * Math.PI * 2,
-        delay:       Math.random() * 0.35,
-      };
-    });
+    const gfx = this.add.graphics().setDepth(194);
+
+    const petals = Array.from({ length: COUNT }, () => ({
+      startX:     Phaser.Math.Between(-30, W + 30),
+      startY:     Phaser.Math.Between(-120, -5),
+      fallSpeed:  0.35 + Math.random() * 0.65,
+      windDrift:  Phaser.Math.Between(30, 80),
+      wobbleFreq: 1.5 + Math.random() * 2.5,
+      wobbleAmp:  12 + Math.random() * 22,
+      wobblePhase: Math.random() * Math.PI * 2,
+      delay:      Math.random() * 0.35,
+      size:       Phaser.Math.Between(3, 8) as number,
+      color:      (Math.random() > 0.45 ? 0xff3377 : 0xff99bb) as number,
+      baseAlpha:  0.65 + Math.random() * 0.35,
+    }));
 
     this.tweens.addCounter({
       from: 0,
@@ -1392,18 +1396,20 @@ export default class GameScene extends BaseScene {
       duration: DURATION,
       onUpdate: (tween) => {
         const g = tween.getValue() ?? 0;
+        gfx.clear();
         for (const p of petals) {
           const t = Math.max(0, (g - p.delay) / (1 - p.delay));
           const ft = Math.min(t * p.fallSpeed, 1);
           const sinW = Math.sin(ft * Math.PI * 2 * p.wobbleFreq + p.wobblePhase);
           const x = p.startX + ft * p.windDrift + sinW * p.wobbleAmp;
           const y = p.startY + ft * (H + 140);
-          p.gfx.setPosition(x, y);
-          p.gfx.setAngle(sinW * 35);
-          p.gfx.setAlpha(ft > 0.78 ? 1 - (ft - 0.78) / 0.22 : 1);
+          const alpha = (ft > 0.78 ? 1 - (ft - 0.78) / 0.22 : 1) * p.baseAlpha;
+          if (alpha <= 0) continue;
+          gfx.fillStyle(p.color, alpha);
+          gfx.fillEllipse(x, y, p.size, Math.round(p.size * 1.7));
         }
       },
-      onComplete: () => petals.forEach(p => p.gfx.destroy()),
+      onComplete: () => gfx.destroy(),
     });
   }
 
