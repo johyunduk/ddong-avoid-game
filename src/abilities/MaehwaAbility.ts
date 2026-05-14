@@ -3,6 +3,7 @@ import { BaseAbility } from './BaseAbility';
 import type { GameSceneAPI } from './types';
 import type PoolablePoopBase from '../objects/PoolablePoopBase';
 import { MAEHWA_PARAMS } from '../config/abilityParams';
+import { ensureGlowDot } from '../utils/glowDot';
 
 /**
  * 매화 (SR) — 이동속도 버프 / 점수마다 칼 베기
@@ -76,33 +77,31 @@ export class MaehwaAbility extends BaseAbility {
     });
   }
 
-  /** 붉은 매화 잎 여러 개 낙화 */
+  /** 붉은 매화 잎 여러 개 낙화 — glow_dot Image 사용으로 WebGL 배치 처리 (21 draw call → 1) */
   private spawnPetals(cx: number, cy: number, api: GameSceneAPI): void {
     const PETAL_COUNT = 7;
+    ensureGlowDot(api.scene);
     for (let i = 0; i < PETAL_COUNT; i++) {
-      const petal = api.scene.add.graphics().setDepth(121);
-      // 초기 위치: 파괴된 똥 주변 랜덤
       const startX = cx + Phaser.Math.Between(-12, 12);
       const startY = cy + Phaser.Math.Between(-12, 12);
-      petal.setPosition(startX, startY);
+      const scale  = Phaser.Math.FloatBetween(0.04, 0.08);
 
-      // 작은 타원형 꽃잎
-      const petalW = Phaser.Math.Between(4, 7);
-      const petalH = Phaser.Math.Between(7, 11);
-      petal.fillStyle(0xff2255, 0.85 + Math.random() * 0.15);
-      petal.fillEllipse(0, 0, petalW, petalH);
-      petal.setAngle(Phaser.Math.Between(0, 360));
+      const img = api.scene.add.image(startX, startY, 'glow_dot')
+        .setDepth(121)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setTint(0xff2255)
+        .setScale(scale)
+        .setAlpha(0.85 + Math.random() * 0.15);
 
-      // 바람에 날리며 낙하
       api.scene.tweens.add({
-        targets: petal,
+        targets: img,
         x: startX + Phaser.Math.Between(-25, 25),
         y: startY + Phaser.Math.Between(30, 60),
-        angle: petal.angle + Phaser.Math.Between(-120, 120),
         alpha: 0,
+        scale: 0,
         duration: Phaser.Math.Between(400, 700),
         ease: 'Sine.easeIn',
-        onComplete: () => petal.destroy(),
+        onComplete: () => { if (img.active) img.destroy(); },
       });
     }
   }
