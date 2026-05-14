@@ -1,0 +1,24 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "6ceac850533c",
+  "session_id": "55a7a05c-d94f-4e3b-9c6d-e5974fb49a57",
+  "strategy": "manual-commit",
+  "created_at": "2026-05-14T12:41:03.19256Z",
+  "branch": "dev",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "src/abilities/MaehwaAbility.ts"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "aa7da447413c",
+  "initial_attribution": {
+    "calculated_at": "2026-05-14T12:41:03.170676Z",
+    "agent_lines": 13,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 13,
+    "agent_percentage": 100
+  },
+  "transcript_path": ".claude/projects/-Users-johyunduk-Projects-ddong-avoid-game/55a7a05c-d94f-4e3b-9c6d-e5974fb49a57.jsonl"
+}
