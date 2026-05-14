@@ -1,0 +1,28 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "d3045f14212f",
+  "session_id": "81f8a4fb-897a-4db3-9e0a-0165258df735",
+  "strategy": "manual-commit",
+  "created_at": "2026-05-14T12:34:27.782076Z",
+  "branch": "dev",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "src/abilities/LegacyAbility.ts",
+    "src/abilities/MugiAbility.ts",
+    "src/scenes/GachaScene.ts",
+    "src/scenes/GameScene.ts"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "1f5f6843ec4d",
+  "transcript_identifier_at_start": "435da29f-57b8-4d60-ab15-13569ecaf4fc",
+  "initial_attribution": {
+    "calculated_at": "2026-05-14T12:34:27.759965Z",
+    "agent_lines": 192,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 192,
+    "agent_percentage": 100
+  },
+  "transcript_path": ".claude/projects/-Users-johyunduk-Projects-ddong-avoid-game/81f8a4fb-897a-4db3-9e0a-0165258df735.jsonl"
+}
