@@ -3,7 +3,7 @@
   "checkpoint_id": "6ceac850533c",
   "strategy": "manual-commit",
   "branch": "dev",
-  "checkpoints_count": 1,
+  "checkpoints_count": 2,
   "files_touched": [
     "src/abilities/MaehwaAbility.ts"
   ],
@@ -13,6 +13,13 @@
       "transcript": "/6c/eac850533c/0/full.jsonl",
       "context": "",
       "content_hash": "/6c/eac850533c/0/content_hash.txt",
+      "prompt": ""
+    },
+    {
+      "metadata": "/6c/eac850533c/1/metadata.json",
+      "transcript": "/6c/eac850533c/1/full.jsonl",
+      "context": "",
+      "content_hash": "/6c/eac850533c/1/content_hash.txt",
       "prompt": ""
     }
   ]
