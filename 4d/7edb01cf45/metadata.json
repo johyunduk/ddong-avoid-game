@@ -3,7 +3,7 @@
   "checkpoint_id": "4d7edb01cf45",
   "strategy": "manual-commit",
   "branch": "dev",
-  "checkpoints_count": 2,
+  "checkpoints_count": 3,
   "files_touched": [
     "docs/story/main/drafts/season1-draft.md",
     "docs/story/main/drafts/season2-draft.md"
@@ -127,13 +127,20 @@
       "context": "/4d/7edb01cf45/16/context.md",
       "content_hash": "/4d/7edb01cf45/16/content_hash.txt",
       "prompt": "/4d/7edb01cf45/16/prompt.txt"
+    },
+    {
+      "metadata": "/4d/7edb01cf45/17/metadata.json",
+      "transcript": "/4d/7edb01cf45/17/full.jsonl",
+      "context": "/4d/7edb01cf45/17/context.md",
+      "content_hash": "/4d/7edb01cf45/17/content_hash.txt",
+      "prompt": "/4d/7edb01cf45/17/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 704,
-    "cache_creation_tokens": 1055097,
-    "cache_read_tokens": 44249077,
-    "output_tokens": 399377,
-    "api_call_count": 506
+    "input_tokens": 739,
+    "cache_creation_tokens": 1326520,
+    "cache_read_tokens": 45491047,
+    "output_tokens": 431642,
+    "api_call_count": 530
   }
 }
