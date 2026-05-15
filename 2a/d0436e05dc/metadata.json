@@ -43,6 +43,13 @@
       "context": "",
       "content_hash": "/2a/d0436e05dc/3/content_hash.txt",
       "prompt": ""
+    },
+    {
+      "metadata": "/2a/d0436e05dc/4/metadata.json",
+      "transcript": "/2a/d0436e05dc/4/full.jsonl",
+      "context": "",
+      "content_hash": "/2a/d0436e05dc/4/content_hash.txt",
+      "prompt": ""
     }
   ]
 }
