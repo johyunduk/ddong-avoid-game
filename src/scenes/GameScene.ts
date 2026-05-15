@@ -17,7 +17,7 @@ import { POOP_CONFIG } from '../config/poop';
 import { getHighScore, updateHighScore } from '../utils/localStorage';
 import { submitScore, getUserInitials, setUserInitials, startGameSession } from '../utils/leaderboard';
 import { getExtremeCharBest, updateExtremeCharBest } from '../utils/extremeCharBest';
-import { submitSkor, type SkorSubmitResponse } from '../utils/skor';
+import { submitSkor, type SkorSubmitResponse, getQuestProgressCache, setQuestProgressCache, estimateQuestRewards, formatQuestRewardText } from '../utils/skor';
 import { getSafeSelectedCharacter, getCharacterDef, getDuplicateCount, getAwakeningLevel } from '../utils/character';
 import { getSafeSelectedWallpaper, getWallpaperDef } from '../utils/wallpaper';
 import { getSynergy, type WallpaperSynergy } from '../config/synergyMap';
@@ -41,7 +41,8 @@ export default class GameScene extends BaseScene {
   protected scoreText!: Phaser.GameObjects.Text;
   private highScore: number = 0;
   protected highScoreText!: Phaser.GameObjects.Text;
-  private charHighScore: number = 0;
+  private charHighScore: number = 0;       // HUD 표시용 (실시간 갱신)
+  private charHighScoreAtStart: number = 0; // 신기록 판정용 (게임 시작 시 고정)
   private charHighScoreText?: Phaser.GameObjects.Text;
   protected gameOver: boolean = false;
   private spawnTimer!: Phaser.Time.TimerEvent;
@@ -270,6 +271,7 @@ export default class GameScene extends BaseScene {
     this.charHighScore = this.scoreDifficulty === Difficulty.EXTREME
       ? getExtremeCharBest(this.selectedCharId)
       : 0;
+    this.charHighScoreAtStart = this.charHighScore;
 
     // 배경 이미지: 선택된 배경화면 우선, 없으면 난이도별 기본
     const wpDefForBg = this.selectedWpId ? getWallpaperDef(this.selectedWpId) : null;
@@ -1478,7 +1480,7 @@ export default class GameScene extends BaseScene {
 
     const isNewRecord = updateHighScore(this.scoreDifficulty, this.score);
     const isCharNewRecord = this.scoreDifficulty === Difficulty.EXTREME
-      && this.score > this.charHighScore;
+      && this.score > this.charHighScoreAtStart;
 
     // 게임 오버 UI 표시 (비동기 처리)
     this.showGameOverUI(isNewRecord, isCharNewRecord);
@@ -1842,12 +1844,19 @@ export default class GameScene extends BaseScene {
    * 게임오버 시 SKOR 정제 수익 제출 및 화면 표시
    */
   private async submitSkorOnGameOver(statusText: Phaser.GameObjects.Text) {
+    const sessionData = {
+      goldCollected: this.goldCollected,
+      diamondCollected: this.diamondCollected,
+      topazCollected: this.topazCollected,
+      rainbowCollected: this.rainbowCollected,
+    };
+
     // ── 낙관적 UI: 서버 응답 전에 예상 SKOR 즉시 계산 ──
     const rawSkor =
-      this.goldCollected * 0.5 +
-      this.diamondCollected * 1.5 +
-      this.topazCollected * 3.5 +
-      this.rainbowCollected * 10.0;
+      sessionData.goldCollected * 0.5 +
+      sessionData.diamondCollected * 1.5 +
+      sessionData.topazCollected * 3.5 +
+      sessionData.rainbowCollected * 10.0;
     const estimatedSkor = Math.floor(Math.min(rawSkor, this.getSkorBracketCap(this.score)));
 
     // floor 후 0이면 API 호출 없이 즉시 종료 (퀘스트 진행도도 없음)
@@ -1857,38 +1866,53 @@ export default class GameScene extends BaseScene {
       return;
     }
 
-    statusText.setText(`💰 +${estimatedSkor} SKOR 획득!`);
+    // ── 낙관적 퀘스트 계산: 캐시된 누적값으로 즉시 표시 ──
+    const questCache = getQuestProgressCache();
+    const estimatedQuests = questCache ? estimateQuestRewards(questCache, sessionData) : [];
+    const estimatedQuestSkor = estimatedQuests.reduce((s, r) => s + r.reward, 0);
+    const optimisticTotal = estimatedSkor + estimatedQuestSkor;
+    let questTextObj: Phaser.GameObjects.Text | null = null;
+
+    statusText.setText(`💰 +${optimisticTotal} SKOR 획득!`);
     statusText.setColor('#FFD700');
+
+    if (estimatedQuests.length > 0) {
+      questTextObj = this.add.text(this.scale.width / 2, statusText.y + 23, `🎯 ${formatQuestRewardText(estimatedQuests)}`, {
+        fontSize: '13px',
+        color: '#88ff88',
+        stroke: '#000',
+        strokeThickness: 2,
+        padding: { top: 3 },
+      }).setOrigin(0.5).setDepth(200);
+    }
 
     // ── 백그라운드 API 호출: 실제 결과로 보정 ──
     try {
       const result: SkorSubmitResponse = await submitSkor({
         score: this.score,
-        goldCollected: this.goldCollected,
-        diamondCollected: this.diamondCollected,
-        topazCollected: this.topazCollected,
-        rainbowCollected: this.rainbowCollected,
+        ...sessionData,
       });
 
       if (!this.scene.isActive()) return;
 
-      // 주간 캡 소진 또는 실제값이 예상과 다른 경우만 갱신
+      if (result.questProgressAfter) {
+        setQuestProgressCache(result.questProgressAfter);
+      }
+
       if (result.weeklyCapRemaining <= 0 && result.totalSkorAdded === 0) {
         statusText.setText(`💰 주간 한도 도달 (SKOR 없음)`);
         statusText.setColor('#888888');
-      } else if (result.totalSkorAdded !== estimatedSkor) {
+        questTextObj?.destroy();
+        return;
+      }
+
+      if (result.totalSkorAdded !== optimisticTotal) {
         statusText.setText(`💰 +${result.totalSkorAdded} SKOR 획득!`);
       }
 
-      // 퀘스트 달성 시 추가 알림 (항상 표시)
-      if (result.questRewards.length > 0) {
-        const questLabels: Record<string, string> = {
-          gold: '금똥', diamond: '다이아', topaz: '토파즈', rainbow: '무지개',
-        };
-        const questText = result.questRewards
-          .map(r => `${questLabels[r.quest] ?? r.quest} 퀘스트 +${r.reward}`)
-          .join(' / ');
-        this.add.text(this.scale.width / 2, statusText.y + 23, `🎯 ${questText}`, {
+      // 캐시 없었던 경우에만 퀘스트 텍스트 새로 표시
+      if (!questCache && result.questRewards.length > 0) {
+        this.add.text(this.scale.width / 2, statusText.y + 23, `🎯 ${formatQuestRewardText(result.questRewards)}`, {
           fontSize: '13px',
           color: '#88ff88',
           stroke: '#000',

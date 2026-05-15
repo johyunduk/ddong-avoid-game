@@ -8,6 +8,13 @@ export interface SkorSubmitData {
   rainbowCollected: number;
 }
 
+export interface QuestProgressCache {
+  gold_total: number;
+  diamond_total: number;
+  topaz_total: number;
+  rainbow_total: number;
+}
+
 export interface SkorSubmitResponse {
   success: boolean;
   skorEarned: number;
@@ -16,6 +23,66 @@ export interface SkorSubmitResponse {
   totalSkorAdded: number;
   remainingBalance: number;
   weeklyCapRemaining: number;
+  questProgressAfter?: QuestProgressCache;
+}
+
+const QUEST_PROGRESS_CACHE_KEY = 'questProgressCache';
+
+const QUESTS = [
+  { key: 'gold',    interval: 50, reward: 10 },
+  { key: 'diamond', interval: 25, reward: 15 },
+  { key: 'topaz',   interval: 12, reward: 20 },
+  { key: 'rainbow', interval: 8,  reward: 35 },
+] as const;
+
+export function getQuestProgressCache(): QuestProgressCache | null {
+  const raw = localStorage.getItem(QUEST_PROGRESS_CACHE_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as QuestProgressCache;
+  } catch {
+    return null;
+  }
+}
+
+export function setQuestProgressCache(progress: QuestProgressCache): void {
+  localStorage.setItem(QUEST_PROGRESS_CACHE_KEY, JSON.stringify(progress));
+}
+
+export const QUEST_LABELS: Record<string, string> = {
+  gold: '금똥', diamond: '다이아', topaz: '토파즈', rainbow: '무지개',
+};
+
+export function formatQuestRewardText(quests: { quest: string; reward: number }[]): string {
+  return quests.map(r => `${QUEST_LABELS[r.quest] ?? r.quest} 퀘스트 +${r.reward}`).join(' / ');
+}
+
+/** 캐시된 누적값 + 이번 게임 수집량으로 예상 퀘스트 보상 계산 */
+export function estimateQuestRewards(
+  cached: QuestProgressCache,
+  session: { goldCollected: number; diamondCollected: number; topazCollected: number; rainbowCollected: number },
+): { quest: string; reward: number }[] {
+  const results: { quest: string; reward: number }[] = [];
+  const totals: Record<string, number> = {
+    gold:    cached.gold_total,
+    diamond: cached.diamond_total,
+    topaz:   cached.topaz_total,
+    rainbow: cached.rainbow_total,
+  };
+  const additions: Record<string, number> = {
+    gold:    session.goldCollected,
+    diamond: session.diamondCollected,
+    topaz:   session.topazCollected,
+    rainbow: session.rainbowCollected,
+  };
+
+  for (const q of QUESTS) {
+    const prev = totals[q.key] ?? 0;
+    const next = prev + (additions[q.key] ?? 0);
+    const achieved = Math.floor(next / q.interval) - Math.floor(prev / q.interval);
+    if (achieved > 0) results.push({ quest: q.key, reward: achieved * q.reward });
+  }
+  return results;
 }
 
 /**

@@ -2,6 +2,7 @@ import { type Difficulty } from '../types/GameMode';
 import { getCurrentUserId } from './auth';
 import { supabase } from './supabase';
 import { getCurrentYearMonth } from './localStorage';
+import { setQuestProgressCache } from './skor';
 
 export interface LeaderboardEntry {
   userId: string;
@@ -105,6 +106,9 @@ export async function startGameSession(difficulty: Difficulty): Promise<string |
       body: { difficulty },
     });
     if (error || !data?.sessionId) return null;
+    if (data.questProgress) {
+      setQuestProgressCache(data.questProgress);
+    }
     return data.sessionId as string;
   } catch {
     return null;

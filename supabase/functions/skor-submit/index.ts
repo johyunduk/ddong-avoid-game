@@ -165,6 +165,7 @@ Deno.serve(async (req: Request) => {
         totalSkorAdded: Math.floor(totalSkorAdded),
         remainingBalance: Math.floor(newBalance),
         weeklyCapRemaining: -1, // 주간 한도 없음
+        questProgressAfter: newProgress,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
