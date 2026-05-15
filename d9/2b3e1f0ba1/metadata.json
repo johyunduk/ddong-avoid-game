@@ -1,0 +1,21 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "d92b3e1f0ba1",
+  "strategy": "manual-commit",
+  "branch": "dev",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src/utils/leaderboard.ts",
+    "supabase/functions/leaderboard-top/index.ts",
+    "supabase/migrations/20260515_leaderboard_rank_rpc.sql"
+  ],
+  "sessions": [
+    {
+      "metadata": "/d9/2b3e1f0ba1/0/metadata.json",
+      "transcript": "/d9/2b3e1f0ba1/0/full.jsonl",
+      "context": "",
+      "content_hash": "/d9/2b3e1f0ba1/0/content_hash.txt",
+      "prompt": ""
+    }
+  ]
+}
