@@ -232,7 +232,7 @@ Deno.serve(async (req: Request) => {
     // 최고 점수만 저장 (upsert)
     if (isNewRecord) {
       const validCharacterTypes = [
-        'chibi',
+        'chibi', 'mugi', 'gumi', 'knight',
         'log', 'swap', 'sum', 'fork', 'seed', 'session', 'branch', 'hook', 'socket', 'index',
         'hacker', 'miner', 'maehwa', 'archieve', 'glitch', 'noise',
         'sentinel', 'legacy',

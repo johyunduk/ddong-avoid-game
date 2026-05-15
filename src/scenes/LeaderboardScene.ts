@@ -7,12 +7,13 @@ import {
   type LeaderboardEntry,
   type PrevSeasonReward,
 } from '../utils/leaderboard';
+import { CHARACTERS } from '../utils/character';
 import BaseScene from './BaseScene';
 
 export default class LeaderboardScene extends BaseScene {
   private selectedDifficulty: Difficulty = DifficultyEnum.NORMAL;
   private leaderboardData: LeaderboardEntry[] = [];
-  private leaderboardTexts: Phaser.GameObjects.Text[] = [];
+  private leaderboardTexts: Phaser.GameObjects.GameObject[] = [];
   private loadingText?: Phaser.GameObjects.Text;
   private errorText?: Phaser.GameObjects.Text;
   private currentRequestId: number = 0;
@@ -38,10 +39,15 @@ export default class LeaderboardScene extends BaseScene {
   }
 
   preload() {
-    // 배경 이미지 로드 (캐시 확인으로 중복 로딩 방지)
     if (!this.textures.exists('background2')) {
       this.load.image('background2', 'assets/backgrounds/background2.webp');
     }
+    // 캐릭터 아이콘 (랭킹 표시용)
+    CHARACTERS.forEach(char => {
+      if (!this.textures.exists(char.imageKey)) {
+        this.load.image(char.imageKey, char.imagePath);
+      }
+    });
   }
 
   create() {
@@ -276,62 +282,120 @@ export default class LeaderboardScene extends BaseScene {
   }
 
   private displayLeaderboard() {
+    const W = this.scale.width;
     const yOff = (this.scale.height - 600) / 2;
-    const cx = this.scale.width / 2;
-    const startY = 163 + yOff;
-    const lineHeight = 35;
+    const startY = 130 + yOff;
+    const ROW_H = 38;
+    const PAD = 48;
+    const ROW_W = W - PAD * 2;
+    const LEFT = PAD;
+    const CX = W / 2;
 
-    // 헤더
-    const headerText = this.add.text(cx, startY, '순위    이름      점수', {
-      fontSize: '16px',
-      color: '#ffff00',
+    // 컬럼 x 좌표 (모두 W 기준 비율 계산)
+    // [순위 50px] [아이콘 44px] [← 이름 중앙 정렬 →] [점수 110px]
+    const COL_RANK       = LEFT + 40;
+    const COL_ICON       = LEFT + 72;
+    const ICON_R         = LEFT + 89;
+    const SCORE_L        = LEFT + ROW_W - 110;
+    const COL_NAME       = (ICON_R + SCORE_L) / 2;
+    const COL_SCORE      = LEFT + ROW_W - 6;
+
+    // ── 헤더 ────────────────────────────────────────────
+    const headerY = startY + 16;
+    const headerStyle = {
+      fontSize: '13px',
+      color: '#aaddff',
       fontStyle: 'bold',
       stroke: '#000',
-      strokeThickness: 4
-    }).setOrigin(0.5);
-    this.leaderboardTexts.push(headerText);
+      strokeThickness: 3,
+    };
+    this.leaderboardTexts.push(
+      this.add.text(COL_RANK, headerY, '순위', headerStyle).setOrigin(1, 0.5),
+      this.add.text(COL_NAME, headerY, '이름', headerStyle).setOrigin(0.5, 0.5),
+      this.add.text(COL_SCORE, headerY, '점수', headerStyle).setOrigin(1, 0.5),
+    );
+    const divider = this.add.rectangle(CX, headerY + 11, ROW_W, 1, 0xaaddff, 0.5);
+    this.leaderboardTexts.push(divider);
 
-    // 랭킹 데이터 표시
+    // ── 데이터 없음 ──────────────────────────────────────
     if (this.leaderboardData.length === 0) {
-      const noDataText = this.add.text(cx, startY + 50, '아직 랭킹이 없습니다\n\n첫 번째 플레이어가 되어보세요!', {
-        fontSize: '18px',
-        color: '#ccc',
-        stroke: '#000',
-        strokeThickness: 3,
-        align: 'center'
-      }).setOrigin(0.5);
+      const noDataText = this.add.text(
+        CX, startY + 80,
+        '아직 랭킹이 없습니다\n\n첫 번째 플레이어가 되어보세요!',
+        { fontSize: '18px', color: '#ccc', stroke: '#000', strokeThickness: 3, align: 'center' }
+      ).setOrigin(0.5);
       this.leaderboardTexts.push(noDataText);
       return;
     }
 
+    // ── 각 행 ────────────────────────────────────────────
     this.leaderboardData.forEach((entry, index) => {
-      const y = startY + 30 + (index * lineHeight);
+      const rowY = startY + 38 + index * ROW_H;
+      const cy = rowY + ROW_H / 2;
 
-      // 순위별 색상
-      let color = '#ffffff';
-      if (entry.rank === 1) color = '#FFD700'; // 금색
-      else if (entry.rank === 2) color = '#C0C0C0'; // 은색
-      else if (entry.rank === 3) color = '#CD7F32'; // 동색
+      // 행 배경
+      const bgColor =
+        entry.rank === 1 ? 0x4a3a00 :
+        entry.rank === 2 ? 0x2a2a35 :
+        entry.rank === 3 ? 0x3a2010 :
+        index % 2 === 0  ? 0x0a0a18 : 0x121220;
+      const bgAlpha = entry.rank <= 3 ? 0.85 : 0.55;
+      const bg = this.add.rectangle(CX, cy, ROW_W, ROW_H - 2, bgColor, bgAlpha);
+      this.leaderboardTexts.push(bg);
 
+      // 상위 3위 왼쪽 테두리 강조
+      if (entry.rank <= 3) {
+        const accentColor = entry.rank === 1 ? 0xFFD700 : entry.rank === 2 ? 0xC0C0C0 : 0xCD7F32;
+        const accent = this.add.rectangle(LEFT + 1, cy, 3, ROW_H - 2, accentColor, 1);
+        this.leaderboardTexts.push(accent);
+      }
 
-      const rankText = `${entry.rank}`.padEnd(8, ' ');
-      const nameText = entry.userName.padEnd(8, ' ');
-      const scoreText = entry.score.toString().padStart(6, ' ');
+      // 순위 색상
+      const rankColor =
+        entry.rank === 1 ? '#FFD700' :
+        entry.rank === 2 ? '#C0C0C0' :
+        entry.rank === 3 ? '#CD7F32' : '#aaaaaa';
 
-      const text = this.add.text(
-        cx,
-        y,
-        `${rankText}${nameText}${scoreText}`,
-        {
-          fontSize: '16px',
-          color: color,
-          fontFamily: 'monospace',
+      // 순위 (숫자만)
+      this.leaderboardTexts.push(
+        this.add.text(COL_RANK, cy, `${entry.rank}`, {
+          fontSize: '15px',
+          color: rankColor,
+          fontStyle: 'bold',
           stroke: '#000',
-          strokeThickness: 3
-        }
-      ).setOrigin(0.5);
+          strokeThickness: 3,
+        }).setOrigin(1, 0.5)
+      );
 
-      this.leaderboardTexts.push(text);
+      // 캐릭터 아이콘
+      const charDef = CHARACTERS.find(c => c.id === (entry.characterType ?? 'chibi')) ?? CHARACTERS[0];
+      this.leaderboardTexts.push(
+        this.add.image(COL_ICON, cy, charDef.imageKey).setDisplaySize(30, 30).setOrigin(0.5)
+      );
+
+      // 이름
+      this.leaderboardTexts.push(
+        this.add.text(COL_NAME, cy, entry.userName, {
+          fontSize: '15px',
+          color: entry.rank <= 3 ? '#ffffff' : '#dddddd',
+          fontFamily: 'monospace',
+          fontStyle: 'bold',
+          stroke: '#000',
+          strokeThickness: 3,
+        }).setOrigin(0.5, 0.5)
+      );
+
+      // 점수
+      this.leaderboardTexts.push(
+        this.add.text(COL_SCORE, cy, entry.score.toLocaleString(), {
+          fontSize: '15px',
+          color: entry.rank <= 3 ? rankColor : '#ffffff',
+          fontFamily: 'monospace',
+          fontStyle: 'bold',
+          stroke: '#000',
+          strokeThickness: 3,
+        }).setOrigin(1, 0.5)
+      );
     });
   }
 

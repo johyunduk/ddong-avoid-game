@@ -128,7 +128,7 @@ export const GUMI_DESC = {
 export const LEGACY_PARAMS = {
   feverDuration: 6000,        // 시작 피버 지속 시간 (ms)
   legacyInterval: 600,        // 레거시 모드 발동 점수 간격
-  legacyDuration: 6000,      // 레거시 모드 지속 시간 (ms)
+  legacyDuration: 4000,      // 레거시 모드 지속 시간 (ms)
   scoreExtra: 0.20,           // 레거시 모드 점수 추가분 (1.2배)
   burnChanceNormal: 0.40,     // 일반 불태우기 확률
   burnChanceLegacy: 0.90,     // 레거시 불태우기 확률
