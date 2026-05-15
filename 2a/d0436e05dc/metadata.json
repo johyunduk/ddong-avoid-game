@@ -106,6 +106,13 @@
       "context": "/2a/d0436e05dc/12/context.md",
       "content_hash": "/2a/d0436e05dc/12/content_hash.txt",
       "prompt": "/2a/d0436e05dc/12/prompt.txt"
+    },
+    {
+      "metadata": "/2a/d0436e05dc/13/metadata.json",
+      "transcript": "/2a/d0436e05dc/13/full.jsonl",
+      "context": "",
+      "content_hash": "/2a/d0436e05dc/13/content_hash.txt",
+      "prompt": ""
     }
   ],
   "token_usage": {
