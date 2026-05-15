@@ -1,0 +1,40 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "2ad0436e05dc",
+  "session_id": "a2be1f23-05e1-45c2-8de2-f503b32a9ef3",
+  "strategy": "manual-commit",
+  "created_at": "2026-05-15T09:45:57.872845Z",
+  "branch": "dev",
+  "checkpoints_count": 13,
+  "files_touched": [
+    "docs/deploy-char-season-reward.md",
+    "docs/deploy-extreme-char-leaderboard.md",
+    "src/scenes/GameScene.ts",
+    "src/scenes/LeaderboardScene.ts",
+    "src/utils/extremeCharBest.ts",
+    "src/utils/leaderboard.ts",
+    "supabase/functions/claim-season-reward/index.ts",
+    "supabase/functions/leaderboard-top/index.ts",
+    "supabase/migrations/20260515_leaderboard_extreme_char.sql"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "30d7dadbb4be",
+  "transcript_identifier_at_start": "8b0f79f6-4860-40e3-b9a7-b6e8026fb012",
+  "token_usage": {
+    "input_tokens": 244,
+    "cache_creation_tokens": 352081,
+    "cache_read_tokens": 16831871,
+    "output_tokens": 158514,
+    "api_call_count": 165
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-05-15T09:45:57.300332Z",
+    "agent_lines": 879,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 879,
+    "agent_percentage": 100
+  },
+  "transcript_path": ".claude/projects/-Users-johyunduk-Projects-ddong-avoid-game/a2be1f23-05e1-45c2-8de2-f503b32a9ef3.jsonl"
+}

@@ -3,7 +3,7 @@
   "checkpoint_id": "2ad0436e05dc",
   "strategy": "manual-commit",
   "branch": "dev",
-  "checkpoints_count": 2,
+  "checkpoints_count": 15,
   "files_touched": [
     "docs/deploy-char-season-reward.md",
     "docs/deploy-extreme-char-leaderboard.md",
@@ -113,13 +113,20 @@
       "context": "",
       "content_hash": "/2a/d0436e05dc/13/content_hash.txt",
       "prompt": ""
+    },
+    {
+      "metadata": "/2a/d0436e05dc/14/metadata.json",
+      "transcript": "/2a/d0436e05dc/14/full.jsonl",
+      "context": "/2a/d0436e05dc/14/context.md",
+      "content_hash": "/2a/d0436e05dc/14/content_hash.txt",
+      "prompt": "/2a/d0436e05dc/14/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 272,
-    "cache_creation_tokens": 486205,
-    "cache_read_tokens": 17207336,
-    "output_tokens": 147735,
-    "api_call_count": 206
+    "input_tokens": 516,
+    "cache_creation_tokens": 838286,
+    "cache_read_tokens": 34039207,
+    "output_tokens": 306249,
+    "api_call_count": 371
   }
 }
