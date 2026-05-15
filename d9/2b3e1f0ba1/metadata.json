@@ -23,6 +23,13 @@
       "context": "",
       "content_hash": "/d9/2b3e1f0ba1/1/content_hash.txt",
       "prompt": ""
+    },
+    {
+      "metadata": "/d9/2b3e1f0ba1/2/metadata.json",
+      "transcript": "/d9/2b3e1f0ba1/2/full.jsonl",
+      "context": "",
+      "content_hash": "/d9/2b3e1f0ba1/2/content_hash.txt",
+      "prompt": ""
     }
   ]
 }
