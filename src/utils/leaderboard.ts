@@ -144,6 +144,10 @@ export async function submitScore(
   return data as SubmitScoreResponse;
 }
 
+// 리더보드 메모리 캐시 (세션 내 30초 유지)
+const _lbCache = new Map<string, { data: LeaderboardResponse; ts: number }>();
+const _LB_TTL = 30_000;
+
 /**
  * 리더보드 조회
  */
@@ -152,6 +156,12 @@ export async function getLeaderboard(
   limit: number = 100,
   characterType?: string
 ): Promise<LeaderboardResponse> {
+  const cacheKey = `${difficulty}:${limit}:${characterType ?? ''}`;
+  const cached = _lbCache.get(cacheKey);
+  if (cached && Date.now() - cached.ts < _LB_TTL) {
+    return cached.data;
+  }
+
   const body: Record<string, unknown> = { difficulty, limit };
   if (characterType) body.characterType = characterType;
 
@@ -163,6 +173,7 @@ export async function getLeaderboard(
     throw new Error(error.message || 'Failed to fetch leaderboard');
   }
 
+  _lbCache.set(cacheKey, { data: data as LeaderboardResponse, ts: Date.now() });
   return data as LeaderboardResponse;
 }
 

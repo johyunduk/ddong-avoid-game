@@ -92,15 +92,12 @@ Deno.serve(async (req: Request) => {
     const yearMonth = getCurrentYearMonth();
     const prevYearMonth = getPrevYearMonth(yearMonth);
 
-    // EXTREME 캐릭터 필터: leaderboard_extreme_char 테이블 조회 후 조기 반환
+    // EXTREME 캐릭터 필터: RPC로 리더보드 + 내 순위 단일 쿼리
     if (characterType && difficulty === 'extreme') {
-      const { data: charData, error: charError } = await supabaseAdmin
-        .from('leaderboard_extreme_char')
-        .select('user_id, score, character_type, profiles!inner(initials)')
-        .eq('year_month', yearMonth)
-        .eq('character_type', characterType)
-        .order('score', { ascending: false })
-        .limit(safeLimit);
+      const { data: charData, error: charError } = await supabaseAdmin.rpc(
+        'get_extreme_char_leaderboard_with_rank',
+        { p_year_month: yearMonth, p_character_type: characterType, p_limit: safeLimit, p_user_id: currentUserId }
+      );
 
       if (charError) {
         console.error('Extreme char leaderboard error:', charError);
@@ -110,45 +107,40 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      const charEntries = (charData ?? []).map((entry, index) => ({
-        userId: entry.user_id,
-        userName: (entry.profiles as { initials: string | null }).initials ?? '???',
-        score: entry.score,
-        rank: index + 1,
-        characterType: (entry as Record<string, unknown>).character_type ?? 'chibi',
+      const rows = charData ?? [];
+      const charEntries = rows.map((r: { user_id: string; score: number; character_type: string; initials: string | null; rank: number }) => ({
+        userId: r.user_id,
+        userName: r.initials ?? '???',
+        score: r.score,
+        rank: r.rank,
+        characterType: r.character_type ?? 'chibi',
       }));
 
-      // 인증된 유저의 직전 달 캐릭터 보드 rank + 보상 상태 계산
-      let charCurrentUserRank: { rank: number; score: number } | null = null;
+      const myRow = rows.find((r: { is_mine: boolean }) => r.is_mine);
+      const charCurrentUserRank = myRow ? { rank: myRow.rank, score: myRow.score } : null;
+
       let charPrevSeasonReward: {
         yearMonth: string; rank: number | null; skorAwarded: number; alreadyClaimed: boolean;
       } | null = null;
 
       if (currentUserId) {
-        const [userPrevResult, claimResult] = await Promise.all([
-          supabaseAdmin.from('leaderboard_extreme_char').select('score')
-            .eq('user_id', currentUserId).eq('year_month', prevYearMonth)
-            .eq('character_type', characterType).single(),
+        const [prevRankResult, claimResult] = await Promise.all([
+          supabaseAdmin.rpc('get_extreme_char_leaderboard_with_rank', {
+            p_year_month: prevYearMonth, p_character_type: characterType,
+            p_limit: 0, p_user_id: currentUserId,
+          }),
           supabaseAdmin.from('season_reward_history_char').select('id')
             .eq('user_id', currentUserId).eq('year_month', prevYearMonth)
             .eq('character_type', characterType).single(),
         ]);
 
-        const userPrevEntry = userPrevResult.data;
-        if (userPrevEntry) {
-          const { count: above } = await supabaseAdmin
-            .from('leaderboard_extreme_char')
-            .select('*', { count: 'exact', head: true })
-            .eq('year_month', prevYearMonth).eq('character_type', characterType)
-            .gt('score', userPrevEntry.score);
-
-          const rank = (above ?? 0) + 1;
+        const prevMyRow = (prevRankResult.data ?? []).find((r: { is_mine: boolean }) => r.is_mine);
+        if (prevMyRow) {
           const CHAR_REWARDS: Record<number, number> = { 1: 5000, 2: 3000, 3: 1500 };
-          charCurrentUserRank = { rank, score: userPrevEntry.score };
           charPrevSeasonReward = {
             yearMonth: prevYearMonth,
-            rank,
-            skorAwarded: CHAR_REWARDS[rank] ?? 0,
+            rank: prevMyRow.rank,
+            skorAwarded: CHAR_REWARDS[prevMyRow.rank] ?? 0,
             alreadyClaimed: !!claimResult.data,
           };
         }
@@ -162,26 +154,18 @@ Deno.serve(async (req: Request) => {
           season: calcSeason(yearMonth),
           leaderboard: charEntries,
           currentUserRank: charCurrentUserRank,
-          totalEntries: charEntries.length,
+          totalEntries: charEntries.filter((e: { rank: number }) => e.rank <= safeLimit).length,
           prevSeasonReward: charPrevSeasonReward,
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // 현재 시즌 리더보드 조회 (profiles와 JOIN하여 이니셜 포함)
-    const { data: leaderboard, error: leaderboardError } = await supabaseAdmin
-      .from('leaderboard')
-      .select(`
-        user_id,
-        score,
-        character_type,
-        profiles!inner(initials)
-      `)
-      .eq('difficulty', difficulty)
-      .eq('year_month', yearMonth)
-      .order('score', { ascending: false })
-      .limit(safeLimit);
+    // 현재 시즌 리더보드 + 내 순위를 RPC 단일 쿼리로 조회
+    const { data: leaderboardRaw, error: leaderboardError } = await supabaseAdmin.rpc(
+      'get_leaderboard_with_rank',
+      { p_difficulty: difficulty, p_year_month: yearMonth, p_limit: safeLimit, p_user_id: currentUserId }
+    );
 
     if (leaderboardError) {
       console.error('Leaderboard query error:', leaderboardError);
@@ -191,20 +175,25 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // 응답 형식 변환
-    const entries = (leaderboard ?? []).map((entry, index) => ({
-      userId: entry.user_id,
-      userName: (entry.profiles as { initials: string | null }).initials ?? '???',
-      score: entry.score,
-      rank: index + 1,
-      characterType: (entry as Record<string, unknown>).character_type ?? 'chibi',
-    }));
+    const rows = leaderboardRaw ?? [];
+    const entries = rows
+      .filter((r: { rank: number }) => r.rank <= safeLimit)
+      .map((r: { user_id: string; score: number; character_type: string; initials: string | null; rank: number }) => ({
+        userId: r.user_id,
+        userName: r.initials ?? '???',
+        score: r.score,
+        rank: r.rank,
+        characterType: r.character_type ?? 'chibi',
+      }));
 
     const totalEntries = entries.length;
 
-    // 현재 유저의 이번 시즌 순위 조회
-    let currentUserRank: { rank: number; score: number } | null = null;
-    // 직전 시즌 보상 상태 (로그인 유저에게만 제공)
+    // 내 순위는 RPC 결과에 포함됨 (is_mine 플래그)
+    const myRow = rows.find((r: { is_mine: boolean }) => r.is_mine);
+    let currentUserRank: { rank: number; score: number } | null = myRow
+      ? { rank: myRow.rank, score: myRow.score }
+      : null;
+
     let prevSeasonReward: {
       yearMonth: string;
       rank: number | null;
@@ -212,66 +201,32 @@ Deno.serve(async (req: Request) => {
       alreadyClaimed: boolean;
     } | null = null;
 
-    if (currentUserId) {
-      // currentUserRank 조회와 prevSeason 보상 조회는 독립적이므로 병렬 실행
-      const [userEntryResult, claimedResult, userPrevEntryResult] = await Promise.all([
-        // 이번 시즌 점수
-        supabaseAdmin.from('leaderboard').select('score')
-          .eq('user_id', currentUserId).eq('difficulty', difficulty).eq('year_month', yearMonth).single(),
-        // 직전 시즌 수령 이력 (easy 제외)
-        difficulty !== 'easy'
-          ? supabaseAdmin.from('season_reward_history').select('skor_awarded, rank')
-              .eq('year_month', prevYearMonth).eq('user_id', currentUserId).eq('difficulty', difficulty).single()
-          : Promise.resolve({ data: null, error: null }),
-        // 직전 시즌 유저 점수 (easy 제외, 미수령 시 순위 계산용)
-        difficulty !== 'easy'
-          ? supabaseAdmin.from('leaderboard').select('score')
-              .eq('user_id', currentUserId).eq('difficulty', difficulty).eq('year_month', prevYearMonth).single()
-          : Promise.resolve({ data: null, error: null }),
+    if (currentUserId && difficulty !== 'easy') {
+      // 직전 시즌: 수령 이력 조회 + 미수령 시 순위 계산을 병렬로
+      const [claimedResult, prevRankResult] = await Promise.all([
+        supabaseAdmin.from('season_reward_history').select('skor_awarded, rank')
+          .eq('year_month', prevYearMonth).eq('user_id', currentUserId).eq('difficulty', difficulty).single(),
+        supabaseAdmin.rpc('get_user_season_rank', {
+          p_difficulty: difficulty, p_year_month: prevYearMonth, p_user_id: currentUserId,
+        }),
       ]);
 
-      // 이번 시즌 순위
-      const userEntry = userEntryResult.data;
-      if (userEntry) {
-        const { count: higherCount } = await supabaseAdmin
-          .from('leaderboard')
-          .select('*', { count: 'exact', head: true })
-          .eq('difficulty', difficulty)
-          .eq('year_month', yearMonth)
-          .gt('score', userEntry.score);
-
-        currentUserRank = { rank: (higherCount ?? 0) + 1, score: userEntry.score };
-      }
-
-      // 직전 시즌 보상 상태
-      if (difficulty !== 'easy') {
-        const claimed = claimedResult.data;
-        if (claimed) {
-          prevSeasonReward = {
-            yearMonth: prevYearMonth,
-            rank: claimed.rank,
-            skorAwarded: claimed.skor_awarded,
-            alreadyClaimed: true,
-          };
-        } else {
-          const userPrevEntry = userPrevEntryResult.data;
-          if (userPrevEntry) {
-            // DB COUNT로 직전 시즌 순위 계산
-            const [{ count: prevHigherCount }, { count: prevTotal }] = await Promise.all([
-              supabaseAdmin.from('leaderboard').select('*', { count: 'exact', head: true })
-                .eq('difficulty', difficulty).eq('year_month', prevYearMonth).gt('score', userPrevEntry.score),
-              supabaseAdmin.from('leaderboard').select('*', { count: 'exact', head: true })
-                .eq('difficulty', difficulty).eq('year_month', prevYearMonth),
-            ]);
-            const rank = (prevHigherCount ?? 0) + 1;
-            prevSeasonReward = {
-              yearMonth: prevYearMonth,
-              rank,
-              skorAwarded: getReward(difficulty, rank, prevTotal ?? 0),
-              alreadyClaimed: false,
-            };
-          }
-        }
+      const claimed = claimedResult.data;
+      if (claimed) {
+        prevSeasonReward = {
+          yearMonth: prevYearMonth,
+          rank: claimed.rank,
+          skorAwarded: claimed.skor_awarded,
+          alreadyClaimed: true,
+        };
+      } else if (prevRankResult.data?.[0]) {
+        const { rank, score: _score, total } = prevRankResult.data[0];
+        prevSeasonReward = {
+          yearMonth: prevYearMonth,
+          rank,
+          skorAwarded: getReward(difficulty, rank, total ?? 0),
+          alreadyClaimed: false,
+        };
       }
     }
 
