@@ -1,0 +1,21 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "5e1361fbf06d",
+  "strategy": "manual-commit",
+  "branch": "dev",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src/config/abilityParams.ts",
+    "src/scenes/LeaderboardScene.ts",
+    "supabase/functions/leaderboard-submit/index.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/5e/1361fbf06d/0/metadata.json",
+      "transcript": "/5e/1361fbf06d/0/full.jsonl",
+      "context": "",
+      "content_hash": "/5e/1361fbf06d/0/content_hash.txt",
+      "prompt": ""
+    }
+  ]
+}
