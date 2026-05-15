@@ -217,6 +217,14 @@ Deno.serve(async (req: Request) => {
     const yearMonth = getCurrentYearMonth();
     const season = calcSeason(yearMonth);
 
+    const validCharacterTypes = [
+      'chibi', 'mugi', 'gumi', 'knight',
+      'log', 'swap', 'sum', 'fork', 'seed', 'session', 'branch', 'hook', 'socket', 'index',
+      'hacker', 'miner', 'maehwa', 'archieve', 'glitch', 'noise',
+      'sentinel', 'legacy',
+    ];
+    const safeCharacterType = validCharacterTypes.includes(characterType) ? characterType : 'chibi';
+
     // 현재 시즌 기존 점수 조회
     const { data: existing } = await supabaseAdmin
       .from('leaderboard')
@@ -231,14 +239,6 @@ Deno.serve(async (req: Request) => {
 
     // 최고 점수만 저장 (upsert)
     if (isNewRecord) {
-      const validCharacterTypes = [
-        'chibi', 'mugi', 'gumi', 'knight',
-        'log', 'swap', 'sum', 'fork', 'seed', 'session', 'branch', 'hook', 'socket', 'index',
-        'hacker', 'miner', 'maehwa', 'archieve', 'glitch', 'noise',
-        'sentinel', 'legacy',
-      ];
-      const safeCharacterType = validCharacterTypes.includes(characterType) ? characterType : 'chibi';
-
       const { error: upsertError } = await supabaseAdmin
         .from('leaderboard')
         .upsert(
@@ -260,6 +260,33 @@ Deno.serve(async (req: Request) => {
           JSON.stringify({ error: 'Failed to save score' }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
+      }
+    }
+
+    // EXTREME: 캐릭터별 베스트 스코어 별도 저장 (다른 캐릭터 점수도 독립적으로 기록)
+    if (difficulty === 'extreme') {
+      const { data: existingChar } = await supabaseAdmin
+        .from('leaderboard_extreme_char')
+        .select('score')
+        .eq('user_id', user.id)
+        .eq('year_month', yearMonth)
+        .eq('character_type', safeCharacterType)
+        .single();
+
+      if (!existingChar || existingChar.score < score) {
+        await supabaseAdmin
+          .from('leaderboard_extreme_char')
+          .upsert(
+            {
+              user_id: user.id,
+              year_month: yearMonth,
+              character_type: safeCharacterType,
+              score,
+              season,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: 'user_id,year_month,character_type' }
+          );
       }
     }
 
