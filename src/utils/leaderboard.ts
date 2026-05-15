@@ -149,10 +149,14 @@ export async function submitScore(
  */
 export async function getLeaderboard(
   difficulty: Difficulty,
-  limit: number = 100
+  limit: number = 100,
+  characterType?: string
 ): Promise<LeaderboardResponse> {
+  const body: Record<string, unknown> = { difficulty, limit };
+  if (characterType) body.characterType = characterType;
+
   const { data, error } = await supabase.functions.invoke('leaderboard-top', {
-    body: { difficulty, limit },
+    body,
   });
 
   if (error) {
@@ -231,6 +235,86 @@ export function getCachedClaimAmount(yearMonth: string, difficulty: string): num
   const cache = _loadClaimedCache();
   const key = `${yearMonth}_${difficulty}`;
   return key in cache ? cache[key] : null;
+}
+
+// ── 캐릭터별 보상 캐시 (localStorage) ────────────────────────────────────
+
+const _CHAR_CLAIMS_KEY = 'charRewardClaims';
+const _CHAR_CLAIMS_SIG_KEY = 'charRewardClaimsSig';
+const _CHAR_CLAIMS_SALT = 'ddong-char-reward-v1';
+
+function _signCharClaims(claims: Record<string, number>): string {
+  const str = Object.entries(claims)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([k, v]) => `${k}:${v}`)
+    .join(',') + _CHAR_CLAIMS_SALT;
+  return _djb2(str);
+}
+
+function _loadCharClaimedCache(): Record<string, number> {
+  try {
+    const raw = localStorage.getItem(_CHAR_CLAIMS_KEY);
+    const sig = localStorage.getItem(_CHAR_CLAIMS_SIG_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, number>;
+    if (sig && sig !== _signCharClaims(parsed)) {
+      localStorage.removeItem(_CHAR_CLAIMS_KEY);
+      localStorage.removeItem(_CHAR_CLAIMS_SIG_KEY);
+      return {};
+    }
+    return parsed;
+  } catch {
+    return {};
+  }
+}
+
+function _saveCharClaimedCache(claims: Record<string, number>): void {
+  const now = new Date();
+  const cur = getCurrentYearMonth();
+  const prevDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
+  const prev = `${prevDate.getUTCFullYear()}-${String(prevDate.getUTCMonth() + 1).padStart(2, '0')}`;
+  const keep = new Set([cur, prev]);
+  const pruned = Object.fromEntries(
+    Object.entries(claims).filter(([k]) => keep.has(k.slice(0, 7)))
+  );
+  localStorage.setItem(_CHAR_CLAIMS_KEY, JSON.stringify(pruned));
+  localStorage.setItem(_CHAR_CLAIMS_SIG_KEY, _signCharClaims(pruned));
+}
+
+/**
+ * 해당 달/캐릭터의 보상을 이미 수령했는지 localStorage에서 확인
+ * @returns 수령한 SKOR 양 (없으면 null)
+ */
+export function getCachedCharClaimAmount(yearMonth: string, charId: string): number | null {
+  const cache = _loadCharClaimedCache();
+  const key = `${yearMonth}_${charId}`;
+  return key in cache ? cache[key] : null;
+}
+
+/**
+ * 직전 달 캐릭터별 보상 수령
+ */
+export async function claimCharacterReward(characterType: string): Promise<ClaimRewardResponse> {
+  const { data, error } = await supabase.functions.invoke('claim-season-reward', {
+    body: { characterType },
+  });
+
+  if (error) {
+    throw new Error(error.message || 'Failed to claim character reward');
+  }
+
+  const result = data as ClaimRewardResponse;
+
+  if (result.success && result.skorAwarded && result.skorAwarded > 0) {
+    const now = new Date();
+    const prevDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
+    const prevYearMonth = `${prevDate.getUTCFullYear()}-${String(prevDate.getUTCMonth() + 1).padStart(2, '0')}`;
+    const cache = _loadCharClaimedCache();
+    cache[`${prevYearMonth}_${characterType}`] = result.skorAwarded;
+    _saveCharClaimedCache(cache);
+  }
+
+  return result;
 }
 
 /**

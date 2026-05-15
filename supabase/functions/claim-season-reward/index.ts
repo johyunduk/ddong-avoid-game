@@ -42,23 +42,54 @@ function getPrevYearMonth(current: string): string {
   return `${prev.getUTCFullYear()}-${String(prev.getUTCMonth() + 1).padStart(2, '0')}`;
 }
 
+/** user_skor 잔액 + 주간 집계 업데이트 (캐릭터/난이도 보상 공통) */
+async function updateUserSkor(
+  // deno-lint-ignore no-explicit-any
+  supabaseAdmin: any,
+  userId: string,
+  reward: number
+): Promise<number> {
+  const { data: existingSkor } = await supabaseAdmin
+    .from('user_skor')
+    .select('balance, weekly_earned, week_start')
+    .eq('user_id', userId)
+    .single();
+
+  const newBalance = Math.floor((existingSkor?.balance ?? 0) + reward);
+  const now = new Date();
+  const dayOfWeek = now.getUTCDay();
+  const daysFromMonday = (dayOfWeek + 6) % 7;
+  const weekStart = new Date(Date.UTC(
+    now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - daysFromMonday
+  ));
+  const weekStartStr = weekStart.toISOString().slice(0, 10);
+  const isSameWeek = existingSkor?.week_start === weekStartStr;
+  const newWeeklyEarned = isSameWeek
+    ? Math.floor((existingSkor?.weekly_earned ?? 0) + reward)
+    : Math.floor(reward);
+
+  await supabaseAdmin.from('user_skor').upsert({
+    user_id: userId,
+    balance: newBalance,
+    weekly_earned: newWeeklyEarned,
+    week_start: weekStartStr,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: 'user_id' });
+
+  return newBalance;
+}
+
+const CHAR_REWARDS: Record<number, number> = { 1: 5000, 2: 3000, 3: 1500 };
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
   try {
-    const { difficulty } = await req.json();
+    const { difficulty, characterType } = await req.json();
 
-    const validDifficulties = ['normal', 'hard', 'extreme', 'physical'];
-    if (!validDifficulties.includes(difficulty)) {
-      return new Response(
-        JSON.stringify({ error: 'Invalid difficulty' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // JWT 인증
+    // JWT 인증 (공통)
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
       return new Response(
@@ -87,6 +118,88 @@ Deno.serve(async (req: Request) => {
 
     const currentYearMonth = getCurrentYearMonth();
     const prevYearMonth = getPrevYearMonth(currentYearMonth);
+
+    // ── 캐릭터별 보상 수령 ─────────────────────────────────────────────────
+    if (characterType) {
+      const { data: existingCharReward } = await supabaseAdmin
+        .from('season_reward_history_char')
+        .select('skor_awarded, rank')
+        .eq('year_month', prevYearMonth)
+        .eq('user_id', user.id)
+        .eq('character_type', characterType)
+        .single();
+
+      if (existingCharReward) {
+        return new Response(
+          JSON.stringify({
+            success: true, alreadyClaimed: true,
+            rank: existingCharReward.rank, skorAwarded: existingCharReward.skor_awarded,
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const { data: userPrevEntry } = await supabaseAdmin
+        .from('leaderboard_extreme_char')
+        .select('score')
+        .eq('user_id', user.id).eq('year_month', prevYearMonth)
+        .eq('character_type', characterType).single();
+
+      if (!userPrevEntry) {
+        return new Response(
+          JSON.stringify({ success: true, alreadyClaimed: false, rank: null, skorAwarded: 0 }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const { count: above } = await supabaseAdmin
+        .from('leaderboard_extreme_char')
+        .select('*', { count: 'exact', head: true })
+        .eq('year_month', prevYearMonth).eq('character_type', characterType)
+        .gt('score', userPrevEntry.score);
+
+      const rank = (above ?? 0) + 1;
+      const reward = CHAR_REWARDS[rank] ?? 0;
+
+      if (reward === 0) {
+        return new Response(
+          JSON.stringify({ success: true, alreadyClaimed: false, rank, skorAwarded: 0 }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const { error: charHistoryError } = await supabaseAdmin
+        .from('season_reward_history_char')
+        .insert({ year_month: prevYearMonth, user_id: user.id, character_type: characterType, rank, skor_awarded: reward });
+
+      if (charHistoryError) {
+        if (charHistoryError.code === '23505') {
+          return new Response(
+            JSON.stringify({ success: true, alreadyClaimed: true, rank, skorAwarded: reward }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        return new Response(
+          JSON.stringify({ error: 'Failed to record reward' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const newBalance = await updateUserSkor(supabaseAdmin, user.id, reward);
+      return new Response(
+        JSON.stringify({ success: true, alreadyClaimed: false, rank, skorAwarded: reward, newBalance }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    // ── 기존 난이도별 보상 수령 ──────────────────────────────────────────────
+
+    const validDifficulties = ['normal', 'hard', 'extreme', 'physical'];
+    if (!validDifficulties.includes(difficulty)) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid difficulty' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     // 보상 수령 기간 검증: 직전 달 기록만 수령 가능
     // (새 달이 되면 이전 이전 달은 자동으로 접근 불가)
@@ -168,35 +281,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // user_skor 잔액 증가
-    const { data: existingSkor } = await supabaseAdmin
-      .from('user_skor')
-      .select('balance, weekly_earned, week_start')
-      .eq('user_id', user.id)
-      .single();
-
-    const newBalance = Math.floor((existingSkor?.balance ?? 0) + reward);
-
-    // 주간 집계 처리
-    const now = new Date();
-    const dayOfWeek = now.getUTCDay();
-    const daysFromMonday = (dayOfWeek + 6) % 7;
-    const weekStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - daysFromMonday));
-    const weekStartStr = weekStart.toISOString().slice(0, 10);
-    const isSameWeek = existingSkor?.week_start === weekStartStr;
-    const newWeeklyEarned = isSameWeek
-      ? Math.floor((existingSkor?.weekly_earned ?? 0) + reward)
-      : Math.floor(reward);
-
-    await supabaseAdmin
-      .from('user_skor')
-      .upsert({
-        user_id: user.id,
-        balance: newBalance,
-        weekly_earned: newWeeklyEarned,
-        week_start: weekStartStr,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'user_id' });
+    const newBalance = await updateUserSkor(supabaseAdmin, user.id, reward);
 
     return new Response(
       JSON.stringify({

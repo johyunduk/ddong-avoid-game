@@ -16,6 +16,7 @@ import { MAEHWA_PARAMS } from '../config/abilityParams';
 import { POOP_CONFIG } from '../config/poop';
 import { getHighScore, updateHighScore } from '../utils/localStorage';
 import { submitScore, getUserInitials, setUserInitials, startGameSession } from '../utils/leaderboard';
+import { getExtremeCharBest, updateExtremeCharBest } from '../utils/extremeCharBest';
 import { submitSkor, type SkorSubmitResponse } from '../utils/skor';
 import { getSafeSelectedCharacter, getCharacterDef, getDuplicateCount, getAwakeningLevel } from '../utils/character';
 import { getSafeSelectedWallpaper, getWallpaperDef } from '../utils/wallpaper';
@@ -40,6 +41,8 @@ export default class GameScene extends BaseScene {
   protected scoreText!: Phaser.GameObjects.Text;
   private highScore: number = 0;
   protected highScoreText!: Phaser.GameObjects.Text;
+  private charHighScore: number = 0;
+  private charHighScoreText?: Phaser.GameObjects.Text;
   protected gameOver: boolean = false;
   private spawnTimer!: Phaser.Time.TimerEvent;
   protected difficultyLevel: number = 2;
@@ -263,8 +266,10 @@ export default class GameScene extends BaseScene {
     // rAF 체크 두 기준점을 동시에 설정 — preload 시간 불일치 방지
     this.resetCheatCheckpoints();
 
-    // 난이도별 최고 점수 로드
     this.highScore = getHighScore(this.scoreDifficulty);
+    this.charHighScore = this.scoreDifficulty === Difficulty.EXTREME
+      ? getExtremeCharBest(this.selectedCharId)
+      : 0;
 
     // 배경 이미지: 선택된 배경화면 우선, 없으면 난이도별 기본
     const wpDefForBg = this.selectedWpId ? getWallpaperDef(this.selectedWpId) : null;
@@ -441,6 +446,16 @@ export default class GameScene extends BaseScene {
       stroke: '#000000',
       strokeThickness: 3
     }).setOrigin(1, 0).setDepth(10);
+
+    if (this.scoreDifficulty === Difficulty.EXTREME) {
+      this.charHighScoreText = this.add.text(W - 16, hudTextY + 22, `캐릭터: ${this.charHighScore}`, {
+        fontSize: '14px',
+        color: '#aaddff',
+        fontStyle: 'bold',
+        stroke: '#000000',
+        strokeThickness: 3
+      }).setOrigin(1, 0).setDepth(10);
+    }
 
     // 조작 안내 (3초 후 자동으로 페이드아웃)
     const hintText = this.add.text(cx, 58, '← → 키로 이동', {
@@ -847,6 +862,11 @@ export default class GameScene extends BaseScene {
       if (this.score > this.highScore) {
         this.highScore = this.score;
         this.highScoreText.setText(`최고: ${this.highScore}`);
+      }
+
+      if (this.charHighScoreText && this.score > this.charHighScore) {
+        this.charHighScore = this.score;
+        this.charHighScoreText.setText(`캐릭터: ${this.charHighScore}`);
       }
 
       // 점수 증가 범위 내에서 건너뛴 생성 포인트를 확인
@@ -1456,11 +1476,12 @@ export default class GameScene extends BaseScene {
       무지개똥: this.rainbowCollected,
     });
 
-    // 최고 점수 업데이트 및 갱신 여부 확인
     const isNewRecord = updateHighScore(this.scoreDifficulty, this.score);
+    const isCharNewRecord = this.scoreDifficulty === Difficulty.EXTREME
+      && this.score > this.charHighScore;
 
     // 게임 오버 UI 표시 (비동기 처리)
-    this.showGameOverUI(isNewRecord);
+    this.showGameOverUI(isNewRecord, isCharNewRecord);
   }
 
   private handleGoldCollected(poop: Phaser.Physics.Arcade.Sprite) {
@@ -1488,7 +1509,7 @@ export default class GameScene extends BaseScene {
   /**
    * 게임 오버 UI 표시 및 랭킹 시스템 연동
    */
-  protected async showGameOverUI(isNewRecord: boolean) {
+  protected async showGameOverUI(isNewRecord: boolean, isCharNewRecord: boolean = false) {
     const W = this.scale.width;
     const H = this.scale.height;
     const cx = W / 2;
@@ -1567,8 +1588,42 @@ export default class GameScene extends BaseScene {
         strokeThickness: 3
       }).setOrigin(0.5).setDepth(200);
 
+      // EXTREME 비신기록: 캐릭터 최고 갱신 시 저장된 이니셜로 조용히 제출
+      if (isCharNewRecord) {
+        const savedInitials = getUserInitials();
+        if (savedInitials) {
+          this.submitScoreForCharRanking(savedInitials);
+        }
+      }
+
       // 재시작 안내
       this.showRestartButton(false);
+    }
+  }
+
+  private async submitScoreForCharRanking(initials: string) {
+    try {
+      const sessionId = await this.sessionPromise;
+      await submitScore(
+        this.score,
+        this.scoreDifficulty,
+        initials,
+        {
+          gameStartTime: this.gameStartTime,
+          gameEndTime: realNow(),
+          goldCollected: this.goldCollected,
+          diamondCollected: this.diamondCollected,
+          topazCollected: this.topazCollected,
+          rainbowCollected: this.rainbowCollected,
+          collectBonusTotal: this.collectBonusTotal,
+          abilityBonusTotal: this.abilityBonusTotal,
+        },
+        this.selectedCharId,
+        sessionId
+      );
+      updateExtremeCharBest(this.selectedCharId, this.score);
+    } catch {
+      // 캐릭터 랭킹 제출 실패 시 UX 영향 없이 무시
     }
   }
 
@@ -1727,6 +1782,10 @@ export default class GameScene extends BaseScene {
         );
 
         submittingText.destroy();
+
+        if (this.scoreDifficulty === Difficulty.EXTREME) {
+          updateExtremeCharBest(this.selectedCharId, this.score);
+        }
 
         // 순위 표시
         if (result.rank !== null) {

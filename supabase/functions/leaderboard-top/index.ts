@@ -55,7 +55,7 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { difficulty, limit: limitParam } = await req.json().catch(() => ({}));
+    const { difficulty, limit: limitParam, characterType } = await req.json().catch(() => ({}));
     const limit = parseInt(limitParam ?? '100', 10);
 
     // 입력 검증
@@ -91,6 +91,83 @@ Deno.serve(async (req: Request) => {
 
     const yearMonth = getCurrentYearMonth();
     const prevYearMonth = getPrevYearMonth(yearMonth);
+
+    // EXTREME 캐릭터 필터: leaderboard_extreme_char 테이블 조회 후 조기 반환
+    if (characterType && difficulty === 'extreme') {
+      const { data: charData, error: charError } = await supabaseAdmin
+        .from('leaderboard_extreme_char')
+        .select('user_id, score, character_type, profiles!inner(initials)')
+        .eq('year_month', yearMonth)
+        .eq('character_type', characterType)
+        .order('score', { ascending: false })
+        .limit(safeLimit);
+
+      if (charError) {
+        console.error('Extreme char leaderboard error:', charError);
+        return new Response(
+          JSON.stringify({ error: 'Failed to fetch character leaderboard' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const charEntries = (charData ?? []).map((entry, index) => ({
+        userId: entry.user_id,
+        userName: (entry.profiles as { initials: string | null }).initials ?? '???',
+        score: entry.score,
+        rank: index + 1,
+        characterType: (entry as Record<string, unknown>).character_type ?? 'chibi',
+      }));
+
+      // 인증된 유저의 직전 달 캐릭터 보드 rank + 보상 상태 계산
+      let charCurrentUserRank: { rank: number; score: number } | null = null;
+      let charPrevSeasonReward: {
+        yearMonth: string; rank: number | null; skorAwarded: number; alreadyClaimed: boolean;
+      } | null = null;
+
+      if (currentUserId) {
+        const [userPrevResult, claimResult] = await Promise.all([
+          supabaseAdmin.from('leaderboard_extreme_char').select('score')
+            .eq('user_id', currentUserId).eq('year_month', prevYearMonth)
+            .eq('character_type', characterType).single(),
+          supabaseAdmin.from('season_reward_history_char').select('id')
+            .eq('user_id', currentUserId).eq('year_month', prevYearMonth)
+            .eq('character_type', characterType).single(),
+        ]);
+
+        const userPrevEntry = userPrevResult.data;
+        if (userPrevEntry) {
+          const { count: above } = await supabaseAdmin
+            .from('leaderboard_extreme_char')
+            .select('*', { count: 'exact', head: true })
+            .eq('year_month', prevYearMonth).eq('character_type', characterType)
+            .gt('score', userPrevEntry.score);
+
+          const rank = (above ?? 0) + 1;
+          const CHAR_REWARDS: Record<number, number> = { 1: 5000, 2: 3000, 3: 1500 };
+          charCurrentUserRank = { rank, score: userPrevEntry.score };
+          charPrevSeasonReward = {
+            yearMonth: prevYearMonth,
+            rank,
+            skorAwarded: CHAR_REWARDS[rank] ?? 0,
+            alreadyClaimed: !!claimResult.data,
+          };
+        }
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          difficulty,
+          yearMonth,
+          season: calcSeason(yearMonth),
+          leaderboard: charEntries,
+          currentUserRank: charCurrentUserRank,
+          totalEntries: charEntries.length,
+          prevSeasonReward: charPrevSeasonReward,
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     // 현재 시즌 리더보드 조회 (profiles와 JOIN하여 이니셜 포함)
     const { data: leaderboard, error: leaderboardError } = await supabaseAdmin
