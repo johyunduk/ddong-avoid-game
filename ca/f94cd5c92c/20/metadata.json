@@ -1,0 +1,38 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "caf94cd5c92c",
+  "session_id": "dbb1e377-fed5-4006-a785-2d4784041a2c",
+  "strategy": "manual-commit",
+  "created_at": "2026-05-15T13:51:21.163946Z",
+  "branch": "dev",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "docs/story/main/README.md",
+    "docs/story/main/characters.md",
+    "docs/story/main/seasons.md",
+    "docs/story/main/themes.md",
+    "docs/story/main/worldbuilding.md"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "90e82ed9f7ae",
+  "transcript_identifier_at_start": "8728bac4-c7db-460e-9aee-8f31bede9957",
+  "checkpoint_transcript_start": 591,
+  "transcript_lines_at_start": 591,
+  "token_usage": {
+    "input_tokens": 218,
+    "cache_creation_tokens": 297718,
+    "cache_read_tokens": 13699002,
+    "output_tokens": 86352,
+    "api_call_count": 162
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-05-15T13:51:20.263735Z",
+    "agent_lines": 604,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 604,
+    "agent_percentage": 100
+  },
+  "transcript_path": ".claude/projects/-Users-johyunduk-Projects-ddong-avoid-game/dbb1e377-fed5-4006-a785-2d4784041a2c.jsonl"
+}
