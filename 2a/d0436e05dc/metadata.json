@@ -3,7 +3,7 @@
   "checkpoint_id": "2ad0436e05dc",
   "strategy": "manual-commit",
   "branch": "dev",
-  "checkpoints_count": 1,
+  "checkpoints_count": 2,
   "files_touched": [
     "docs/deploy-char-season-reward.md",
     "docs/deploy-extreme-char-leaderboard.md",
@@ -21,6 +21,13 @@
       "transcript": "/2a/d0436e05dc/0/full.jsonl",
       "context": "",
       "content_hash": "/2a/d0436e05dc/0/content_hash.txt",
+      "prompt": ""
+    },
+    {
+      "metadata": "/2a/d0436e05dc/1/metadata.json",
+      "transcript": "/2a/d0436e05dc/1/full.jsonl",
+      "context": "",
+      "content_hash": "/2a/d0436e05dc/1/content_hash.txt",
       "prompt": ""
     }
   ]
