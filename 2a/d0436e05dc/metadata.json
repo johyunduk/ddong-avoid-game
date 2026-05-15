@@ -1,0 +1,27 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "2ad0436e05dc",
+  "strategy": "manual-commit",
+  "branch": "dev",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "docs/deploy-char-season-reward.md",
+    "docs/deploy-extreme-char-leaderboard.md",
+    "src/scenes/GameScene.ts",
+    "src/scenes/LeaderboardScene.ts",
+    "src/utils/extremeCharBest.ts",
+    "src/utils/leaderboard.ts",
+    "supabase/functions/claim-season-reward/index.ts",
+    "supabase/functions/leaderboard-top/index.ts",
+    "supabase/migrations/20260515_leaderboard_extreme_char.sql"
+  ],
+  "sessions": [
+    {
+      "metadata": "/2a/d0436e05dc/0/metadata.json",
+      "transcript": "/2a/d0436e05dc/0/full.jsonl",
+      "context": "",
+      "content_hash": "/2a/d0436e05dc/0/content_hash.txt",
+      "prompt": ""
+    }
+  ]
+}
