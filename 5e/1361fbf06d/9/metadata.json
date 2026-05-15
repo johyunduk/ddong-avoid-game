@@ -1,0 +1,33 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "5e1361fbf06d",
+  "session_id": "627a9cef-9202-4b9e-b27f-db8dfe6e9ded",
+  "strategy": "manual-commit",
+  "created_at": "2026-05-15T07:36:20.624283Z",
+  "branch": "dev",
+  "checkpoints_count": 9,
+  "files_touched": [
+    "src/config/abilityParams.ts",
+    "src/scenes/LeaderboardScene.ts",
+    "supabase/functions/leaderboard-submit/index.ts"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "48bbabaefd14",
+  "token_usage": {
+    "input_tokens": 90,
+    "cache_creation_tokens": 105093,
+    "cache_read_tokens": 4428341,
+    "output_tokens": 34176,
+    "api_call_count": 58
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-05-15T07:36:20.479269Z",
+    "agent_lines": 106,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 106,
+    "agent_percentage": 100
+  },
+  "transcript_path": ".claude/projects/-Users-johyunduk-Projects-ddong-avoid-game/627a9cef-9202-4b9e-b27f-db8dfe6e9ded.jsonl"
+}
