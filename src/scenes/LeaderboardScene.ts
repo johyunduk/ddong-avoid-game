@@ -481,11 +481,13 @@ export default class LeaderboardScene extends BaseScene {
       }).setOrigin(0.5).setDepth(DEPTH + 1)
     );
 
-    // readyForInput: 드롭다운(y≈145)과 같은 위치에 있는 첫 번째 행 카드의 고스트 클릭 방지용.
-    // 닫기 버튼(y≈576)·전체 버튼(y≈68)은 드롭다운과 위치가 달라 가드 불필요.
-    // Phaser 이벤트 순서: 게임오브젝트(카드) pointerup → 씬 레벨 onUp.
-    // 카드는 readyForInput=false로 차단, 이후 onUp이 true로 전환.
-    const scroll = { y: 0, startY: 0, startScrollY: 0, active: false, hasDragged: false, readyForInput: false };
+    // 오버레이가 열린 시각을 기록해 200ms 이내 pointerup은 모두 무시한다.
+    // (드롭다운 pointerdown → 오버레이 생성 → 같은 손가락 pointerup이 카드·버튼에 전달되는 고스트 클릭 방지)
+    // Phaser 이벤트 순서에 의존하는 readyForInput 패턴을 대체한다.
+    const openedAt = Date.now();
+    const OPEN_DEBOUNCE = 200;
+
+    const scroll = { y: 0, startY: 0, startScrollY: 0, active: false, hasDragged: false };
 
     // "전체 랭킹" 버튼
     const allSel = this.selectedCharFilter === null;
@@ -497,7 +499,7 @@ export default class LeaderboardScene extends BaseScene {
     }).setOrigin(0.5).setDepth(DEPTH + 2);
     allBg.setInteractive({ useHandCursor: true });
     allBg.on('pointerup', () => {
-      if (scroll.hasDragged) return;
+      if (Date.now() - openedAt < OPEN_DEBOUNCE || scroll.hasDragged) return;
       this.hideCharSelectOverlay();
       if (this.selectedCharFilter !== null) {
         this.selectedCharFilter = null;
@@ -506,7 +508,7 @@ export default class LeaderboardScene extends BaseScene {
     });
     this.charOverlayObjects.push(allBg, allTxt);
 
-    // 닫기 버튼 (하단 고정)
+    // 닫기 버튼 (하단 고정) — 스크롤 영역 밖이므로 hasDragged 체크 불필요
     const closeY = H - 24;
     const closeBg = this.add.rectangle(cx, closeY, 100, 30, 0x333333, 1)
       .setDepth(DEPTH + 1).setStrokeStyle(2, 0x666666);
@@ -514,7 +516,10 @@ export default class LeaderboardScene extends BaseScene {
       fontSize: '13px', color: '#cccccc', fontStyle: 'bold',
     }).setOrigin(0.5).setDepth(DEPTH + 2);
     closeBg.setInteractive({ useHandCursor: true });
-    closeBg.on('pointerup', () => { if (!scroll.hasDragged) this.hideCharSelectOverlay(); });
+    closeBg.on('pointerup', () => {
+      if (Date.now() - openedAt < OPEN_DEBOUNCE) return;
+      this.hideCharSelectOverlay();
+    });
     this.charOverlayObjects.push(closeBg, closeTxt);
 
     // 스크롤 영역 정의
@@ -593,7 +598,7 @@ export default class LeaderboardScene extends BaseScene {
 
       cardBg.setInteractive({ useHandCursor: true });
       cardBg.on('pointerup', (ptr: Phaser.Input.Pointer) => {
-        if (!scroll.readyForInput || scroll.hasDragged) return;
+        if (Date.now() - openedAt < OPEN_DEBOUNCE || scroll.hasDragged) return;
         if (ptr.y < SCROLL_TOP || ptr.y > SCROLL_BOTTOM) return;
         this.hideCharSelectOverlay();
         if (this.selectedCharFilter !== char.id) {
@@ -621,7 +626,6 @@ export default class LeaderboardScene extends BaseScene {
     const onUp = () => {
       scroll.active = false;
       scroll.hasDragged = false;
-      scroll.readyForInput = true;
     };
 
     this.input.on('pointerdown', onDown);
