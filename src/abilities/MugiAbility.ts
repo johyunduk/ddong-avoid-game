@@ -25,50 +25,56 @@ interface YeoijuOrb {
   y: number;
 }
 
+interface OrbitOrb {
+  gfx: Phaser.GameObjects.Graphics;
+  angle: number;
+  speed: number;    // rad/ms (음수 = 반시계)
+  radius: number;
+  tiltCos: number;  // 궤도 기울기 (작을수록 납작한 타원)
+}
+
+const HALO_Y_OFFSET = 28; // 후광 중심을 플레이어 중심보다 위로
+
+// 각 궤도 고유 파라미터 — 전자 궤도처럼 방향/기울기/속도 다양화
+const ORBIT_CONFIGS: { speed: number; radius: number; tiltCos: number; startAngle: number }[] = [
+  {  speed:  0.0050, radius: 30, tiltCos: 0.32, startAngle: 0 },
+  {  speed: -0.0043, radius: 32, tiltCos: 0.58, startAngle: Math.PI * 0.7 },
+  {  speed:  0.0060, radius: 29, tiltCos: 0.44, startAngle: Math.PI * 1.3 },
+  {  speed: -0.0038, radius: 34, tiltCos: 0.22, startAngle: Math.PI * 0.4 },
+  {  speed:  0.0048, radius: 31, tiltCos: 0.78, startAngle: Math.PI * 1.7 },
+];
+
 export class MugiAbility extends BaseAbility {
-  private lastYeoijuScore  = 0;
-  private yeoijuCount      = 0;
+  private lastYeoijuScore    = 0;
+  private yeoijuCount        = 0;
   private yeoijus: YeoijuOrb[] = [];
-  private counterText: Phaser.GameObjects.Text | null = null;
+  private orbitOrbs: OrbitOrb[] = [];
   private normalPrefix     = 'mugi_';
   private isGoldForm       = false;
   private auraTimer        = 0;
-  private revivalAuraTimer = 0;
+  private revivalHaloOuter: Phaser.GameObjects.Image | null = null;
+  private revivalHaloInner: Phaser.GameObjects.Image | null = null;
 
   // Revival state
   private revivalCharges     = 1;   // 0 or 1 (max stored)
   private totalRevivalsUsed  = 0;   // lifetime cap: 3
   private revivalChargeCount = 0;   // yeoijus collected toward recharge
-  private revivalText: Phaser.GameObjects.Text | null = null;
 
   override onCreate(api: GameSceneAPI): void {
     this.lastYeoijuScore    = 0;
     this.yeoijuCount        = 0;
     this.yeoijus            = [];
-    this.counterText        = null;
+    this.orbitOrbs          = [];
     this.normalPrefix       = api.player.getTexturePrefix();
     this.isGoldForm         = false;
     this.auraTimer          = 0;
-    this.revivalAuraTimer   = 0;
+    this.revivalHaloOuter   = null;
+    this.revivalHaloInner   = null;
     this.revivalCharges     = 1;
-    ensureGlowDot(api.scene);
     this.totalRevivalsUsed  = 0;
     this.revivalChargeCount = 0;
-    this.revivalText        = null;
-
-    this.counterText = api.scene.add.text(8, 80, `여의주 0/${MUGI_PARAMS.goldThreshold}`, {
-      fontSize: '11px',
-      color: '#ff88cc',
-      stroke: '#000000',
-      strokeThickness: 3,
-    }).setDepth(500).setAlpha(0.88);
-
-    this.revivalText = api.scene.add.text(8, 95, '♡ 부활', {
-      fontSize: '11px',
-      color: '#ff66bb',
-      stroke: '#000000',
-      strokeThickness: 3,
-    }).setDepth(500).setAlpha(0.88);
+    ensureGlowDot(api.scene);
+    this._createRevivalHalo(api);
   }
 
   override onScoreMilestone(score: number, api: GameSceneAPI): void {
@@ -82,6 +88,8 @@ export class MugiAbility extends BaseAbility {
   override onUpdate(api: GameSceneAPI): void {
     this._updateYeoijus(api);
     this._tickAura(api);
+    this._updateOrbitOrbs(api);
+    this._updateRevivalHalo(api.player.x, api.player.y);
   }
 
   override onHitPoop(api: GameSceneAPI): boolean {
@@ -152,9 +160,8 @@ export class MugiAbility extends BaseAbility {
       if (this.revivalChargeCount >= MUGI_PARAMS.goldThreshold) {
         this.revivalCharges = 1;
         this.revivalChargeCount = 0;
-        this._playRechargeGlow(api.player.x, api.player.y, api.scene);
+        this._playRechargeGlow(api);
       }
-      this._updateRevivalUI();
     }
 
     if (this.isGoldForm) {
@@ -163,7 +170,10 @@ export class MugiAbility extends BaseAbility {
     }
 
     this.yeoijuCount++;
-    this._updateCounter();
+
+    if (this.yeoijuCount % 10 === 0 && this.orbitOrbs.length < 5) {
+      this._spawnOrbitOrb(api);
+    }
 
     if (this.yeoijuCount >= MUGI_PARAMS.goldThreshold) {
       this._transformGold(api);
@@ -191,18 +201,8 @@ export class MugiAbility extends BaseAbility {
       }
     }
 
-    // 부활 충전 시 흰색 기운 (레벨 무관, 항상 일정 속도)
-    if (this.revivalCharges > 0 && this.totalRevivalsUsed < 3) {
-      this.revivalAuraTimer += delta;
-      if (this.revivalAuraTimer >= 180) {
-        this.revivalAuraTimer -= 180;
-        this._spawnAuraWisp(api.player.x, api.player.y, 0xffffff, 3, api.scene);
-        this._spawnAuraWisp(api.player.x, api.player.y, 0xffffff, 3, api.scene);
-      }
-    }
   }
 
-  // glow_dot + ADD 블렌드로 여우불 질감 표현
   private _spawnAuraWisp(px: number, py: number, color: number, level: number, scene: Phaser.Scene): void {
     const angle  = Math.random() * Math.PI * 2;
     const spread = 18 + level * 4;
@@ -211,34 +211,67 @@ export class MugiAbility extends BaseAbility {
     const sz  = Phaser.Math.FloatBetween(3, 5 + level * 0.6);
     const glowScale = sz / 28;
 
-    // 외곽 글로우 (ADD 블렌드 — 뒤 화면색에 색을 더함)
     const img = scene.add.image(ox, oy, 'glow_dot')
       .setDepth(6)
       .setBlendMode(Phaser.BlendModes.ADD)
       .setTint(color)
-      .setScale(glowScale);
-
-    // 코어: 흰색 glow_dot으로 중심 강조 (Graphics → Image, 드로우콜 제거)
-    const core = scene.add.image(ox, oy, 'glow_dot')
-      .setDepth(7)
-      .setBlendMode(Phaser.BlendModes.ADD)
-      .setTint(0xffffff)
-      .setScale(glowScale * 0.32);
+      .setScale(glowScale)
+      .setAlpha(0.85);
 
     const tx  = ox + Phaser.Math.Between(-14, 14);
     const ty  = oy - Phaser.Math.Between(22, 44);
-    const dur = Phaser.Math.Between(480, 860);
+    const dur = Phaser.Math.Between(280, 440);
 
     scene.tweens.add({
       targets: img, x: tx, y: ty, alpha: 0, scale: glowScale * 0.3,
       duration: dur, ease: 'Quad.easeOut',
       onComplete: () => { if (img.active) img.destroy(); },
     });
-    scene.tweens.add({
-      targets: core, x: tx, y: ty, alpha: 0, scale: 0,
-      duration: dur, ease: 'Quad.easeOut',
-      onComplete: () => { if (core.active) core.destroy(); },
+  }
+
+  // ── 궤도 구슬 (전자 궤도 이펙트) ────────────────────────────────────
+
+  private _spawnOrbitOrb(api: GameSceneAPI): void {
+    const cfg = ORBIT_CONFIGS[this.orbitOrbs.length];
+    if (!cfg) return;
+
+    const gfx = api.scene.add.graphics().setDepth(145).setScale(0);
+
+    // 여의주와 동일한 팔레트, 절반 크기
+    gfx.fillStyle(0x550000, 1);    gfx.fillCircle(0, 0, 4.5);
+    gfx.fillStyle(0xaa1100, 0.95); gfx.fillCircle(0.5, 0.8, 3.2);
+    gfx.fillStyle(0xdd2200, 0.80); gfx.fillCircle(0.5, 0.8, 2);
+    gfx.fillStyle(0xff5500, 0.50); gfx.fillCircle(0.5, 1.2, 1);
+    gfx.fillStyle(0xffffff, 0.90); gfx.fillCircle(-1.5, -1.5, 1);
+
+    const startX = api.player.x + Math.cos(cfg.startAngle) * cfg.radius;
+    const startY = api.player.y + Math.sin(cfg.startAngle) * cfg.radius * cfg.tiltCos;
+    gfx.setPosition(startX, startY);
+
+    // 등장 애니메이션
+    api.scene.tweens.add({
+      targets: gfx, scale: 1, duration: 300, ease: 'Back.easeOut',
     });
+
+    this.orbitOrbs.push({
+      gfx,
+      angle: cfg.startAngle,
+      speed: cfg.speed,
+      radius: cfg.radius,
+      tiltCos: cfg.tiltCos,
+    });
+  }
+
+  private _updateOrbitOrbs(api: GameSceneAPI): void {
+    const delta = api.scene.game.loop.delta;
+    const { player } = api;
+
+    for (const orb of this.orbitOrbs) {
+      orb.angle += orb.speed * delta;
+      const x = player.x + Math.cos(orb.angle) * orb.radius;
+      const y = player.y + Math.sin(orb.angle) * orb.radius * orb.tiltCos;
+      orb.gfx.setPosition(x, y);
+    }
   }
 
   private _spawnCollectEffect(x: number, y: number, scene: Phaser.Scene): void {
@@ -260,31 +293,12 @@ export class MugiAbility extends BaseAbility {
     }
   }
 
-  private _updateCounter(): void {
-    if (!this.counterText) return;
-    this.counterText.setText(`여의주 ${this.yeoijuCount}/${MUGI_PARAMS.goldThreshold}`);
-  }
-
-  private _updateRevivalUI(): void {
-    if (!this.revivalText) return;
-    if (this.totalRevivalsUsed >= 3) {
-      this.revivalText.setText('(부활 소진)').setColor('#666666');
-    } else if (this.revivalCharges > 0) {
-      this.revivalText.setText(`♡ 부활 (${3 - this.totalRevivalsUsed}회 남음)`).setColor('#ff66bb');
-    } else {
-      this.revivalText
-        .setText(`○ 부활 충전 ${this.revivalChargeCount}/${MUGI_PARAMS.goldThreshold}`)
-        .setColor('#aaaaaa');
-    }
-  }
-
   // ── 황금 변신 ────────────────────────────────────────────────────────
 
   private _transformGold(api: GameSceneAPI): void {
     this.isGoldForm = true;
     this.yeoijus.forEach(orb => orb.gfx.destroy());
     this.yeoijus = [];
-    this.counterText?.setVisible(false);
     this._strikeThunder(api, true);
   }
 
@@ -292,36 +306,22 @@ export class MugiAbility extends BaseAbility {
     this.isGoldForm = false;
     this.yeoijuCount = 0;
     api.player.setTexturePrefix(this.normalPrefix);
-    this.counterText?.setVisible(true);
-    this._updateCounter();
   }
 
   // ── 황금 번개 ────────────────────────────────────────────────────────
 
-  // applyGoldSprite: true → 변신 시 (180ms 딜레이 후 gold 텍스처 적용), false → 이미 변신 상태
   private _strikeThunder(api: GameSceneAPI, applyGoldSprite: boolean): void {
     const { scene, player } = api;
     const tx = player.x;
     const ty = player.y;
 
-    scene.cameras.main.flash(600, 255, 230, 0, true);
+    if (applyGoldSprite) scene.cameras.main.flash(600, 80, 70, 0, true);
 
     const g = scene.add.graphics().setDepth(310);
 
-    const makePts = (startX: number) => {
-      const pts: { x: number; y: number }[] = [{ x: startX, y: -10 }];
-      for (let i = 1; i < 17; i++) {
-        const t = i / 17;
-        const spread = 70 * (1 - t * 0.65);
-        pts.push({ x: tx + Phaser.Math.Between(-spread, spread), y: (ty + 20) * t - 10 });
-      }
-      pts.push({ x: tx, y: ty + 8 });
-      return pts;
-    };
-
     const drawBolt = () => {
       g.clear();
-      const pts = makePts(tx + Phaser.Math.Between(-25, 25));
+      const pts = this._makeBoltPts(tx, ty, tx + Phaser.Math.Between(-25, 25));
       g.lineStyle(44, 0xffaa00, 0.09); this._drawPolyline(g, pts);
       g.lineStyle(22, 0xffcc00, 0.32); this._drawPolyline(g, pts);
       g.lineStyle(9,  0xffee44, 0.80); this._drawPolyline(g, pts);
@@ -377,9 +377,7 @@ export class MugiAbility extends BaseAbility {
     scene.time.delayedCall(180, () => {
       if (!scene.sys.isActive()) return;
       // 변신 도중 부활로 isGoldForm이 해제됐을 수 있으므로 확인
-      if (applyGoldSprite && this.isGoldForm) {
-        api.player.setTexturePrefix('gold_mugi_');
-      }
+      if (applyGoldSprite && this.isGoldForm) api.player.setTexturePrefix('gold_mugi_');
       this._clearPoops(api, () => true, 20);
     });
   }
@@ -391,28 +389,14 @@ export class MugiAbility extends BaseAbility {
     const tx = player.x;
     const ty = player.y;
 
-    scene.cameras.main.flash(250, 120, 0, 0, true);
-
     const g = scene.add.graphics().setDepth(310);
-
-    // _strikeThunder와 동일한 형태, 색만 검붉은 팔레트
-    const makePts = (startX: number) => {
-      const pts: { x: number; y: number }[] = [{ x: startX, y: -10 }];
-      for (let i = 1; i < 17; i++) {
-        const t = i / 17;
-        const spread = 70 * (1 - t * 0.65);
-        pts.push({ x: tx + Phaser.Math.Between(-spread, spread), y: (ty + 20) * t - 10 });
-      }
-      pts.push({ x: tx, y: ty + 8 });
-      return pts;
-    };
 
     const drawRed = () => {
       g.clear();
-      const pts = makePts(tx + Phaser.Math.Between(-25, 25));
+      const pts = this._makeBoltPts(tx, ty, tx + Phaser.Math.Between(-25, 25));
       g.lineStyle(30, 0x440000, 0.09); this._drawPolyline(g, pts);
       g.lineStyle(14, 0x880000, 0.32); this._drawPolyline(g, pts);
-      g.lineStyle(6,  0x080000, 0.92); this._drawPolyline(g, pts); // 코어 바로 외곽 — 진한 검정
+      g.lineStyle(6,  0x080000, 0.92); this._drawPolyline(g, pts);
       g.lineStyle(2,  0xff3311, 1.00); this._drawPolyline(g, pts);
       [3, 7, 11].forEach(bi => {
         if (bi >= pts.length - 1) return;
@@ -486,6 +470,17 @@ export class MugiAbility extends BaseAbility {
     });
   }
 
+  private _makeBoltPts(tx: number, ty: number, startX: number): { x: number; y: number }[] {
+    const pts: { x: number; y: number }[] = [{ x: startX, y: -10 }];
+    for (let i = 1; i < 17; i++) {
+      const t = i / 17;
+      const spread = 70 * (1 - t * 0.65);
+      pts.push({ x: tx + Phaser.Math.Between(-spread, spread), y: (ty + 20) * t - 10 });
+    }
+    pts.push({ x: tx, y: ty + 8 });
+    return pts;
+  }
+
   private _drawPolyline(g: Phaser.GameObjects.Graphics, pts: { x: number; y: number }[]): void {
     g.beginPath();
     g.moveTo(pts[0]!.x, pts[0]!.y);
@@ -519,6 +514,7 @@ export class MugiAbility extends BaseAbility {
     const timer = scene.time.addEvent({ delay: 80, repeat: 5, callback: draw });
     scene.time.delayedCall(550, () => {
       timer.remove();
+      if (!scene.sys.isActive()) return;
       if (g.active) g.destroy();
     });
   }
@@ -532,7 +528,9 @@ export class MugiAbility extends BaseAbility {
     if (this.isGoldForm) {
       this._resetGoldForm(api);
     }
-    this._updateRevivalUI();
+    this.orbitOrbs.forEach(o => { api.scene.tweens.killTweensOf(o.gfx); o.gfx.destroy(); });
+    this.orbitOrbs = [];
+    this._destroyRevivalHalo();
 
     const { poops, scene } = api;
 
@@ -545,7 +543,6 @@ export class MugiAbility extends BaseAbility {
     const centerX = scene.scale.width / 2;
     api.player.setX(centerX);
 
-    scene.cameras.main.flash(350, 255, 220, 240, true);
     api.player.setInvincibleBriefly(2500);
     this._playRevivalLotus(centerX, api.player.y, scene);
   }
@@ -632,15 +629,66 @@ export class MugiAbility extends BaseAbility {
     });
   }
 
-  private _playRechargeGlow(px: number, py: number, scene: Phaser.Scene): void {
+  // ── 부활 후광 ─────────────────────────────────────────────────────────
+
+  private _createRevivalHalo(api: GameSceneAPI): void {
+    const { scene, player } = api;
+    player.setDepth(5);
+    const hy = player.y - HALO_Y_OFFSET;
+
+    this.revivalHaloOuter = scene.add.image(player.x, hy, 'glow_dot')
+      .setDepth(3)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setTint(0xffffff)
+      .setScale(1.5)
+      .setAlpha(0.35);
+
+    this.revivalHaloInner = scene.add.image(player.x, hy, 'glow_dot')
+      .setDepth(4)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setTint(0xffeedd)
+      .setScale(0.75)
+      .setAlpha(0.65);
+
+    scene.tweens.add({
+      targets: this.revivalHaloOuter,
+      alpha: { from: 0.2, to: 0.50 },
+      scale: { from: 1.3, to: 1.7 },
+      yoyo: true, repeat: -1, duration: 1100, ease: 'Sine.easeInOut',
+    });
+    scene.tweens.add({
+      targets: this.revivalHaloInner,
+      alpha: { from: 0.45, to: 0.80 },
+      yoyo: true, repeat: -1, duration: 1100, ease: 'Sine.easeInOut',
+    });
+  }
+
+  private _updateRevivalHalo(px: number, py: number): void {
+    const hy = py - HALO_Y_OFFSET;
+    this.revivalHaloOuter?.setPosition(px, hy);
+    this.revivalHaloInner?.setPosition(px, hy);
+  }
+
+  private _destroyRevivalHalo(): void {
+    this.revivalHaloOuter?.destroy();
+    this.revivalHaloInner?.destroy();
+    this.revivalHaloOuter = null;
+    this.revivalHaloInner = null;
+  }
+
+  private _playRechargeGlow(api: GameSceneAPI): void {
+    const { scene, player } = api;
     const g = scene.add.graphics().setDepth(320);
     g.lineStyle(4, 0xff88cc, 1);
-    g.strokeCircle(px, py, 30);
+    g.strokeCircle(player.x, player.y, 30);
     scene.tweens.add({
       targets: g, scaleX: 2.5, scaleY: 2.5, alpha: 0,
       duration: 500, ease: 'Quad.easeOut',
       onComplete: () => g.destroy(),
     });
+    if (!this.revivalHaloOuter) {
+      this._createRevivalHalo(api);
+    }
   }
 
   // ── 정리 ─────────────────────────────────────────────────────────────
@@ -648,10 +696,9 @@ export class MugiAbility extends BaseAbility {
   override onDestroy(api: GameSceneAPI): void {
     this.yeoijus.forEach(orb => orb.gfx.destroy());
     this.yeoijus = [];
-    this.counterText?.destroy();
-    this.counterText = null;
-    this.revivalText?.destroy();
-    this.revivalText = null;
+    this.orbitOrbs.forEach(o => { api.scene.tweens.killTweensOf(o.gfx); o.gfx.destroy(); });
+    this.orbitOrbs = [];
+    this._destroyRevivalHalo();
     if (this.isGoldForm) {
       api.player.setTexturePrefix(this.normalPrefix);
       this.isGoldForm = false;
