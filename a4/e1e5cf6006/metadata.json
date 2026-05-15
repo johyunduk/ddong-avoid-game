@@ -126,6 +126,13 @@
       "context": "/a4/e1e5cf6006/16/context.md",
       "content_hash": "/a4/e1e5cf6006/16/content_hash.txt",
       "prompt": "/a4/e1e5cf6006/16/prompt.txt"
+    },
+    {
+      "metadata": "/a4/e1e5cf6006/17/metadata.json",
+      "transcript": "/a4/e1e5cf6006/17/full.jsonl",
+      "context": "",
+      "content_hash": "/a4/e1e5cf6006/17/content_hash.txt",
+      "prompt": ""
     }
   ],
   "token_usage": {
