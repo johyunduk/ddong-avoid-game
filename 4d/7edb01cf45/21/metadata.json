@@ -1,0 +1,35 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "4d7edb01cf45",
+  "session_id": "dfbe0200-abf5-4b84-8531-1233d8aca267",
+  "strategy": "manual-commit",
+  "created_at": "2026-05-15T13:53:39.055614Z",
+  "branch": "dev",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "docs/story/main/drafts/season1-draft.md",
+    "docs/story/main/drafts/season2-draft.md"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "03d23b16a336",
+  "transcript_identifier_at_start": "1e600082-6d86-4d85-adca-b1af13a3c652",
+  "checkpoint_transcript_start": 1474,
+  "transcript_lines_at_start": 1474,
+  "token_usage": {
+    "input_tokens": 414,
+    "cache_creation_tokens": 699074,
+    "cache_read_tokens": 32059684,
+    "output_tokens": 261954,
+    "api_call_count": 291
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-05-15T13:53:38.330681Z",
+    "agent_lines": 0,
+    "human_added": 499,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 499,
+    "agent_percentage": 0
+  },
+  "transcript_path": ".claude/projects/-Users-johyunduk-Projects-ddong-avoid-game/dfbe0200-abf5-4b84-8531-1233d8aca267.jsonl"
+}
