@@ -1,0 +1,19 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "a4e1e5cf6006",
+  "strategy": "manual-commit",
+  "branch": "dev",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src/abilities/MugiAbility.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/a4/e1e5cf6006/0/metadata.json",
+      "transcript": "/a4/e1e5cf6006/0/full.jsonl",
+      "context": "",
+      "content_hash": "/a4/e1e5cf6006/0/content_hash.txt",
+      "prompt": ""
+    }
+  ]
+}
