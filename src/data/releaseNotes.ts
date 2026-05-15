@@ -6,6 +6,13 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: 'v2.7.0',
+    date: '2026-05-15',
+    changes: [
+      'EXTREME 캐릭터별 랭킹 추가',
+    ],
+  },
+  {
     version: 'v2.6.0',
     date: '2026-05-10',
     changes: [
