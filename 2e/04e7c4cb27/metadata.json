@@ -3,7 +3,7 @@
   "checkpoint_id": "2e04e7c4cb27",
   "strategy": "manual-commit",
   "branch": "dev",
-  "checkpoints_count": 2,
+  "checkpoints_count": 6,
   "files_touched": [
     "src/scenes/GameScene.ts",
     "src/utils/leaderboard.ts",
@@ -137,13 +137,20 @@
       "context": "",
       "content_hash": "/2e/04e7c4cb27/17/content_hash.txt",
       "prompt": ""
+    },
+    {
+      "metadata": "/2e/04e7c4cb27/18/metadata.json",
+      "transcript": "/2e/04e7c4cb27/18/full.jsonl",
+      "context": "/2e/04e7c4cb27/18/context.md",
+      "content_hash": "/2e/04e7c4cb27/18/content_hash.txt",
+      "prompt": "/2e/04e7c4cb27/18/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 704,
-    "cache_creation_tokens": 1055097,
-    "cache_read_tokens": 44249077,
-    "output_tokens": 399377,
-    "api_call_count": 506
+    "input_tokens": 1523,
+    "cache_creation_tokens": 1152805,
+    "cache_read_tokens": 48504306,
+    "output_tokens": 440693,
+    "api_call_count": 564
   }
 }
