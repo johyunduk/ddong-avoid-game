@@ -3,7 +3,7 @@
   "checkpoint_id": "a4e1e5cf6006",
   "strategy": "manual-commit",
   "branch": "dev",
-  "checkpoints_count": 1,
+  "checkpoints_count": 2,
   "files_touched": [
     "src/abilities/MugiAbility.ts"
   ],
@@ -13,6 +13,13 @@
       "transcript": "/a4/e1e5cf6006/0/full.jsonl",
       "context": "",
       "content_hash": "/a4/e1e5cf6006/0/content_hash.txt",
+      "prompt": ""
+    },
+    {
+      "metadata": "/a4/e1e5cf6006/1/metadata.json",
+      "transcript": "/a4/e1e5cf6006/1/full.jsonl",
+      "context": "",
+      "content_hash": "/a4/e1e5cf6006/1/content_hash.txt",
       "prompt": ""
     }
   ]
