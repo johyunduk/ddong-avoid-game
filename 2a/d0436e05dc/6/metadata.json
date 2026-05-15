@@ -1,0 +1,33 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "2ad0436e05dc",
+  "session_id": "4cdc23e6-a766-4df9-a59f-f56ca521f2c4",
+  "strategy": "manual-commit",
+  "created_at": "2026-05-15T09:45:44.418127Z",
+  "branch": "dev",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "supabase/functions/leaderboard-top/index.ts",
+    "docs/deploy-char-season-reward.md",
+    "docs/deploy-extreme-char-leaderboard.md",
+    "src/scenes/LeaderboardScene.ts",
+    "src/utils/extremeCharBest.ts",
+    "src/utils/leaderboard.ts",
+    "supabase/functions/claim-season-reward/index.ts",
+    "supabase/migrations/20260515_leaderboard_extreme_char.sql",
+    "src/scenes/GameScene.ts"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "54639eb1d30a",
+  "transcript_identifier_at_start": "c7e7fa82-462d-4f5a-bc07-9404424e53e3",
+  "initial_attribution": {
+    "calculated_at": "2026-05-15T09:45:44.39511Z",
+    "agent_lines": 879,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 879,
+    "agent_percentage": 100
+  },
+  "transcript_path": ".claude/projects/-Users-johyunduk-Projects-ddong-avoid-game/4cdc23e6-a766-4df9-a59f-f56ca521f2c4.jsonl"
+}
