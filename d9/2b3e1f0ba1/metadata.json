@@ -3,7 +3,7 @@
   "checkpoint_id": "d92b3e1f0ba1",
   "strategy": "manual-commit",
   "branch": "dev",
-  "checkpoints_count": 1,
+  "checkpoints_count": 2,
   "files_touched": [
     "src/utils/leaderboard.ts",
     "supabase/functions/leaderboard-top/index.ts",
@@ -15,6 +15,13 @@
       "transcript": "/d9/2b3e1f0ba1/0/full.jsonl",
       "context": "",
       "content_hash": "/d9/2b3e1f0ba1/0/content_hash.txt",
+      "prompt": ""
+    },
+    {
+      "metadata": "/d9/2b3e1f0ba1/1/metadata.json",
+      "transcript": "/d9/2b3e1f0ba1/1/full.jsonl",
+      "context": "",
+      "content_hash": "/d9/2b3e1f0ba1/1/content_hash.txt",
       "prompt": ""
     }
   ]
