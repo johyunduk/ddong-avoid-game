@@ -1,0 +1,21 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "3b0e1d9bb20b",
+  "strategy": "manual-commit",
+  "branch": "dev",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "docs/release-notes/README.md",
+    "docs/release-notes/v2.7.0.md",
+    "src/data/releaseNotes.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/3b/0e1d9bb20b/0/metadata.json",
+      "transcript": "/3b/0e1d9bb20b/0/full.jsonl",
+      "context": "",
+      "content_hash": "/3b/0e1d9bb20b/0/content_hash.txt",
+      "prompt": ""
+    }
+  ]
+}
