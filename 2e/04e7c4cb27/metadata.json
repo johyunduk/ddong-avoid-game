@@ -1,0 +1,23 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "2e04e7c4cb27",
+  "strategy": "manual-commit",
+  "branch": "dev",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src/scenes/GameScene.ts",
+    "src/utils/leaderboard.ts",
+    "src/utils/skor.ts",
+    "supabase/functions/game-start/index.ts",
+    "supabase/functions/skor-submit/index.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/2e/04e7c4cb27/0/metadata.json",
+      "transcript": "/2e/04e7c4cb27/0/full.jsonl",
+      "context": "",
+      "content_hash": "/2e/04e7c4cb27/0/content_hash.txt",
+      "prompt": ""
+    }
+  ]
+}
