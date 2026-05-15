@@ -1,0 +1,968 @@
+지금보면 난이도 별로 랭킹이 있는데 이것과 별개로 난이도 & 캐릭터별 랭킹이 따로 있으면 좋을거 같은데 어떻게 생각해?
+
+---
+
+음 이거는 그러면 익스트림 모드만 캐릭터별 랭킹을 두는건 어떤가?
+
+---
+
+[Request interrupted by user for tool use]
+
+---
+
+근데 궁금한게 있어. 현재 랭킹 제출은 기존 기록을 넘은 경우에만 제출을 하는데 레거시로 2만점이고 무기로 처음하여 5천점을 달성했을 때 무기의 점수가 등록은 되어야 하는데 이땐 등록이 안되는 그런 상태 아닌가? 이거 고려해줘봐
+
+---
+
+[Request interrupted by user for tool use]
+
+---
+
+테이블을 따로 구분하는건 어떻게 생각해?
+
+---
+
+그래 별도 테이블로 하자.
+
+---
+
+배포 순서 그거 쿼리랑 명령어 순서대로 뭐 날려야 하는지 알려줘
+
+---
+
+마크다운 파일로 만들어줘
+
+---
+
+supabase functions deploy leaderboard-submit --no-verify-jwt 얘는 왜 하는거지?
+
+---
+
+supabase functions deploy leaderboard-top --no-verify-jwt 이건 그러면 뭔데?
+
+---
+
+3개 다 했어. 로컬에서 테스트만 해보면 되나?
+
+---
+
+센티넬로 플레이 했는데 아무런 네트워크 통신도 없는ㄷ[ㅔ?
+
+---
+
+[Request interrupted by user for tool use]
+
+---
+
+음 그니까 센티넬로는 처음 플레이를 했는데 익스트림 모드에서 근데 왜 센티넬 점수가 등록이 안되는거지? 분명히 내가 익스트림모드에서 캐릭터별 랭킹을 만들겠다고 했는데
+
+---
+
+이니셜 입력이 없었지 당연히. 내 최고 점수를 넘지 못했으니까. 그래서 내가 아까 너한테 물어본거잖아. 다른 캐릭터로 최고 점수 냈던거 넘지 못하면 점수 등록 못하는거 아니냐고
+
+---
+
+[Request interrupted by user for tool use]
+
+---
+
+이거는 근데 게임오버시 마다 계속 제출을 한다는건가?
+
+---
+
+이것도 캐릭터별 로컬스토리지로하자. 그리고 게임 진행시 현재 점수와 개인 최고 점수가 있는데 캐릭터 최고 점수도 추가해줘.
+
+---
+
+익스트림 난이도 랭킹에서 특정 캐릭터 랭킹 보기위해 선택하는거 좀 ui 좋은거로 생각해봐 지금은 4명만 나오는거 같은데 이게 사람이 없을 때 가능해보이는데 나중에 많은 경우 여러 캐릭터를 사용할텐데 말이지
+
+---
+
+기록이 있는 캐릭터만 선택할 필요는 없잖아 굳이 api 호출을 늘릴 필요가 없다고 생각해. 그냥 전체 캐릭터 목록이 나오면 될 거 같은데.
+
+---
+
+목록 일러스트로 바꿔줘봐.
+
+---
+
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+Summary:
+1. Primary Request and Intent:
+   - Add character-based rankings to the EXTREME difficulty leaderboard (separate from existing difficulty-only rankings)
+   - Fix a core bug: when a user's score with a different character doesn't beat their overall record, the score was never submitted/saved at all
+   - Add character-specific best score tracking in localStorage (only submit when character best is beaten, not every game over)
+   - Show character best score in HUD during EXTREME gameplay alongside overall best score
+   - Replace character filter chip row UI with a scalable overlay grid showing ALL 21 characters
+   - Latest request: replace icon images in the overlay grid with illustration images (portrait card style)
+
+2. Key Technical Concepts:
+   - Phaser 3 hypercasual game on 400×600 canvas
+   - TypeScript strict mode: `verbatimModuleSyntax=true`, `erasableSyntaxOnly=true` (no enums, use `as const`)
+   - Supabase PostgreSQL + Edge Functions (Deno)
+   - `leaderboard` table PK: `(user_id, difficulty, year_month)` — kept unchanged
+   - New `leaderboard_extreme_char` table PK: `(user_id, year_month, character_type)` — EXTREME-only
+   - djb2 hashing for localStorage anti-tamper signing (inline per-file pattern)
+   - PostgREST JOIN via FK: `profiles!inner(initials)` requires FK from table to `profiles(id)`
+   - `showGameOverUI(isNewRecord)` in GameScene — score submission ONLY fires when `isNewRecord=true`
+   - Phaser Container + GeometryMask for scrollable overlays
+   - `CharacterDef` has both `imageKey`/`imagePath` (small sprite) and `illustKey`/`illustPath` (portrait illustration)
+
+3. Files and Code Sections:
+
+   - **`supabase/migrations/20260515_leaderboard_extreme_char.sql`** (NEW)
+     - Creates `leaderboard_extreme_char` table with PK `(user_id, year_month, character_type)`
+     - References `profiles(id)` (not `auth.users`) for PostgREST JOIN support
+     - RLS policies: read all, insert/update own
+     ```sql
+     CREATE TABLE IF NOT EXISTS leaderboard_extreme_char (
+       user_id        UUID        NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+       year_month     TEXT        NOT NULL,
+       character_type TEXT        NOT NULL DEFAULT 'chibi',
+       score          INTEGER     NOT NULL DEFAULT 0,
+       season         INTEGER     NOT NULL DEFAULT 1,
+       updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       PRIMARY KEY (user_id, year_month, character_type)
+     );
+     CREATE INDEX IF NOT EXISTS idx_extreme_char_score
+       ON leaderboard_extreme_char (year_month, character_type, score DESC);
+     ```
+
+   - **`supabase/functions/leaderboard-submit/index.ts`** (MODIFIED)
+     - Moved `validCharacterTypes` and `safeCharacterType` calculation OUTSIDE the `if (isNewRecord)` block (was at line ~234, moved to ~218)
+     - Added EXTREME char upsert block after the main leaderboard upsert:
+     ```typescript
+     if (difficulty === 'extreme') {
+       const { data: existingChar } = await supabaseAdmin
+         .from('leaderboard_extreme_char')
+         .select('score')
+         .eq('user_id', user.id)
+         .eq('year_month', yearMonth)
+         .eq('character_type', safeCharacterType)
+         .single();
+       if (!existingChar || existingChar.score < score) {
+         await supabaseAdmin
+           .from('leaderboard_extreme_char')
+           .upsert({ user_id: user.id, year_month: yearMonth, character_type: safeCharacterType, score, season, updated_at: new Date().toISOString() },
+             { onConflict: 'user_id,year_month,character_type' });
+       }
+     }
+     ```
+
+   - **`supabase/functions/leaderboard-top/index.ts`** (MODIFIED)
+     - Parses optional `characterType` from request body
+     - When `characterType && difficulty === 'extreme'`: queries `leaderboard_extreme_char`, returns early with simplified response (null for `currentUserRank` and `prevSeasonReward`)
+     ```typescript
+     const { difficulty, limit: limitParam, characterType } = await req.json().catch(() => ({}));
+     // ...
+     if (characterType && difficulty === 'extreme') {
+       const { data: charData, error: charError } = await supabaseAdmin
+         .from('leaderboard_extreme_char')
+         .select('user_id, score, character_type, profiles!inner(initials)')
+         .eq('year_month', yearMonth)
+         .eq('character_type', characterType)
+         .order('score', { ascending: false })
+         .limit(safeLimit);
+       // ... returns early with charEntries
+     }
+     ```
+
+   - **`src/utils/leaderboard.ts`** (MODIFIED)
+     - `getLeaderboard()` signature updated:
+     ```typescript
+     export async function getLeaderboard(
+       difficulty: Difficulty,
+       limit: number = 100,
+       characterType?: string
+     ): Promise<LeaderboardResponse> {
+       const body: Record<string, unknown> = { difficulty, limit };
+       if (characterType) body.characterType = characterType;
+       const { data, error } = await supabase.functions.invoke('leaderboard-top', { body });
+     ```
+
+   - **`src/utils/extremeCharBest.ts`** (NEW)
+     - localStorage management for EXTREME character best scores
+     - djb2 inline implementation (no shared signing util exists — each file has its own)
+     ```typescript
+     const _KEY = 'extremeCharBest';
+     const _SIG_KEY = 'extremeCharBestSig';
+     const _SALT = 'ddong-extreme-char-v1';
+     
+     function _djb2(str: string): string {
+       let h = 5381;
+       for (let i = 0; i < str.length; i++) {
+         h = ((h << 5) + h) ^ str.charCodeAt(i);
+         h = h >>> 0;
+       }
+       return h.toString(36);
+     }
+     
+     export function getExtremeCharBest(charId: string): number // returns 0 if none, clears on signature mismatch
+     export function updateExtremeCharBest(charId: string, score: number): void // only saves if score > existing
+     ```
+
+   - **`src/scenes/LeaderboardScene.ts`** (MODIFIED)
+     - Added properties: `selectedCharFilter: string | null = null`, `charFilterObjects: Phaser.GameObjects.GameObject[] = []`, `charOverlayObjects: Phaser.GameObjects.GameObject[] = []`
+     - `availableChars` property REMOVED (no longer needed)
+     - `preload()`: added illustration preloading (most recent change):
+     ```typescript
+     CHARACTERS.forEach(char => {
+       if (!this.textures.exists(char.imageKey)) {
+         this.load.image(char.imageKey, char.imagePath);
+       }
+       if (!this.textures.exists(char.illustKey)) {
+         this.load.image(char.illustKey, char.illustPath);
+       }
+     });
+     ```
+     - `selectDifficulty()`: resets `selectedCharFilter = null` and clears `charFilterObjects` on difficulty change
+     - `loadLeaderboard()`: calls `getLeaderboard(difficulty, 10, this.selectedCharFilter ?? undefined)`; calls `updateCharFilterRow()` after display
+     - `updateRewardUI()`: early return when `selectedCharFilter !== null`
+     - `displayLeaderboard()`: `startY = (this.selectedDifficulty === DifficultyEnum.EXTREME ? 170 : 130) + yOff`
+     - `updateCharFilterRow()`: shows single dropdown button "👤 전체 ▼" for EXTREME:
+     ```typescript
+     const label = `👤 ${selectedName}  ▼`;
+     const btn = this.add.rectangle(cx, cy, 180, 28, 0x1a1a3a, 1);
+     btn.setStrokeStyle(2, 0x5566aa);
+     btn.on('pointerdown', () => this.showCharSelectOverlay());
+     ```
+     - `showCharSelectOverlay()`: 4-column grid overlay with all 21 characters (currently using `imageKey` icons — pending illustration update)
+     - `hideCharSelectOverlay()`: destroys overlay objects, calls `updateCharFilterRow()`
+
+   - **`src/scenes/GameScene.ts`** (MODIFIED)
+     - Added import: `import { getExtremeCharBest, updateExtremeCharBest } from '../utils/extremeCharBest';`
+     - Added properties: `private charHighScore: number = 0; private charHighScoreText?: Phaser.GameObjects.Text;`
+     - `init()`: loads `charHighScore = getExtremeCharBest(this.selectedCharId)` when `scoreDifficulty === 'extreme'`
+     - `create()` HUD: adds "캐릭터: XXXXX" text at `hudTextY + 22` for EXTREME mode
+     - `updateScore()`: real-time charHighScore update when `charHighScoreText` exists
+     - Game-over handling (was line 1459): added `isCharNewRecord` detection:
+     ```typescript
+     const isNewRecord = updateHighScore(this.scoreDifficulty, this.score);
+     const isCharNewRecord = this.scoreDifficulty === 'extreme'
+       && this.score > getExtremeCharBest(this.selectedCharId);
+     this.showGameOverUI(isNewRecord, isCharNewRecord);
+     ```
+     - `showGameOverUI` signature: `protected async showGameOverUI(isNewRecord: boolean, isCharNewRecord: boolean = false)`
+     - In `else` (non-new-record) branch: auto-submit when `isCharNewRecord`:
+     ```typescript
+     if (isCharNewRecord) {
+       const savedInitials = getUserInitials();
+       if (savedInitials) {
+         this.submitScoreForCharRanking(savedInitials);
+       }
+     }
+     ```
+     - After successful normal submission: `updateExtremeCharBest(this.selectedCharId, this.score)`
+     - New private method `submitScoreForCharRanking(initials: string)`: silent auto-submit using saved initials + calls `updateExtremeCharBest` on success
+
+   - **`docs/deploy-extreme-char-leaderboard.md`** (NEW)
+     - Deployment guide: SQL for migration (run in Supabase SQL Editor), then two Edge Function deploy commands
+
+4. Errors and fixes:
+   - **`signing.ts` doesn't exist**: Tried `import { djb2 } from './signing'` in `extremeCharBest.ts`, but no shared signing utility exists. Fixed by inlining the djb2 function (matches pattern in `leaderboard.ts`, `character.ts`, `wallpaper.ts`, etc.)
+   - **Score not saved when not beating overall record**: `showGameOverUI` only ran initials input + `submitScore` when `isNewRecord=true`. Fixed by adding `isCharNewRecord` parameter and auto-submitting for EXTREME when character record is beaten.
+   - **API calls wasteful on every game-over**: Initial plan was to submit every EXTREME game-over. User rejected this. Fixed with localStorage-cached `charHighScore` — only submit when current score beats character's personal best.
+
+5. Problem Solving:
+   - **Core architecture**: Chose separate table (`leaderboard_extreme_char`) over PK modification of existing `leaderboard` to avoid risk to existing bonus/reward system. This allows full rollback with `DROP TABLE`.
+   - **Score not registered for non-record plays**: The game's submission flow is gated by `isNewRecord`. Solution: compare score against character-specific best (from localStorage) and auto-submit silently using saved initials when character best is beaten.
+   - **Scalable character filter UI**: Chip row was limited to top-10 entry characters. Replaced with single button → full 21-character overlay grid. User preferred showing all characters without extra API calls.
+
+6. All user messages:
+   - "지금보면 난이도 별로 랭킹이 있는데 이것과 별개로 난이도 & 캐릭터별 랭킹이 따로 있으면 좋을거 같은데 어떻게 생각해?"
+   - "음 이거는 그러면 익스트림 모드만 캐릭터별 랭킹을 두는건 어떤가?"
+   - "근데 궁금한게 있어. 현재 랭킹 제출은 기존 기록을 넘은 경우에만 제출을 하는데 레거시로 2만점이고 무기로 처음하여 5천점을 달성했을 때 무기의 점수가 등록은 되어야 하는데 이땐 등록이 안되는 그런 상태 아닌가? 이거 고려해줘봐"
+   - "테이블을 따로 구분하는건 어떻게 생각해?"
+   - "그래 별도 테이블로 하자."
+   - "배포 순서 그거 쿼리랑 명령어 순서대로 뭐 날려야 하는지 알려줘"
+   - "마크다운 파일로 만들어줘"
+   - "supabase functions deploy leaderboard-submit --no-verify-jwt 얘는 왜 하는거지?"
+   - "supabase functions deploy leaderboard-top --no-verify-jwt 이건 그러면 뭔데?"
+   - "3개 다 했어. 로컬에서 테스트만 해보면 되나?"
+   - "센티넬로 플레이 했는데 아무런 네트워크 통신도 없는ㄷ[ㅔ?"
+   - "음 그니까 센티넬로는 처음 플레이를 했는데 익스트림 모드에서 근데 왜 센티넬 점수가 등록이 안되는거지? 분명히 내가 익스트림모드에서 캐릭터별 랭킹을 만들겠다고 했는데"
+   - "이니셜 입력이 없었지 당연히. 내 최고 점수를 넘지 못했으니까. 그래서 내가 아까 너한테 물어본거잖아. 다른 캐릭터로 최고 점수 냈던거 넘지 못하면 점수 등록 못하는거 아니냐고"
+   - "이거는 근데 게임오버시 마다 계속 제출을 한다는건가?"
+   - "이것도 캐릭터별 로컬스토리지로하자. 그리고 게임 진행시 현재 점수와 개인 최고 점수가 있는데 캐릭터 최고 점수도 추가해줘."
+   - "익스트림 난이도 랭킹에서 특정 캐릭터 랭킹 보기위해 선택하는거 좀 ui 좋은거로 생각해봐 지금은 4명만 나오는거 같은데 이게 사람이 없을 때 가능해보이는데 나중에 많은 경우 여러 캐릭터를 사용할텐데 말이지"
+   - "기록이 있는 캐릭터만 선택할 필요는 없잖아 굳이 api 호출을 늘릴 필요가 없다고 생각해. 그냥 전체 캐릭터 목록이 나오면 될 거 같은데."
+   - "목록 일러스트로 바꿔줘봐."
+
+7. Pending Tasks:
+   - **Update `showCharSelectOverlay()` to use illustration images** (`char.illustKey`) instead of icon images (`char.imageKey`), with portrait card design (fill card with illustration, gradient at bottom, name overlay, grade badge) and scrollable container with Phaser mask for clipping (21 characters, 4 columns, 6 rows, scrollable)
+
+8. Current Work:
+   The most recent work was updating the character selection overlay in `LeaderboardScene.ts` to use illustration images. The `preload()` method was already updated to load illustrations:
+   ```typescript
+   CHARACTERS.forEach(char => {
+     if (!this.textures.exists(char.imageKey)) {
+       this.load.image(char.imageKey, char.imagePath);
+     }
+     if (!this.textures.exists(char.illustKey)) {
+       this.load.image(char.illustKey, char.illustPath);
+     }
+   });
+   ```
+   But the `showCharSelectOverlay()` method itself still uses `char.imageKey` and the old icon-based grid. The method needs to be rewritten to use `char.illustKey` with portrait card styling and scroll functionality.
+
+9. Optional Next Step:
+   Update `showCharSelectOverlay()` in `src/scenes/LeaderboardScene.ts` to replace icon-based grid with illustration-based portrait cards with scrolling.
+   
+   User's most recent request: "목록 일러스트로 바꿔줘봐" (change the list to use illustrations).
+   
+   The implementation should:
+   - Use `char.illustKey` for card background image (fill card in portrait format)
+   - Card dimensions: ~88×108px, 4 columns
+   - Gradient overlay at card bottom for name text readability
+   - Grade badge (colored, top-right of card)
+   - Character name text at card bottom
+   - Scrollable container with Phaser GeometryMask clipping
+   - Drag-to-scroll interaction shared across cards and background
+   - Selected character highlighted with colored border
+
+If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/johyunduk/.REDACTED.jsonl
+Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.
+
+---
+
+다시 또 더블 클릭 이슈가 생긴거 같아. 저 캐릭터 필터 선택하기위해 버튼 누르면 바로 뒤에 있는 캐릭터가 눌려
+
+---
+
+아직도 그런데? 근데 pc 에서 클릭이긴해
+
+---
+
+# Simplify: Code Review and Cleanup
+
+Review all changed files for reuse, quality, and efficiency. Fix any issues found.
+
+## Phase 1: Identify Changes
+
+Run `git diff` (or `git diff HEAD` if there are staged changes) to see what changed. If there are no git changes, review the most recently modified files that the user mentioned or that you edited earlier in this conversation.
+
+## Phase 2: Launch Three Review Agents in Parallel
+
+Use the Agent tool to launch all three agents concurrently in a single message. Pass each agent the full diff so it has the complete context.
+
+### Agent 1: Code Reuse Review
+
+For each change:
+
+1. **Search for existing utilities and helpers** that could replace newly written code. Look for similar patterns elsewhere in the codebase — common locations are utility directories, shared modules, and files adjacent to the changed ones.
+2. **Flag any new function that duplicates existing functionality.** Suggest the existing function to use instead.
+3. **Flag any inline logic that could use an existing utility** — hand-rolled string manipulation, manual path handling, custom environment checks, ad-hoc type guards, and similar patterns are common candidates.
+
+### Agent 2: Code Quality Review
+
+Review the same changes for hacky patterns:
+
+1. **Redundant state**: state that duplicates existing state, cached values that could be derived, observers/effects that could be direct calls
+2. **Parameter sprawl**: adding new parameters to a function instead of generalizing or restructuring existing ones
+3. **Copy-paste with slight variation**: near-duplicate code blocks that should be unified with a shared abstraction
+4. **Leaky abstractions**: exposing internal details that should be encapsulated, or breaking existing abstraction boundaries
+5. **Stringly-typed code**: using raw strings where constants, enums (string unions), or branded types already exist in the codebase
+6. **Unnecessary JSX nesting**: wrapper Boxes/elements that add no layout value — check if inner component props (flexShrink, alignItems, etc.) already provide the needed behavior
+7. **Nested conditionals**: ternary chains (`a ? x : b ? y : ...`), nested if/else, or nested switch 3+ levels deep — flatten with early returns, guard clauses, a lookup table, or an if/else-if cascade
+8. **Unnecessary comments**: comments explaining WHAT the code does (well-named identifiers already do that), narrating the change, or referencing the task/caller — delete; keep only non-obvious WHY (hidden constraints, subtle invariants, workarounds)
+
+### Agent 3: Efficiency Review
+
+Review the same changes for efficiency:
+
+1. **Unnecessary work**: redundant computations, repeated file reads, duplicate network/API calls, N+1 patterns
+2. **Missed concurrency**: independent operations run sequentially when they could run in parallel
+3. **Hot-path bloat**: new blocking work added to startup or per-request/per-render hot paths
+4. **Recurring no-op updates**: state/store updates inside polling loops, intervals, or event handlers that fire unconditionally — add a change-detection guard so downstream consumers aren't notified when nothing changed. Also: if a wrapper function takes an updater/reducer callback, verify it honors same-reference returns (or whatever the "no change" signal is) — otherwise callers' early-return no-ops are silently defeated
+5. **Unnecessary existence checks**: pre-checking file/resource existence before operating (TOCTOU anti-pattern) — operate directly and handle the error
+6. **Memory**: unbounded data structures, missing cleanup, event listener leaks
+7. **Overly broad operations**: reading entire files when only a portion is needed, loading all items when filtering for one
+
+## Phase 3: Fix Issues
+
+Wait for all three agents to complete. Aggregate their findings and fix each issue directly. If a finding is a false positive or not worth addressing, note it and move on — do not argue with the finding, just skip it.
+
+When done, briefly summarize what was fixed (or confirm the code was already clean).
+
+---
+
+<task-notification>
+<task-id>a82f96a850b8e00b8</task-id>
+<tool-use-id>toolu_01FMfYLhfbwDLrrP5DurcJk9</tool-use-id>
+<output-file>REDACTED.output</output-file>
+<status>completed</status>
+<summary>Agent "Code quality review" completed</summary>
+<result>Now I have all the information I need to provide a thorough review.
+
+## Code Review: Phaser 3 TypeScript Game Diff
+
+### Real Findings
+
+**1. Stringly-typed difficulty checks (Critical)**
+Four instances of `this.scoreDifficulty === 'extreme'` (lines 272, 453, 1485, 1792 in GameScene.ts) should use the constant `Difficulty.EXTREME` defined in types/GameMode.ts. The constant is already imported:
+```typescript
+import { GameMode, Difficulty, DIFFICULTIES, ... }
+```
+Replace: `this.scoreDifficulty === 'extreme'` → `this.scoreDifficulty === Difficulty.EXTREME`
+
+**2. Redundant comments that explain WHAT, not WHY**
+- Line 271: `// EXTREME: 캐릭터별 최고 점수 로드` — just describes the next line
+- Line 452: `// EXTREME: 캐릭터 최고 점수 텍스트` — obvious from code
+- Line 869: `// EXTREME: 캐릭터 최고 점수 실시간 갱신` — self-explanatory
+- Line 1792: `// EXTREME: 캐릭터 베스트 localStorage 갱신` — states what, not why
+
+These should either explain the business logic (e.g., "Only track per-character bests in extreme mode to avoid storage bloat") or be removed.
+
+**3. Parameter sprawl (Minor)**
+`showGameOverUI(isNewRecord: boolean, isCharNewRecord: boolean = false)` now takes two booleans. While functional, consider: would a `{ isNewRecord, isCharNewRecord }` object parameter improve clarity if this grows further?
+
+### Non-Issues (Correctly Dismissed)
+
+- **`charHighScore` redundancy**: Legitimate — holds HUD display state; `getExtremeCharBest()` requires localStorage reads, so caching prevents thrashing during real-time updates.
+- **`scroll.startScrollY`**: Correct — distinct from `y` and `startY`; needed to calculate delta correctly during drag.
+- **`ROWS` inlining**: Already inline where needed (used only in `totalGridH` calculation on line 519).</result>
+<usage><total_tokens>26187</total_tokens><tool_uses>9</tool_uses><duration_ms>22599</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a5c25d91bf7927167</task-id>
+<tool-use-id>toolu_017gfCMv2LUbbmS7esvSFQ4b</tool-use-id>
+<output-file>REDACTED.output</output-file>
+<status>completed</status>
+<summary>Agent "Efficiency review" completed</summary>
+<result>Excellent. Now I have all the context. Let me provide a focused efficiency review:
+
+---
+
+## Efficiency Review Findings
+
+**1. Double localStorage read (GameScene.init + game-over): REAL ISSUE**
+
+At `init()` line 271, you call `getExtremeCharBest(this.selectedCharId)` and store in `this.charHighScore`. At game-over (line 1485), you call it again with `this.score &gt; getExtremeCharBest(this.selectedCharId)`. Since `this.charHighScore` is updated in real-time during play (line 872), the second read is **redundant**—you already have the answer in `this.charHighScore`. Change line 1485 to:
+```typescript
+const isCharNewRecord = this.scoreDifficulty === 'extreme' &amp;&amp; this.score &gt; this.charHighScore;
+```
+
+**2. Overlay GameObjects per card: NOT A CONCERN**
+
+105 objects for a one-time overlay is minimal and destroyed on close. Graphics per card is acceptable for this use case.
+
+**3. Event listener leak: MINOR RISK**
+
+The `overlayCleanup` function is only called in `hideCharSelectOverlay()`. If a player leaves LeaderboardScene while the overlay is open (e.g., navigation, scene shutdown), the three input listeners remain. Mitigate by adding to `shutdown()` hook:
+```typescript
+this.events.once('shutdown', () =&gt; this.overlayCleanup?.());
+```
+
+**4. Leaderboard-submit EXTREME char block: CORRECT AS-IS**
+
+The SELECT + conditional UPSERT pattern is necessary because Supabase's `upsert` doesn't return the conflict row. A single query cannot determine "is this a new record?" without reading first. The logic is optimal.
+
+**5. `getExtremeCharBest()` calls: RESOLVED**
+
+Confirmed—init() loads once, game-over reuses `this.charHighScore`. Issue #1 fixes this.</result>
+<usage><total_tokens>26390</total_tokens><tool_uses>8</tool_uses><duration_ms>18628</duration_ms></usage>
+</task-notification>
+
+---
+
+뭐 명령어 날려야 하는게 있나?
+
+---
+
+근데 여전히 익스트림 캐릭터 드롭다운 더블 클릭 이슈 여전히 남아있어. 좀 제대로 확인해봐.
+
+---
+
+닫기 버튼은 왜 잘 안눌리냐?
+
+---
+
+자 그러면 이제 마지막으로 보상관련해서는 어떻게 하는게 좋을까?
+
+---
+
+B 느낌으로 하고 싶긴한데 지금 현재 익스트림 보상은 어떤식으로 구현되어 있지?
+
+---
+
+<task-notification>
+<task-id>a0b84b882310d9f48</task-id>
+<tool-use-id>toolu_019b2UNzBfi7ymLyPbms7cmG</tool-use-id>
+<output-file>REDACTED.output</output-file>
+<status>completed</status>
+<summary>Agent "Claim season reward Edge Function 탐색" completed</summary>
+<result>## Report: claim-season-reward Function Analysis
+
+**Tables Read/Written:**
+- **Reads:** `leaderboard` (user's score and rank for difficulty/month), `season_reward_history` (claim check), `user_skor` (balance/weekly tracking)
+- **Writes:** `season_reward_history` (reward record), `user_skor` (balance &amp; weekly earned update)
+
+**Reward Calculation (SKOR per Rank):**
+Difficulty-based tiers with percentile ranking:
+- **Rank 1/2/3:** Fixed rewards (Normal: 6000/4000/2000 | Hard: 12000/8000/4000 | Extreme/Physical: 30000/20000/10000)
+- **Top 10% (by percentile):** 1000–5000 SKOR
+- **Top 50%:** 600–3000 SKOR
+- **Rest:** 200–1000 SKOR
+
+**Reward Trigger Conditions:**
+1. User must have a leaderboard entry for the *previous month* in the specified difficulty
+2. User must not have already claimed the reward for that month/difficulty combo
+3. Reward claim window is hardcoded to previous month only—prevents retroactive claims
+
+**Idempotency &amp; Constraints:**
+- **UNIQUE constraint** on `season_reward_history(year_month, user_id, difficulty)` prevents duplicate claims
+- **Race condition protection:** Concurrent requests trigger PostgreSQL unique constraint violation (error code 23505), detected and handled to return `alreadyClaimed: true`
+- **Pre-claim check:** Queries existing reward record before attempting insert; if found, returns immediately
+- The function calculates rank at claim-time using COUNT queries (not stored in leaderboard), making rewards flexible if leaderboard changes
+
+**Weekly tracking:** Updates `user_skor.weekly_earned` and `week_start` based on UTC week boundaries.</result>
+<usage><total_tokens>17080</total_tokens><tool_uses>1</tool_uses><duration_ms>7996</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a0080e6ebb2830264</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>REDACTED.output</output-file>
+<status>completed</status>
+<summary>Agent "LeaderboardScene 보상 UI + DB 스키마 탐색" completed</summary>
+<result>Perfect! Now I have all the information needed. Let me compile the findings:
+
+## Summary
+
+**1. UI Flow for Claiming Season Reward (lines 620–700)**
+
+`updateRewardUI()` manages button states based on reward eligibility:
+- Disabled (gray) if character filter is active or no record exists (rank=null, skorAwarded=0)
+- Disabled (green, "수령완료") if already claimed (`alreadyClaimed=true`)
+- Enabled (yellow, "보상수령") if reward is available — interactive with hover effects
+
+`handleClaimReward()` handles the claim action:
+- Disables button and shows "처리중..." (processing) during request
+- Calls `claimSeasonReward()` (async)
+- On success: updates local reward state (`alreadyClaimed=true`), refreshes UI, and displays a flash animation showing the acquired SKOR amount
+
+**2. Database Schema for Season Rewards**
+
+Migration file: `REDACTED.sql`
+
+Table: `season_reward_history`
+- `id` (UUID, PK)
+- `year_month` (TEXT, 'YYYY-MM' format)
+- `user_id` (UUID, FK to auth.users, cascade delete)
+- `difficulty` (TEXT)
+- `rank` (INTEGER, user's rank that season)
+- `skor_awarded` (NUMERIC 10.1, award amount)
+- `awarded_at` (TIMESTAMPTZ, claim timestamp)
+- **UNIQUE constraint**: `(year_month, user_id, difficulty)` — prevents duplicate claims at DB level
+- **Indexes**: by user+year_month, and leaderboard by season+difficulty+score
+
+**3. Caching Strategy**
+
+`getCachedClaimAmount(yearMonth, difficulty)` checks localStorage for previously claimed amounts, returning the SKOR awarded or null.
+
+`claimSeasonReward()` updates localStorage cache on success using djb2-signed key-value pairs. Cache stores `{yearMonth_difficulty: skorAmount}`, pruned to keep only current and previous month entries. Signature verification prevents tampering; mismatched signatures clear the cache.</result>
+<usage><total_tokens>20075</total_tokens><tool_uses>5</tool_uses><duration_ms>11195</duration_ms></usage>
+</task-notification>
+
+---
+
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+Summary:
+## 1. Primary Request and Intent
+
+The session continued from a previous conversation that implemented EXTREME character-based rankings. The key requests in this session were:
+
+1. **Replace icon grid with illustration portrait cards** in the character selection overlay (`showCharSelectOverlay()`)
+2. **Fix ghost click / double-click issues** in the EXTREME character dropdown (multiple iterations)
+3. **Run `/simplify`** — code quality cleanup pass
+4. **Fix close button requiring two clicks** in the character overlay
+5. **Add character-specific season rewards** for EXTREME leaderboard (direction B): reduced amounts (1위 5,000 / 2위 3,000 / 3위 1,500 SKOR), multiple character rewards per month allowed
+
+---
+
+## 2. Key Technical Concepts
+
+- **Phaser 3** game on 400×600 canvas; `verbatimModuleSyntax=true`, `erasableSyntaxOnly=true` (no enums, no runtime `Phaser` namespace)
+- **GeometryMask + Container scroll**: `maskGfx.createGeometryMask()` (not `new Phaser.Display.Masks.GeometryMask()`) for clipping; Container.y changes for scrolling
+- **Phaser event order**: Game object `pointerdown/up` fires BEFORE scene-level `input.on('pointerdown/up')`. TimePlugin.update() runs BEFORE InputPlugin.update() in the same frame step
+- **Ghost click fix pattern**: `readyForInput = false` initially; scene-level `onUp` sets it `true` AFTER the card's `pointerup` check (exploiting game-object-before-scene-level ordering)
+- **`delayedCall(0)` trap**: fires at the START of the next frame (before input), NOT after input — wrong approach for ghost click prevention
+- **djb2 signing for localStorage**: all game data in localStorage signed for tamper prevention
+- **Supabase Edge Functions**: `--no-verify-jwt` for functions with their own auth handling
+- **`Difficulty.EXTREME`** constant from `types/GameMode.ts` (as const object, not enum)
+- **`season_reward_history`**: UNIQUE `(year_month, user_id, difficulty)` — new `season_reward_history_char` table for character rewards
+- **PostgreSQL error 23505**: race condition protection for duplicate claims
+
+---
+
+## 3. Files and Code Sections
+
+### `src/scenes/LeaderboardScene.ts` (heavily modified)
+
+**New class properties:**
+```typescript
+private selectedCharFilter: string | null = null;
+private charFilterObjects: Phaser.GameObjects.GameObject[] = [];
+private charOverlayObjects: Phaser.GameObjects.GameObject[] = [];
+private overlayCleanup?: () => void;
+```
+
+**`create()` addition:**
+```typescript
+this.events.once('shutdown', () => this.overlayCleanup?.());
+```
+
+**`showCharSelectOverlay()` — full portrait card overlay with scrolling:**
+```typescript
+private showCharSelectOverlay() {
+  if (this.charOverlayObjects.length > 0) return;
+  // DEPTH = 500
+  // readyForInput: false initially — set true in onUp (scene-level fires AFTER game object events)
+  const scroll = { y: 0, startY: 0, startScrollY: 0, active: false, hasDragged: false, readyForInput: false };
+  // NO delayedCall
+
+  // "전체 랭킹" button — NO readyForInput guard (different y position, no ghost click risk)
+  allBg.on('pointerup', () => {
+    if (scroll.hasDragged) return;
+    // ... select all
+  });
+
+  // Close button — NO readyForInput guard (y=H-24, far from dropdown at y=145)
+  closeBg.on('pointerup', () => { if (!scroll.hasDragged) this.hideCharSelectOverlay(); });
+
+  // SCROLL_TOP = 90+yOff, SCROLL_BOTTOM = H-46
+  // GeometryMask for clipping
+  const maskGfx = this.add.graphics();
+  maskGfx.fillRect(0, SCROLL_TOP, W, scrollAreaH);
+  const mask = maskGfx.createGeometryMask();
+  
+  const cardContainer = this.add.container(0, 0).setDepth(DEPTH + 1);
+  cardContainer.setMask(mask);
+
+  // Cards: CELL_W=90, CELL_H=112, CARD_W=84, CARD_H=106, COLS=4, gridLeft=20
+  // Uses char.illustKey for portrait image
+  cardBg.on('pointerup', (ptr) => {
+    if (!scroll.readyForInput || scroll.hasDragged) return; // ONLY cards have readyForInput guard
+    if (ptr.y < SCROLL_TOP || ptr.y > SCROLL_BOTTOM) return;
+    // ... select character
+  });
+
+  const onDown = (ptr) => { /* scroll tracking */ };
+  const onMove = (ptr) => { /* scroll.y update, cardContainer.y = -scroll.y */ };
+  const onUp = () => {
+    scroll.active = false;
+    scroll.readyForInput = true; // KEY: fires after card pointerup, enables next click
+  };
+
+  this.input.on('pointerdown', onDown);
+  this.input.on('pointermove', onMove);
+  this.input.on('pointerup', onUp);
+
+  this.overlayCleanup = () => {
+    this.input.off('pointerdown', onDown);
+    this.input.off('pointermove', onMove);
+    this.input.off('pointerup', onUp);
+  };
+}
+```
+
+**`hideCharSelectOverlay()`:**
+```typescript
+private hideCharSelectOverlay() {
+  this.overlayCleanup?.();
+  this.overlayCleanup = undefined;
+  this.charOverlayObjects.forEach(o => o.destroy());
+  this.charOverlayObjects = [];
+  this.updateCharFilterRow();
+}
+```
+
+**`updateRewardUI()` — character filter currently disables reward button** (to be changed in pending implementation):
+```typescript
+if (this.selectedCharFilter !== null) {
+  btn.setFillStyle(0x555555)...
+  btn.disableInteractive();
+  label.setText('보상수령').setColor('#999999');
+  return;
+}
+```
+
+### `src/scenes/GameScene.ts` (modified)
+
+**Import added:**
+```typescript
+import { getExtremeCharBest, updateExtremeCharBest } from '../utils/extremeCharBest';
+```
+
+**New properties:**
+```typescript
+private charHighScore: number = 0;
+private charHighScoreText?: Phaser.GameObjects.Text;
+```
+
+**Key changes (from /simplify):**
+- `'extreme'` literals → `Difficulty.EXTREME` in 4 places
+- `getExtremeCharBest()` at game-over removed → uses `this.charHighScore` instead:
+  ```typescript
+  const isCharNewRecord = this.scoreDifficulty === Difficulty.EXTREME
+    && this.score > this.charHighScore; // was: > getExtremeCharBest(this.selectedCharId)
+  ```
+- WHAT comments removed (3 instances)
+
+**`showGameOverUI` signature:**
+```typescript
+protected async showGameOverUI(isNewRecord: boolean, isCharNewRecord: boolean = false)
+```
+
+**`submitScoreForCharRanking(initials)` — silent auto-submit for char records:**
+```typescript
+private async submitScoreForCharRanking(initials: string) {
+  try {
+    const sessionId = await this.sessionPromise;
+    await submitScore(this.score, this.scoreDifficulty, initials, { ... }, this.selectedCharId, sessionId);
+    updateExtremeCharBest(this.selectedCharId, this.score);
+  } catch { /* UX 영향 없이 무시 */ }
+}
+```
+
+### `src/utils/extremeCharBest.ts` (new file — already implemented)
+```typescript
+const _KEY = 'extremeCharBest';
+const _SIG_KEY = 'extremeCharBestSig';
+const _SALT = 'ddong-extreme-char-v1';
+// inline djb2 + sign/load/save
+export function getExtremeCharBest(charId: string): number
+export function updateExtremeCharBest(charId: string, score: number): void
+```
+
+### `src/utils/leaderboard.ts` (modified)
+
+**`getLeaderboard()` updated signature:**
+```typescript
+export async function getLeaderboard(
+  difficulty: Difficulty,
+  limit: number = 100,
+  characterType?: string
+): Promise<LeaderboardResponse>
+```
+
+**New character reward cache + function added (just implemented):**
+```typescript
+const _CHAR_CLAIMS_KEY = 'charRewardClaims';
+const _CHAR_CLAIMS_SIG_KEY = 'charRewardClaimsSig';
+const _CHAR_CLAIMS_SALT = 'ddong-char-reward-v1';
+
+export function getCachedCharClaimAmount(yearMonth: string, charId: string): number | null
+
+export async function claimCharacterReward(characterType: string): Promise<ClaimRewardResponse> {
+  const { data, error } = await supabase.functions.invoke('claim-season-reward', {
+    body: { characterType },
+  });
+  // on success: caches to charRewardClaims with djb2 signature
+}
+```
+
+### `supabase/functions/leaderboard-top/index.ts` (modified)
+
+**Character filter block now computes rank+reward for authenticated user:**
+```typescript
+// Parallel queries for prev month
+const [userPrevResult, claimResult] = await Promise.all([
+  supabaseAdmin.from('leaderboard_extreme_char').select('score')
+    .eq('user_id', currentUserId).eq('year_month', prevYearMonth)
+    .eq('character_type', characterType).single(),
+  supabaseAdmin.from('season_reward_history_char').select('id')
+    .eq('user_id', currentUserId).eq('year_month', prevYearMonth)
+    .eq('character_type', characterType).single(),
+]);
+// COUNT for rank, CHAR_REWARDS = {1:5000, 2:3000, 3:1500}
+// Returns charCurrentUserRank and charPrevSeasonReward (not null anymore)
+```
+
+### `supabase/functions/claim-season-reward/index.ts` (modified)
+
+**Extracted `updateUserSkor()` helper** (was inline 25-line block):
+```typescript
+async function updateUserSkor(supabaseAdmin: any, userId: string, reward: number): Promise<number>
+```
+
+**Added `CHAR_REWARDS` constant:**
+```typescript
+const CHAR_REWARDS: Record<number, number> = { 1: 5000, 2: 3000, 3: 1500 };
+```
+
+**New character reward branch before existing difficulty logic:**
+```typescript
+const { difficulty, characterType } = await req.json();
+// auth check (common)...
+if (characterType) {
+  // 1. check existing claim in season_reward_history_char
+  // 2. query leaderboard_extreme_char for user's prev month score
+  // 3. compute rank, get reward from CHAR_REWARDS
+  // 4. rank > 3 → return skorAwarded: 0
+  // 5. INSERT season_reward_history_char (23505 → alreadyClaimed)
+  // 6. updateUserSkor()
+  return response;
+}
+// existing difficulty logic below (unchanged)
+```
+
+### `supabase/migrations/20260515_leaderboard_extreme_char.sql` (new — already created)
+Creates `leaderboard_extreme_char` table with PK `(user_id, year_month, character_type)`, references `profiles(id)` for PostgREST JOIN.
+
+### DB Migration pending (not yet run — user must run in SQL Editor):
+```sql
+CREATE TABLE IF NOT EXISTS season_reward_history_char (
+  id            UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id       UUID        NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  year_month    TEXT        NOT NULL,
+  character_type TEXT       NOT NULL,
+  rank          INTEGER     NOT NULL,
+  skor_awarded  NUMERIC(10,1) NOT NULL DEFAULT 0,
+  awarded_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(year_month, user_id, character_type)
+);
+CREATE INDEX IF NOT EXISTS idx_char_reward_user ON season_reward_history_char (user_id, year_month);
+ALTER TABLE season_reward_history_char ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "read_own_char_rewards" ON season_reward_history_char FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "insert_own_char_rewards" ON season_reward_history_char FOR INSERT WITH CHECK (auth.uid() = user_id);
+```
+
+---
+
+## 4. Errors and Fixes
+
+1. **`Phaser.Math.Clamp` runtime error**: Used `Phaser.Math.Clamp` but `import type Phaser` = no runtime access. Fixed: `Math.max(0, Math.min(maxScroll, ...))`.
+
+2. **`Phaser` cannot be used as a value** (tsc error on `new Phaser.Display.Masks.GeometryMask`): Fixed by using `maskGfx.createGeometryMask()` instance method instead.
+
+3. **Ghost click — first attempt (`delayedCall(0)`)**: Set `readyForInput = true` via `delayedCall(0, ...)`. Failed because `delayedCall(0)` fires at start of next frame BEFORE input processing (TimePlugin runs before InputPlugin in Phaser's game loop).
+
+4. **Ghost click — second attempt (onDown sets readyForInput)**: Same frame issue: game object `pointerdown` fires → calls `showCharSelectOverlay()` → registers scene-level `onDown` → same frame's scene-level `pointerdown` fires → `readyForInput = true` immediately.
+
+5. **Ghost click — final fix**: Use `onUp` (scene-level) to set `readyForInput = true`. Key: game object `pointerup` fires BEFORE scene-level `pointerup`, so card handler sees `readyForInput=false` and is blocked; then `onUp` enables it for the next press. Removed `delayedCall` entirely.
+
+6. **Close button requiring two clicks**: `readyForInput` guard was applied to close button and "전체 랭킹" button unnecessarily. These are at y=576 and y=68 respectively — far from the dropdown button at y=145 (where ghost clicks can occur). Fixed by removing `readyForInput` guard from these buttons, keeping it only on cards.
+
+7. **`signing.ts` doesn't exist**: Initial attempt to use `import { djb2 } from './signing'`. Fixed by inlining djb2 function (per-file pattern used throughout codebase).
+
+---
+
+## 5. Problem Solving
+
+- **Ghost click root cause**: Phaser's event execution order (`TimePlugin` before `InputPlugin`; game object events before scene-level events) is the core insight enabling the `readyForInput` pattern. Position-specific guarding (only cards, not buttons at different y positions) avoids over-zealous blocking.
+
+- **Character-specific rewards without breaking existing system**: Separate `season_reward_history_char` table instead of modifying `season_reward_history`, new branch in `claim-season-reward` with `characterType` param, all existing reward logic untouched.
+
+- **`leaderboard-top` authentication**: Already had optional auth (anon key pattern) so extending it for character reward rank computation was straightforward.
+
+---
+
+## 6. All User Messages
+
+1. (Continuation from previous session — picking up task of updating `showCharSelectOverlay()` to use illustrations)
+2. "다시 또 더블 클릭 이슈가 생긴거 같아. 저 캐릭터 필터 선택하기위해 버튼 누르면 바로 뒤에 있는 캐릭터가 눌려"
+3. "아직도 그런데? 근데 pc 에서 클릭이긴해"
+4. `/simplify` (slash command)
+5. "닫기 버튼은 왜 잘 안눌리냐?"
+6. "근데 여전히 익스트림 캐릭터 드롭다운 더블 클릭 이슈 여전히 남아있어. 좀 제대로 확인해봐."
+7. "뭐 명령어 날려야 하는게 있나?"
+8. "자 그러면 이제 마지막으로 보상관련해서는 어떻게 하는게 좋을까?"
+9. "B 느낌으로 하고 싶긴한데 지금 현재 익스트림 보상은 어떤식으로 구현되어 있지?" (entered plan mode)
+10. (Question answers) "캐릭터별 보상 금액을 어떻게 할까요?" → "축소 (추천)" (1위 5,000 / 2위 3,000 / 3위 1,500); "한 유저가 한 달에 여러 캐릭터 보상을 모두 받을 수 있나요?" → "전부 받기 가능 (추천)"
+11. Plan approved (ExitPlanMode)
+
+---
+
+## 7. Pending Tasks
+
+1. **Complete `LeaderboardScene.ts` reward UI implementation**:
+   - Import `getCachedCharClaimAmount`, `claimCharacterReward` from `leaderboard.ts`
+   - Update `loadLeaderboard()` to use `getCachedCharClaimAmount` when char filter active
+   - Update `updateRewardUI()`: replace "disable button" behavior with character reward UI (노란색 활성/초록 수령완료/회색 보상없음)
+   - Add `handleClaimCharReward()` private method
+
+2. **Run DB Migration** in Supabase SQL Editor (create `season_reward_history_char` table)
+
+3. **Deploy Edge Functions**:
+   - `supabase functions deploy leaderboard-top --no-verify-jwt`
+   - `supabase functions deploy claim-season-reward --no-verify-jwt`
+
+---
+
+## 8. Current Work
+
+Implementing EXTREME character-specific season rewards. The implementation was in progress, having completed:
+- `supabase/functions/leaderboard-top/index.ts` ✅
+- `supabase/functions/claim-season-reward/index.ts` ✅ (including `updateUserSkor` extraction)
+- `src/utils/leaderboard.ts` ✅ (`getCachedCharClaimAmount`, `claimCharacterReward` added)
+
+The session was cut off mid-implementation while reading `src/scenes/LeaderboardScene.ts` to complete the final step.
+
+Last read context from `LeaderboardScene.ts`:
+- Lines 1-15: imports, class opening
+- Lines 226-275: `loadLeaderboard()` method showing existing cache logic
+- Lines 635-720: `updateRewardUI()` and `handleClaimReward()` methods
+
+The `updateRewardUI()` currently has this block to replace:
+```typescript
+if (this.selectedCharFilter !== null) {
+  btn.setFillStyle(0x555555).setStrokeStyle(3, 0x333333);
+  btn.disableInteractive();
+  btn.removeAllListeners();
+  label.setText('보상수령').setColor('#999999');
+  return;
+}
+```
+
+---
+
+## 9. Optional Next Step
+
+Continue implementing the `LeaderboardScene.ts` changes per the approved plan:
+
+1. Add imports for `getCachedCharClaimAmount` and `claimCharacterReward`
+2. In `loadLeaderboard()`, update prevSeasonReward cache logic to branch on `selectedCharFilter`:
+   ```typescript
+   if (this.selectedCharFilter !== null) {
+     const cached = getCachedCharClaimAmount(prevYM, this.selectedCharFilter);
+     this.prevSeasonReward = cached !== null
+       ? { ...response.prevSeasonReward, alreadyClaimed: true, skorAwarded: cached }
+       : response.prevSeasonReward;
+   } else {
+     // existing getCachedClaimAmount logic
+   }
+   ```
+3. In `updateRewardUI()`, replace the disabled-button char filter block with full character reward UI (노란색/초록/회색 states, calling `handleClaimCharReward()`)
+4. Add `handleClaimCharReward()` private method (mirrors `handleClaimReward()` but calls `claimCharacterReward(this.selectedCharFilter!)`)
+5. Run `npx tsc --noEmit` to verify
+
+If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/johyunduk/.REDACTED.jsonl
+Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.
+
+---
+
+쿼리문만 문서에 마크다운 문서에 작성해줘봐
+
+---
+
+랭킹보드에서 닫기버튼 또 안눌리는데
+
+---
+
+깃 푸시해줘
+
+---
+
+엥 변경내용이 없는게 맞아?
+
+---
+
+아오 다시 모바일에서 더블 클릭 되는 현상 다시 나타났어 랭킹에서 캐릭터 드롭다운 누를때 그리고 닫기 버튼도 안눌리고. 제대로 파악해서 제대로 고쳐.
