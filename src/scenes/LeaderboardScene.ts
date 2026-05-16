@@ -511,10 +511,10 @@ export default class LeaderboardScene extends BaseScene {
     // 닫기 버튼 (하단 고정) — 스크롤 영역 밖이므로 hasDragged 체크 불필요
     const closeY = H - 24;
     const closeBg = this.add.rectangle(cx, closeY, 100, 30, 0x333333, 1)
-      .setDepth(DEPTH + 1).setStrokeStyle(2, 0x666666);
+      .setDepth(DEPTH + 3).setStrokeStyle(2, 0x666666);
     const closeTxt = this.add.text(cx, closeY, '✕ 닫기', {
       fontSize: '13px', color: '#cccccc', fontStyle: 'bold',
-    }).setOrigin(0.5).setDepth(DEPTH + 2);
+    }).setOrigin(0.5).setDepth(DEPTH + 4);
     closeBg.setInteractive({ useHandCursor: true });
     closeBg.on('pointerup', () => {
       if (Date.now() - openedAt < OPEN_DEBOUNCE) return;
