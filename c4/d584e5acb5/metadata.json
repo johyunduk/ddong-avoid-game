@@ -3,7 +3,7 @@
   "checkpoint_id": "c4d584e5acb5",
   "strategy": "manual-commit",
   "branch": "dev",
-  "checkpoints_count": 2,
+  "checkpoints_count": 3,
   "files_touched": [
     "src/scenes/LeaderboardScene.ts"
   ],
@@ -20,6 +20,13 @@
       "transcript": "/c4/d584e5acb5/1/full.jsonl",
       "context": "",
       "content_hash": "/c4/d584e5acb5/1/content_hash.txt",
+      "prompt": ""
+    },
+    {
+      "metadata": "/c4/d584e5acb5/2/metadata.json",
+      "transcript": "/c4/d584e5acb5/2/full.jsonl",
+      "context": "",
+      "content_hash": "/c4/d584e5acb5/2/content_hash.txt",
       "prompt": ""
     }
   ],
