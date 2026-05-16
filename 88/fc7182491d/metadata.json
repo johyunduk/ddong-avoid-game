@@ -135,6 +135,13 @@
       "context": "/88/fc7182491d/17/context.md",
       "content_hash": "/88/fc7182491d/17/content_hash.txt",
       "prompt": "/88/fc7182491d/17/prompt.txt"
+    },
+    {
+      "metadata": "/88/fc7182491d/18/metadata.json",
+      "transcript": "/88/fc7182491d/18/full.jsonl",
+      "context": "",
+      "content_hash": "/88/fc7182491d/18/content_hash.txt",
+      "prompt": ""
     }
   ],
   "token_usage": {
