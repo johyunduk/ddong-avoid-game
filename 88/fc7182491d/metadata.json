@@ -23,6 +23,13 @@
       "context": "",
       "content_hash": "/88/fc7182491d/1/content_hash.txt",
       "prompt": ""
+    },
+    {
+      "metadata": "/88/fc7182491d/2/metadata.json",
+      "transcript": "/88/fc7182491d/2/full.jsonl",
+      "context": "",
+      "content_hash": "/88/fc7182491d/2/content_hash.txt",
+      "prompt": ""
     }
   ]
 }
