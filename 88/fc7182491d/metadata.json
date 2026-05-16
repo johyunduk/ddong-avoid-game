@@ -121,6 +121,13 @@
       "context": "/88/fc7182491d/15/context.md",
       "content_hash": "/88/fc7182491d/15/content_hash.txt",
       "prompt": "/88/fc7182491d/15/prompt.txt"
+    },
+    {
+      "metadata": "/88/fc7182491d/16/metadata.json",
+      "transcript": "/88/fc7182491d/16/full.jsonl",
+      "context": "",
+      "content_hash": "/88/fc7182491d/16/content_hash.txt",
+      "prompt": ""
     }
   ],
   "token_usage": {
