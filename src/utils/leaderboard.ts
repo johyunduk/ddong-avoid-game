@@ -158,9 +158,10 @@ const _LB_TTL = 30_000;
 export async function getLeaderboard(
   difficulty: Difficulty,
   limit: number = 100,
-  characterType?: string
+  characterType?: string,
+  yearMonth?: string
 ): Promise<LeaderboardResponse> {
-  const cacheKey = `${difficulty}:${limit}:${characterType ?? ''}`;
+  const cacheKey = `${difficulty}:${limit}:${characterType ?? ''}:${yearMonth ?? ''}`;
   const cached = _lbCache.get(cacheKey);
   if (cached && Date.now() - cached.ts < _LB_TTL) {
     return cached.data;
@@ -168,6 +169,7 @@ export async function getLeaderboard(
 
   const body: Record<string, unknown> = { difficulty, limit };
   if (characterType) body.characterType = characterType;
+  if (yearMonth) body.yearMonth = yearMonth;
 
   const { data, error } = await supabase.functions.invoke('leaderboard-top', {
     body,

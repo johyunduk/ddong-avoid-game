@@ -30,6 +30,9 @@ export default class LeaderboardScene extends BaseScene {
   // 시즌 UI 요소
   private seasonText?: Phaser.GameObjects.Text;
   private prevSeasonReward: PrevSeasonReward | null = null;
+  private viewingYearMonth: string | null = null; // null = 현재 시즌
+  private leftArrowBtn?: Phaser.GameObjects.Text;
+  private rightArrowBtn?: Phaser.GameObjects.Text;
 
   // 보상수령 버튼 (create에서 1회 생성, updateRewardUI에서 상태 변경)
   private rewardBtnBg?: Phaser.GameObjects.Rectangle;
@@ -44,6 +47,7 @@ export default class LeaderboardScene extends BaseScene {
     if (last) {
       this.selectedDifficulty = last;
     }
+    this.viewingYearMonth = null;
   }
 
   preload() {
@@ -85,13 +89,33 @@ export default class LeaderboardScene extends BaseScene {
       padding: { top: 6 },
     }).setOrigin(0.5);
 
-    // 시즌 월 표시 (데이터 로드 후 갱신)
-    this.seasonText = this.add.text(cx, 70 + yOff, '', {
+    // 시즌 탐색 UI (◀ 시즌텍스트 ▶)
+    const arrowY = 70 + yOff;
+    const arrowStyle = {
+      fontSize: '18px',
+      color: '#aaddff',
+      stroke: '#000',
+      strokeThickness: 3,
+    };
+
+    // 왼쪽 화살표: 텍스트 + 투명 히트박스 Rectangle
+    this.leftArrowBtn = this.add.text(cx - 145, arrowY, '◀', arrowStyle).setOrigin(0.5);
+    const leftHit = this.add.rectangle(cx - 145, arrowY, 44, 36, 0xffffff, 0)
+      .setInteractive({ useHandCursor: true });
+    leftHit.on('pointerdown', () => this.navigateSeason(-1));
+
+    this.seasonText = this.add.text(cx, arrowY, '', {
       fontSize: '13px',
       color: '#aaddff',
       stroke: '#000',
       strokeThickness: 3,
     }).setOrigin(0.5);
+
+    // 오른쪽 화살표: 텍스트 + 투명 히트박스 Rectangle
+    this.rightArrowBtn = this.add.text(cx + 145, arrowY, '▶', arrowStyle).setOrigin(0.5);
+    const rightHit = this.add.rectangle(cx + 145, arrowY, 44, 36, 0xffffff, 0)
+      .setInteractive({ useHandCursor: true });
+    rightHit.on('pointerdown', () => this.navigateSeason(1));
 
     // 난이도 선택 버튼들
     this.createDifficultyButtons(cx, yOff);
@@ -230,19 +254,31 @@ export default class LeaderboardScene extends BaseScene {
       const response = await getLeaderboard(
         this.selectedDifficulty,
         10,
-        this.selectedCharFilter ?? undefined
+        this.selectedCharFilter ?? undefined,
+        this.viewingYearMonth ?? undefined
       );
 
       if (requestId !== this.currentRequestId) return;
 
       this.leaderboardData = response.leaderboard;
 
-      // 시즌 텍스트 갱신
-      if (this.seasonText && response.yearMonth) {
-        const [y, m] = response.yearMonth.split('-');
-        const daysLeft = this.calcDaysUntilMonthEnd();
-        this.seasonText.setText(`${y}년 ${parseInt(m)}월 시즌  |  시즌 종료까지 D-${daysLeft}`);
+      // 시즌 텍스트 갱신 — viewingYearMonth 우선 (response는 항상 현재 달 반환)
+      if (this.seasonText) {
+        const displayYM = this.viewingYearMonth ?? response.yearMonth;
+        if (displayYM) {
+          const [y, m] = displayYM.split('-');
+          const isCurrentSeason = this.viewingYearMonth === null;
+          if (isCurrentSeason) {
+            const daysLeft = this.calcDaysUntilMonthEnd();
+            this.seasonText.setText(`${y}년 ${parseInt(m)}월 시즌  |  시즌 종료까지 D-${daysLeft}`);
+          } else {
+            this.seasonText.setText(`${y}년 ${parseInt(m)}월 시즌  |  종료된 시즌`);
+          }
+        }
       }
+
+      // 화살표 활성/비활성 업데이트
+      this.updateArrowStates();
 
       // 직전 달 보상 상태 결정 (localStorage 캐시 우선)
       if (response.yearMonth) {
@@ -311,9 +347,15 @@ export default class LeaderboardScene extends BaseScene {
 
   private displayLeaderboard() {
     const W = this.scale.width;
-    const yOff = (this.scale.height - 600) / 2;
+    const H = this.scale.height;
+    const yOff = (H - 600) / 2;
     const startY = (this.selectedDifficulty === DifficultyEnum.EXTREME ? 170 : 130) + yOff;
-    const ROW_H = 38;
+    const ROW_H = 36;
+    // 버튼 영역 상단 기준으로 표시 가능한 최대 행 수 계산
+    const BUTTON_TOP = H - 62;
+    const HEADER_H = 38;
+    const maxRows = Math.floor((BUTTON_TOP - startY - HEADER_H) / ROW_H);
+    const displayData = this.leaderboardData.slice(0, maxRows);
     const PAD = 48;
     const ROW_W = W - PAD * 2;
     const LEFT = PAD;
@@ -357,8 +399,8 @@ export default class LeaderboardScene extends BaseScene {
     }
 
     // ── 각 행 ────────────────────────────────────────────
-    this.leaderboardData.forEach((entry, index) => {
-      const rowY = startY + 38 + index * ROW_H;
+    displayData.forEach((entry, index) => {
+      const rowY = startY + HEADER_H + index * ROW_H;
       const cy = rowY + ROW_H / 2;
 
       // 행 배경
@@ -648,6 +690,49 @@ export default class LeaderboardScene extends BaseScene {
     this.updateCharFilterRow();
   }
 
+  /** 클라이언트 기준 현재 'YYYY-MM' */
+  private getClientCurrentYM(): string {
+    const now = new Date();
+    const y = now.getUTCFullYear();
+    const m = String(now.getUTCMonth() + 1).padStart(2, '0');
+    return `${y}-${m}`;
+  }
+
+  /** 시즌 탐색 (delta: -1 = 이전달, +1 = 다음달) */
+  private navigateSeason(delta: number) {
+    const currentYM = this.getClientCurrentYM();
+    const viewingYM = this.viewingYearMonth ?? currentYM;
+    const [y, m] = viewingYM.split('-').map(Number) as [number, number];
+    const date = new Date(Date.UTC(y, m - 1 + delta, 1));
+    const newYM = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
+
+    if (newYM < '2026-01' || newYM > currentYM) return;
+
+    this.viewingYearMonth = newYM === currentYM ? null : newYM;
+
+    // 난이도 전환 시와 동일하게 캐릭터 필터 유지하고 리로드
+    this.selectedCharFilter = null;
+    this.charFilterObjects.forEach(o => o.destroy());
+    this.charFilterObjects = [];
+
+    this.loadLeaderboard();
+  }
+
+  /** 화살표 버튼 활성/비활성 색상 갱신 */
+  private updateArrowStates() {
+    const currentYM = this.getClientCurrentYM();
+    const viewingYM = this.viewingYearMonth ?? currentYM;
+
+    if (this.leftArrowBtn) {
+      const canGoBack = viewingYM > '2026-01';
+      this.leftArrowBtn.setColor(canGoBack ? '#aaddff' : '#444455');
+    }
+    if (this.rightArrowBtn) {
+      const canGoForward = viewingYM < currentYM;
+      this.rightArrowBtn.setColor(canGoForward ? '#aaddff' : '#444455');
+    }
+  }
+
   /** 이번 달 말일까지 남은 일수 */
   private calcDaysUntilMonthEnd(): number {
     const now = new Date();
@@ -662,6 +747,15 @@ export default class LeaderboardScene extends BaseScene {
 
     const btn = this.rewardBtnBg;
     const label = this.rewardBtnLabel;
+
+    // 과거 시즌 조회 중이면 보상 버튼 비활성
+    if (this.viewingYearMonth !== null) {
+      btn.removeAllListeners();
+      btn.disableInteractive();
+      btn.setFillStyle(0x333333).setStrokeStyle(3, 0x222222);
+      label.setText('현재 시즌만').setColor('#555555');
+      return;
+    }
 
     const reward = this.prevSeasonReward;
 

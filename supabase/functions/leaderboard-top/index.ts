@@ -55,7 +55,7 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { difficulty, limit: limitParam, characterType } = await req.json().catch(() => ({}));
+    const { difficulty, limit: limitParam, characterType, yearMonth: requestedYM } = await req.json().catch(() => ({}));
     const limit = parseInt(limitParam ?? '100', 10);
 
     // 입력 검증
@@ -68,6 +68,16 @@ Deno.serve(async (req: Request) => {
     }
 
     const safeLimit = Math.min(Math.max(1, limit), 100);
+
+    // 요청된 월이 있으면 사용 (과거 시즌 조회), 없으면 현재 월
+    const currentYM = getCurrentYearMonth();
+    const EARLIEST_YM = '2026-01';
+    let yearMonth = currentYM;
+    if (requestedYM && /^\d{4}-\d{2}$/.test(requestedYM)
+        && requestedYM >= EARLIEST_YM && requestedYM <= currentYM) {
+      yearMonth = requestedYM;
+    }
+    const isCurrentSeason = yearMonth === currentYM;
 
     // JWT에서 사용자 인증 (선택적 — 비로그인 시에도 랭킹 조회 가능)
     const authHeader = req.headers.get('Authorization');
@@ -89,7 +99,6 @@ Deno.serve(async (req: Request) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const yearMonth = getCurrentYearMonth();
     const prevYearMonth = getPrevYearMonth(yearMonth);
 
     // EXTREME 캐릭터 필터: RPC로 리더보드 + 내 순위 단일 쿼리
@@ -123,7 +132,7 @@ Deno.serve(async (req: Request) => {
         yearMonth: string; rank: number | null; skorAwarded: number; alreadyClaimed: boolean;
       } | null = null;
 
-      if (currentUserId) {
+      if (currentUserId && isCurrentSeason) {
         const [prevRankResult, claimResult] = await Promise.all([
           supabaseAdmin.rpc('get_extreme_char_leaderboard_with_rank', {
             p_year_month: prevYearMonth, p_character_type: characterType,
@@ -201,7 +210,7 @@ Deno.serve(async (req: Request) => {
       alreadyClaimed: boolean;
     } | null = null;
 
-    if (currentUserId && difficulty !== 'easy') {
+    if (currentUserId && difficulty !== 'easy' && isCurrentSeason) {
       // 직전 시즌: 수령 이력 조회 + 미수령 시 순위 계산을 병렬로
       const [claimedResult, prevRankResult] = await Promise.all([
         supabaseAdmin.from('season_reward_history').select('skor_awarded, rank')
