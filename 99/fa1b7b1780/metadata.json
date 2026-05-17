@@ -98,6 +98,13 @@
       "context": "",
       "content_hash": "/99/fa1b7b1780/12/content_hash.txt",
       "prompt": ""
+    },
+    {
+      "metadata": "/99/fa1b7b1780/13/metadata.json",
+      "transcript": "/99/fa1b7b1780/13/full.jsonl",
+      "context": "",
+      "content_hash": "/99/fa1b7b1780/13/content_hash.txt",
+      "prompt": ""
     }
   ],
   "token_usage": {
