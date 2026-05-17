@@ -1,4 +1,4 @@
-# Season 1 로그 초안 — TRASH-007 ~ TRASH-012
+# Phase 1 로그 초안 — TRASH-007 ~ TRASH-012
 
 > 현재 TRASH-001~006은 구현 완료.
 > 아래는 TRASH-007~012의 초안입니다.

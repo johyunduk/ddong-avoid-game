@@ -1,4 +1,4 @@
-# Season 2 로그 초안 — LEGACY-0003 ~ LEGACY-0008
+# Phase 2 로그 초안 — LEGACY-0003 ~ LEGACY-0008
 
 > 현재 LEGACY-0001~0002는 구현 완료.
 > 아래는 LEGACY-0003~0008의 초안입니다.
