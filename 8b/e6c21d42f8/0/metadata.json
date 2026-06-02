@@ -1,0 +1,50 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "8be6c21d42f8",
+  "session_id": "0560e2dd-3356-4ec3-9443-2763e48c475a",
+  "strategy": "manual-commit",
+  "created_at": "2026-06-02T14:03:54.095282Z",
+  "branch": "dev",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "public/assets/illustrations_bak/archieve.png",
+    "public/assets/illustrations_bak/branch.png",
+    "public/assets/illustrations_bak/chibi.png",
+    "public/assets/illustrations_bak/fork.png",
+    "public/assets/illustrations_bak/glitch.png",
+    "public/assets/illustrations_bak/hacker.png",
+    "public/assets/illustrations_bak/hook.png",
+    "public/assets/illustrations_bak/index.png",
+    "public/assets/illustrations_bak/legacy.png",
+    "public/assets/illustrations_bak/log.png",
+    "public/assets/illustrations_bak/maehwa.png",
+    "public/assets/illustrations_bak/miner.png",
+    "public/assets/illustrations_bak/noise.png",
+    "public/assets/illustrations_bak/seed.png",
+    "public/assets/illustrations_bak/sentinel.png",
+    "public/assets/illustrations_bak/session.png",
+    "public/assets/illustrations_bak/socket.png",
+    "public/assets/illustrations_bak/sum.png",
+    "public/assets/illustrations_bak/swap.png",
+    "src/main.ts"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "ecf4e07e89b3",
+  "token_usage": {
+    "input_tokens": 12599,
+    "cache_creation_tokens": 68953,
+    "cache_read_tokens": 1394336,
+    "output_tokens": 26372,
+    "api_call_count": 22
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-06-02T14:03:53.811868Z",
+    "agent_lines": 5,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 3,
+    "total_committed": 5,
+    "agent_percentage": 100
+  },
+  "transcript_path": ".claude/projects/-Users-johyunduk-Projects-ddong-avoid-game/0560e2dd-3356-4ec3-9443-2763e48c475a.jsonl"
+}
