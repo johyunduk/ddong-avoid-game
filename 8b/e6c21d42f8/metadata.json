@@ -3,7 +3,7 @@
   "checkpoint_id": "8be6c21d42f8",
   "strategy": "manual-commit",
   "branch": "dev",
-  "checkpoints_count": 4,
+  "checkpoints_count": 5,
   "files_touched": [
     "public/assets/illustrations_bak/archieve.png",
     "public/assets/illustrations_bak/branch.png",
@@ -39,6 +39,13 @@
       "transcript": "/8b/e6c21d42f8/1/full.jsonl",
       "context": "",
       "content_hash": "/8b/e6c21d42f8/1/content_hash.txt",
+      "prompt": ""
+    },
+    {
+      "metadata": "/8b/e6c21d42f8/2/metadata.json",
+      "transcript": "/8b/e6c21d42f8/2/full.jsonl",
+      "context": "",
+      "content_hash": "/8b/e6c21d42f8/2/content_hash.txt",
       "prompt": ""
     }
   ],
