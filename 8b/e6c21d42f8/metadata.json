@@ -145,6 +145,13 @@
       "context": "/8b/e6c21d42f8/16/context.md",
       "content_hash": "/8b/e6c21d42f8/16/content_hash.txt",
       "prompt": "/8b/e6c21d42f8/16/prompt.txt"
+    },
+    {
+      "metadata": "/8b/e6c21d42f8/17/metadata.json",
+      "transcript": "/8b/e6c21d42f8/17/full.jsonl",
+      "context": "",
+      "content_hash": "/8b/e6c21d42f8/17/content_hash.txt",
+      "prompt": ""
     }
   ],
   "token_usage": {
