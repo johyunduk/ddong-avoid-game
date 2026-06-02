@@ -23,7 +23,9 @@ const config: Phaser.Types.Core.GameConfig = {
     arcade: {
       gravity: { y: 0, x: 0 },
       debug: false, // 히트박스 on/off
-      fixedStep: false
+      // 고정 타임스텝(Phaser 기본) — 프레임 변동을 accumulator로 흡수해 낙하가 부드러움.
+      // 안티치트는 this.time.now(rAF 루프) 기준이라 물리 스텝과 무관 → 켜도 영향 없음.
+      fixedStep: true
     }
   },
   input: {
@@ -38,10 +40,13 @@ const config: Phaser.Types.Core.GameConfig = {
   },
   render: {
     antialias: true,
-    roundPixels: true
+    roundPixels: true,
+    // 배터리 모드에서 브라우저/OS가 WebGL 컨텍스트를 저전력 GPU·다운클럭으로 돌리는 것을 억제하는 힌트.
+    // 충전 시엔 매끄럽다가 배터리에서 버벅이는 throttle 증상 완화 (배터리 소모는 소폭 증가).
+    powerPreference: 'high-performance'
   },
   fps: {
-    smoothStep: false // 네이티브 리프레시 레이트 사용, raw delta로 프레임 타이밍 드리프트 방지
+    smoothStep: true // delta 스무딩으로 프레임 지터 흡수 → 모션 부드러움 (안티치트 ratio 허용폭 0.70~1.30 내라 안전)
   }
 };
 
