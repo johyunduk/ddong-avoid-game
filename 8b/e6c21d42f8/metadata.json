@@ -110,6 +110,13 @@
       "context": "",
       "content_hash": "/8b/e6c21d42f8/11/content_hash.txt",
       "prompt": ""
+    },
+    {
+      "metadata": "/8b/e6c21d42f8/12/metadata.json",
+      "transcript": "/8b/e6c21d42f8/12/full.jsonl",
+      "context": "",
+      "content_hash": "/8b/e6c21d42f8/12/content_hash.txt",
+      "prompt": ""
     }
   ],
   "token_usage": {
