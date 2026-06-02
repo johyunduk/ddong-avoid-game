@@ -1,0 +1,53 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "8be6c21d42f8",
+  "session_id": "dbb1e377-fed5-4006-a785-2d4784041a2c",
+  "strategy": "manual-commit",
+  "created_at": "2026-06-02T14:04:29.50448Z",
+  "branch": "dev",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "public/assets/illustrations_bak/fork.png",
+    "public/assets/illustrations_bak/hacker.png",
+    "public/assets/illustrations_bak/log.png",
+    "public/assets/illustrations_bak/archieve.png",
+    "public/assets/illustrations_bak/chibi.png",
+    "public/assets/illustrations_bak/hook.png",
+    "public/assets/illustrations_bak/index.png",
+    "public/assets/illustrations_bak/legacy.png",
+    "public/assets/illustrations_bak/miner.png",
+    "public/assets/illustrations_bak/sentinel.png",
+    "public/assets/illustrations_bak/swap.png",
+    "public/assets/illustrations_bak/branch.png",
+    "public/assets/illustrations_bak/glitch.png",
+    "public/assets/illustrations_bak/maehwa.png",
+    "public/assets/illustrations_bak/seed.png",
+    "public/assets/illustrations_bak/session.png",
+    "src/main.ts",
+    "public/assets/illustrations_bak/noise.png",
+    "public/assets/illustrations_bak/socket.png",
+    "public/assets/illustrations_bak/sum.png"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "90e82ed9f7ae",
+  "transcript_identifier_at_start": "8728bac4-c7db-460e-9aee-8f31bede9957",
+  "checkpoint_transcript_start": 591,
+  "transcript_lines_at_start": 591,
+  "token_usage": {
+    "input_tokens": 218,
+    "cache_creation_tokens": 297718,
+    "cache_read_tokens": 13699002,
+    "output_tokens": 86352,
+    "api_call_count": 162
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-06-02T14:04:28.595597Z",
+    "agent_lines": 8,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 8,
+    "agent_percentage": 100
+  },
+  "transcript_path": ".claude/projects/-Users-johyunduk-Projects-ddong-avoid-game/dbb1e377-fed5-4006-a785-2d4784041a2c.jsonl"
+}
