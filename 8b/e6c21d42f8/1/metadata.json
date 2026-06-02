@@ -1,0 +1,43 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "8be6c21d42f8",
+  "session_id": "26d95ed2-7e6e-457a-a8ac-3074837ef07f",
+  "strategy": "manual-commit",
+  "created_at": "2026-06-02T14:03:56.62627Z",
+  "branch": "dev",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "public/assets/illustrations_bak/archieve.png",
+    "public/assets/illustrations_bak/chibi.png",
+    "public/assets/illustrations_bak/hook.png",
+    "public/assets/illustrations_bak/index.png",
+    "public/assets/illustrations_bak/legacy.png",
+    "public/assets/illustrations_bak/miner.png",
+    "public/assets/illustrations_bak/sentinel.png",
+    "public/assets/illustrations_bak/swap.png",
+    "public/assets/illustrations_bak/branch.png",
+    "public/assets/illustrations_bak/glitch.png",
+    "public/assets/illustrations_bak/maehwa.png",
+    "public/assets/illustrations_bak/seed.png",
+    "public/assets/illustrations_bak/session.png",
+    "src/main.ts",
+    "public/assets/illustrations_bak/noise.png",
+    "public/assets/illustrations_bak/socket.png",
+    "public/assets/illustrations_bak/sum.png",
+    "public/assets/illustrations_bak/fork.png",
+    "public/assets/illustrations_bak/hacker.png",
+    "public/assets/illustrations_bak/log.png"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "143c33fae757",
+  "initial_attribution": {
+    "calculated_at": "2026-06-02T14:03:56.599417Z",
+    "agent_lines": 8,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 8,
+    "agent_percentage": 100
+  },
+  "transcript_path": ".claude/projects/-Users-johyunduk-Projects-ddong-avoid-game/26d95ed2-7e6e-457a-a8ac-3074837ef07f.jsonl"
+}
