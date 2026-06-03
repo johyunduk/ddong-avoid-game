@@ -3,7 +3,7 @@
   "checkpoint_id": "a60402467957",
   "strategy": "manual-commit",
   "branch": "dev",
-  "checkpoints_count": 3,
+  "checkpoints_count": 4,
   "files_touched": [
     "src/main.ts",
     "src/scenes/GameScene.ts"
@@ -21,6 +21,13 @@
       "transcript": "/a6/0402467957/1/full.jsonl",
       "context": "",
       "content_hash": "/a6/0402467957/1/content_hash.txt",
+      "prompt": ""
+    },
+    {
+      "metadata": "/a6/0402467957/2/metadata.json",
+      "transcript": "/a6/0402467957/2/full.jsonl",
+      "context": "",
+      "content_hash": "/a6/0402467957/2/content_hash.txt",
       "prompt": ""
     }
   ],
