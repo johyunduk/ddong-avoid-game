@@ -48,6 +48,7 @@ export default class GameScene extends BaseScene {
   private spawnTimer!: Phaser.Time.TimerEvent;
   protected difficultyLevel: number = 2;
   private bgMusic!: Phaser.Sound.BaseSound;
+  private fpsText?: Phaser.GameObjects.Text;  // ?fps URL 파라미터 시에만 표시되는 디버그 오버레이
   protected gameMode: GameMode = GameMode.CLASSIC;
   protected difficulty: Difficulty = Difficulty.HARD;  // 게임플레이 파라미터 기준
   private purePhysical: boolean = false;
@@ -470,6 +471,14 @@ export default class GameScene extends BaseScene {
       this.tweens.add({ targets: hintText, alpha: 0, duration: 700, ease: 'Linear' });
     });
 
+    // [디버그] ?fps URL 파라미터 시 실측 FPS 오버레이 (프레임레이트 진단용, 일반 플레이엔 비표시)
+    if (location.search.includes('fps')) {
+      this.fpsText = this.add.text(W / 2, 2, 'fps', {
+        fontSize: '12px', color: '#00ff41', fontFamily: 'monospace',
+        stroke: '#000000', strokeThickness: 3,
+      }).setOrigin(0.5, 0).setDepth(9999);
+    }
+
     // 💩 생성 타이머 (난이도별 초기 주기 사용)
     this.spawnTimer = this.time.addEvent({
       delay: this.difficultyConfig.spawnDelay,
@@ -532,6 +541,12 @@ export default class GameScene extends BaseScene {
   }
 
   update() {
+    if (this.fpsText) {
+      // 입력 상태도 함께 표기 — 터치 눌림 ↔ 뗌 구간의 fps 차이를 한눈에 비교
+      const dir = (this.player?.body?.velocity.x ?? 0) !== 0 ? '◀▶' : '··';
+      this.fpsText.setText(`fps ${Math.round(this.game.loop.actualFps)} ${dir}`);
+    }
+
     if (!this.gameOver) {
       this.player.update();
 

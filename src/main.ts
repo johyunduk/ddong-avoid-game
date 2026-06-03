@@ -46,7 +46,10 @@ const config: Phaser.Types.Core.GameConfig = {
     powerPreference: 'high-performance'
   },
   fps: {
-    smoothStep: true // delta 스무딩으로 프레임 지터 흡수 → 모션 부드러움 (안티치트 ratio 허용폭 0.70~1.30 내라 안전)
+    // 노트북 배터리 등 가변 프레임에서 시각적 부드러움을 위해 delta 스무딩 사용(Phaser 기본).
+    // 모바일의 "터치 눌림→낙하 빨라짐"은 smoothStep이 아니라 idle rAF 스로틀 + fps.min 클램프가
+    // 원인으로 추정 → ?fps 오버레이로 실측 후 fps.min/panicMax 보정 예정.
+    smoothStep: true
   }
 };
 
