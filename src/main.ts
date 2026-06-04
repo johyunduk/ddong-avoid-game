@@ -23,9 +23,12 @@ const config: Phaser.Types.Core.GameConfig = {
     arcade: {
       gravity: { y: 0, x: 0 },
       debug: false, // 히트박스 on/off
-      // 고정 타임스텝(Phaser 기본) — 프레임 변동을 accumulator로 흡수해 낙하가 부드러움.
+      // 고정 타임스텝 — 프레임 변동을 accumulator로 흡수해 낙하 속도 일정.
       // 안티치트는 this.time.now(rAF 루프) 기준이라 물리 스텝과 무관 → 켜도 영향 없음.
-      fixedStep: true
+      fixedStep: true,
+      // 물리 120Hz — 60Hz 화면에선 프레임당 ~2 서브스텝을 안정적으로 돌려
+      // "스텝 0회 프레임"(뚝뚝 끊김)을 제거. 속도는 accumulator가 정확히 유지하므로 불변.
+      fps: 120
     }
   },
   input: {
