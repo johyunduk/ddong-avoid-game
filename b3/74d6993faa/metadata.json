@@ -147,6 +147,13 @@
       "context": "",
       "content_hash": "/b3/74d6993faa/19/content_hash.txt",
       "prompt": ""
+    },
+    {
+      "metadata": "/b3/74d6993faa/20/metadata.json",
+      "transcript": "/b3/74d6993faa/20/full.jsonl",
+      "context": "",
+      "content_hash": "/b3/74d6993faa/20/content_hash.txt",
+      "prompt": ""
     }
   ],
   "token_usage": {
