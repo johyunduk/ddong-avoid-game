@@ -46,9 +46,10 @@ const config: Phaser.Types.Core.GameConfig = {
     powerPreference: 'high-performance'
   },
   fps: {
-    // 노트북 배터리 등 가변 프레임에서 시각적 부드러움을 위해 delta 스무딩 사용(Phaser 기본).
-    // 모바일의 "터치 눌림→낙하 빨라짐"은 smoothStep이 아니라 idle rAF 스로틀 + fps.min 클램프가
-    // 원인으로 추정 → ?fps 오버레이로 실측 후 fps.min/panicMax 보정 예정.
+    // 60fps 하드 캡 — 모바일 가변 고주사율(120/144Hz) 패널에서 터치 시 주사율이 오르면
+    // 낙하 속도가 함께 빨라지는 프레임레이트 의존 문제를 차단. 모든 기기를 동일 60 step/s로 통일.
+    // 노트북은 이미 ~60이라 영향 없음. smoothStep은 90Hz→60캡 시 박자 지터 흡수용으로 유지.
+    limit: 60,
     smoothStep: true
   }
 };
