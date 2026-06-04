@@ -140,6 +140,13 @@
       "context": "/38/5543d665c6/18/context.md",
       "content_hash": "/38/5543d665c6/18/content_hash.txt",
       "prompt": "/38/5543d665c6/18/prompt.txt"
+    },
+    {
+      "metadata": "/38/5543d665c6/19/metadata.json",
+      "transcript": "/38/5543d665c6/19/full.jsonl",
+      "context": "",
+      "content_hash": "/38/5543d665c6/19/content_hash.txt",
+      "prompt": ""
     }
   ],
   "token_usage": {
