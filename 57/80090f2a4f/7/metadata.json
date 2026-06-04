@@ -1,0 +1,27 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "5780090f2a4f",
+  "session_id": "4cdc23e6-a766-4df9-a59f-f56ca521f2c4",
+  "strategy": "manual-commit",
+  "created_at": "2026-06-04T13:58:36.240746Z",
+  "branch": "dev",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "src/abilities/MugiAbility.ts",
+    "src/config/abilityParams.ts",
+    "supabase/functions/gacha-pull/index.ts"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "54639eb1d30a",
+  "transcript_identifier_at_start": "c7e7fa82-462d-4f5a-bc07-9404424e53e3",
+  "initial_attribution": {
+    "calculated_at": "2026-06-04T13:58:36.204147Z",
+    "agent_lines": 0,
+    "human_added": 3,
+    "human_modified": 9,
+    "human_removed": 0,
+    "total_committed": 3,
+    "agent_percentage": 0
+  },
+  "transcript_path": ".claude/projects/-Users-johyunduk-Projects-ddong-avoid-game/4cdc23e6-a766-4df9-a59f-f56ca521f2c4.jsonl"
+}
