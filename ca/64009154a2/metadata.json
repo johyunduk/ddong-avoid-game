@@ -98,6 +98,13 @@
       "context": "",
       "content_hash": "/ca/64009154a2/12/content_hash.txt",
       "prompt": ""
+    },
+    {
+      "metadata": "/ca/64009154a2/13/metadata.json",
+      "transcript": "/ca/64009154a2/13/full.jsonl",
+      "context": "",
+      "content_hash": "/ca/64009154a2/13/content_hash.txt",
+      "prompt": ""
     }
   ],
   "token_usage": {
