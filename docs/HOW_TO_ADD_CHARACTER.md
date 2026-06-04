@@ -162,6 +162,13 @@ const POOL = [
 supabase functions deploy gacha-pull --no-verify-jwt
 ```
 
+> ⚠️ **가장 빠뜨리기 쉬운 단계.** 클라이언트(GachaScene 슬라이드쇼·`CHARS_WITH_SPRITES`·`character.ts`·연출)에 캐릭터를 다 넣어도, **POOL에 없으면 확률 0%로 영영 안 뽑힙니다.** 코드상 멀쩡해 보여 발견이 어렵습니다.
+> (실제 사례: `mugi`가 클라엔 전부 준비됐는데 POOL 누락으로 0%였음 — 2026-06)
+>
+> **UR 추가 시 가중치 결정**: UR은 종당 `UR_W = 0.7/3 ≈ 0.233%`. 새 UR을 넣을 때 두 갈래 —
+> ① 기존 UR 확률 유지(`UR_W` 그대로 → UR 총합 ↑) / ② UR 총합 0.7% 고정(`UR_W = 0.7/종수` → 기존 UR 너프).
+> 라이브 게임이면 보통 ①(기존 캐릭터 너프 회피).
+
 ---
 
 ## 4. 자동 처리 (별도 작업 불필요)
@@ -189,7 +196,8 @@ supabase functions deploy gacha-pull --no-verify-jwt
 [ ] src/abilities/index.ts                  ← import + case 추가
 [ ] src/utils/character.ts                  ← CHARACTERS 배열 + import
 [ ] src/scenes/GameScene.ts                 ← CHARS_WITH_SPRITES 배열
-[ ] supabase/functions/gacha-pull/index.ts  ← POOL + SR_W 재계산
+[ ] supabase/functions/gacha-pull/index.ts  ← POOL 추가 (★ 빠뜨리면 0%, 클라 준비만으론 안 뽑힘) + 가중치 재계산
 [ ] npx tsc --noEmit                        ← 타입 에러 확인
 [ ] supabase functions deploy gacha-pull --no-verify-jwt
+[ ] 배포 후 검증: POOL에 새 id 존재 확인 + 실제 가챠에서 등장 확인
 ```
