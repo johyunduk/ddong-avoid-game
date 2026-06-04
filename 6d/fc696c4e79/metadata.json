@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "6dfc696c4e79",
+  "strategy": "manual-commit",
+  "branch": "dev",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "docs/HOW_TO_ADD_CHARACTER.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/6d/fc696c4e79/0/metadata.json",
+      "transcript": "/6d/fc696c4e79/0/full.jsonl",
+      "context": "/6d/fc696c4e79/0/context.md",
+      "content_hash": "/6d/fc696c4e79/0/content_hash.txt",
+      "prompt": "/6d/fc696c4e79/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 20845,
+    "cache_creation_tokens": 888561,
+    "cache_read_tokens": 22824293,
+    "output_tokens": 220433,
+    "api_call_count": 121
+  }
+}
