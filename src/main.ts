@@ -46,11 +46,11 @@ const config: Phaser.Types.Core.GameConfig = {
     powerPreference: 'high-performance'
   },
   fps: {
-    // 60fps 하드 캡 — 모바일 가변 고주사율(120/144Hz) 패널에서 터치 시 주사율이 오르면
-    // 낙하 속도가 함께 빨라지는 프레임레이트 의존 문제를 차단. 모든 기기를 동일 60 step/s로 통일.
-    // 노트북은 이미 ~60이라 영향 없음. smoothStep은 90Hz→60캡 시 박자 지터 흡수용으로 유지.
-    limit: 60,
-    smoothStep: true
+    // smoothStep:false — fixedStep accumulator(_elapsed)에 가공된 평균 delta가 아닌
+    // raw 경과시간을 먹여야 고주사율 패널에서 주사율이 올라도 물리 스텝 수가 일정 → 낙하 속도 일정.
+    // (smoothStep:true는 주사율 램프업 시 평균 delta 지연으로 속도 드리프트 유발 →  모바일 "터치 시 빨라짐"의 원인.
+    //  limit은 60Hz에서 임계값 미달로 스텝이 반토막나는 부작용 → 둘 다 제거.)
+    smoothStep: false
   }
 };
 

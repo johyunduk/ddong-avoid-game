@@ -480,6 +480,8 @@ export default class GameScene extends BaseScene {
         fontSize: '12px', color: '#00ff41', fontFamily: 'monospace',
         stroke: '#000000', strokeThickness: 3,
       }).setOrigin(0.5, 0).setDepth(9999);
+      // 실제 물리 스텝 발생 횟수를 직접 카운트 (똥이 움직이는 ground truth — fixedStep 정상이면 ~60/s 고정)
+      this.physics.world.on('worldstep', () => { this._stepCount++; });
     }
 
     // 💩 생성 타이머 (난이도별 초기 주기 사용)
@@ -545,8 +547,8 @@ export default class GameScene extends BaseScene {
 
   update() {
     if (this.fpsText) {
-      // step = 실제 게임 스텝 rate (update 호출 빈도, 캡 먹히면 ≤60). raw = 원본 rAF 주사율(패널).
-      this._stepCount++;
+      // phys = 실제 물리 스텝/초 (똥 움직임의 ground truth, fixedStep 정상이면 주사율 무관 ~60 고정)
+      // raw = 원본 rAF 주사율(패널). 고주사율이면 raw만 오르고 phys는 60이어야 정상.
       const t = this.game.loop.now;
       if (this._stepWinStart === 0) this._stepWinStart = t;
       const win = t - this._stepWinStart;
@@ -556,7 +558,7 @@ export default class GameScene extends BaseScene {
         this._stepWinStart = t;
       }
       const dir = (this.player?.body?.velocity.x ?? 0) !== 0 ? '◀▶' : '··';
-      this.fpsText.setText(`step ${this._stepRate} / raw ${Math.round(this.game.loop.actualFps)} ${dir}`);
+      this.fpsText.setText(`phys ${this._stepRate}/s · raw ${Math.round(this.game.loop.actualFps)} ${dir}`);
     }
 
     if (!this.gameOver) {
