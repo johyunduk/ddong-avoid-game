@@ -1,0 +1,28 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "5780090f2a4f",
+  "strategy": "manual-commit",
+  "branch": "dev",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src/abilities/MugiAbility.ts",
+    "src/config/abilityParams.ts",
+    "supabase/functions/gacha-pull/index.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/57/80090f2a4f/0/metadata.json",
+      "transcript": "/57/80090f2a4f/0/full.jsonl",
+      "context": "/57/80090f2a4f/0/context.md",
+      "content_hash": "/57/80090f2a4f/0/content_hash.txt",
+      "prompt": "/57/80090f2a4f/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 20475,
+    "cache_creation_tokens": 878987,
+    "cache_read_tokens": 20726866,
+    "output_tokens": 209829,
+    "api_call_count": 115
+  }
+}
