@@ -23,12 +23,12 @@ const config: Phaser.Types.Core.GameConfig = {
     arcade: {
       gravity: { y: 0, x: 0 },
       debug: false, // 히트박스 on/off
-      // 고정 타임스텝 — 프레임 변동을 accumulator로 흡수해 낙하 속도 일정.
-      // 안티치트는 this.time.now(rAF 루프) 기준이라 물리 스텝과 무관 → 켜도 영향 없음.
-      fixedStep: true,
-      // 물리 120Hz — 60Hz 화면에선 프레임당 ~2 서브스텝을 안정적으로 돌려
-      // "스텝 0회 프레임"(뚝뚝 끊김)을 제거. 속도는 accumulator가 정확히 유지하므로 불변.
-      fps: 120
+      // 가변 타임스텝 — 매 프레임 velocity×실제 delta로 위치 적분.
+      // 매 프레임 움직여 fixedStep의 "스텝 0회 프레임" 양자화 지터가 없어 실측상 가장 부드럽고,
+      // 등속이라 평균 낙하 속도는 주사율과 무관(프레임 2배면 프레임당 이동량 절반).
+      // (fixedStep:true는 60Hz 임계값 경계 판정으로 뚝뚝 끊김 발생.
+      //  초기 배터리 버벅임의 진짜 원인은 GPU 스로틀 → 위 render.powerPreference로 해소.)
+      fixedStep: false
     }
   },
   input: {
@@ -49,10 +49,10 @@ const config: Phaser.Types.Core.GameConfig = {
     powerPreference: 'high-performance'
   },
   fps: {
-    // smoothStep:false — fixedStep accumulator(_elapsed)에 가공된 평균 delta가 아닌
-    // raw 경과시간을 먹여야 고주사율 패널에서 주사율이 올라도 물리 스텝 수가 일정 → 낙하 속도 일정.
-    // (smoothStep:true는 주사율 램프업 시 평균 delta 지연으로 속도 드리프트 유발 →  모바일 "터치 시 빨라짐"의 원인.
-    //  limit은 60Hz에서 임계값 미달로 스텝이 반토막나는 부작용 → 둘 다 제거.)
+    // smoothStep:false — 가변 타임스텝에 가공된 평균 delta가 아닌 raw 경과시간을 먹여
+    // 매 프레임 정확히 (velocity×실제 delta)만큼 이동 → 주사율이 올라도 낙하 속도 일정.
+    // (smoothStep:true는 주사율 램프업 시 평균 delta 지연으로 속도 드리프트 → 모바일 "터치 시 빨라짐" 유발.
+    //  fps.limit은 60Hz에서 임계값 미달로 스텝 반토막 부작용 → 둘 다 미사용.)
     smoothStep: false
   }
 };
