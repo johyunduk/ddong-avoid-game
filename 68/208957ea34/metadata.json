@@ -3,7 +3,7 @@
   "checkpoint_id": "68208957ea34",
   "strategy": "manual-commit",
   "branch": "dev",
-  "checkpoints_count": 3,
+  "checkpoints_count": 4,
   "files_touched": [
     "src/data/releaseNotes.ts"
   ],
@@ -20,6 +20,13 @@
       "transcript": "/68/208957ea34/1/full.jsonl",
       "context": "",
       "content_hash": "/68/208957ea34/1/content_hash.txt",
+      "prompt": ""
+    },
+    {
+      "metadata": "/68/208957ea34/2/metadata.json",
+      "transcript": "/68/208957ea34/2/full.jsonl",
+      "context": "",
+      "content_hash": "/68/208957ea34/2/content_hash.txt",
       "prompt": ""
     }
   ],
