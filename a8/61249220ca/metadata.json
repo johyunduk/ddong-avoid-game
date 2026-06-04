@@ -141,6 +141,13 @@
       "context": "/a8/61249220ca/18/context.md",
       "content_hash": "/a8/61249220ca/18/content_hash.txt",
       "prompt": "/a8/61249220ca/18/prompt.txt"
+    },
+    {
+      "metadata": "/a8/61249220ca/19/metadata.json",
+      "transcript": "/a8/61249220ca/19/full.jsonl",
+      "context": "",
+      "content_hash": "/a8/61249220ca/19/content_hash.txt",
+      "prompt": ""
     }
   ],
   "token_usage": {
