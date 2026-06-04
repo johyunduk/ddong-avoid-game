@@ -3,7 +3,7 @@
   "checkpoint_id": "6dfc696c4e79",
   "strategy": "manual-commit",
   "branch": "dev",
-  "checkpoints_count": 1,
+  "checkpoints_count": 2,
   "files_touched": [
     "docs/HOW_TO_ADD_CHARACTER.md"
   ],
@@ -20,6 +20,13 @@
       "transcript": "/6d/fc696c4e79/1/full.jsonl",
       "context": "",
       "content_hash": "/6d/fc696c4e79/1/content_hash.txt",
+      "prompt": ""
+    },
+    {
+      "metadata": "/6d/fc696c4e79/2/metadata.json",
+      "transcript": "/6d/fc696c4e79/2/full.jsonl",
+      "context": "",
+      "content_hash": "/6d/fc696c4e79/2/content_hash.txt",
       "prompt": ""
     }
   ],
