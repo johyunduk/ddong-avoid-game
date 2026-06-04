@@ -1,0 +1,786 @@
+요즘 llm wiki 라는게 자주 보이는데 뭔지 자세히 알려줘.
+
+---
+
+안드레 카파시라는 사람이 제안한거라던데 모르겠으면 웹 서치를 해 임마
+
+---
+
+사용을 어떻게 하는건데?
+
+---
+
+현재 나는 옵시디언을 쓰고 있고 지금 이 프로젝트를 저렇게 llm wiki로 관리하고 싶은데 어떻게 하면 되는건지 자세히 알려줘.
+
+---
+
+이것들은 원래 자동으로 적용을 하는게 아니라 내가 지시를 해야 하는건가?
+
+---
+
+[Request interrupted by user for tool use]
+
+---
+
+ingest 해달라고만 말하면 되는건가?
+
+---
+
+CLAUDE.md 에 추가하고 싶어. 근데 그 전에 최신 버전으로 CLAUDE.md 를 수정하고 싶어. 근데 최근에 웹에서 보면 CLAUDE.md 를 너무 길게 하는것도 좋지 않다고 들었어. 웹서치해서 현재 내 CLAUDE.md 의 문제점을 파악하고 나서 알려줘.
+
+---
+
+진행해줘.
+
+---
+
+현재 이 프로젝트의 내용과 위키에서의 내용과 다른 부분이 있나?
+
+---
+
+배틀 시스템이랑 캐릭터 수 ingest해줘
+
+---
+
+근데 지금 구조가 llm wiki 에 맞는 구조인가?
+
+---
+
+재편 해줘.
+
+---
+
+일단 이거 깃 푸시부터 하자
+
+---
+
+그 일러스트 같은거나 캐릭터별 노래(추가 예정) 이런거를 관리하면서 sns 같은데서 관리를 해보려고 해. 인스타나 유튜브에서. 어떻게 생각해?
+
+---
+
+구체적으로 기획해봐.
+
+---
+
+일단 이 기획 문서로 작성하고 ingest 도 해줘
+
+---
+
+여기서 추가나 수정하면 좋을게 뭐가 있을까? 그리고 노래나 일러스트 공개 순서는 무조건 치비일거야. 게임의 주인공이니까
+
+---
+
+해줘 ingest 도 하고
+
+---
+
+사업 방향성 이런것도 작성해줄 수 있나?
+
+---
+
+지금 근데 llm wiki 가 안드레 카파시가 말한 방법론을 잘 따르고 있나?
+
+---
+
+제대로 해줘.
+
+---
+
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+Summary:
+1. Primary Request and Intent:
+   The user is working on a Phaser 3 hyper-casual game ("똥 피하기 게임") and had several interconnected requests:
+   1. Learn about Andrej Karpathy's LLM Wiki concept and how to use it
+   2. Apply LLM Wiki to their project using Obsidian as the wiki layer
+   3. Refactor CLAUDE.md from 430 lines to ~50 lines (best practice)
+   4. Identify discrepancies between code state and wiki
+   5. Ingest battle system and character count fixes into wiki
+   6. Restructure the Obsidian vault to properly follow LLM Wiki pattern (sources/ vs wiki/ separation)
+   7. Create SNS strategy (Instagram/YouTube) with character-focused "IMPORT_GATE 아카이브" concept
+   8. Create business direction document (IP incubator model)
+   9. Properly implement LLM Wiki with true cross-source synthesis (entity pages, concept pages) after recognizing earlier implementation was just "summarization not synthesis"
+
+2. Key Technical Concepts:
+   - **Karpathy LLM Wiki Pattern**: Three layers — sources/ (immutable input), wiki/ (LLM-synthesized), schema (operating contract). LLM reads multiple sources and synthesizes connections, not just summarizes.
+   - **Phaser 3**: Game framework used, 400×600 canvas, Arcade Physics
+   - **TypeScript strict config**: `verbatimModuleSyntax=true` (require `import { type X }`), `erasableSyntaxOnly=true` (no enum/namespace, use `as const`)
+   - **Supabase**: Auth, Edge Functions, Realtime channels for battle system
+   - **CLAUDE.md best practices**: 80+ lines → rules start dropping; 200+ lines → blocks ignored; keep only non-inferable constraints
+   - **LLM Wiki synthesis vs summarization**: True synthesis = pulling from multiple sources to reveal NEW connections not present in any single source
+   - **IP Incubator Business Model**: Game as entry point, revenue from goods/music/licensing not in-app purchases
+   - **Obsidian**: Used as wiki viewer with LLM Wiki structure
+
+3. Files and Code Sections:
+
+   **`REDACTED.md`**
+   - Refactored from 430 lines → 49 lines
+   - Kept only: TypeScript constraints, `npx tsc --noEmit` requirement, `npm run dev` don't auto-run, 4 invariant rules, Supabase deploy commands, Wiki path
+   - Key invariant rules preserved:
+     ```
+     1. init()에서 상태 변수 초기화 (score, gameOver, difficultyLevel 등)
+     2. 씬 전환 전 this.sound.stopAll() 호출
+     3. 점수 변경 시 updateScore(amount) 사용 (직접 this.score += 금지)
+     4. 충돌 감지는 physics.add.overlap() 사용
+     ```
+   - Added: `## Wiki` section pointing to `~/Documents/Obsidian/1. Projects/똥피하기/`
+   - Pushed to `dev` branch
+
+   **`~/Documents/Obsidian/1. Projects/똥피하기/WIKI.md`** (schema)
+   - Updated twice: initially created, then updated after restructure
+   - Final structure definition:
+     ```
+     sources/ ← 인간 작성 원본, 절대 수정 금지
+     wiki/    ← LLM 소유, 합성 결과
+     archive/ ← 폐기된 기획
+     ```
+   - Defines ingest/query/lint workflows and wiki page writing rules
+
+   **`~/Documents/Obsidian/1. Projects/똥피하기/wiki/INDEX.md`**
+   - Created as new file (didn't exist before)
+   - Serves as page graph with system docs table and sources list
+   - Updated with SNS 전략 and 사업 방향성 entries
+
+   **`~/Documents/Obsidian/1. Projects/똥피하기/wiki/구현 현황.md`** (moved from root)
+   - Updated: battle system added to ✅ 완료 table
+   - Character count corrected: 19 → 22 (등급외 1 + R 11 + SR 7 + UR 3)
+   - SNS 기획 섹션 added
+   - Date updated to 2026-05-17
+
+   **`~/Documents/Obsidian/1. Projects/똥피하기/wiki/시스템/배틀 시스템.md`**
+   - Synthesized from reading actual battle scene code
+   - Key synthesis: BattleGameScene extends GameScene (code reuse pattern)
+   - Supabase Realtime listener ordering rule: listeners BEFORE subscribe
+   - `destroyImmediate()` pattern explanation (Phaser doesn't support await)
+
+   **`~/Documents/Obsidian/1. Projects/똥피하기/sources/SNS 기획.md`**
+   - Created initially, then updated with chibi-first revision
+   - Final content includes:
+     - Visual identity guide (dark background, IBM Plex Mono font, character signature colors)
+     - 12-week reveal order: 치비 → 루트 → 세계관 카드 → 레거시 → 센티넬 → R LOST FILES
+     - Chibi first post interactive hook: "이름을 아는 사람이 있다면 알려줘"
+     - Highlight structure: WORLD / FILES / GAME / MUSIC
+     - Song priority: 1. 치비×루트 duet, 2. 레거시 soloist, 3. 노이즈 ambient
+
+   **`~/Documents/Obsidian/1. Projects/똥피하기/sources/사업 방향성.md`**
+   - IP pyramid: 게임 플레이 → 캐릭터 IP → 팬덤 → 굿즈/음악/콜라보
+   - 3 phases: 0(기반), 1(유입 0-6mo), 2(팬덤 6mo-1yr), 3(IP확장 1yr+)
+   - Key principle: No monetization until 1,000 fans
+
+   **`~/Documents/Obsidian/1. Projects/똥피하기/wiki/캐릭터/치비.md`** (NEW - synthesized)
+   - Sources synthesized: 캐릭터 설정집 + 세계관 설정 + character.ts + SNS기획 + 사업방향성
+   - Key cross-source connections:
+     - `special_ability: null` (코드) ↔ "원본 데이터 누락, 기본값 초기화" (설정) → intentional design matching
+     - Ascending system (코드, 유일하게 등급 상승 가능) ↔ "CPU 능력이 잠겨있음" (세계관) → ascending = narrative unlocking
+     - "이름 없음" (설정) ↔ SNS first post hook ↔ IP emotional core → single concept spanning all layers
+
+   **`~/Documents/Obsidian/1. Projects/똥피하기/wiki/캐릭터/루트.md`** (NEW - synthesized)
+   - Sources: 설정집 + 세계관 + character.ts + HackerAbility + SNS기획
+   - Key connections:
+     - "금똥 낙하 속도 감소" ability ↔ "루트가 정제 담당" (세계관) → ability reflects worldbuilding role
+     - HackerAbility terminal effect (green 0x00ff41, pixel scatter) ↔ "말이 짧고 기능적" personality → visual language matches character
+     - "숨겨진 목적" (세계관, Phase 3 reveal) documented as key story node
+
+   **`~/Documents/Obsidian/1. Projects/똥피하기/wiki/캐릭터/레거시.md`** (NEW - synthesized)
+   - Sources: 설정집 + 세계관 + character.ts + SNS기획 + 사업방향성
+   - Key connections:
+     - UR = 하드웨어 레벨 (세계관) ↔ "황금 빗줄기 + 레거시 모드 점수 1.2배" (코드) → completeness/power expressed as strongest buff
+     - "나는 완전해 / 연결만 없을 뿐" (song lyrics concept) ↔ 레거시 모드 (game mechanic) → emotional concept = gameplay peak
+
+   **`~/Documents/Obsidian/1. Projects/똥피하기/wiki/개념/SKOR.md`** (NEW - synthesized)
+   - Sources: 세계관 + SKOR 시스템 + skor-submit Edge Function + 사업방향성
+   - Key connections:
+     - Rarity ladder (세계관: 버려진<잃어버린<출처모름) ↔ weight values (0.1<0.3<0.7) → economy mirrors worldbuilding
+     - Layered cap serves 3 purposes simultaneously: economic (inflation), worldbuilding (scarcity of divine shards), business (no-IAP philosophy)
+
+   **File moves executed:**
+   ```bash
+   # sources/ (human-written originals)
+   01-배포완료/{프로젝트 개요, 세계관 설정, 캐릭터 설정집, 캐릭터 능력 설계, 각성 수치 설계, 뽑기 시스템, 뽑기 연출 C안, SKOR 시스템}.md → sources/
+   02-구현예정/*.md → sources/스토리/
+   03-에셋작업/*.md → sources/에셋작업/
+
+   # wiki/ (LLM synthesized)
+   01-배포완료/배틀 시스템.md → wiki/시스템/
+   구현 현황.md → wiki/
+   ```
+
+4. Errors and fixes:
+   - **Edit tool failed on 구현 현황.md**: Tool requires file to be read before editing. Fixed by reading the file first, then applying the edit.
+   - **Initial LLM Wiki implementation was wrong**: First version of wiki pages were just summaries of single sources. User asked "제대로 해줘" (do it properly). Recognized the fundamental issue: true Karpathy LLM Wiki requires cross-source synthesis creating NEW connections, not summarization. Rebuilt with entity pages (캐릭터/) and concept pages (개념/) synthesizing 4-5 sources each.
+
+5. Problem Solving:
+   - **CLAUDE.md too long**: Solved by identifying the principle "keep only what Claude can't infer from code." Removed all content derivable from reading source files (hitbox values, asset lists, code templates). Reduced 430→49 lines.
+   - **Wiki not following Karpathy pattern**: Solved by creating proper entity and concept pages that synthesize multiple sources and highlight cross-source connections not visible in any single source.
+   - **Battle system completely missing from wiki**: Discovered by comparing actual scene files vs wiki. Read code, created 배틀 시스템.md with full synthesis.
+   - **Character count wrong**: 구현 현황.md said 19, code had 22 (1 등급외 + 11 R + 7 SR + 3 UR). Fixed in wiki.
+
+6. All user messages:
+   - "요즘 llm wiki 라는게 자주 보이는데 뭔지 자세히 알려줘."
+   - "안드레 카파시라는 사람이 제안한거라던데 모르겠으면 웹 서치를 해 임마"
+   - "사용을 어떻게 하는건데?"
+   - "현재 나는 옵시디언을 쓰고 있고 지금 이 프로젝트를 저렇게 llm wiki로 관리하고 싶은데 어떻게 하면 되는건지 자세히 알려줘."
+   - "ingest 해달라고만 말하면 되는건가?"
+   - "CLAUDE.md 에 추가하고 싶어. 근데 그 전에 최신 버전으로 CLAUDE.md 를 수정하고 싶어. 근데 최근에 웹에서 보면 CLAUDE.md 를 너무 길게 하는것도 좋지 않다고 들었어. 웹서치해서 현재 내 CLAUDE.md 의 문제점을 파악하고 나서 알려줘."
+   - "진행해줘."
+   - "현재 이 프로젝트의 내용과 위키에서의 내용과 다른 부분이 있나?"
+   - "배틀 시스템이랑 캐릭터 수 ingest해줘"
+   - "근데 지금 구조가 llm wiki 에 맞는 구조인가?"
+   - "재편 해줘."
+   - "일단 이 깃 푸시부터 하자"
+   - "그 일러스트 같은거나 캐릭터별 노래(추가 예정) 이런거를 관리하면서 sns 같은데서 관리를 해보려고 해. 인스타나 유튜브에서. 어떻게 생각해?"
+   - "구체적으로 기획해봐."
+   - "일단 이 기획 문서로 작성하고 ingest 도 해줘"
+   - "여기서 추가나 수정하면 좋을게 뭐가 있을까? 그리고 노래나 일러스트 공개 순서는 무조건 치비일거야. 게임의 주인공이니까"
+   - "해줘 ingest 도 하고"
+   - "사업 방향성 이런것도 작성해줄 수 있나?"
+   - "해줘."
+   - "지금 근데 llm wiki 가 안드레 카파시가 말한 방법론을 잘 따르고 있나?"
+   - "제대로 해줘."
+
+7. Pending Tasks:
+   - **`wiki/개념/IMPORT_GATE.md`**: Not yet created. Should synthesize: 세계관 설정 (루트가 발견한 포트, 이식 시스템) + 캐릭터 설정집 (모든 캐릭터가 처음 눈 뜰 때 루트를 본다) + SNS 기획 (계정 이름=IMPORT_GATE, 메타 컨셉) + 가챠 연출 (루트 터미널 명령어)
+   - **Update `wiki/INDEX.md`**: Need to add캐릭터/치비, 캐릭터/루트, 캐릭터/레거시, 개념/SKOR, 개념/IMPORT_GATE entries
+   - **More character pages**: 센티넬, 광부, 나이트, 매화 (at minimum SR/UR characters)
+   - **More concept pages**: 세계관 (폐기 공간 개념), 배틀 시스템 개념 등
+
+8. Current Work:
+   Immediately before this summary, the work was creating proper LLM Wiki synthesized pages following Karpathy's actual methodology. The task was triggered by the user saying "제대로 해줘" after the assistant honestly assessed that the wiki was doing summarization, not synthesis.
+
+   The following files were just created:
+   - `wiki/캐릭터/치비.md` - complete
+   - `wiki/캐릭터/루트.md` - complete
+   - `wiki/캐릭터/레거시.md` - complete
+   - `wiki/개념/SKOR.md` - complete
+
+   The work was stopped mid-task. Still remaining:
+   - `wiki/개념/IMPORT_GATE.md` - not yet created
+   - `wiki/INDEX.md` - not yet updated with new캐릭터/ and 개념/ entries
+
+9. Optional Next Step:
+   Continue creating the remaining synthesized wiki pages that were in-progress. The user asked "제대로 해줘" (do it properly) and the work was cut off mid-execution.
+
+   The next immediate step is to create `wiki/개념/IMPORT_GATE.md` synthesizing:
+   - `sources/세계관 설정.md`: IMPORT_GATE as the port루트 discovered, new character injection system
+   - `sources/캐릭터 설정집.md`: All characters see루트 first when they wake up; 루트 built this system
+   - `sources/SNS 기획.md`: Account name = IMPORT_GATE (meta concept - SNS account IS the worldbuilding location)
+   - 가챠 연출 (from 프로젝트 개요): 루트 terminal commands for injection
+
+   Then update `wiki/INDEX.md` with all new캐릭터/ and 개념/ pages.
+
+If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/johyunduk/.REDACTED.jsonl
+Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.
+
+---
+
+유튜브나 인스타그램 사업자 등록 없이 수익화가 가능한가?
+
+---
+
+2026년 최신화 해서 다시 알려줘봐. 그리고 유튜브에 올릴거는 suno ai 를 통해 제작한 노래에 이 프로젝트의 일러스트를 사용하여 영상만든거를 올릴거거든
+
+---
+
+유료야.
+
+---
+
+위키 업데이트 해줘
+
+---
+
+# Karpathy LLM Wiki — Claude Code 설정 가이드
+
+## 기존 프로젝트에 추가하는 방법
+
+기존 프로젝트 코드나 노트는 **그대로 두면 됩니다.** 새로운 `raw/`와 `wiki/` 폴더를 추가하고, 기존 파일들을 점진적으로 소화(ingest)시키면 됩니다.
+
+### 폴더 구조 (기존 프로젝트 기준)
+
+```
+your-project/
+├── src/                  ← 기존 코드 (손대지 않음)
+├── docs/                 ← 기존 문서 (손대지 않음)
+├── raw/                  ← 새로 추가 (원본 소스를 여기에 복사)
+│   ├── decisions/        ← 설계 결정 기록
+│   ├── references/       ← 참고 자료
+│   └── notes/            ← 기타 노트
+├── wiki/                 ← 새로 추가 (LLM이 자동 생성/관리)
+│   ├── index.md          ← 전체 목차 (LLM이 관리)
+│   ├── log.md            ← 작업 기록 (LLM이 관리)
+│   └── concepts/         ← 개념 페이지들 (LLM이 생성)
+└── CLAUDE.md             ← 새로 추가 (가장 중요!)
+```
+
+---
+
+## CLAUDE.md — 핵심 설정 파일
+
+Claude Code가 위키를 어떻게 관리할지 알려주는 규칙서입니다.  
+아래 내용을 Claude Code에 붙여넣어 프로젝트에 맞게 생성하세요.
+
+### 초기 생성 프롬프트 (Claude Code에 입력)
+
+```
+이 프로젝트에 Karpathy LLM Wiki 패턴을 적용하고 싶어.
+기존 프로젝트로, 이미 [코드/문서/노트]가 있어.
+다음을 해줘:
+1. 이 wiki가 무엇을 다룰지 나한테 물어봐
+2. 답변을 바탕으로 CLAUDE.md 스키마 파일 작성
+3. wiki/index.md 와 wiki/log.md 초기화
+원본 소스: https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f
+```
+
+### CLAUDE.md 예시 구조
+
+```markdown
+# Wiki Schema
+
+## 목적
+이 wiki는 [프로젝트명]의 지식을 축적하는 공간입니다.
+
+## 디렉토리 규칙
+- raw/     : 원본 소스 (절대 수정 금지)
+- wiki/    : LLM이 생성/관리하는 지식 페이지
+- CLAUDE.md: 이 파일 (스키마 및 워크플로우 규칙)
+
+## 페이지 형식
+각 wiki 페이지는 다음 형식을 따릅니다:
+- title, summary, tags, sources, content, related
+
+## 워크플로우
+- ingest  : raw/ 소스를 읽고 wiki/ 페이지 생성/업데이트
+- query   : wiki/ 기반으로 질문에 답변 (출처 명시)
+- audit   : 모순/중복/고아 페이지 탐지
+```
+
+---
+
+## 기존 파일 처리 방법
+
+### Step 1: 기존 파일 분류
+
+| 파일 종류 | 처리 방법 |
+|---|---|
+| 설계 문서, ADR | `raw/decisions/`에 복사 |
+| README, 기술 노트 | `raw/notes/`에 복사 |
+| 외부 참고 자료 | `raw/references/`에 복사 |
+| 소스 코드 | 직접 복사 X → Claude가 읽도록 경로만 알려줌 |
+
+> **원본 파일은 절대 이동/삭제하지 마세요.** `raw/`에는 복사본만 넣습니다.
+
+### Step 2: 일괄 ingestion 프롬프트
+
+```
+raw/ 폴더에 있는 모든 파일을 순서대로 wiki에 컴파일해줘.
+각 파일마다:
+1. 핵심 개념/결정 추출
+2. wiki/ 에 해당 페이지 생성 또는 기존 페이지 업데이트
+3. log.md에 처리 기록 추가
+끝나면 index.md 전체 업데이트해줘.
+```
+
+### Step 3: 코드 자체를 소스로 활용
+
+```
+src/ 폴더의 코드를 읽고, 주요 아키텍처 결정과
+패턴들을 wiki/concepts/ 에 정리해줘.
+```
+
+---
+
+## 일상적인 사용법
+
+### 소스 추가 (새 문서/노트가 생길 때마다)
+
+```
+raw/notes/2026-05-25-new-decision.md 를 wiki에 ingest해줘
+```
+
+### 질문하기
+
+```
+wiki에서 [개념/기능]에 대해 설명해줘
+인증 관련 설계 결정들 요약해줘
+A와 B의 차이점이 뭐야?
+```
+
+### 정기 감사 (월 1회 권장)
+
+```
+wiki 전체를 감사해줘:
+- 서로 모순되는 내용
+- 오래된 정보
+- 링크 없는 고아 페이지
+- 언급됐지만 페이지 없는 개념들
+```
+
+---
+
+## RAG vs LLM Wiki 비교
+
+| 구분 | RAG (기존 방식) | LLM Wiki |
+|---|---|---|
+| 동작 방식 | 질문마다 문서 재검색 | 한 번 컴파일 → 계속 쿼리 |
+| 지식 축적 | 없음 | 소스가 쌓일수록 연결됨 |
+| 세션 간 기억 | 없음 | CLAUDE.md + wiki/ 파일로 유지 |
+| 복잡한 질문 | 5개 문서 동시 검색 어려움 | 이미 연결된 페이지에서 답변 |
+
+---
+
+## 참고 링크
+
+- Karpathy 원본 Gist: https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f
+- 구현 예시 (GitHub): https://github.com/Astro-Han/karpathy-llm-wiki 이거 보고 현재 내 llm wiki 가 이렇게 동작하는지 봐줘.
+
+---
+
+해줘.
+
+---
+
+내가 캐릭터별로 노래 만들어서 앨범이나 뭐 그런식으로 한다고 말 했었나?
+
+---
+
+그냥 캐릭터별로 많아지면 묶거나 하겠지만 지금은 앨범까지는 크게 생각은 없어. 그러면 캐릭터별 노래에 대한 분위기, 장르 이런거 정리를 좀 하고 싶은데.
+
+---
+
+일단 치비, 루트 각각 나눠줘. 그리고 이미지보고 분위기 파악해서 컨셉잡아줘봐. 그리고 구미랑 무기가 빠진거 같아.
+
+---
+
+아 그리고 참고할 만한 가수나 노래가 있어. 일단 치비는 가수 넬의 기억을 걷는 시간 느낌을 참고하면 좋을거 같아.
+
+---
+
+일단 너가 어울리는거로 추천해서 넣어줘봐.
+
+---
+
+루트는 일단 랩 관련이면 좋겠는데
+
+---
+
+일단은 이거로 하자
+
+---
+
+캐릭터 스타일 프롬프트랑 가사 작성을 요청하려고 하는데 전문적인 느낌으로 만들고 싶은데 에이전트나 스킬을 만들어줄 수 있나?
+
+---
+
+치비 수노 스타일 프롬프트랑 가사 작성해줘.
+
+---
+
+이렇게 작성된 것들 문서에 별도 캐릭터별 디렉토리 만들어서 작성해줘. 그리고 스킬에도 다음부턴 그렇게 저장하도록 작성해주고.
+
+---
+
+이렇게 작성된 것들 문서에 별도 캐릭터별 디렉토리 만들어서 작성해줘. 그리고 스킬에도 다음부턴 그렇게 저장하도록 작성해주고. 아 그리고 이거 각각 복사하기 쉽게 작성해줘.
+
+---
+
+이거 근데 최신 버전 기준이지? 현재 나는 suno ai v5.5 pro 야
+
+---
+
+컨셉은 가지지만 게임과 너무 연관될 필요가 없어. 오히려 대중적인 느낌이어야 해.
+
+---
+
+## Suno Custom Mode Tags 이거 따로 작성하지 말고 가사에 넣어서 처리해줘. 그리고 장르별 가사 작성법 그런거 웹서치 및 학습해서 잘 좀 써줘. 대한민국 기준으로 말야. 그렇게해서 치비꺼 완전히 새롭게 다시 써줘.
+
+---
+
+이런 학습한 내용도 어디 써놨니? 이거는 캐릭터별이 아니라 장르별디렉토리에 작성해둬.
+
+---
+
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+Summary:
+1. Primary Request and Intent:
+   The conversation covered multiple topics building on a previous session about a Phaser 3 game ("똥피하기"):
+   - Complete the LLM Wiki with IMPORT_GATE concept page and INDEX update
+   - Research YouTube/Instagram monetization without Korean business registration
+   - Research Suno AI v5.5 usage for music videos (confirmed user has paid plan)
+   - Update wiki (SNS 전략, 사업 방향성) with monetization findings
+   - Compare current LLM Wiki implementation with Karpathy's reference (Astro-Han/karpathy-llm-wiki)
+   - Add wiki/log.md (was missing, required by Karpathy pattern)
+   - Define character song concepts for all SR/UR characters (12 total)
+   - Create SKILL.md for Suno AI prompt + lyrics generation workflows
+   - Write 치비's song (Style Tags + Lyrics) with multiple user-directed revisions:
+     - Split 치비×루트 duet into individual songs
+     - Apply mainstream principle (no game-specific terms in lyrics)
+     - Integrate Custom Mode Tags directly into lyrics blocks (not separate section)
+     - Research and apply Korean indie rock ballad lyric writing techniques
+     - Complete rewrite applying 넬/10cm/혁오 style techniques
+   - Save Korean lyric writing research to genre-specific directory (last request, in progress)
+
+2. Key Technical Concepts:
+   - **Karpathy LLM Wiki Pattern**: 3-layer structure (sources/ → wiki/ → schema), Ingest/Query/Lint workflows, append-only log.md
+   - **Suno AI v5.5**: 4-layer Style Tags structure (tempo+genre → instruments → vocals → negatives), 100-char limit, Custom Mode parameter meta-tags `[Chorus: full band, high energy]`, v5.5 Voices feature (remove vocal tags when using), Pro plan = commercial license
+   - **Korean Lyric Writing Techniques**: Show don't tell, 8-5 syllable pattern, hook design (3-5 syllables, no particles for impact), 받침 rhyme scheme, Verse/Chorus/Bridge role differentiation (넬/10cm/혁오 style)
+   - **Mainstream Principle**: Game-specific terms (SKOR, IMPORT_GATE, 파편, 이식) forbidden in lyrics; worldbuilding = internal compass only
+   - **SKILL.md Pattern**: Natural language trigger → workflow → output format, from Astro-Han/karpathy-llm-wiki reference
+   - **YouTube monetization (Korea)**: YPP possible without business registration; comprehensive income tax filing required; business registration recommended at Phase 3
+   - **AI content disclosure**: YouTube requires disclosure of AI-generated music/images in description
+
+3. Files and Code Sections:
+
+   - **`wiki/개념/IMPORT_GATE.md`** (Created)
+     - Synthesizes 4 sources: 세계관 설정, 뽑기 연출 C안, SNS 기획, 캐릭터 설정집
+     - Key synthesis: IMPORT_GATE name = worldbuilding port = gacha UI = SNS account name (all same)
+     - Gacha probability ↔ signal strength (worldbuilding explains game mechanic)
+     - All characters first see 루트 when awakened (루트 runs IMPORT_GATE)
+
+   - **`wiki/INDEX.md`** (Updated)
+     - Added 캐릭터 페이지 section: 치비, 루트, 레거시
+     - Added 개념 페이지 section: SKOR, IMPORT_GATE
+     - Updated date to 2026-05-19
+
+   - **`wiki/log.md`** (Created)
+     - Append-only work log, newest entries at top
+     - Format: `## [YYYY-MM-DD] Ingest/Query/Lint | Title`
+     - Retroactively logged 4 sessions: 2026-05-17, 05-19, 05-23, 05-25, 05-26
+
+   - **`WIKI.md`** (Updated)
+     - Added SKILL.md to directory structure
+     - Added log.md to directory structure
+     - Added step 6 to ingest workflow: "wiki/log.md 상단에 기록 추가"
+     - Added log recording to query and lint workflows
+
+   - **`wiki/SNS 전략.md`** (Updated multiple times)
+     - Added "음악 제작 — Suno AI" section with legal/operational info
+     - Updated checklist: MV items moved from "예산 확보 후" → "Suno AI로 제작 가능"
+     - Full character song concept table (12 SR/UR characters):
+       ```
+       치비: 인디 록 발라드 / 넬 — 기억을 걷는 시간
+       루트: 서사 힙합 + 드라마틱 신스 / 에픽하이 — 우산/Fan
+       무기: 국악 퓨전 + 다크 앰비언트 / 잠비나이 — 한 점
+       구미: 동양 팝 퓨전 / 오마이걸 — 비밀정원
+       센티넬: 오케스트라 + 인더스트리얼 신스 / Woodkid — Iron
+       레거시: 발라드 → 클라이맥스 EDM / Sia — Chandelier
+       나이트: 다크 오케스트라 + 록 / Imagine Dragons — Warriors
+       매화: 피아노 인디팝 / Yorushika — Elma
+       아카이브: 시네마틱 피아노 발라드 / 아이유 — 밤편지
+       글리치: Hyperpop / 글리치 팝 / 100 gecs — money machine
+       노이즈: Lo-fi ambient / Nujabes — Feather
+       광부: 인디 포크 / 어쿠스틱 / 혁오 — Comes and Goes
+       ```
+     - 공개 우선순위: 치비 → 레거시 → 루트 → 나머지
+
+   - **`wiki/사업 방향성.md`** (Updated)
+     - Phase 2 수익원에 유튜브 광고 수익 추가
+     - 유튜브 수익화 운영 방침 섹션 추가:
+       - Suno AI 유료 플랜 = 상업 라이선스
+       - 사업자등록: Phase 3 이후 검토
+       - AI 생성 콘텐츠 공개 표시 의무
+
+   - **`SKILL.md`** (Created, multiple updates)
+     Path: `/Users/johyunduk/Documents/Obsidian/1. Projects/똥피하기/SKILL.md`
+     
+     Final structure:
+     - **저장 규칙**: wiki/음악/[캐릭터명].md, 섹션별 코드 블록 분리, log.md 기록
+     - **SKILL 1**: Suno AI 스타일 프롬프트 (트리거: "[캐릭터명] suno 프롬프트 만들어줘")
+     - **SKILL 2**: 캐릭터 가사 작성 (트리거: "[캐릭터명] 가사 써줘")
+     - **동시 호출**: "[캐릭터명] 노래 전체 만들어줘"
+     
+     v5.5 Style Tags rules:
+     ```
+     4-레이어 구조: [템포+장르] → [핵심 악기] → [보컬] → [네거티브]
+     100자 이내, 쉼표 구분, 관사 생략
+     Voices 사용 시 보컬 태그 제거
+     ```
+     
+     Custom Mode Tags: 별도 섹션 금지 → 가사 섹션 태그에 통합
+     ```
+     [Chorus: full band, emotional peak]
+     [Bridge: stripped back, single guitar]
+     ```
+     
+     Korean lyric writing techniques:
+     - Show don't tell: 감정 단어 대신 구체적 장면
+     - 8-5 음절 패턴
+     - 훅: 3~5음절, 조사 탈락, 개음절(ㅏ·ㅣ·ㅔ)
+     - 받침 운율 통일
+     - 대중성 원칙: 게임 용어 금지
+
+   - **`wiki/음악/치비.md`** (Created, multiple rewrites)
+     Final version:
+     
+     Style Tags:
+     ```
+     slow tempo indie rock ballad, acoustic guitar and piano, warm korean male vocals, melancholic introspective, no autotune, no excessive reverb
+     ```
+     
+     Final lyrics (with integrated section tags):
+     ```
+     [Verse 1: quiet acoustic guitar only, restrained vocals]
+     이름 적는 칸 앞에서
+     잠깐 멈췄어
+     어딜 왔냐고 물으면
+     잘 모르겠어
+
+     뭔가 있었을 것 같은데
+     기억이 안 나
+     그게 이상한 건지
+     달리면서 생각해
+
+     [Pre-Chorus: piano joins, vocals slightly open]
+     손이 따뜻해
+     이유는 없어
+     뭔가 살아있단 건
+     느껴져
+
+     [Chorus: full band, emotional peak]
+     달린다
+     그래도 달린다
+     여기 있으니까
+     언젠가 알게 되겠지
+     그때까지
+     달린다
+
+     [Verse 2: back to quiet, intimate]
+     누군가 말했어
+     그건 네 것이 아니래
+     그럴 수도 있어
+     근데 지금 난 여기 있잖아
+
+     비어있는 자리가
+     처음부터 없진 않았잖아
+     그럼 뭔가는 있었단 거야
+     그거면 충분해
+
+     [Bridge: stripped back, single guitar]
+     모르면 어때
+     지금 뛰고 있잖아
+     손이 따뜻해
+     이게 나야
+
+     어딜 왔는지 몰라도
+     그냥 달리면 돼
+
+     [Chorus: full band, building intensity]
+     달린다
+     그래도 달린다
+     여기 있으니까
+     언젠가 알게 되겠지
+     그때까지
+     달린다
+
+     [Outro: fade to single guitar]
+     달린다
+     그냥 달린다
+     ```
+
+   - **`wiki/음악/장르/` directory** (Created, file not yet written)
+     - Directory created with `mkdir -p`
+     - File `인디 록 발라드.md` was about to be written when summary was requested
+
+4. Errors and fixes:
+   - **Initial IMPORT_GATE page missing**: Discovered at end of previous session, completed at start of this session
+   - **무기/구미 missing from character list**: User pointed out these two UR characters were missing from the song concept table. Checked character.ts and found both are UR grade. Added to table.
+   - **치비×루트 duet → separate**: User requested splitting into individual songs
+   - **Game lore too prominent in lyrics**: User said "컨셉은 가지지만 게임과 너무 연관될 필요가 없어" → removed SKOR, IMPORT_GATE, 파편, 루트 direct mentions, 코드 주석 아웃트로
+   - **Custom Mode Tags as separate section**: User said "따로 작성하지 말고 가사에 넣어서 처리해줘" → integrated into lyrics section tags
+   - **Lyric quality**: User asked for proper Korean lyric writing research → web searched → rewrote with 8-5 syllable pattern, Show don't tell, proper hook design
+
+5. Problem Solving:
+   - **LLM Wiki compliance**: Identified missing log.md vs Karpathy pattern, created it with retroactive entries, updated WIKI.md workflows
+   - **Suno v5.5 format**: Researched and updated Style Tags from 14 tags → 6 tags following 4-layer structure and 100-char limit
+   - **Korean lyric writing**: Researched 넬/10cm/혁오 techniques, applied Show don't tell, 8-5 syllable pattern, hook design to 치비 lyrics
+   - **Mainstream vs game-specific**: Established principle that worldbuilding = internal compass, no game terms in lyrics
+
+6. All user messages:
+   - (Session continuation - previous context summarized)
+   - "유튜브나 인스타그램 사업자 등록 없이 수익화가 가능한가?"
+   - "2026년 최신화 해서 다시 알려줘봐. 그리고 유튜브에 올릴거는 suno ai 를 통해 제작한 노래에 이 프로젝트의 일러스트를 사용하여 영상만든거를 올릴거거든"
+   - "유료야."
+   - "위키 업데이트 해줘"
+   - "# Karpathy LLM Wiki — Claude Code 설정 가이드 [document pasted] 이거 보고 현재 내 llm wiki 가 이렇게 동작하는지 봐줘."
+   - "해줘."
+   - "내가 캐릭터별로 노래 만들어서 앨범이나 뭐 그런식으로 한다고 말 했었나?"
+   - "그냥 캐릭터별로 많아지면 묶거나 하겠지만 지금은 앨범까지는 크게 생각은 없어. 그러면 캐릭터별 노래에 대한 분위기, 장르 이런거 정리를 좀 하고 싶은데."
+   - "일단 치비, 루트 각각 나눠줘. 그리고 이미지보고 분위기 파악해서 컨셉잡아줘봐. 그리고 구미랑 무기가 빠진거 같아."
+   - (empty message - prompted continuation)
+   - (empty message - prompted continuation)
+   - "아 그리고 참고할 만한 가수나 노래가 있어. 일단 치비는 가수 넬의 기억을 걷는 시간 느낌을 참고하면 좋을거 같아."
+   - "일단 너가 어울리는거로 추천해서 넣어줘봐."
+   - "루트는 일단 랩 관련이면 좋겠는데"
+   - "일단은 이거로 하자"
+   - "캐릭터 스타일 프롬프트랑 가사 작성을 요청하려고 하는데 전문적인 느낌으로 만들고 싶은데 에이전트나 스킬을 만들어줄 수 있나?"
+   - "치비 수노 스타일 프롬프트랑 가사 작성해줘."
+   - "이렇게 작성된 것들 문서에 별도 캐릭터별 디렉토리 만들어서 작성해줘. 그리고 스킬에도 다음부턴 그렇게 저장하도록 작성해주고. 아 그리고 이거 각각 복사하기 쉽게 작성해줘."
+   - "이거 근데 최신 버전 기준이지? 현재 나는 suno ai v5.5 pro 야"
+   - (empty message - prompted continuation after v5.5 research)
+   - "컨셉은 가지지만 게임과 너무 연관될 필요가 없어. 오히려 대중적인 느낌이어야 해."
+   - "## Suno Custom Mode Tags 이거 따로 작성하지 말고 가사에 넣어서 처리해줘. 그리고 장르별 가사 작성법 그런거 웹서치 및 학습해서 잘 좀 써줘. 대한민국 기준으로 말야. 그렇게해서 치비꺼 완전히 새롭게 다시 써줘."
+   - (empty message - prompted continuation after lyric research)
+   - "이런 학습한 내용도 어디 써놨니? 이거는 캐릭터별이 아니라 장르별디렉토리에 작성해둬."
+
+7. Pending Tasks:
+   - **Create `wiki/음악/장르/인디 록 발라드.md`**: The directory was created but the file with Korean indie rock ballad lyric writing techniques has not been written yet. This is the immediate next task.
+   - Write the content including: 받침 운율, 8-5 음절 패턴, Show don't tell, Verse/Chorus/Bridge roles, hook design for Korean indie rock ballad (넬/10cm/혁오 style)
+   - Update SKILL.md to reference genre files for lyric techniques
+   - Update wiki/log.md with this session's work
+
+8. Current Work:
+   The user asked "이런 학습한 내용도 어디 써놨니? 이거는 캐릭터별이 아니라 장르별 디렉토리에 작성해둬."
+
+   The assistant:
+   1. Created directory `wiki/음악/장르/` with mkdir -p
+   2. Was in the process of creating `wiki/음악/장르/인디 록 발라드.md` when the summary was requested
+
+   The lyric research to be saved includes:
+   - 한국어 받침 운율 구조 (7가지 받침, ㄴ/ㄹ 유사음)
+   - 8-5 음절 패턴 (넬 스타일)
+   - Show don't tell 기법 (장면으로 감정 전달)
+   - Verse/Pre-Chorus/Chorus/Bridge 각 역할과 밀도
+   - 훅 설계법 (3~5음절, 조사 탈락, 개음절)
+   - 넬/10cm/혁오별 특징적 작사 스타일
+
+9. Optional Next Step:
+   Create `wiki/음악/장르/인디 록 발라드.md` with all the Korean lyric writing research findings, then update wiki/log.md.
+
+   The user's exact request: "이런 학습한 내용도 어디 써놨니? 이거는 캐릭터별이 아니라 장르별디렉토리에 작성해둬."
+
+   The directory `wiki/음악/장르/` was already created. The next step is to write the file with all the research content about Korean indie rock ballad lyric writing techniques (넬/10cm/혁오 style: Show don't tell, 8-5 syllable pattern, 받침 rhyme, hook design, Verse/Chorus/Bridge roles).
+
+If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/johyunduk/.REDACTED.jsonl
+Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.
+
+---
+
+랩 장르도 학습 및 분석해서 작성하고 루트꺼 스타일프롬프트랑 가사 작성해줘.
+
+---
+
+캐릭터별 이것도 파일만 있는게 아니라 캐릭터별로 디렉토리가되서 거기에 하나씩 추가하는 방향으로 해줘. 그리고나서 루트는 dark synthwave, cyberpunk pop, confident female rap & vocals, cool and smirking tone, glitchy electronic beats, pulsing bassline, neon atmosphere, distorted synth leads, hi-hat patterns, mysterious and sharp, fast tempo, 128 BPM, midnight hacker aesthetic, blue and amber color palette 이런 느낌의 방향으로도 하나 작성해주고 장르도 분석해서 작성해줘.
+
+---
+
+루트는 여자야.
+
+---
+
+그리고 모든 캐릭터들 가사 작성할 떄 게임의 내용과는 연결짓지 말이줘.
+
+---
+
+루트 저 다크에 트랩 섞은 느낌으로 하나 만들어줘봐. 트랩 장르도 분석해서 작성하고.
+
+---
+
+가사가 너무 짧아서 느린 느낌이 나는데? 랩 가사 어떻게 쓰는지 배워와.
+
+---
+
+치비 딘 스타일로도 하나 만들어줘.
+
+---
+
+치비와 루트 같이 듀엣으로 딘, 헤이즈 and july 같은 노래도 만들어줘.
