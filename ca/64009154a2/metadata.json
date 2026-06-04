@@ -126,6 +126,13 @@
       "context": "/ca/64009154a2/16/context.md",
       "content_hash": "/ca/64009154a2/16/content_hash.txt",
       "prompt": "/ca/64009154a2/16/prompt.txt"
+    },
+    {
+      "metadata": "/ca/64009154a2/17/metadata.json",
+      "transcript": "/ca/64009154a2/17/full.jsonl",
+      "context": "",
+      "content_hash": "/ca/64009154a2/17/content_hash.txt",
+      "prompt": ""
     }
   ],
   "token_usage": {
