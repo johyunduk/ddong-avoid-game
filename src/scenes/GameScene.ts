@@ -48,10 +48,6 @@ export default class GameScene extends BaseScene {
   private spawnTimer!: Phaser.Time.TimerEvent;
   protected difficultyLevel: number = 2;
   private bgMusic!: Phaser.Sound.BaseSound;
-  private fpsText?: Phaser.GameObjects.Text;  // ?fps URL 파라미터 시에만 표시되는 디버그 오버레이
-  private _stepCount = 0;     // 실제 게임 스텝(update 호출) 카운트 — 캡 적용 후 실 rate 측정
-  private _stepWinStart = 0;
-  private _stepRate = 0;
   protected gameMode: GameMode = GameMode.CLASSIC;
   protected difficulty: Difficulty = Difficulty.HARD;  // 게임플레이 파라미터 기준
   private purePhysical: boolean = false;
@@ -474,16 +470,6 @@ export default class GameScene extends BaseScene {
       this.tweens.add({ targets: hintText, alpha: 0, duration: 700, ease: 'Linear' });
     });
 
-    // [디버그] ?fps URL 파라미터 시 실측 FPS 오버레이 (프레임레이트 진단용, 일반 플레이엔 비표시)
-    if (location.search.includes('fps')) {
-      this.fpsText = this.add.text(W / 2, 2, 'fps', {
-        fontSize: '12px', color: '#00ff41', fontFamily: 'monospace',
-        stroke: '#000000', strokeThickness: 3,
-      }).setOrigin(0.5, 0).setDepth(9999);
-      // 실제 물리 스텝 발생 횟수를 직접 카운트 (똥이 움직이는 ground truth — fixedStep 정상이면 ~60/s 고정)
-      this.physics.world.on('worldstep', () => { this._stepCount++; });
-    }
-
     // 💩 생성 타이머 (난이도별 초기 주기 사용)
     this.spawnTimer = this.time.addEvent({
       delay: this.difficultyConfig.spawnDelay,
@@ -546,21 +532,6 @@ export default class GameScene extends BaseScene {
   }
 
   update() {
-    if (this.fpsText) {
-      // phys = 실제 물리 스텝/초 (똥 움직임의 ground truth, fixedStep 정상이면 주사율 무관 ~60 고정)
-      // raw = 원본 rAF 주사율(패널). 고주사율이면 raw만 오르고 phys는 60이어야 정상.
-      const t = this.game.loop.now;
-      if (this._stepWinStart === 0) this._stepWinStart = t;
-      const win = t - this._stepWinStart;
-      if (win >= 500) {
-        this._stepRate = Math.round((this._stepCount * 1000) / win);
-        this._stepCount = 0;
-        this._stepWinStart = t;
-      }
-      const dir = (this.player?.body?.velocity.x ?? 0) !== 0 ? '◀▶' : '··';
-      this.fpsText.setText(`phys ${this._stepRate}/s · raw ${Math.round(this.game.loop.actualFps)} ${dir}`);
-    }
-
     if (!this.gameOver) {
       this.player.update();
 
