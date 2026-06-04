@@ -129,7 +129,7 @@ export class MugiAbility extends BaseAbility {
   private _updateYeoijus(api: GameSceneAPI): void {
     const delta = api.scene.game.loop.delta * 0.001;
     const { player } = api;
-    const fallDelta = (api.baseSpeed + api.difficultyLevel * 40) * delta;
+    const fallDelta = (api.baseSpeed + api.difficultyLevel * 40) * MUGI_PARAMS.yeoijuFallFactor * delta;
     const r2 = MUGI_PARAMS.yeoijuCollectRadius ** 2;
     const remaining: YeoijuOrb[] = [];
 
@@ -157,7 +157,7 @@ export class MugiAbility extends BaseAbility {
     // Revival recharge: runs regardless of gold form
     if (this.revivalCharges === 0 && this.totalRevivalsUsed < 3) {
       this.revivalChargeCount++;
-      if (this.revivalChargeCount >= MUGI_PARAMS.goldThreshold) {
+      if (this.revivalChargeCount >= MUGI_PARAMS.revivalRechargeCount) {
         this.revivalCharges = 1;
         this.revivalChargeCount = 0;
         this._playRechargeGlow(api);

@@ -143,13 +143,15 @@ export const LEGACY_DESC = {
 
 // ── 무기 (Mugi / UR) — 검붉은 여의주 & 황금 변신 ──────────────────────
 export const MUGI_PARAMS = {
-  yeoijuInterval:      50,    // 여의주 생성 점수 간격 (변신 전)
-  yeoijuGoldInterval:  200,   // 여의주 생성 점수 간격 (변신 후)
-  yeoijuCollectRadius: 28,    // 여의주 수집 반경 (px)
-  goldThreshold:       50,    // 황금 변신 필요 여의주 수
+  yeoijuInterval:       50,   // 여의주 생성 점수 간격 (변신 전)
+  yeoijuGoldInterval:   200,  // 여의주 생성 점수 간격 (변신 후)
+  yeoijuCollectRadius:  40,   // 여의주 수집 반경 (px) — 버프: 28→40, 쫓는 리스크 완화
+  goldThreshold:        30,   // 황금 변신 필요 여의주 수 — 버프: 50→30
+  yeoijuFallFactor:     0.75, // 여의주 낙하 속도 배율 — 버프: 후반 수집 난이도 완화
+  revivalRechargeCount: 20,   // 부활 재충전 필요 여의주 — 버프: goldThreshold와 분리(50→20)
 } as const;
 
 export const MUGI_DESC = {
   basicEffect:    `${MUGI_PARAMS.yeoijuInterval}점마다 검붉은 여의주 낙하 — 매 수집마다 검붉은 번개 (경로 위 똥 제거 +10점) · ${MUGI_PARAMS.goldThreshold}개 달성 시 황금 변신 (이후 여의주마다 황금 번개, 전체 삭제 +20점)`,
-  specialAbility: `부활 최대 1회 보유 / 총 3회 사용 · 게임 시작 시 1회 충전 · 여의주 ${MUGI_PARAMS.goldThreshold}개로 재충전 · 피격 시 연꽃 발현 후 소생 (변신 중이면 변신 해제)`,
+  specialAbility: `부활 최대 1회 보유 / 총 3회 사용 · 게임 시작 시 1회 충전 · 여의주 ${MUGI_PARAMS.revivalRechargeCount}개로 재충전 · 피격 시 연꽃 발현 후 소생 (변신 중이면 변신 해제)`,
 } as const;
