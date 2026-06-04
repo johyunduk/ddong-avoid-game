@@ -1,0 +1,44 @@
+# Session Context
+
+## User Prompts
+
+### Prompt 1
+
+phaser.js 게임에서 실제 게임들은 스킬 이펙트를 어떻게 처리하나? 지금 내꺼에서 구현된건 내장 이펙트들인데 너무 구린거 같아.
+
+### Prompt 2
+
+시작해봐
+
+### Prompt 3
+
+더 별로인데?
+
+### Prompt 4
+
+5번이야
+
+### Prompt 5
+
+시각적으로 더 임팩트 있게가 맞긴 한데. 보통 다른 게임들은 어떻게 하는지부터 알려줘봐.
+
+### Prompt 6
+
+[Image #1] 이거 검붉은 번개 스프라이트 시트 만들었는데 이거로 뭐 어떻게 못할까?
+
+### Prompt 7
+
+[Image: source: red_lightning_sp.png]
+
+### Prompt 8
+
+@public/assets/sprites/skills/red_lightning_sp.png 이거 추가했어
+
+### Prompt 9
+
+음 뒤에 배경이 있어서 배경 제거한 버전의 이미지로 수정을 했어. 근데 뭔가 화질이 안좋고 바닥에 닿지 않는거 같은데
+
+### Prompt 10
+
+음 화질이 안좋은건 이미지 자체가 그래서 그런가?
+
