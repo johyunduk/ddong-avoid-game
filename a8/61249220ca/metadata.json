@@ -92,6 +92,13 @@
       "context": "",
       "content_hash": "/a8/61249220ca/11/content_hash.txt",
       "prompt": ""
+    },
+    {
+      "metadata": "/a8/61249220ca/12/metadata.json",
+      "transcript": "/a8/61249220ca/12/full.jsonl",
+      "context": "",
+      "content_hash": "/a8/61249220ca/12/content_hash.txt",
+      "prompt": ""
     }
   ],
   "token_usage": {
