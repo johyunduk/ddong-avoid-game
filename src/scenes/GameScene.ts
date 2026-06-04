@@ -49,6 +49,9 @@ export default class GameScene extends BaseScene {
   protected difficultyLevel: number = 2;
   private bgMusic!: Phaser.Sound.BaseSound;
   private fpsText?: Phaser.GameObjects.Text;  // ?fps URL 파라미터 시에만 표시되는 디버그 오버레이
+  private _stepCount = 0;     // 실제 게임 스텝(update 호출) 카운트 — 캡 적용 후 실 rate 측정
+  private _stepWinStart = 0;
+  private _stepRate = 0;
   protected gameMode: GameMode = GameMode.CLASSIC;
   protected difficulty: Difficulty = Difficulty.HARD;  // 게임플레이 파라미터 기준
   private purePhysical: boolean = false;
@@ -542,9 +545,18 @@ export default class GameScene extends BaseScene {
 
   update() {
     if (this.fpsText) {
-      // 입력 상태도 함께 표기 — 터치 눌림 ↔ 뗌 구간의 fps 차이를 한눈에 비교
+      // step = 실제 게임 스텝 rate (update 호출 빈도, 캡 먹히면 ≤60). raw = 원본 rAF 주사율(패널).
+      this._stepCount++;
+      const t = this.game.loop.now;
+      if (this._stepWinStart === 0) this._stepWinStart = t;
+      const win = t - this._stepWinStart;
+      if (win >= 500) {
+        this._stepRate = Math.round((this._stepCount * 1000) / win);
+        this._stepCount = 0;
+        this._stepWinStart = t;
+      }
       const dir = (this.player?.body?.velocity.x ?? 0) !== 0 ? '◀▶' : '··';
-      this.fpsText.setText(`fps ${Math.round(this.game.loop.actualFps)} ${dir}`);
+      this.fpsText.setText(`step ${this._stepRate} / raw ${Math.round(this.game.loop.actualFps)} ${dir}`);
     }
 
     if (!this.gameOver) {
