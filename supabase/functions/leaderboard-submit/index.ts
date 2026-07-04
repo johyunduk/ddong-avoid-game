@@ -218,7 +218,7 @@ Deno.serve(async (req: Request) => {
     const season = calcSeason(yearMonth);
 
     const validCharacterTypes = [
-      'chibi', 'mugi', 'gumi', 'knight',
+      'chibi', 'mugi', 'gumi', 'knight', 'k',
       'log', 'swap', 'sum', 'fork', 'seed', 'session', 'branch', 'hook', 'socket', 'index',
       'hacker', 'miner', 'maehwa', 'archieve', 'glitch', 'noise',
       'sentinel', 'legacy',

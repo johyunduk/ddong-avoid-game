@@ -22,8 +22,8 @@ function pullWallpaper(): { id: string } {
 }
 
 // ── 뽑기 풀 정의 ────────────────────────────────────────────────────────
-// R 80% (10종 균등 배분), SR 19.3% (7종 균등 배분), UR 종당 ≈0.233% (4종 → 총 ≈0.93%)
-const SR_W  = 19.3 / 7;         // ≈ 2.757%
+// R 80% (10종 균등 배분), SR 19.3% (8종 균등 배분), UR 종당 ≈0.233% (4종 → 총 ≈0.93%)
+const SR_W  = 19.3 / 8;         // ≈ 2.413%
 const UR_W  = 0.7  / 3;         // 종당 ≈0.233% (기존 3종 산출값 유지 — 4종이어도 종당 확률 동일, 기존 UR 너프 없음)
 const POOL = [
   // ── R등급 ──
@@ -45,6 +45,7 @@ const POOL = [
   { id: 'glitch',   grade: 'SR', weight: SR_W },
   { id: 'noise',    grade: 'SR', weight: SR_W },
   { id: 'knight',   grade: 'SR', weight: SR_W },
+  { id: 'k',        grade: 'SR', weight: SR_W },
   // ── UR등급 ──
   { id: 'mugi',     grade: 'UR', weight: UR_W },
   { id: 'gumi',     grade: 'UR', weight: UR_W },

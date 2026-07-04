@@ -91,7 +91,7 @@ export default class GameScene extends BaseScene {
     return Math.max(400, this.difficultyConfig.spawnDelay - (this.difficultyLevel * 80));
   }
 
-  private static readonly CHARS_WITH_SPRITES = ['miner', 'maehwa', 'hacker', 'archieve', 'glitch', 'noise', 'sentinel', 'legacy', 'log', 'swap', 'sum', 'fork', 'seed', 'session', 'branch', 'hook', 'socket', 'index', 'knight', 'gumi', 'mugi'];
+  private static readonly CHARS_WITH_SPRITES = ['miner', 'maehwa', 'hacker', 'archieve', 'glitch', 'noise', 'sentinel', 'legacy', 'log', 'swap', 'sum', 'fork', 'seed', 'session', 'branch', 'hook', 'socket', 'index', 'knight', 'gumi', 'mugi', 'k'];
   private static readonly RAINBOW_COLORS = [
     '#ff0000', '#ff7f00', '#ffff00', '#00ff00', '#0000ff', '#4b0082', '#9400d3',
   ];
@@ -212,6 +212,16 @@ export default class GameScene extends BaseScene {
         if (!this.textures.exists('gold_mugi_front')) this.load.image('gold_mugi_front', 'assets/players/gold_mugi_front.webp');
         if (!this.textures.exists('gold_mugi_left'))  this.load.image('gold_mugi_left',  'assets/players/gold_mugi_left.webp');
         if (!this.textures.exists('gold_mugi_right')) this.load.image('gold_mugi_right', 'assets/players/gold_mugi_right.webp');
+      }
+      if (this.selectedCharId === 'k') {
+        // 아들(ktei) 동반자 — 항상 k 뒤를 따라다님
+        if (!this.textures.exists('ktei_front')) this.load.image('ktei_front', 'assets/players/ktei_front.webp');
+        if (!this.textures.exists('ktei_left'))  this.load.image('ktei_left',  'assets/players/ktei_left.webp');
+        if (!this.textures.exists('ktei_right')) this.load.image('ktei_right', 'assets/players/ktei_right.webp');
+        // ktei_ss(각성 본체) — k 사망 시 승계되는 스프라이트
+        if (!this.textures.exists('ktei_ss_front')) this.load.image('ktei_ss_front', 'assets/players/ktei_ss_front.webp');
+        if (!this.textures.exists('ktei_ss_left'))  this.load.image('ktei_ss_left',  'assets/players/ktei_ss_left.webp');
+        if (!this.textures.exists('ktei_ss_right')) this.load.image('ktei_ss_right', 'assets/players/ktei_ss_right.webp');
       }
     } else {
       // chibi (기본) 또는 플레이어 스프라이트가 없는 UR 캐릭터 → 치비로 fallback

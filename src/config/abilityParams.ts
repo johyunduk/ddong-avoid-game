@@ -155,3 +155,15 @@ export const MUGI_DESC = {
   basicEffect:    `${MUGI_PARAMS.yeoijuInterval}점마다 검붉은 여의주 낙하 — 매 수집마다 검붉은 번개 (경로 위 똥 제거 +10점) · ${MUGI_PARAMS.goldThreshold}개 달성 시 황금 변신 (이후 여의주마다 황금 번개, 전체 삭제 +20점)`,
   specialAbility: `부활 최대 1회 보유 / 총 3회 사용 · 게임 시작 시 1회 충전 · 여의주 ${MUGI_PARAMS.revivalRechargeCount}개로 재충전 · 피격 시 연꽃 발현 후 소생 (변신 중이면 변신 해제)`,
 } as const;
+
+// ── K (아빠 / SR) — 각성 에너지파 ──────────────────────────────────────
+export const K_PARAMS = {
+  gmhmInterval:      300, // 에너지파 발동 점수 간격 (초사이언 전)
+  gmhmIntervalSs:    200, // 에너지파 발동 점수 간격 (초사이언 후 — 더 자주)
+  beamPointsPerPoop: 5,   // 빔 경로상 제거 똥당 보너스 점수
+} as const;
+
+export const K_DESC = {
+  basicEffect:    `${K_PARAMS.gmhmInterval}점마다 각성 에너지파 발사 — 화면 중앙 반대쪽 위 대각선으로 손끝에서 발사, 빔 경로상 똥 제거 (+${K_PARAMS.beamPointsPerPoop}점/개)`,
+  specialAbility: `피격 시 아들이 각성해 본체로 부활 (1회) — 이후 ${K_PARAMS.gmhmIntervalSs}점마다 멈춰서 강화 에너지파`,
+} as const;

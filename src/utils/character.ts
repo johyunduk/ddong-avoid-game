@@ -2,7 +2,7 @@ import {
   HACKER_DESC, MINER_DESC, MAEHWA_DESC,
   ARCHIEVE_DESC, GLITCH_DESC, NOISE_DESC,
   SENTINEL_DESC, LEGACY_DESC, KNIGHT_DESC,
-  GUMI_DESC, MUGI_DESC,
+  GUMI_DESC, MUGI_DESC, K_DESC,
 } from '../config/abilityParams';
 
 export interface CharacterDef {
@@ -106,6 +106,20 @@ export const CHARACTERS: CharacterDef[] = [
     specialAbility: LEGACY_DESC.specialAbility,
   },
   // ── SR등급 ─────────────────────────────────────────────────────────────
+  {
+    id: 'k',
+    name: 'K',
+    grade: 'SR',
+    gradeColor: '#4488ff',
+    imageKey: 'k_front',
+    imagePath: 'assets/players/k_front.webp',
+    illustKey: 'illust_k',
+    illustPath: 'assets/illustrations/k.webp',
+    basicEffect: K_DESC.basicEffect,
+    specialAbility: K_DESC.specialAbility,
+    playerDisplaySize: [46, 80],
+    cardDisplaySize: [48, 84],
+  },
   {
     id: 'knight',
     name: '나이트',
