@@ -1,0 +1,47 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "dab9438e5542",
+  "strategy": "manual-commit",
+  "branch": "dev",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".granite/app.json",
+    "public/assets/illustrations/k.webp",
+    "public/assets/illustrations/k_ill.jpg",
+    "public/assets/players/k_front.webp",
+    "public/assets/players/k_left.webp",
+    "public/assets/players/k_right.webp",
+    "public/assets/players/ktei_front.webp",
+    "public/assets/players/ktei_left.webp",
+    "public/assets/players/ktei_right.webp",
+    "public/assets/players/ktei_ss_front.webp",
+    "public/assets/players/ktei_ss_gmhm_left.webp",
+    "public/assets/players/ktei_ss_gmhm_right.webp",
+    "public/assets/players/ktei_ss_left.webp",
+    "public/assets/players/ktei_ss_right.webp",
+    "src/abilities/KAbility.ts",
+    "src/abilities/index.ts",
+    "src/config/abilityParams.ts",
+    "src/objects/Player.ts",
+    "src/scenes/GameScene.ts",
+    "src/utils/character.ts",
+    "supabase/functions/gacha-pull/index.ts",
+    "supabase/functions/leaderboard-submit/index.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/da/b9438e5542/0/metadata.json",
+      "transcript": "/da/b9438e5542/0/full.jsonl",
+      "context": "/da/b9438e5542/0/context.md",
+      "content_hash": "/da/b9438e5542/0/content_hash.txt",
+      "prompt": "/da/b9438e5542/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 22209,
+    "cache_creation_tokens": 1662752,
+    "cache_read_tokens": 31124325,
+    "output_tokens": 243705,
+    "api_call_count": 145
+  }
+}
