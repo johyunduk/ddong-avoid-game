@@ -1,0 +1,51 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "dab9438e5542",
+  "session_id": "abf57f4d-88aa-4e61-936d-ba3d421ba650",
+  "strategy": "manual-commit",
+  "created_at": "2026-07-04T04:51:14.8261Z",
+  "branch": "dev",
+  "checkpoints_count": 17,
+  "files_touched": [
+    "public/assets/illustrations/k.webp",
+    "public/assets/illustrations/k_ill.jpg",
+    "public/assets/players/k_front.webp",
+    "public/assets/players/k_left.webp",
+    "public/assets/players/k_right.webp",
+    "public/assets/players/ktei_front.webp",
+    "public/assets/players/ktei_left.webp",
+    "public/assets/players/ktei_right.webp",
+    "public/assets/players/ktei_ss_front.webp",
+    "public/assets/players/ktei_ss_gmhm_left.webp",
+    "public/assets/players/ktei_ss_gmhm_right.webp",
+    "public/assets/players/ktei_ss_left.webp",
+    "public/assets/players/ktei_ss_right.webp",
+    "src/abilities/KAbility.ts",
+    "src/abilities/index.ts",
+    "src/config/abilityParams.ts",
+    "src/objects/Player.ts",
+    "src/scenes/GameScene.ts",
+    "src/utils/character.ts",
+    "supabase/functions/gacha-pull/index.ts",
+    "supabase/functions/leaderboard-submit/index.ts"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "38b4e81073ee",
+  "token_usage": {
+    "input_tokens": 19754,
+    "cache_creation_tokens": 610795,
+    "cache_read_tokens": 50536179,
+    "output_tokens": 305867,
+    "api_call_count": 218
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-07-04T04:51:14.20372Z",
+    "agent_lines": 512,
+    "human_added": 0,
+    "human_modified": 15,
+    "human_removed": 0,
+    "total_committed": 527,
+    "agent_percentage": 97.15370018975332
+  },
+  "transcript_path": ".claude/projects/-Users-johyunduk-Projects-ddong-avoid-game/abf57f4d-88aa-4e61-936d-ba3d421ba650.jsonl"
+}

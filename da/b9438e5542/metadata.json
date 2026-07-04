@@ -3,7 +3,7 @@
   "checkpoint_id": "dab9438e5542",
   "strategy": "manual-commit",
   "branch": "dev",
-  "checkpoints_count": 2,
+  "checkpoints_count": 19,
   "files_touched": [
     ".granite/app.json",
     "public/assets/illustrations/k.webp",
@@ -133,13 +133,20 @@
       "context": "",
       "content_hash": "/da/b9438e5542/14/content_hash.txt",
       "prompt": ""
+    },
+    {
+      "metadata": "/da/b9438e5542/15/metadata.json",
+      "transcript": "/da/b9438e5542/15/full.jsonl",
+      "context": "/da/b9438e5542/15/context.md",
+      "content_hash": "/da/b9438e5542/15/content_hash.txt",
+      "prompt": "/da/b9438e5542/15/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 22209,
-    "cache_creation_tokens": 1662752,
-    "cache_read_tokens": 31124325,
-    "output_tokens": 243705,
-    "api_call_count": 145
+    "input_tokens": 41963,
+    "cache_creation_tokens": 2273547,
+    "cache_read_tokens": 81660504,
+    "output_tokens": 549572,
+    "api_call_count": 363
   }
 }
