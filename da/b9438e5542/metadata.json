@@ -3,7 +3,7 @@
   "checkpoint_id": "dab9438e5542",
   "strategy": "manual-commit",
   "branch": "dev",
-  "checkpoints_count": 1,
+  "checkpoints_count": 2,
   "files_touched": [
     ".granite/app.json",
     "public/assets/illustrations/k.webp",
@@ -41,6 +41,13 @@
       "transcript": "/da/b9438e5542/1/full.jsonl",
       "context": "",
       "content_hash": "/da/b9438e5542/1/content_hash.txt",
+      "prompt": ""
+    },
+    {
+      "metadata": "/da/b9438e5542/2/metadata.json",
+      "transcript": "/da/b9438e5542/2/full.jsonl",
+      "context": "",
+      "content_hash": "/da/b9438e5542/2/content_hash.txt",
       "prompt": ""
     }
   ],
