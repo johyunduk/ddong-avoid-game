@@ -160,6 +160,13 @@
       "context": "",
       "content_hash": "/e4/220015be10/20/content_hash.txt",
       "prompt": ""
+    },
+    {
+      "metadata": "/e4/220015be10/21/metadata.json",
+      "transcript": "/e4/220015be10/21/full.jsonl",
+      "context": "",
+      "content_hash": "/e4/220015be10/21/content_hash.txt",
+      "prompt": ""
     }
   ],
   "token_usage": {
