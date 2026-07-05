@@ -3,7 +3,7 @@
   "checkpoint_id": "e4220015be10",
   "strategy": "manual-commit",
   "branch": "dev",
-  "checkpoints_count": 1,
+  "checkpoints_count": 2,
   "files_touched": [
     ".granite/app.json",
     "src/abilities/KAbility.ts",
@@ -26,6 +26,13 @@
       "transcript": "/e4/220015be10/1/full.jsonl",
       "context": "",
       "content_hash": "/e4/220015be10/1/content_hash.txt",
+      "prompt": ""
+    },
+    {
+      "metadata": "/e4/220015be10/2/metadata.json",
+      "transcript": "/e4/220015be10/2/full.jsonl",
+      "context": "",
+      "content_hash": "/e4/220015be10/2/content_hash.txt",
       "prompt": ""
     }
   ],
