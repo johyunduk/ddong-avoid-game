@@ -1,0 +1,28 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "e1405b25b846",
+  "session_id": "b0daece2-f2c0-4a23-8be3-21200ebe2060",
+  "strategy": "manual-commit",
+  "created_at": "2026-07-05T06:53:04.898067Z",
+  "branch": "dev",
+  "checkpoints_count": 0,
+  "files_touched": [
+    ".granite/app.json",
+    "public/assets/vids/k.mp4",
+    "src/scenes/GachaScene.ts",
+    "src/utils/character.ts"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "c4f9de5ec865",
+  "transcript_identifier_at_start": "de8efb8c-ef43-4e7d-a32a-64b934c50502",
+  "initial_attribution": {
+    "calculated_at": "2026-07-05T06:53:04.866818Z",
+    "agent_lines": 4,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 4,
+    "agent_percentage": 100
+  },
+  "transcript_path": ".claude/projects/-Users-johyunduk-Projects-ddong-avoid-game/b0daece2-f2c0-4a23-8be3-21200ebe2060.jsonl"
+}
