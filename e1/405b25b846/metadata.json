@@ -3,7 +3,7 @@
   "checkpoint_id": "e1405b25b846",
   "strategy": "manual-commit",
   "branch": "dev",
-  "checkpoints_count": 1,
+  "checkpoints_count": 2,
   "files_touched": [
     ".granite/app.json",
     "public/assets/vids/k.mp4",
@@ -23,6 +23,13 @@
       "transcript": "/e1/405b25b846/1/full.jsonl",
       "context": "",
       "content_hash": "/e1/405b25b846/1/content_hash.txt",
+      "prompt": ""
+    },
+    {
+      "metadata": "/e1/405b25b846/2/metadata.json",
+      "transcript": "/e1/405b25b846/2/full.jsonl",
+      "context": "",
+      "content_hash": "/e1/405b25b846/2/content_hash.txt",
       "prompt": ""
     }
   ],
