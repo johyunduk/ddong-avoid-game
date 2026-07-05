@@ -1,0 +1,31 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "9dcb99c2b920",
+  "strategy": "manual-commit",
+  "branch": "dev",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".granite/app.json",
+    "public/assets/illustrations/heidi_ill.jpg",
+    "public/assets/illustrations/red_ill.png",
+    "public/assets/illustrations/ted_ill.png",
+    "src/abilities/KAbility.ts",
+    "src/config/abilityParams.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/9d/cb99c2b920/0/metadata.json",
+      "transcript": "/9d/cb99c2b920/0/full.jsonl",
+      "context": "/9d/cb99c2b920/0/context.md",
+      "content_hash": "/9d/cb99c2b920/0/content_hash.txt",
+      "prompt": "/9d/cb99c2b920/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 22209,
+    "cache_creation_tokens": 1662752,
+    "cache_read_tokens": 31124325,
+    "output_tokens": 243705,
+    "api_call_count": 145
+  }
+}
