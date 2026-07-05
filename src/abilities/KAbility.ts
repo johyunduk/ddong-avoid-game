@@ -5,9 +5,9 @@ import type PoolablePoopBase from '../objects/PoolablePoopBase';
 import { K_PARAMS } from '../config/abilityParams';
 
 // ── K (아빠) 능력 ────────────────────────────────────────────────────────
-// 300점마다 현재 캐릭터(움직이던 그 스프라이트)가 그대로 손끝에서 위 대각선으로
-// 에너지파를 발사한다 — 컷인·포즈 교체 없음. 화면 중앙 기준 플레이어가 왼쪽이면
-// 오른쪽 위, 오른쪽이면 왼쪽 위로 쏘며 빔 경로상의 일반 똥을 제거한다.
+// K_PARAMS.gmhmInterval 점(초사이언 전)마다 현재 캐릭터(움직이던 그 스프라이트)가
+// 그대로 손끝에서 위 대각선으로 에너지파를 발사한다 — 컷인·포즈 교체 없음. 화면 중앙
+// 기준 플레이어가 왼쪽이면 오른쪽 위, 오른쪽이면 왼쪽 위로 쏘며 빔 경로상 똥을 제거한다.
 //
 // 아들 동반자(ktei)는 항상 '태이' 크기(아빠 k의 80%)로 땅에서 뒤를 따라다니며
 // (간격 유지, 겹침 없음) 특수똥을 수집한다 (일반 똥은 통과 — 게임오버 유발 안 함).
@@ -23,15 +23,15 @@ const HAND_Y_RATIO    = 0.34;  // 플레이어 높이 대비 손끝 y 오프셋 
 const BEAM_SWEEP_COUNT    = 5;   // 총 판정 횟수
 const BEAM_SWEEP_INTERVAL = 90;  // 판정 간격 (ms) → 5회 × 90ms ≈ 빔 지속시간 커버
 
-// 초사이언(ktei_ss) 강화 에너지파 — 멈춰서 더 굵게 + 주변 범위까지 제거
+// 초사이언(ktei_ss) 강화 에너지파 — 더 굵은 빔 + 주변 번개 폭발로 광역 제거 (정지 없음)
 const SS_BEAM_WIDTH_MUL = 2.7;  // 빔 두께 배율 (더 굵게)
 const SS_BEAM_HALF_WIDTH = 72;  // 굵어진 빔의 똥 제거 반경
-const SS_AURA_RADIUS     = 100; // 멈춰서 쏘는 동안 캐릭터 주변 원형 제거 반경
-const SS_FREEZE_MS       = 420; // 발사 순간 이동 정지 시간
+const SS_AURA_RADIUS     = 100; // 발사 시 캐릭터 주변 원형 제거 반경
 
 // 파지직 번개 (센티넬 drawSparkLine 참고)
 const SPARK_YELLOW  = 0xffee44; // 노란 파지직 (빔 주변 + 캐릭터 주변)
 const SPARK_BLUE    = 0x59b8ff; // 파란 파지직 (캐릭터 주변)
+const SPARK_ALPHA   = 0.55;     // 파지직 반투명도 (살짝 투명)
 const CRACKLE_MS    = 480;      // 빔 주변 파지직 지속 시간 (발사 연출, 일회성)
 const CRACKLE_STEP  = 55;       // 빔 주변 파지직 리드로 간격 (ms)
 const SS_AURA_STEP  = 80;       // 초사이언 상시 오라 파지직 리드로 간격 (ms)
@@ -147,20 +147,20 @@ export class KAbility extends BaseAbility {
     if (scene.time.now < this.ssAuraNext) return;
     this.ssAuraNext = scene.time.now + SS_AURA_STEP;
     g.clear();
-    this._drawAuraSparks(g, player.x, player.y, player.displayHeight * 0.38);
+    this._drawAuraSparks(g, player.x, player.y, player.displayHeight * 0.26);
   }
 
   // 캐릭터를 감싸는 파란·노란 파지직 (몸통에 바짝 붙는 링에서 방출)
   private _drawAuraSparks(g: Phaser.GameObjects.Graphics, cx: number, cy: number, radius: number): void {
-    const bolts = 12;
+    const bolts = 6;
     for (let i = 0; i < bolts; i++) {
       const a = (i / bolts) * Math.PI * 2 + Phaser.Math.FloatBetween(-0.25, 0.25);
       const r = Phaser.Math.FloatBetween(radius * 0.9, radius * 1.15);
       const sx = cx + Math.cos(a) * r;
       const sy = cy + Math.sin(a) * r * 0.95;
       const color = i % 2 === 0 ? SPARK_BLUE : SPARK_YELLOW;
-      this._drawSpark(g, sx, sy, Phaser.Math.FloatBetween(1.8, 2.8), 11, color);
-      this._drawSpark(g, sx, sy, 1, 8, 0xffffff); // 밝은 코어로 선명하게
+      this._drawSpark(g, sx, sy, Phaser.Math.FloatBetween(1.8, 2.8), 7, color);
+      this._drawSpark(g, sx, sy, 1, 5, 0xffffff); // 밝은 코어로 선명하게
     }
   }
 
@@ -230,7 +230,7 @@ export class KAbility extends BaseAbility {
   }
 
   onScoreMilestone(score: number, api: GameSceneAPI): void {
-    // 초사이언 후엔 더 자주(200점), 전엔 300점마다
+    // 초사이언 후엔 더 자주(gmhmIntervalSs), 전엔 gmhmInterval 간격
     const interval = this.transformed ? K_PARAMS.gmhmIntervalSs : K_PARAMS.gmhmInterval;
     if (score % interval !== 0) return;
     if (score <= this.lastGmhmScore) return;
@@ -250,8 +250,7 @@ export class KAbility extends BaseAbility {
     // 중앙 기준 왼쪽 → 오른쪽 위 대각선(+1), 오른쪽 → 왼쪽 위 대각선(-1)
     const dirX = shooter.x < scene.scale.width / 2 ? 1 : -1;
 
-    // 초사이언: 발사 순간 잠깐 멈춰서 쏨
-    if (isSs) player.freeze(SS_FREEZE_MS);
+    // (초사이언 발사 시 정지 없음 — 움직이면서 발사)
 
     // 손 끝 좌표 — 발사 주체의 상체(발사 방향쪽)에서 시작
     const handX = shooter.x + dirX * shooter.displayWidth * HAND_X_RATIO;
@@ -268,9 +267,9 @@ export class KAbility extends BaseAbility {
     this._fireBeam(scene, handX, handY, ux, uy, widthMul);
     this._sweepBeam(api, handX, handY, ux, uy, halfWidth);
 
-    // 초사이언: 멈춰서 쏘므로 캐릭터 주변 원형 범위의 똥도 제거 + 파지직 번개 연출
+    // 초사이언: 캐릭터 주변 번개 폭발(팡 퍼지는 방사형 전격) + 그 범위 똥 제거
     if (isSs) {
-      this._auraEffect(scene, shooter.x, shooter.y, SS_AURA_RADIUS);
+      this._boltBurst(scene, shooter.x, shooter.y, SS_AURA_RADIUS);
       this._clearPoopsAround(api, shooter.x, shooter.y, SS_AURA_RADIUS);
       // 빔 주변 노란 파지직 (빔 라인을 따라) — 캐릭터 오라는 onUpdate에서 상시 처리
       this._crackleAlongBeam(scene, handX, handY, ux, uy, BEAM_LENGTH);
@@ -369,15 +368,58 @@ export class KAbility extends BaseAbility {
     api.addAbilityBonus(positions.length * K_PARAMS.beamPointsPerPoop);
   }
 
-  // ── 초사이언 오라 링 (주변 범위 제거 시각화) ─────────────────────────────
-  private _auraEffect(scene: Phaser.Scene, x: number, y: number, radius: number): void {
-    const ring = scene.add.graphics({ x, y }).setDepth(314);
-    ring.fillStyle(0x8fd4ff, 0.28); ring.fillCircle(0, 0, radius);
-    ring.lineStyle(4, 0xffffff, 0.9); ring.strokeCircle(0, 0, radius);
+  // ── 초사이언 번개 폭발 (중심에서 방사형으로 팡 뻗는 전격) ──────────────────
+  // 원형 파동이 아니라, 여러 갈래 번개가 사방으로 터져나가며 지지직 퍼진다.
+  private _boltBurst(scene: Phaser.Scene, x: number, y: number, radius: number): void {
+    const g = scene.add.graphics().setDepth(317);
+    const state = { reach: 0, fade: 1 };
+    const count = 16;
+    // 각 번개의 기준 각도(고르게 분포 + 약간 흔들기) — 리드로해도 방향은 유지
+    const angles = Array.from({ length: count }, (_, i) =>
+      (i / count) * Math.PI * 2 + Phaser.Math.FloatBetween(-0.18, 0.18));
+
+    const redraw = () => {
+      if (!g.active) return;
+      g.clear();
+      const len = radius * state.reach;
+      const a = state.fade;
+      angles.forEach((ang, i) => {
+        const color = i % 2 === 0 ? SPARK_BLUE : SPARK_YELLOW;
+        this._drawBolt(g, x, y, ang, len, Phaser.Math.FloatBetween(2, 3.4), color, a);
+        this._drawBolt(g, x, y, ang, len, 1, 0xffffff, a); // 밝은 코어
+      });
+    };
+
+    // 중심 섬광 + 팡 뻗어나감
+    this._spawnBurst(scene, x, y, 22);
+    scene.tweens.add({ targets: state, reach: 1, duration: 150, ease: 'Quart.easeOut', onUpdate: redraw });
+    // 짧게 지지직 유지 후 페이드
     scene.tweens.add({
-      targets: ring, scaleX: 1.25, scaleY: 1.25, alpha: 0, duration: 340, ease: 'Quad.easeOut',
-      onComplete: () => { if (ring.active) ring.destroy(); },
+      targets: state, fade: 0, delay: 110, duration: 220, ease: 'Quad.easeIn',
+      onUpdate: redraw,
+      onComplete: () => { if (g.active) g.destroy(); },
     });
+  }
+
+  // 중심에서 angle 방향으로 length까지 뻗는 번개 한 갈래 (수직 지터로 지그재그)
+  private _drawBolt(
+    g: Phaser.GameObjects.Graphics,
+    cx: number, cy: number, angle: number, length: number,
+    thickness: number, color: number, alpha: number,
+  ): void {
+    if (length < 1) return;
+    const dx = Math.cos(angle), dy = Math.sin(angle);
+    const nx = -dy, ny = dx; // 진행 방향에 수직
+    const segs = 5;
+    g.lineStyle(thickness, color, alpha);
+    g.beginPath();
+    g.moveTo(cx, cy);
+    for (let i = 1; i <= segs; i++) {
+      const along = length * (i / segs);
+      const jitter = i === segs ? 0 : Phaser.Math.Between(-7, 7); // 끝점은 정확히
+      g.lineTo(cx + dx * along + nx * jitter, cy + dy * along + ny * jitter);
+    }
+    g.strokePath();
   }
 
   // ── 파지직 번개 (센티넬 drawSparkLine 참고) ──────────────────────────────
@@ -386,7 +428,7 @@ export class KAbility extends BaseAbility {
     g: Phaser.GameObjects.Graphics, ox: number, oy: number,
     thickness: number, segLen: number, color: number,
   ): void {
-    g.lineStyle(thickness, color, 1);
+    g.lineStyle(thickness, color, SPARK_ALPHA);
     g.beginPath();
     let px = ox + Phaser.Math.Between(-5, 5);
     let py = oy + Phaser.Math.Between(-5, 5);
@@ -417,7 +459,7 @@ export class KAbility extends BaseAbility {
     scene: Phaser.Scene, ox: number, oy: number, ux: number, uy: number, length: number,
   ): void {
     this._runCrackle(scene, 317, g => {
-      const bolts = 14;
+      const bolts = 7;
       for (let i = 0; i < bolts; i++) {
         const d = Phaser.Math.FloatBetween(20, length * 0.75);
         // 빔 라인 위 지점에서 살짝 옆으로 벗어나 튀는 스파크

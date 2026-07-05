@@ -158,12 +158,12 @@ export const MUGI_DESC = {
 
 // ── K (아빠 / SR) — 각성 에너지파 ──────────────────────────────────────
 export const K_PARAMS = {
-  gmhmInterval:      300, // 에너지파 발동 점수 간격 (초사이언 전)
-  gmhmIntervalSs:    200, // 에너지파 발동 점수 간격 (초사이언 후 — 더 자주)
-  beamPointsPerPoop: 5,   // 빔 경로상 제거 똥당 보너스 점수
+  gmhmInterval:      200, // 에너지파 발동 점수 간격 (초사이언 전)
+  gmhmIntervalSs:    150, // 에너지파 발동 점수 간격 (초사이언 후 — 더 자주)
+  beamPointsPerPoop: 50,  // 빔 경로·주변 제거 똥당 보너스 점수
 } as const;
 
 export const K_DESC = {
-  basicEffect:    `${K_PARAMS.gmhmInterval}점마다 각성 에너지파 발사 — 화면 중앙 반대쪽 위 대각선으로 손끝에서 발사, 빔 경로상 똥 제거 (+${K_PARAMS.beamPointsPerPoop}점/개)`,
-  specialAbility: `피격 시 아들이 각성해 본체로 부활 (1회) — 이후 ${K_PARAMS.gmhmIntervalSs}점마다 멈춰서 강화 에너지파`,
+  basicEffect:    `${K_PARAMS.gmhmInterval}점마다 아들이 대각선 에너지파 발사 — 화면 중앙 반대쪽 위로 쏴 빔 경로상 똥 제거 (+${K_PARAMS.beamPointsPerPoop}점/개)`,
+  specialAbility: `피격 시 아들이 초사이언 본체로 각성·부활 (1회) — 이후 ${K_PARAMS.gmhmIntervalSs}점마다 강화 에너지파 (굵은 빔 + 주변 번개 폭발로 광역 제거)`,
 } as const;
