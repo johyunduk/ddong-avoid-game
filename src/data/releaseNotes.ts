@@ -6,6 +6,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: 'v2.8.0',
+    date: '2026-07-05',
+    changes: [
+      'SR 캐릭터 K 추가',
+      'K 기본 능력 — 200점마다 태이가 대각선 에너지파 발사, 빔 경로 위 똥 제거 (+50점/개)',
+      'K 특수 능력 — 피격 시 태이가 초사이언 본체로 각성·부활(1회), 이후 150점마다 강화 에너지파',
+    ],
+  },
+  {
     version: 'v2.7.1',
     date: '2026-06-04',
     changes: [

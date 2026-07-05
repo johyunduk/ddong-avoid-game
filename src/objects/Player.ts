@@ -32,10 +32,6 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
   private speedBoostTimer?: Phaser.Time.TimerEvent;
   private rainbowTimer?: Phaser.Time.TimerEvent;
 
-  // 일시 정지 (초사이언 에너지파 발사 순간 등)
-  private frozen: boolean = false;
-  private freezeTimer?: Phaser.Time.TimerEvent;
-
   constructor(scene: Phaser.Scene, x: number, y: number, speed: number = 300, texturePrefix: string = '', displayW: number = 50, displayH: number = 80) {
     // 기본 텍스처는 front (정면)
     super(scene, x, y, `${texturePrefix}front`);
@@ -47,16 +43,8 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     scene.add.existing(this);
     scene.physics.add.existing(this);
 
-    // 캐릭터 크기 설정
-    this.setDisplaySize(displayW, displayH);
-
-    // 히트박스: 텍스처 해상도와 무관하게 world pixel 크기 고정
-    // setSize/setOffset 은 frame pixel 단위이므로 scaleX/Y 로 역산
-    // 목표 world 크기: 16×40 px, 중앙 정렬
-    const sx = this.scaleX;
-    const sy = this.scaleY;
-    this.setSize(16 / sx, 40 / sy);
-    this.setOffset((displayW - 16) / 2 / sx, (displayH - 40) / 2 / sy);
+    // 캐릭터 크기 + 히트박스 설정 (resize에 world 16×40 히트박스 계산이 있음)
+    this.resize(displayW, displayH);
 
     // 물리 설정
     this.setCollideWorldBounds(true);
@@ -132,12 +120,6 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   update() {
-    // 정지 상태: 입력 무시하고 제자리 (현재 방향 스프라이트 유지)
-    if (this.frozen) {
-      this.setVelocityX(0);
-      return;
-    }
-
     let isMoving = false;
     let nextDir: string = this.currentDir;
 
@@ -180,18 +162,6 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
   setTexturePrefix(prefix: string): void {
     this.texturePrefix = prefix;
     this.setTexture(`${prefix}${this.currentDir}`);
-  }
-
-  // 일정 시간 이동 정지 (초사이언 에너지파 발사 순간 등). 무적과 무관.
-  freeze(duration: number): void {
-    this.frozen = true;
-    this.setVelocityX(0);
-    if (this.freezeTimer) this.freezeTimer.remove();
-    this.freezeTimer = this.scene.time.addEvent({
-      delay: duration,
-      callback: () => { this.frozen = false; },
-      callbackScope: this,
-    });
   }
 
   // 표시 크기 + 히트박스 재설정 (승계 시 태이 크기로 변경 등)
@@ -333,9 +303,6 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     }
     if (this.rainbowTimer) {
       this.rainbowTimer.remove();
-    }
-    if (this.freezeTimer) {
-      this.freezeTimer.remove();
     }
   }
 }

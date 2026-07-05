@@ -9,9 +9,9 @@ import { K_PARAMS } from '../config/abilityParams';
 // 그대로 손끝에서 위 대각선으로 에너지파를 발사한다 — 컷인·포즈 교체 없음. 화면 중앙
 // 기준 플레이어가 왼쪽이면 오른쪽 위, 오른쪽이면 왼쪽 위로 쏘며 빔 경로상 똥을 제거한다.
 //
-// 아들 동반자(ktei)는 항상 '태이' 크기(아빠 k의 80%)로 땅에서 뒤를 따라다니며
+// 태이 동반자(ktei)는 항상 '태이' 크기(아빠 k의 80%)로 땅에서 뒤를 따라다니며
 // (간격 유지, 겹침 없음) 특수똥을 수집한다 (일반 똥은 통과 — 게임오버 유발 안 함).
-// k가 죽으면(첫 피격) 게임오버 대신 아들이 각성해 ktei_ss 본체로 승계된다 — 1회 한정.
+// k가 죽으면(첫 피격) 게임오버 대신 태이가 각성해 ktei_ss 본체로 승계된다 — 1회 한정.
 // 승계 후 본체도 같은 '태이' 크기(k의 80%), 살짝 공중에 뜨지만 조작은 좌우만(기존과 동일).
 
 // 에너지파 (gmhm)
@@ -36,13 +36,13 @@ const CRACKLE_MS    = 480;      // 빔 주변 파지직 지속 시간 (발사 �
 const CRACKLE_STEP  = 55;       // 빔 주변 파지직 리드로 간격 (ms)
 const SS_AURA_STEP  = 80;       // 초사이언 상시 오라 파지직 리드로 간격 (ms)
 
-// 태이(ktei) 크기 — 아들 동반자 + 초사이언 본체 공용. 아빠(k)의 80% 크기
+// 태이(ktei) 크기 — 태이 동반자 + 초사이언 본체 공용. 아빠(k)의 80% 크기
 const KTEI_SCALE = 0.8;
-// 초사이언(ktei_ss)은 프레임 세로 채움이 아들(ktei)보다 작아(1110px vs 1166px) 같은 박스면
-// 캐릭터가 작아 보임 → 트림 높이 비율만큼 본체를 균일 확대해 시각적 크기를 아들과 일치.
+// 초사이언(ktei_ss)은 프레임 세로 채움이 태이(ktei)보다 작아(1110px vs 1166px) 같은 박스면
+// 캐릭터가 작아 보임 → 트림 높이 비율만큼 본체를 균일 확대해 시각적 크기를 태이와 일치.
 const SS_HEIGHT_COMP = 1166 / 1110; // ≈ 1.05
 
-// 아들(ktei) 동반자 — 아빠와 무관하게 혼자 좌우로 왔다갔다 (경계에서 방향 반전)
+// 태이(ktei) 동반자 — 아빠와 무관하게 혼자 좌우로 왔다갔다 (경계에서 방향 반전)
 const SON_WANDER_SPEED  = 130;  // 배회 속도 (px/s)
 const SON_WANDER_MARGIN = 40;   // 좌우 반전 여백 (화면 가장자리에서)
 
@@ -54,7 +54,7 @@ export class KAbility extends BaseAbility {
   // score가 한 번에 여러 점 뛰어도 같은 마일스톤에서 두 번 발동하지 않도록 가드
   private lastGmhmScore = 0;
 
-  // 아들(ktei) 동반자 — onCreate에서 생성, onUpdate에서 배회, onDestroy에서 정리
+  // 태이(ktei) 동반자 — onCreate에서 생성, onUpdate에서 배회, onDestroy에서 정리
   private son?: Phaser.Physics.Arcade.Sprite;
   private sonDir: string = 'front';
   private sonWanderDir = -1; // 배회 방향 (-1 왼쪽 / +1 오른쪽)
@@ -67,7 +67,7 @@ export class KAbility extends BaseAbility {
   private ssAura?: Phaser.GameObjects.Graphics;
   private ssAuraNext = 0;
 
-  // ── 아들 동반자: 생성 + 추적 + 특수똥 수집 ─────────────────────────────
+  // ── 태이 동반자: 생성 + 추적 + 특수똥 수집 ─────────────────────────────
   onCreate(api: GameSceneAPI): void {
     const { scene, player } = api;
 
@@ -83,7 +83,7 @@ export class KAbility extends BaseAbility {
     // 배경 위 · 플레이어 뒤로 배치 (표시 순서로 제어)
     scene.children.moveBelow(son, player);
 
-    // 특수 똥은 아들이 닿으면 수집 (일반 똥은 overlap 미등록 → 통과, 게임오버 유발 안 함)
+    // 특수 똥은 태이가 닿으면 수집 (일반 똥은 overlap 미등록 → 통과, 게임오버 유발 안 함)
     const makeCollect = (
       fn: (p: Phaser.Physics.Arcade.Sprite) => void,
     ): Phaser.Types.Physics.Arcade.ArcadePhysicsCallback => (_s, p) => {
@@ -99,7 +99,7 @@ export class KAbility extends BaseAbility {
   }
 
   onUpdate(api: GameSceneAPI): void {
-    // 초사이언 후: 아들 없음 → 캐릭터 주변 상시 오라 파지직만 갱신
+    // 초사이언 후: 태이 없음 → 캐릭터 주변 상시 오라 파지직만 갱신
     if (this.transformed) {
       this._updateSsAura(api);
       return;
@@ -164,7 +164,7 @@ export class KAbility extends BaseAbility {
     }
   }
 
-  // ── 사망 승계: k 죽으면 아들이 각성해 본체가 됨 (1회) ────────────────────
+  // ── 사망 승계: k 죽으면 태이가 각성해 본체가 됨 (1회) ────────────────────
   // true 반환 시 GameScene이 게임오버를 취소하고 피격 똥을 회수한다.
   onHitPoop(api: GameSceneAPI): boolean {
     if (this.transformed) return false; // 이미 승계됨 → 정상 게임오버
@@ -176,12 +176,12 @@ export class KAbility extends BaseAbility {
   private _succeedToKteiSs(api: GameSceneAPI): void {
     const { scene, player } = api;
 
-    // 아들이 본체로 승계 → 작은 동반자 제거
+    // 태이가 본체로 승계 → 작은 동반자 제거
     this.son?.destroy();
     this.son = undefined;
 
     // 각성형 스프라이트로 교체 + '태이' 크기(k의 80%)로 + 살짝 공중으로 (조작은 기존 좌우 그대로)
-    // SS_HEIGHT_COMP로 균일 확대 → 초사이언 캐릭터 겉보기 크기를 변경 전 아들과 일치
+    // SS_HEIGHT_COMP로 균일 확대 → 초사이언 캐릭터 겉보기 크기를 변경 전 태이와 일치
     player.setTexturePrefix('ktei_ss_');
     const kteiScale = KTEI_SCALE * SS_HEIGHT_COMP;
     player.resize(player.displayWidth * kteiScale, player.displayHeight * kteiScale);
@@ -201,9 +201,7 @@ export class KAbility extends BaseAbility {
   private _clearAllPoops(api: GameSceneAPI): void {
     const { poops, scene } = api;
     const targets = (poops.getChildren() as Phaser.Physics.Arcade.Sprite[]).filter(p => p.active);
-    const positions = targets.map(p => ({ x: p.x, y: p.y }));
-    targets.forEach(p => (p as unknown as PoolablePoopBase).recycle());
-    positions.forEach(({ x, y }) => this._spawnBurst(scene, x, y, 12));
+    this._recycleWithBurst(scene, targets); // 승계 연출 — 점수 없이 전체 정리
   }
 
   private _succeedEffect(scene: Phaser.Scene, x: number, y: number): void {
@@ -243,14 +241,12 @@ export class KAbility extends BaseAbility {
     const { scene, player } = api;
     const isSs = this.transformed; // 초사이언 승계 후 여부
 
-    // 발사 주체: 초사이언 전 = 아들(ktei), 후 = 본체(player = ktei_ss)
+    // 발사 주체: 초사이언 전 = 태이(ktei), 후 = 본체(player = ktei_ss)
     const shooter = isSs ? player : this.son;
     if (!shooter || !shooter.active) return;
 
     // 중앙 기준 왼쪽 → 오른쪽 위 대각선(+1), 오른쪽 → 왼쪽 위 대각선(-1)
     const dirX = shooter.x < scene.scale.width / 2 ? 1 : -1;
-
-    // (초사이언 발사 시 정지 없음 — 움직이면서 발사)
 
     // 손 끝 좌표 — 발사 주체의 상체(발사 방향쪽)에서 시작
     const handX = shooter.x + dirX * shooter.displayWidth * HAND_X_RATIO;
@@ -356,16 +352,22 @@ export class KAbility extends BaseAbility {
     this._recycleAndScore(api, scene, targets);
   }
 
-  // 똥 재활용 + 이펙트 + 점수 (경로/범위 제거 공통)
-  private _recycleAndScore(
-    api: GameSceneAPI, scene: Phaser.Scene, targets: Phaser.Physics.Arcade.Sprite[],
-  ): void {
-    if (targets.length === 0) return;
+  // 똥 재활용 + 스파크 버스트 (제거 공통) — 재활용한 개수 반환
+  private _recycleWithBurst(scene: Phaser.Scene, targets: Phaser.Physics.Arcade.Sprite[]): number {
+    if (targets.length === 0) return 0;
     // 위치 저장 후 즉시 재활용 (똥은 오브젝트 풀 — destroy 아님)
     const positions = targets.map(p => ({ x: p.x, y: p.y }));
     targets.forEach(p => (p as unknown as PoolablePoopBase).recycle());
     positions.forEach(({ x, y }) => this._spawnBurst(scene, x, y, 12));
-    api.addAbilityBonus(positions.length * K_PARAMS.beamPointsPerPoop);
+    return positions.length;
+  }
+
+  // 재활용 + 이펙트 + 개수당 점수 (빔 경로/주변 제거 공통)
+  private _recycleAndScore(
+    api: GameSceneAPI, scene: Phaser.Scene, targets: Phaser.Physics.Arcade.Sprite[],
+  ): void {
+    const n = this._recycleWithBurst(scene, targets);
+    if (n > 0) api.addAbilityBonus(n * K_PARAMS.beamPointsPerPoop);
   }
 
   // ── 초사이언 번개 폭발 (중심에서 방사형으로 팡 뻗는 전격) ──────────────────

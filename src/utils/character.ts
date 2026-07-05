@@ -22,6 +22,8 @@ export interface CharacterDef {
   playerDisplaySize?: [number, number];
   /** 캐릭터 선택 카드 표시 크기 [w, h]. 생략 시 [58, 85] */
   cardDisplaySize?: [number, number];
+  /** 변신·동반자 등 추가로 로드할 스프라이트 텍스처 키 (assets/players/{key}.webp). GameScene preload가 순회 로드 */
+  extraSprites?: string[];
 }
 
 /** 등급 이미지 텍스처 키 반환. 등급외 → null */
@@ -60,6 +62,7 @@ export const CHARACTERS: CharacterDef[] = [
     basicEffect: MUGI_DESC.basicEffect,
     specialAbility: MUGI_DESC.specialAbility,
     cardDisplaySize: [48, 85],
+    extraSprites: ['gold_mugi_front', 'gold_mugi_left', 'gold_mugi_right'], // 황금 변신
   },
   {
     id: 'gumi',
@@ -119,6 +122,11 @@ export const CHARACTERS: CharacterDef[] = [
     specialAbility: K_DESC.specialAbility,
     playerDisplaySize: [46, 80],
     cardDisplaySize: [48, 84],
+    // 태이(ktei) 동반자 + 초사이언 승계 본체(ktei_ss)
+    extraSprites: [
+      'ktei_front', 'ktei_left', 'ktei_right',
+      'ktei_ss_front', 'ktei_ss_left', 'ktei_ss_right',
+    ],
   },
   {
     id: 'knight',

@@ -164,6 +164,6 @@ export const K_PARAMS = {
 } as const;
 
 export const K_DESC = {
-  basicEffect:    `${K_PARAMS.gmhmInterval}점마다 아들이 대각선 에너지파 발사 — 화면 중앙 반대쪽 위로 쏴 빔 경로상 똥 제거 (+${K_PARAMS.beamPointsPerPoop}점/개)`,
-  specialAbility: `피격 시 아들이 초사이언 본체로 각성·부활 (1회) — 이후 ${K_PARAMS.gmhmIntervalSs}점마다 강화 에너지파 (굵은 빔 + 주변 번개 폭발로 광역 제거)`,
+  basicEffect:    `${K_PARAMS.gmhmInterval}점마다 태이가 대각선 에너지파 발사 — 화면 중앙 반대쪽 위로 쏴 빔 경로상 똥 제거 (+${K_PARAMS.beamPointsPerPoop}점/개)`,
+  specialAbility: `피격 시 태이가 초사이언 본체로 각성·부활 (1회) — 이후 ${K_PARAMS.gmhmIntervalSs}점마다 강화 에너지파 (굵은 빔 + 주변 번개 폭발로 광역 제거)`,
 } as const;

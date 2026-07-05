@@ -208,20 +208,9 @@ export default class GameScene extends BaseScene {
       if (!this.textures.exists(`${p}front`)) this.load.image(`${p}front`, `assets/players/${p}front.webp`);
       if (!this.textures.exists(`${p}left`)) this.load.image(`${p}left`, `assets/players/${p}left.webp`);
       if (!this.textures.exists(`${p}right`)) this.load.image(`${p}right`, `assets/players/${p}right.webp`);
-      if (this.selectedCharId === 'mugi') {
-        if (!this.textures.exists('gold_mugi_front')) this.load.image('gold_mugi_front', 'assets/players/gold_mugi_front.webp');
-        if (!this.textures.exists('gold_mugi_left'))  this.load.image('gold_mugi_left',  'assets/players/gold_mugi_left.webp');
-        if (!this.textures.exists('gold_mugi_right')) this.load.image('gold_mugi_right', 'assets/players/gold_mugi_right.webp');
-      }
-      if (this.selectedCharId === 'k') {
-        // 아들(ktei) 동반자 — 항상 k 뒤를 따라다님
-        if (!this.textures.exists('ktei_front')) this.load.image('ktei_front', 'assets/players/ktei_front.webp');
-        if (!this.textures.exists('ktei_left'))  this.load.image('ktei_left',  'assets/players/ktei_left.webp');
-        if (!this.textures.exists('ktei_right')) this.load.image('ktei_right', 'assets/players/ktei_right.webp');
-        // ktei_ss(각성 본체) — k 사망 시 승계되는 스프라이트
-        if (!this.textures.exists('ktei_ss_front')) this.load.image('ktei_ss_front', 'assets/players/ktei_ss_front.webp');
-        if (!this.textures.exists('ktei_ss_left'))  this.load.image('ktei_ss_left',  'assets/players/ktei_ss_left.webp');
-        if (!this.textures.exists('ktei_ss_right')) this.load.image('ktei_ss_right', 'assets/players/ktei_ss_right.webp');
+      // 변신·동반자 등 추가 스프라이트 (캐릭터 정의의 extraSprites) — mugi 황금변신, k 태이/초사이언 등
+      for (const key of getCharacterDef(this.selectedCharId).extraSprites ?? []) {
+        if (!this.textures.exists(key)) this.load.image(key, `assets/players/${key}.webp`);
       }
     } else {
       // chibi (기본) 또는 플레이어 스프라이트가 없는 UR 캐릭터 → 치비로 fallback
