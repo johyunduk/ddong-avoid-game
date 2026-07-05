@@ -138,6 +138,13 @@
       "context": "",
       "content_hash": "/9d/cb99c2b920/17/content_hash.txt",
       "prompt": ""
+    },
+    {
+      "metadata": "/9d/cb99c2b920/18/metadata.json",
+      "transcript": "/9d/cb99c2b920/18/full.jsonl",
+      "context": "",
+      "content_hash": "/9d/cb99c2b920/18/content_hash.txt",
+      "prompt": ""
     }
   ],
   "token_usage": {
