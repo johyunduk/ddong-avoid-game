@@ -1,0 +1,30 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "9dcb99c2b920",
+  "session_id": "2c79c564-0af6-4832-8000-f31ccf1018c4",
+  "strategy": "manual-commit",
+  "created_at": "2026-07-05T05:16:53.911188Z",
+  "branch": "dev",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "src/config/abilityParams.ts",
+    ".granite/app.json",
+    "public/assets/illustrations/heidi_ill.jpg",
+    "public/assets/illustrations/red_ill.png",
+    "public/assets/illustrations/ted_ill.png",
+    "src/abilities/KAbility.ts"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "b694667e9982",
+  "transcript_identifier_at_start": "9fe52313-0f26-43e7-b967-f6ddd02a56bc",
+  "initial_attribution": {
+    "calculated_at": "2026-07-05T05:16:53.880521Z",
+    "agent_lines": 71,
+    "human_added": 0,
+    "human_modified": 1,
+    "human_removed": 0,
+    "total_committed": 72,
+    "agent_percentage": 98.61111111111111
+  },
+  "transcript_path": ".claude/projects/-Users-johyunduk-Projects-ddong-avoid-game/2c79c564-0af6-4832-8000-f31ccf1018c4.jsonl"
+}
