@@ -3,7 +3,7 @@
   "checkpoint_id": "9dcb99c2b920",
   "strategy": "manual-commit",
   "branch": "dev",
-  "checkpoints_count": 2,
+  "checkpoints_count": 13,
   "files_touched": [
     ".granite/app.json",
     "public/assets/illustrations/heidi_ill.jpg",
@@ -110,13 +110,20 @@
       "context": "",
       "content_hash": "/9d/cb99c2b920/13/content_hash.txt",
       "prompt": ""
+    },
+    {
+      "metadata": "/9d/cb99c2b920/14/metadata.json",
+      "transcript": "/9d/cb99c2b920/14/full.jsonl",
+      "context": "/9d/cb99c2b920/14/context.md",
+      "content_hash": "/9d/cb99c2b920/14/content_hash.txt",
+      "prompt": "/9d/cb99c2b920/14/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 22209,
-    "cache_creation_tokens": 1662752,
-    "cache_read_tokens": 31124325,
-    "output_tokens": 243705,
-    "api_call_count": 145
+    "input_tokens": 26404,
+    "cache_creation_tokens": 2690169,
+    "cache_read_tokens": 60954131,
+    "output_tokens": 324394,
+    "api_call_count": 228
   }
 }
