@@ -139,6 +139,13 @@
       "context": "",
       "content_hash": "/e4/220015be10/17/content_hash.txt",
       "prompt": ""
+    },
+    {
+      "metadata": "/e4/220015be10/18/metadata.json",
+      "transcript": "/e4/220015be10/18/full.jsonl",
+      "context": "",
+      "content_hash": "/e4/220015be10/18/content_hash.txt",
+      "prompt": ""
     }
   ],
   "token_usage": {
