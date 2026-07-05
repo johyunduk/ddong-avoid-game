@@ -118,6 +118,13 @@
       "context": "/e4/220015be10/14/context.md",
       "content_hash": "/e4/220015be10/14/content_hash.txt",
       "prompt": "/e4/220015be10/14/prompt.txt"
+    },
+    {
+      "metadata": "/e4/220015be10/15/metadata.json",
+      "transcript": "/e4/220015be10/15/full.jsonl",
+      "context": "",
+      "content_hash": "/e4/220015be10/15/content_hash.txt",
+      "prompt": ""
     }
   ],
   "token_usage": {
