@@ -1,0 +1,32 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "e4220015be10",
+  "strategy": "manual-commit",
+  "branch": "dev",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".granite/app.json",
+    "src/abilities/KAbility.ts",
+    "src/config/abilityParams.ts",
+    "src/data/releaseNotes.ts",
+    "src/objects/Player.ts",
+    "src/scenes/GameScene.ts",
+    "src/utils/character.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/e4/220015be10/0/metadata.json",
+      "transcript": "/e4/220015be10/0/full.jsonl",
+      "context": "/e4/220015be10/0/context.md",
+      "content_hash": "/e4/220015be10/0/content_hash.txt",
+      "prompt": "/e4/220015be10/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 22209,
+    "cache_creation_tokens": 1662752,
+    "cache_read_tokens": 31124325,
+    "output_tokens": 243705,
+    "api_call_count": 145
+  }
+}
