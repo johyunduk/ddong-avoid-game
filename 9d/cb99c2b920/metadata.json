@@ -3,7 +3,7 @@
   "checkpoint_id": "9dcb99c2b920",
   "strategy": "manual-commit",
   "branch": "dev",
-  "checkpoints_count": 1,
+  "checkpoints_count": 2,
   "files_touched": [
     ".granite/app.json",
     "public/assets/illustrations/heidi_ill.jpg",
@@ -25,6 +25,13 @@
       "transcript": "/9d/cb99c2b920/1/full.jsonl",
       "context": "",
       "content_hash": "/9d/cb99c2b920/1/content_hash.txt",
+      "prompt": ""
+    },
+    {
+      "metadata": "/9d/cb99c2b920/2/metadata.json",
+      "transcript": "/9d/cb99c2b920/2/full.jsonl",
+      "context": "",
+      "content_hash": "/9d/cb99c2b920/2/content_hash.txt",
       "prompt": ""
     }
   ],
