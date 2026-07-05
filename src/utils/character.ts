@@ -118,6 +118,8 @@ export const CHARACTERS: CharacterDef[] = [
     imagePath: 'assets/players/k_front.webp',
     illustKey: 'illust_k',
     illustPath: 'assets/illustrations/k.webp',
+    videoKey: 'vid_k',
+    videoPath: 'assets/vids/k.mp4',
     basicEffect: K_DESC.basicEffect,
     specialAbility: K_DESC.specialAbility,
     playerDisplaySize: [46, 80],

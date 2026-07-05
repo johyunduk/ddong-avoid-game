@@ -7,7 +7,7 @@ import BaseScene from './BaseScene';
 
 // vids/ 디렉토리에 개인 영상이 존재하는 캐릭터 목록
 const CHARS_WITH_VIDS = new Set([
-  'chibi', 'hacker', 'miner', 'maehwa', 'archieve', 'glitch', 'noise', 'sentinel', 'legacy', 'knight', 'mugi',
+  'chibi', 'hacker', 'miner', 'maehwa', 'archieve', 'glitch', 'noise', 'sentinel', 'legacy', 'knight', 'mugi', 'k',
 ]);
 
 const GRADE_COLORS: Record<string, number> = {
