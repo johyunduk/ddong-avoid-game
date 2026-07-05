@@ -1,0 +1,202 @@
+# Session Context
+
+## User Prompts
+
+### Prompt 1
+
+지금 players 에 파일 7개 추가를 했어. 이거 다른 애들처럼 left right 만들어야 하고 확장자도 webp 로 해줘
+
+### Prompt 2
+
+자 이제 얘네의 용도를 알려줄게. ktei 로 시작하는건 k 로 시작하는 캐릭터의 아들이야. k 라는 플레이어 뒤에 계속 ktei 로 시작하는애가 반만한 사이즈로 돌아다닐거고 k 라는 플레이어가 죽으면 ktei_ss 로 시작하는게 본체가 될거야 약간 하늘을 날라다니게말야. 그러고 gmhm 은 특정 점수에 도달할 때 나오는 이미지야.
+
+### Prompt 3
+
+7d75325a-dc30-4808-a019-21ce386a3dba 이 사용자한테 해당 캐릭터 넣는 쿼리 알려줘
+
+### Prompt 4
+
+300 점 마다로 일단하고 구현들어가자. 300점마다 화면 가운데를 기준으로 왼쪽에 있으면 오른쪽 위 대각선으로 이미지의 손 끝 부분에서 에너지파 발사하고 오른쪽이면 그 반대로 나오게 해줘. 이때 저 이미지를 쓰려고 한거야.
+
+### Prompt 5
+
+뽑기나 목록 등등 전부 다 추가된건가? 특정 캐릭터 사용되는것들 보고 전부 다 됐는지 봐바. 그리고 SR 캐릭터야.
+
+### Prompt 6
+
+k 캐릭터 뒤에 ktei 캐릭터가 없는데? ktei는 계속 있어야 되는데?
+
+### Prompt 7
+
+그냥 다른 캐릭터보다 살짝 땅 위에 있을 뿐 조작은 양옆만 가능한건 똑같아
+
+### Prompt 8
+
+ss 되기전 ktei 는 일단 너무 작다. ss 됐을떄랑 같은 크기로 해주고 ktei는 하늘에 떠다니면 안돼. 그리고 ss 됐을 때 지금 뜬거의 3분의1 정도 높이로 바꿔줘. 그리고 ktei 는 ss 던 아니던 특수똥 먹을 수 있어야 하고 ss 되기 전 ktei는  k 와 겹치면 안돼. 대신 글리치 분신보다는 가까워야 해.
+
+### Prompt 9
+
+@public/assets/illustrations/k_ill.jpg 이거 추가했어. 대체해줘. 아니 그리고 왜 갑자기 300점 마다 저렇게 바뀐거냐? 그냥 움직이고 있는 . 캐릭터가 에너지파를 쏘는건데. 그리고 초사이언 전 태이는 왜 k 랑 크기가 같니. 초사이언된 태이와 같은 사이즈여야 하는데
+
+### Prompt 10
+
+태이 너무 크다고. 왜 더 커진거야. 아빠의 60% 정도 크기로 하라고
+
+### Prompt 11
+
+좀 작다 80퍼로 하자. 근데 초사이언되기 전 태이는 왜 땅에 붙어있지 않나? 사이즈 조절한 만큼 내려야 할 듯?
+
+### Prompt 12
+
+초사이언된 태이랑 변경 전 태이랑 크기가 같아?
+
+### Prompt 13
+
+일치시켜줘
+
+### Prompt 14
+
+자 초사이언 되기 전에 에너지파 쏘는건 유지를 하고 초사이언이 됐을 때 에너지파는 쏘는 순간은 조금 멈춰서 에너지파를 쏘게 해줘.
+
+### Prompt 15
+
+[Request interrupted by user]
+
+### Prompt 16
+
+자 초사이언 되기 전에 에너지파 쏘는건 유지를 하고 초사이언이 됐을 때 에너지파는 쏘는 순간은 조금 멈춰서 에너지파를 쏘게 해줘. 초사이언이 되고 나서의 에너지파는 좀 더 굵게 만들어주고. 그리고 지금 에너지파에 맞은 똥들이 안사라지는거 같은데? 아 그리고 초사이언이 되고 나서의 에너지파 범위는 멈춰있으니 캐릭터 주변의 범위의 똥도 없어져야 해.
+
+### Prompt 17
+
+초사이언 때 좀 더 굵은 에너지파로 해줘. 그리고 에너지파 주변에 노란 파지직 번개들 나오게 해줘. 파지직 효과는 센티넬 참고를 하면 될 거 같고 초사이언 캐릭터 주변에도 파란색, 노란색 파지직 나오게 해주고
+
+### Prompt 18
+
+초사이언 주변에는 파지직이 없는데?
+
+### Prompt 19
+
+초사이언 됐을 떈 200점 마다 에너지파 쏘게 해줘. 그리고 초사이언 되기 전에는
+
+### Prompt 20
+
+[Request interrupted by user]
+
+### Prompt 21
+
+초사이언 됐을 떈 200점 마다 에너지파 쏘게 해줘. 그리고 초사이언 되기 전에는 아빠를 따라 다니는게 아니라 좌우로 혼자 왔다갔다 하게 해줄 수 있나?
+
+### Prompt 22
+
+초사이언 전에 에너지파가 ktei 한테서 나가는게 아닌데?
+
+### Prompt 23
+
+초사이언 캐릭터 주변 파지직이 에너지파 쏠때가 아니라 상시 효과로 말한건데
+
+### Prompt 24
+
+캐릭터 주변 파지직 너무 넓다 범위가
+
+### Prompt 25
+
+지금 일러스트 이미지를 추가했어. 여기서 일단 @public/assets/illustrations/ted_ill.png 이 이미지를 보고 현재 이 게임에 어울릴 만한 능력을 추천해줘
+
+### Prompt 26
+
+음 일단 생각한건 약간 뒷골목의 지배자 느낌으로 생각을 하긴 했는데 이거 기준으로 한번 생각해줘봐
+
+### Prompt 27
+
+전부 그냥 개별 캐릭터야 연관 없어
+
+### Prompt 28
+
+음 일단 그건 넘기고 k 로 다시 돌아와서 초사이언 됐을 때 정지를 하니까 오히려 안좋아지네. 어떻게 할까
+
+### Prompt 29
+
+[Request interrupted by user for tool use]
+
+### Prompt 30
+
+음 아니 그냥 정지를 없애고 뭐 다른걸 추가하려고
+
+### Prompt 31
+
+b 로 해줘. 근데 이 파동은 센티넬이나 레거시 같은 파동이 아니라 주변의 번개가 팡 퍼지는 그런 느낌으로 해봐줄 수 있나?
+
+### Prompt 32
+
+그 초사이언 상태에서 에너지파 쏠 때 ktei 뒤에 k 가 반투명한 상태로 뒤에 나오게 해 줄 수 있나? 드래곤볼 부자 에너지파 처럼?
+
+### Prompt 33
+
+음 아니다 그냥 없애줘
+
+### Prompt 34
+
+초사이언때 파피직 이펙트 반으로 줄여줘
+
+### Prompt 35
+
+갯수 줄인거는 괜찮은데 넓이라고 해야 하나 그것도 줄여줘
+
+### Prompt 36
+
+좋아 근데 색상을 살짝 반투명하게 해줄 . 있나
+
+### Prompt 37
+
+조금만 더 투명하게
+
+### Prompt 38
+
+지금 에너지파각 몇점 간격이지 변신 전후 각각?
+
+### Prompt 39
+
+변신 전 200점 변신후 150점 으로 변경해줘. 문구들 통일해주고
+
+### Prompt 40
+
+에너지파로 똥 파괴할 때 점수를 주면 좋을거 같은데 파괴된 똥 갯수마다
+
+### Prompt 41
+
+50점으로 올려줘봐
+
+### Prompt 42
+
+Review target: `k 캐릭터 메모리나 뭐 그런 부분 봐줘.`
+
+`/simplify → 4 cleanup agents in parallel → apply the fixes`
+
+You are improving the quality of the changed code, not hunting for bugs. Review
+it for reuse, simplification, efficiency, and altitude issues, then fix what you
+find. Do not look for correctness bugs — that is what `/code-review` is for.
+
+## Phase 0 — Gather the diff
+
+Run `git diff @{upstream}...HEAD` (or `git diff main...HEAD` / `git diff HEAD~1`
+if there's ...
+
+### Prompt 43
+
+아 그리고 아들이란 단어 대신 태이로 바꿔주고 릴리즈 노트에 k 캐릭터 추가된거 작성해줘. 너무 길게 말고.
+
+### Prompt 44
+
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+Summary:
+1. Primary Request and Intent:
+   The conversation covers two character-related development efforts in a Phaser 3 hyper-casual game ("똥 피하기 게임" / poop-avoid game, Toss in-app integration target). User communicates in Korean; I respond in Korean.
+
+   **A) "K family" character system (bulk of conversation):**
+   - Convert 7 ne...
+
+### Prompt 45
+
+명령어 알려줘봐
+
