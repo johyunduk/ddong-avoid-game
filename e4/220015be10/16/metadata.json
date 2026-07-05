@@ -1,0 +1,31 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "e4220015be10",
+  "session_id": "c0d5e539-200c-4ee4-a787-07ea6611bfc0",
+  "strategy": "manual-commit",
+  "created_at": "2026-07-05T06:44:57.967321Z",
+  "branch": "dev",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "src/abilities/KAbility.ts",
+    "src/config/abilityParams.ts",
+    "src/data/releaseNotes.ts",
+    "src/objects/Player.ts",
+    "src/scenes/GameScene.ts",
+    "src/utils/character.ts",
+    ".granite/app.json"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "2afc5c5d510b",
+  "transcript_identifier_at_start": "b192f52f-ae62-40b6-9554-14c445605de1",
+  "initial_attribution": {
+    "calculated_at": "2026-07-05T06:44:57.936395Z",
+    "agent_lines": 17,
+    "human_added": 0,
+    "human_modified": 19,
+    "human_removed": 0,
+    "total_committed": 36,
+    "agent_percentage": 47.22222222222222
+  },
+  "transcript_path": ".claude/projects/-Users-johyunduk-Projects-ddong-avoid-game/c0d5e539-200c-4ee4-a787-07ea6611bfc0.jsonl"
+}
