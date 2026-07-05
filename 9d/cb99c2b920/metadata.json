@@ -19,6 +19,13 @@
       "context": "/9d/cb99c2b920/0/context.md",
       "content_hash": "/9d/cb99c2b920/0/content_hash.txt",
       "prompt": "/9d/cb99c2b920/0/prompt.txt"
+    },
+    {
+      "metadata": "/9d/cb99c2b920/1/metadata.json",
+      "transcript": "/9d/cb99c2b920/1/full.jsonl",
+      "context": "",
+      "content_hash": "/9d/cb99c2b920/1/content_hash.txt",
+      "prompt": ""
     }
   ],
   "token_usage": {
