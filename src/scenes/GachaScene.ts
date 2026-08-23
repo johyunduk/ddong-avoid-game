@@ -3,11 +3,12 @@ import { gachaPull, syncOwnedCharacters, syncOwnedWallpapers, type PulledCharact
 import { CHARACTERS, getCharacterDef, addOwnedCharacter, getDuplicateCount, setDuplicateCount, getGradeImgKey, type CharacterDef } from '../utils/character';
 import { WALLPAPERS, getWallpaperDef, addOwnedWallpaper, WP_ACCENT_INT, WP_ACCENT_HEX, type BackgroundDef } from '../utils/wallpaper';
 import { getSkorBalance, getCachedSkorBalance, cacheSkorBalance } from '../utils/skor';
+import { destroyVideo } from '../utils/video';
 import BaseScene from './BaseScene';
 
 // vids/ 디렉토리에 개인 영상이 존재하는 캐릭터 목록
 const CHARS_WITH_VIDS = new Set([
-  'chibi', 'hacker', 'miner', 'maehwa', 'archieve', 'glitch', 'noise', 'sentinel', 'legacy', 'knight', 'mugi', 'k',
+  'chibi', 'hacker', 'miner', 'maehwa', 'archieve', 'glitch', 'noise', 'sentinel', 'legacy', 'knight', 'mugi', 'gumi', 'k',
 ]);
 
 const GRADE_COLORS: Record<string, number> = {
@@ -617,7 +618,7 @@ export default class GachaScene extends BaseScene {
       // videoSkipResolver에 저장 → API 완료 후 addSkipButton에서 호출
       const doResolve = () => {
         this.videoSkipResolver = null;
-        if (vid.active) vid.destroy();
+        destroyVideo(vid);
         resolve();
       };
       this.videoSkipResolver = doResolve;
@@ -663,7 +664,7 @@ export default class GachaScene extends BaseScene {
         if (proceeded) return;
         proceeded = true;
         this.input.off('pointerdown', proceed);
-        if (vid.active) vid.destroy();
+        destroyVideo(vid);
         this.showRevealCard(pulled, def);
       };
 
@@ -671,7 +672,7 @@ export default class GachaScene extends BaseScene {
         if (proceeded) return;
         proceeded = true;
         this.input.off('pointerdown', proceed);
-        if (vid.active) vid.destroy();
+        destroyVideo(vid);
         // 10연차: 영상 스킵 시 남은 리빌 전체 건너뛰고 결과 화면으로
         if (this.revealItems.length > 1) {
           this.showSummary();
@@ -978,7 +979,11 @@ export default class GachaScene extends BaseScene {
     this.tweens.killAll();
     this.time.removeAllEvents();
     this.input.off('pointerdown');
-    this.children.getAll().forEach(c => c.destroy());
+    this.children.getAll().forEach(c => {
+      // Video는 UUID 텍스처까지 함께 제거 (일반 destroy는 텍스처를 남김)
+      if (c instanceof Phaser.GameObjects.Video) destroyVideo(c);
+      else c.destroy();
+    });
     this.terminalTexts = [];
   }
 

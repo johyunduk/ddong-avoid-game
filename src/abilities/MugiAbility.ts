@@ -143,7 +143,7 @@ export class MugiAbility extends BaseAbility {
         this._collectYeoiju(orb, api);
         continue;
       }
-      if (orb.y > 660) { orb.gfx.destroy(); continue; }
+      if (orb.y > 660) { api.scene.tweens.killTweensOf(orb.gfx); orb.gfx.destroy(); continue; }
       remaining.push(orb);
     }
     this.yeoijus = remaining;
@@ -151,6 +151,7 @@ export class MugiAbility extends BaseAbility {
 
   private _collectYeoiju(orb: YeoijuOrb, api: GameSceneAPI): void {
     this._spawnCollectEffect(orb.x, orb.y, api.scene);
+    api.scene.tweens.killTweensOf(orb.gfx);
     orb.gfx.destroy();
     api.addAbilityBonus(80);
 
@@ -297,7 +298,7 @@ export class MugiAbility extends BaseAbility {
 
   private _transformGold(api: GameSceneAPI): void {
     this.isGoldForm = true;
-    this.yeoijus.forEach(orb => orb.gfx.destroy());
+    this.yeoijus.forEach(orb => { api.scene.tweens.killTweensOf(orb.gfx); orb.gfx.destroy(); });
     this.yeoijus = [];
     this._strikeThunder(api, true);
   }
@@ -670,8 +671,15 @@ export class MugiAbility extends BaseAbility {
   }
 
   private _destroyRevivalHalo(): void {
-    this.revivalHaloOuter?.destroy();
-    this.revivalHaloInner?.destroy();
+    // repeat:-1 트윈이 destroy된 이미지를 계속 참조하지 않도록 먼저 kill
+    if (this.revivalHaloOuter) {
+      this.revivalHaloOuter.scene.tweens.killTweensOf(this.revivalHaloOuter);
+      this.revivalHaloOuter.destroy();
+    }
+    if (this.revivalHaloInner) {
+      this.revivalHaloInner.scene.tweens.killTweensOf(this.revivalHaloInner);
+      this.revivalHaloInner.destroy();
+    }
     this.revivalHaloOuter = null;
     this.revivalHaloInner = null;
   }
@@ -694,7 +702,7 @@ export class MugiAbility extends BaseAbility {
   // ── 정리 ─────────────────────────────────────────────────────────────
 
   override onDestroy(api: GameSceneAPI): void {
-    this.yeoijus.forEach(orb => orb.gfx.destroy());
+    this.yeoijus.forEach(orb => { api.scene.tweens.killTweensOf(orb.gfx); orb.gfx.destroy(); });
     this.yeoijus = [];
     this.orbitOrbs.forEach(o => { api.scene.tweens.killTweensOf(o.gfx); o.gfx.destroy(); });
     this.orbitOrbs = [];

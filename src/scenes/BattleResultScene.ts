@@ -74,6 +74,9 @@ export default class BattleResultScene extends BaseScene {
   create() {
     super.create();
 
+    // Phaser는 씬 인스턴스의 shutdown() 메서드를 자동 호출하지 않음 → 이벤트로 직접 등록
+    this.events.once('shutdown', () => this.cleanupOnShutdown());
+
     const W = this.scale.width;
     const H = this.scale.height;
     const cx = W / 2;
@@ -399,7 +402,7 @@ export default class BattleResultScene extends BaseScene {
     this.scene.start(targetScene);
   }
 
-  shutdown() {
+  private cleanupOnShutdown() {
     if (this.rematchChannel) {
       this.rematchChannel.destroyImmediate();
       this.rematchChannel = null;

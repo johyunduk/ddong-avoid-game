@@ -21,6 +21,7 @@ import {
   type BackgroundDef,
 } from '../utils/wallpaper';
 import { syncOwnedCharacters, syncOwnedWallpapers } from '../utils/gacha';
+import { destroyVideo } from '../utils/video';
 import BaseScene from './BaseScene';
 
 // ── 캐릭터 그리드 설정 ──────────────────────────────────────────────────────
@@ -100,6 +101,7 @@ export default class CharacterSelectScene extends BaseScene {
   private infoPanel: Phaser.GameObjects.Container | null = null;
   private detailVideo: Phaser.GameObjects.Video | null = null;
   private fitVideoTimers: Phaser.Time.TimerEvent[] = [];
+  private illustLoadingId: string | null = null;
 
   constructor() {
     super('CharacterSelectScene');
@@ -114,12 +116,15 @@ export default class CharacterSelectScene extends BaseScene {
       if (!this.textures.exists(char.imageKey)) {
         this.load.image(char.imageKey, char.imagePath);
       }
-      if (!this.textures.exists(char.illustKey)) {
-        this.load.image(char.illustKey, char.illustPath);
-      }
       if (char.videoKey && char.videoPath && !this.cache.video.exists(char.videoKey)) {
         this.load.video(char.videoKey, char.videoPath);
       }
+    }
+    // 일러스트(768×1344, 디코드 시 각 4MB+)는 배경으로 쓰이는 "현재 선택 캐릭터"만 사전 로드.
+    // 나머지는 상세 패널을 열 때 온디맨드 로드 (전량 로드 시 텍스처 메모리 ~95MB 상주)
+    const selDef = CHARACTERS.find(c => c.id === getSelectedCharacter()) ?? CHARACTERS[0];
+    if (!this.textures.exists(selDef.illustKey)) {
+      this.load.image(selDef.illustKey, selDef.illustPath);
     }
     // 배경화면 bgKey(세로 이미지) 사전 로드 — 표시 대상 3종만
     for (const wp of WALLPAPERS.filter(w => AVAILABLE_WP_SET.has(w.id))) {
@@ -146,6 +151,12 @@ export default class CharacterSelectScene extends BaseScene {
     this.hasPointerDownInScene = false;
     this.cardHighlights.clear();
     this.wpHighlights.clear();
+    // 씬 인스턴스 재사용 대비 stale 참조 리셋 (상세 패널 연 채로 씬 이탈 시 스크롤 가드가 막히는 것 방지)
+    this.detailPanel = null;
+    this.infoPanel = null;
+    this.detailVideo = null;
+    this.fitVideoTimers = [];
+    this.illustLoadingId = null;
 
     // 동기화 전 각성 수치 스냅샷 (동기화 후 변화 감지용)
     this._preSyncDupCounts = new Map(
@@ -738,6 +749,23 @@ export default class CharacterSelectScene extends BaseScene {
   }
 
   private showCharacterDetail(id: string): void {
+    const def = CHARACTERS.find(c => c.id === id) ?? CHARACTERS[0];
+    // 일러스트 온디맨드 로드 (preload에서는 선택된 캐릭터만 로드됨)
+    if (!this.textures.exists(def.illustKey)) {
+      if (this.illustLoadingId) return; // 이미 로딩 중이면 중복 요청 무시
+      this.illustLoadingId = id;
+      this.load.image(def.illustKey, def.illustPath);
+      this.load.once(Phaser.Loader.Events.COMPLETE, () => {
+        this.illustLoadingId = null;
+        if (this.scene.isActive()) this.buildCharacterDetail(id);
+      });
+      this.load.start();
+      return;
+    }
+    this.buildCharacterDetail(id);
+  }
+
+  private buildCharacterDetail(id: string): void {
     this.hideCharacterDetail();
 
     const W = this.scale.width;
@@ -907,14 +935,9 @@ export default class CharacterSelectScene extends BaseScene {
     for (const t of this.fitVideoTimers) t.remove();
     this.fitVideoTimers = [];
 
-    // 비디오 명시 정지 및 HTMLVideoElement src 해제
-    if (this.detailVideo) {
-      this.detailVideo.stop();
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const el: HTMLVideoElement | null = (this.detailVideo as any).video ?? null;
-      if (el) { el.src = ''; }
-      this.detailVideo = null;
-    }
+    // 비디오 파괴 + 재생 시 생성된 UUID 텍스처 제거 (Phaser preDestroy가 안 지움)
+    destroyVideo(this.detailVideo);
+    this.detailVideo = null;
 
     this.hideInfoPanel();
     this.detailPanel?.destroy();

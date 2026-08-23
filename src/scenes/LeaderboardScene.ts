@@ -1,4 +1,4 @@
-import type Phaser from 'phaser';
+import Phaser from 'phaser';
 import { Difficulty, Difficulty as DifficultyEnum } from '../types/GameMode';
 import {
   getLeaderboard,
@@ -25,6 +25,7 @@ export default class LeaderboardScene extends BaseScene {
   private selectedCharFilter: string | null = null;
   private charFilterObjects: Phaser.GameObjects.GameObject[] = [];
   private charOverlayObjects: Phaser.GameObjects.GameObject[] = [];
+  private charOverlayLoading = false;
   private overlayCleanup?: () => void;
 
   // 시즌 UI 요소
@@ -48,19 +49,21 @@ export default class LeaderboardScene extends BaseScene {
       this.selectedDifficulty = last;
     }
     this.viewingYearMonth = null;
+    // 씬 인스턴스 재사용 대비 stale 상태 리셋 (로딩 중 이탈 시 오버레이가 영영 안 열리는 것 방지)
+    this.charOverlayObjects = [];
+    this.charOverlayLoading = false;
   }
 
   preload() {
     if (!this.textures.exists('background2')) {
       this.load.image('background2', 'assets/backgrounds/background2.webp');
     }
-    // 캐릭터 아이콘 (랭킹 표시용) + 일러스트 (캐릭터 선택 오버레이용)
+    // 캐릭터 아이콘 (랭킹 표시용)
+    // 일러스트(768×1344, 전량 로드 시 ~95MB)는 EXTREME 캐릭터 필터 오버레이에서만 쓰이므로
+    // showCharSelectOverlay()에서 온디맨드 로드
     CHARACTERS.forEach(char => {
       if (!this.textures.exists(char.imageKey)) {
         this.load.image(char.imageKey, char.imagePath);
-      }
-      if (!this.textures.exists(char.illustKey)) {
-        this.load.image(char.illustKey, char.illustPath);
       }
     });
   }
@@ -500,8 +503,26 @@ export default class LeaderboardScene extends BaseScene {
     this.charFilterObjects.push(btn, txt);
   }
 
-  /** 캐릭터 선택 오버레이 표시 (일러스트 포트레이트 카드, 스크롤 가능) */
+  /** 캐릭터 선택 오버레이 표시 — 일러스트는 이 시점에 온디맨드 로드 */
   private showCharSelectOverlay() {
+    if (this.charOverlayObjects.length > 0 || this.charOverlayLoading) return;
+
+    const missing = CHARACTERS.filter(c => !this.textures.exists(c.illustKey));
+    if (missing.length > 0) {
+      this.charOverlayLoading = true;
+      missing.forEach(c => this.load.image(c.illustKey, c.illustPath));
+      this.load.once(Phaser.Loader.Events.COMPLETE, () => {
+        this.charOverlayLoading = false;
+        if (this.scene.isActive()) this.buildCharSelectOverlay();
+      });
+      this.load.start();
+      return;
+    }
+    this.buildCharSelectOverlay();
+  }
+
+  /** 캐릭터 선택 오버레이 구성 (일러스트 포트레이트 카드, 스크롤 가능) */
+  private buildCharSelectOverlay() {
     if (this.charOverlayObjects.length > 0) return;
 
     const W = this.scale.width;

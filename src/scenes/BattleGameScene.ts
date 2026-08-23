@@ -78,6 +78,9 @@ export default class BattleGameScene extends GameScene {
   create() {
     super.create();
 
+    // Phaser는 씬 인스턴스의 shutdown() 메서드를 자동 호출하지 않음 → 이벤트로 직접 등록
+    this.events.once('shutdown', () => this.cleanupOnShutdown());
+
     // 대전 모드에서는 점수 / 최고 기록 표시 불필요 → 생존 시간으로 대체
     if (this.scoreText) this.scoreText.setVisible(false);
     if (this.highScoreText) this.highScoreText.setVisible(false);
@@ -400,14 +403,14 @@ export default class BattleGameScene extends GameScene {
     });
   }
 
-  shutdown() {
+  private cleanupOnShutdown() {
     if (this.scoreUpdateTimer) this.scoreUpdateTimer.remove();
     if (this.survivalTimerEvent) this.survivalTimerEvent.remove();
     if (this.disconnectTimer) {
       clearTimeout(this.disconnectTimer);
       this.disconnectTimer = null;
     }
-    // 동기 채널 정리 — Phaser는 shutdown()을 await하지 않으므로 비동기 destroy() 대신 즉시 제거
+    // 동기 채널 정리 — shutdown 이벤트는 await되지 않으므로 비동기 destroy() 대신 즉시 제거
     if (this.battleChannel) {
       this.battleChannel.destroyImmediate();
       this.battleChannel = null;

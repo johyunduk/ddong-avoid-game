@@ -13,6 +13,7 @@ export class GlitchAbility extends BaseAbility {
   private posHistory: Array<{ x: number; y: number }> = [];
   private readonly TRAIL_FRAMES = 12; // ~0.2초 딜레이 (60fps 기준)
   private attackTimers: Phaser.Time.TimerEvent[] = [];
+  private colliders: Phaser.Physics.Arcade.Collider[] = [];
 
 
   override onCreate(api: GameSceneAPI): void {
@@ -34,10 +35,12 @@ export class GlitchAbility extends BaseAbility {
         if (!sp.active) return;
         collectFn(sp);
       };
-    api.scene.physics.add.overlap(this.ghost, api.goldPoops,    makeCollect(p => api.collectGoldPoop(p)));
-    api.scene.physics.add.overlap(this.ghost, api.diamondPoops, makeCollect(p => api.collectDiamondPoop(p)));
-    api.scene.physics.add.overlap(this.ghost, api.topazPoops,   makeCollect(p => api.collectTopazPoop(p)));
-    api.scene.physics.add.overlap(this.ghost, api.rainbowPoops, makeCollect(p => api.collectRainbowPoop(p)));
+    this.colliders.push(
+      api.scene.physics.add.overlap(this.ghost, api.goldPoops,    makeCollect(p => api.collectGoldPoop(p))),
+      api.scene.physics.add.overlap(this.ghost, api.diamondPoops, makeCollect(p => api.collectDiamondPoop(p))),
+      api.scene.physics.add.overlap(this.ghost, api.topazPoops,   makeCollect(p => api.collectTopazPoop(p))),
+      api.scene.physics.add.overlap(this.ghost, api.rainbowPoops, makeCollect(p => api.collectRainbowPoop(p))),
+    );
   }
 
   override onScoreMilestone(score: number, api: GameSceneAPI): void {
@@ -63,6 +66,9 @@ export class GlitchAbility extends BaseAbility {
   }
 
   override onDestroy(_api: GameSceneAPI): void {
+    // ghost 파괴 전에 collider부터 제거 — 죽은 body를 매 스텝 검사하는 잔여 collider 방지
+    this.colliders.forEach(c => c.destroy());
+    this.colliders = [];
     this.ghost?.destroy();
     this.attackTimers.forEach(t => t.remove());
   }

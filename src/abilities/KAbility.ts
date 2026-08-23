@@ -56,6 +56,7 @@ export class KAbility extends BaseAbility {
 
   // 태이(ktei) 동반자 — onCreate에서 생성, onUpdate에서 배회, onDestroy에서 정리
   private son?: Phaser.Physics.Arcade.Sprite;
+  private sonColliders: Phaser.Physics.Arcade.Collider[] = [];
   private sonDir: string = 'front';
   private sonWanderDir = -1; // 배회 방향 (-1 왼쪽 / +1 오른쪽)
   private sonFootOffset = 0; // 발을 바닥 라인에 맞추기 위한 y 오프셋 (센터 원점 보정)
@@ -90,12 +91,22 @@ export class KAbility extends BaseAbility {
       const sp = p as Phaser.Physics.Arcade.Sprite;
       if (sp.active) fn(sp);
     };
-    scene.physics.add.overlap(son, api.goldPoops,    makeCollect(p => api.collectGoldPoop(p)));
-    scene.physics.add.overlap(son, api.diamondPoops, makeCollect(p => api.collectDiamondPoop(p)));
-    scene.physics.add.overlap(son, api.topazPoops,   makeCollect(p => api.collectTopazPoop(p)));
-    scene.physics.add.overlap(son, api.rainbowPoops, makeCollect(p => api.collectRainbowPoop(p)));
+    this.sonColliders.push(
+      scene.physics.add.overlap(son, api.goldPoops,    makeCollect(p => api.collectGoldPoop(p))),
+      scene.physics.add.overlap(son, api.diamondPoops, makeCollect(p => api.collectDiamondPoop(p))),
+      scene.physics.add.overlap(son, api.topazPoops,   makeCollect(p => api.collectTopazPoop(p))),
+      scene.physics.add.overlap(son, api.rainbowPoops, makeCollect(p => api.collectRainbowPoop(p))),
+    );
 
     this.son = son;
+  }
+
+  /** 태이 제거 시 collider도 함께 정리 — 죽은 body를 매 스텝 검사하는 잔여 collider 방지 */
+  private _destroySon(): void {
+    this.sonColliders.forEach(c => c.destroy());
+    this.sonColliders = [];
+    this.son?.destroy();
+    this.son = undefined;
   }
 
   onUpdate(api: GameSceneAPI): void {
@@ -133,8 +144,7 @@ export class KAbility extends BaseAbility {
   }
 
   onDestroy(_api: GameSceneAPI): void {
-    this.son?.destroy();
-    this.son = undefined;
+    this._destroySon();
     this.ssAura?.destroy();
     this.ssAura = undefined;
   }
@@ -176,9 +186,8 @@ export class KAbility extends BaseAbility {
   private _succeedToKteiSs(api: GameSceneAPI): void {
     const { scene, player } = api;
 
-    // 태이가 본체로 승계 → 작은 동반자 제거
-    this.son?.destroy();
-    this.son = undefined;
+    // 태이가 본체로 승계 → 작은 동반자 제거 (collider 포함)
+    this._destroySon();
 
     // 각성형 스프라이트로 교체 + '태이' 크기(k의 80%)로 + 살짝 공중으로 (조작은 기존 좌우 그대로)
     // SS_HEIGHT_COMP로 균일 확대 → 초사이언 캐릭터 겉보기 크기를 변경 전 태이와 일치
