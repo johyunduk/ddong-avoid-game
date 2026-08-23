@@ -1,0 +1,615 @@
+지금 이 프로젝트 말야 메모리 누수인지 뭔지 모르겠는데 게임을 웹에서 하는데 뭔가 렉걸리는 느낌이 있어.
+
+---
+
+<task-notification>
+<task-id>a034318cf9c376ae2</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>REDACTED.output</output-file>
+<status>completed</status>
+<summary>Agent "능력/배틀씬 타이머 감사" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>조사 완료. Phaser 3.90 소스와 supabase-js 동작까지 대조해서 확인했습니다.
+
+---
+
+# 메모리 누수 / 렉 감사 결과
+
+## 🔴 확실한 누수
+
+### C1. Phaser는 씬의 `shutdown()` 메서드를 자동 호출하지 않습니다 — 배틀 씬 3곳의 정리 코드가 전부 死코드
+
+가장 심각한 근본 원인입니다.
+
+- `node_modules/phaser/src/scene/Systems.js:770-786` — `Systems.shutdown()`은 `events.emit(Events.SHUTDOWN)`만 합니다.
+- `node_modules/phaser/src/scene/SceneManager.js:1300` — `scene.sys.shutdown(data)` 호출뿐. `phaser/src/scene/` 전체에 **씬 인스턴스의 `shutdown` 메서드를 참조하는 코드가 0건**입니다 (자동 배선되는 건 `init`/`preload`/`create`/`update`뿐).
+- 같은 저장소의 다른 씬들은 올바른 패턴을 씁니다: `/Users/johyunduk/Projects/ddong-avoid-game/src/scenes/GameScene.ts:524`, `:701`, `LeaderboardScene.ts:71`, `CharacterSelectScene.ts:316`, `ReleaseNotesScene.ts:57`, `objects/Player.ts:105` — 전부 `this.events.once('shutdown', …)`.
+- 반면 死코드: `src/scenes/BattleMatchScene.ts:1012`, `src/scenes/BattleGameScene.ts:403`, `src/scenes/BattleResultScene.ts:402`.
+
+### C2. BattleGameScene: Supabase realtime 채널이 영구 잔류 + 리스너 중복 등록
+
+C1의 직접적 결과이며, 파급이 가장 큽니다.
+
+- `src/scenes/BattleGameScene.ts:392-400` `endBattle()` → `scene.start('BattleResultScene')` 경로에 **채널 정리 코드가 전혀 없습니다.** 유일한 정리는 호출되지 않는 `shutdown()`(:403-415).
+- `node_modules/@supabase/realtime-js/dist/main/RealtimeClient.js:277-288` — `channel(topic)`은 **같은 topic이면 기존 채널을 그대로 재사용**합니다.
+
+파급 효과 3가지:
+
+1. **씬 전체가 GC 불가**: `realtime:battle-game:&lt;CODE&gt;` 채널이 `client.channels`에 영구 잔류하고, `setupBattleListeners()`(`BattleGameScene.ts:179-224`)의 클로저가 `this`(죽은 씬 → player, 5개 poop 그룹, 텍스처 참조)를 붙잡습니다.
+2. **재도전 시 리스너 중복**: 재도전은 **같은 roomCode를 재사용**합니다 (`BattleResultScene.ts:383` `code: this.roomCode` → `BattleMatchScene` autoRematch → `BattleGameScene.init`). 두 번째 대전에서 `joinGame(code)`가 같은 채널 객체를 반환하고 리스너 5개가 또 붙습니다 → SEND_POOP 1개가 똥 2개로 생성, GAME_OVER 2번 처리, 죽은 씬의 핸들러까지 실행.
+3. **재도전 시 10초 스톨 + 게임오버 미전환**: `RealtimeChannel.js:127`의 `if (this.state == closed)` 가드 때문에 이미 join된 채널에 `subscribe()`를 다시 부르면 콜백이 오지 않고, `src/utils/battleChannel.ts:89-92`의 10초 타임아웃까지 `channelReady=false`입니다. 그 사이 `BattleGameScene.ts:277`의 `this.channelReady` 조건이 false라 `endBattle(BattleResult.LOSE)`가 호출되지 않고, `showGameOverUI`는 override로 비어 있어(`:288-290`) 화면이 멈춥니다.
+
+### C3. MugiAbility: `repeat:-1` 트윈이 destroy된 Graphics를 계속 붙잡음
+
+Phaser `GameObject.destroy()`는 트윈을 죽이지 않습니다(`node_modules/phaser/src/gameobjects/GameObject.js`의 `destroy` 본문에 tween 처리 없음). 따라서 무한 트윈은 씬이 끝날 때까지 죽은 객체에 매 프레임 alpha를 씁니다.
+
+- **여의주**: `src/abilities/MugiAbility.ts:121-124` 무한 yoyo 트윈. gfx는 수집(`:154`), 화면이탈(`:146`), 황금변신(`:300`), `onDestroy`(`:697`)에서 destroy하지만 **트윈은 어디서도 kill하지 않습니다.** 간격이 50점(`src/config/abilityParams.ts:146`)≈5초 → 5분 플레이면 좀비 트윈 약 60개 누적.
+- **부활 후광**: `MugiAbility.ts:653-663` 무한 트윈 2개. `_destroyRevivalHalo()`(`:672-677`)는 image만 destroy. `_playRechargeGlow`(`:689-691`)가 후광을 재생성할 때마다 2개씩 추가 누적.
+- 대조: 같은 파일 `:531`, `:699`는 orbitOrbs에 대해 `killTweensOf`를 제대로 호출합니다 → 여의주·후광만 누락된 명백한 실수.
+
+### C4. GlitchAbility / KAbility: `physics.add.overlap` collider가 onDestroy에서 제거되지 않음
+
+- `src/abilities/GlitchAbility.ts:37-40` overlap 4개 등록 → `onDestroy`(`:65-68`)는 ghost destroy와 타이머 remove만. Collider 객체는 `physics.world.colliders`에 남아 매 스텝 죽은 sprite를 처리합니다.
+- `src/abilities/KAbility.ts:93-96` 동일하게 4개. 게다가 초사이언 승계 시 `this.son?.destroy()`(`:180`) 이후에도 collider 4개가 그대로 남아 **게임 끝날 때까지** 죽은 객체를 대상으로 돕니다.
+- 저장소 전체에 `removeCollider` 호출이 **0건**입니다.
+- 씬 shutdown 시 ArcadePhysics가 world를 정리하므로 씬을 넘어가는 누수는 아니지만, 한 판 내에서 죽은 객체를 참조하는 collider가 계속 남는 건 명백한 미정리입니다.
+
+---
+
+## 🟡 의심 (주로 프레임 드랍 / GC 압력)
+
+### S1. GumiAbility.onUpdate — 매 프레임 배열 할당 + 3프레임마다 Image/Tween 생성
+`src/abilities/GumiAbility.ts:586-588` `poops.getChildren().filter(...)`가 매 프레임 새 배열, `:590` `remaining` 배열도 매 프레임. `:599-610`은 여우불 1개당 3프레임마다 Image+Tween 생성 → 9개 기준 **초당 약 180개 객체 생성/파괴**. `_updateAura`(`:380-403`)도 무적 3초 동안 매 프레임 `.filter().forEach()` 배열 2개를 할당합니다. 전부 destroy되므로 누수는 아니고 GC 스파이크 → 주기적 프레임 드랍.
+
+### S2. GumiAbility.onDestroy — 꼬리 트윈 kill 누락
+`:667`에서 seg image만 destroy하고 등장(`:189-195`)·확대(`:282-288`)·소멸(`:333-337`) 트윈을 kill하지 않습니다. 전부 유한 트윈(최대 수백 ms)이라 영구 누수는 아닙니다. 참고로 `onCreate`의 주석(`:126` "씬 재시작 시 onDestroy가 호출되지 않으므로")은 전제가 무효입니다 — `src/abilities/index.ts:20-37`이 매 `init()`마다 **새 인스턴스**를 생성합니다. (같은 이유로 `invincibleActive`/`lastTailScore` 미리셋도 실무상 무해)
+
+### S3. GlitchAbility.onUpdate — 프레임당 객체 리터럴 1개
+`src/abilities/GlitchAbility.ts:52` `posHistory.push({ x, y })` — 초당 60개. 배열은 12로 캡핑되므로 누수 아님, GC 압력만.
+
+### S4. KnightAbility — 검기 tween `onUpdate`의 CPU 비용
+`src/abilities/KnightAbility.ts:130-171`: 검기 1개당 매 프레임 `wavyPoints` 3회 × 62포인트(각 `Math.hypot`) + Graphics 4개 clear/fill/stroke + 전 poops 순회. `:53`에서 100점마다 3개 동시 발사 → **프레임당 ~558 hypot + Graphics 12개 재작성**. 할당은 정적 버퍼(`:37-41`)로 제거됐지만 순수 CPU 부하가 큽니다. 리소스 정리 자체는 양호(`:47-48`, `:57-65`, `:172-179`).
+
+### S5. LegacyAbility — 상시 파티클 생성량
+`src/abilities/LegacyAbility.ts:143-182` `spawnOraFlame`: 레거시 모드에서 80ms마다 5~7개 Image+Tween → **초당 약 75개 객체**. 전부 tween onComplete로 destroy되니 누수는 아니고 GC 압력. `legacyTopGlow`/`legacyPulseTween(repeat:-1)`은 `:327-341`과 `:469-479` 양쪽에서 정리됩니다.
+
+### S6. SentinelAbility.onDestroy — 배열 미초기화 + 트윈 kill 누락
+`src/abilities/SentinelAbility.ts:93-97`: `orbitDroplets.forEach(destroy)` 후 `= []` 없음, `killTweensOf` 없음(유한 트윈). 인스턴스가 매번 새로 만들어지므로 실질 무해하나 패턴 불일치.
+
+### S7. BattleMatchScene — 정상 경로는 커버되지만 안전망 없음
+`readyRetryTimer`(`:919`), `rankMatchPollTimer`(`:399`), DOM input(`:626-651`)은 `goBack()`(`:997-1010`), `goToBattle()`(`:975-988`), `clearUI()`(`:161-172`)에서 모두 정리됩니다 → **현재 동작상 누수 없음**. 다만 `:259`(CharacterSelectScene)와 `:272`(BattleLeaderboardScene)는 아무 정리 없이 씬을 떠나고, shutdown()이 죽어 있어 안전망이 전혀 없습니다. 메뉴 상태에서만 도달 가능해 지금은 타이머/채널이 null이지만 상태 전이 순서가 바뀌는 순간 즉시 누수로 전환됩니다.
+
+### S8. BattleResultScene — 정상 경로만 정리
+`navigateAway`(`:393-400`), `checkBothRematch`(`:377-385`), 랭크 새매칭(`:149-155`)에서 `destroyImmediate()` 호출 ✓. 예기치 않은 이탈 시 `battle-result:&lt;CODE&gt;` 채널 잔류. `repeat:-1` 펄스 트윈(`:329-336`)은 `:353`/`:367`에서 killTweensOf로 정리됩니다 ✓.
+
+### S9. GameScene 게임오버 경로 (1437~2012)
+- `hitPoop`(`:1437-1486`)의 정리는 양호: `spawnTimer.remove()`, `clearFeverTimeUI()`, `ability.onDestroy()`, `physics.pause()`.
+- **`bgMusic`은 게임오버 시 정지되지 않습니다** — `:300-301`에서 loop 재생, 정지는 재시작/메뉴 버튼의 `sound.stopAll()`(`:1999`, `:2007`)에서만.
+- **Player 무적 `rainbowTimer`가 게임오버 후에도 계속 돕니다** — `src/objects/Player.ts:246-254` `loop: true`. `physics.pause()`는 `scene.time`을 멈추지 않으므로 150ms마다 tint 갱신이 계속됩니다. `cleanupEffects()`(`:297-307`)는 재시작/메뉴 버튼에서만 호출.
+- **DOM input 정리 훅 부재**: `:1648-1692`에서 생성한 `&lt;input&gt;`의 제거 경로는 제출 성공(`:1747`), 재시작(`:1997-1998`), 메뉴(`:2005-2006`) 세 곳뿐이고 `events.once('shutdown', …)` 훅이 없습니다. 안티치트 강제 리로드(`:700`)나 예외 경로에서 body에 남습니다. 또한 `document.querySelector('input')`은 **문서의 첫 번째 input**을 지우므로, BattleMatchScene의 코드 입력창(`BattleMatchScene.ts:626`)이 남아 있으면 엉뚱한 요소를 제거합니다.
+- `submitScoreForCharRanking`(`:1605-1629`)에는 `scene.isActive()` 가드가 없습니다(`submitSkorOnGameOver`는 `:1895`에 있음). GameObject를 만들지 않아 현재는 안전.
+
+---
+
+## 🟢 문제없음
+
+- `src/abilities/LegacyAbility.ts:469-479` — 타이머 4개 + 트윈 + Graphics 2개 전부 정리.
+- `src/abilities/KnightAbility.ts:47-48, 57-65, 172-179` — activeTimers/activeGraphics 추적 + killTweensOf + destroy, onComplete에서 배열 필터링까지.
+- `src/abilities/GumiAbility.ts:224-257` `_updateTailPositions` — 할당 0.
+- `src/abilities/SentinelAbility.ts:55-87, 104-147` — persistent Graphics 재사용, 매 프레임 할당 0.
+- `src/abilities/LegacyAbility.ts:392-429` — 정적 버퍼(`_STAR_BUF`)로 GC 0, 단일 Graphics 1 draw call.
+- `src/abilities/KAbility.ts:143-151` — 80ms 스로틀 + Graphics 재사용.
+- `src/utils/battleChannel.ts:196-215` — `destroy()`/`destroyImmediate()` 구현 자체는 정상. 문제는 호출부(C2).
+- `src/scenes/GameScene.ts:1215-1223` `clearFeverTimeUI` — 타이머 2개 remove + killTweensOf + destroy + 배열 비움.
+- `src/objects/Player.ts:105` — DOM 리스너 8개를 `events.once('shutdown')`로 정확히 해제.
+- `src/scenes/GameScene.ts:523-526` — visibilitychange 리스너 정상 해제.
+- `src/scenes/GameScene.ts:328-377` — 오브젝트 풀 maxSize + prewarm으로 런타임 생성 히치 억제.
+
+---
+
+## 권장 수정 우선순위
+
+1. **`shutdown()` → `this.events.once('shutdown', () =&gt; …)` 로 전환** (BattleMatchScene:1012 / BattleGameScene:403 / BattleResultScene:402). 한 줄 변경으로 C2와 S7·S8이 동시에 해결됩니다.
+2. **BattleGameScene.endBattle에 `destroyImmediate()` 명시 호출** 추가 (`:392` 전환 직전) — 1번의 백업.
+3. **MugiAbility 여의주/후광 트윈에 `killTweensOf`** 추가 (`:154`, `:146`, `:300`, `:672`, `:697`) — orbitOrbs와 동일 패턴 적용.
+4. **Glitch/KAbility에서 collider 핸들을 보관해 `onDestroy`/`_succeedToKteiSs`에서 `physics.world.removeCollider()`** 호출.
+5. GumiAbility 여우불 trail을 오브젝트 풀 또는 단일 Graphics 배치(LegacyAbility `_updateRainStars` 방식)로 전환 — 렉 개선.</result>
+<usage><subagent_tokens>196590</subagent_tokens><tool_uses>39</tool_uses><duration_ms>481744</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a754fe3d36b920054</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>REDACTED.output</output-file>
+<status>completed</status>
+<summary>Agent "비디오/텍스처 수명주기 감사" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>코드와 Phaser 3.90 내부 구현, 실제 에셋까지 대조해 감사를 마쳤습니다.
+
+---
+
+# 똥 피하기 게임 — 메모리 누수 / 렉 감사 보고서
+
+## 핵심 요약
+
+| # | 항목 | 판정 | 영향 |
+|---|---|---|---|
+| 1 | Phaser Video GameObject의 **UUID 텍스처 미해제** | 확실한 누수 | 영상 1회 재생당 GPU 1.3~5.0 MB 영구 누적 |
+| 2 | `CharacterSelectScene.preload` 대형 텍스처 일괄 로드 | 확실한 성능 저하 | 단일 씬 진입에 **약 148 MB** 텍스처 메모리 |
+| 3 | `LeaderboardScene.preload` 일러스트 23장 전량 로드 | 확실한 성능 저하 | 84×106 썸네일용으로 95 MB |
+| 4 | 씬 재진입 시 stale 인스턴스 필드 | 의심 | 기능 무력화(UI 안 열림) 가능 |
+| 5 | `this.load.video()` 자체 | 문제없음 | Phaser 3.60+ 는 실제 다운로드를 하지 않음 |
+
+---
+
+## A. 확실한 누수
+
+### A-1. Phaser Video 재생 시 생성된 텍스처가 destroy 후에도 전역 TextureManager에 영구 잔존 ★최우선
+
+Phaser 3.90 내부 동작(실측 확인):
+
+- `/Users/johyunduk/Projects/ddong-avoid-game/node_modules/phaser/src/gameobjects/video/Video.js:214`
+  ```js
+  this._key = UUID();
+  ```
+  → **Video GameObject마다 랜덤 UUID 키**를 갖습니다.
+- 같은 파일 `:862` — 첫 프레임 렌더 시점에
+  ```js
+  texture = this.scene.sys.textures.create(this._key, video, width, height);
+  ```
+  전역 TextureManager에 텍스처를 등록하고, `TextureSource.js:235`에서 `renderer.createVideoTexture()`로 **WebGL 텍스처를 실제 할당**합니다.
+- 같은 파일 `:2324-2343` `preDestroy()` — `stop()` / `removeLoadEventHandlers()` / `removeVideoElement()` / `game.off` / `sound.off`만 수행하고 **`textures.remove(this._key)`를 호출하지 않습니다.**
+
+결과: Video를 destroy해도 `game.textures.list`에 UUID 키 텍스처 + GL 텍스처 + (src 제거된) `HTMLVideoElement` 참조가 **영구히 남습니다.** 키가 UUID라 재사용/중복 감지도 불가능합니다.
+
+프로젝트 전체에 `textures.remove` 호출이 **0건**입니다:
+```
+grep -rn "textures\.remove" src/   →  결과 없음
+```
+
+**누수량 실측** (`ffprobe` 기준 영상 해상도 × 4바이트 RGBA):
+
+| 재생 지점 | 파일:라인 | 해상도 | 1회 누수 |
+|---|---|---|---|
+| 캐릭터 상세 패널 영상 | `src/scenes/CharacterSelectScene.ts:764` | 832×1504 (대부분) | **5.0 MB** |
+| 가챠 공통 연출 영상 | `src/scenes/GachaScene.ts:613` | 416×752 | **1.25 MB** |
+| 가챠 캐릭터 리빌 영상 | `src/scenes/GachaScene.ts:657` | 832×1504 | **5.0 MB** |
+
+- **10연차 1회 = 최대 1.25 + 5.0×10 ≈ 51 MB 영구 누수.** 10연차를 5번 돌리면 250 MB → 모바일 Safari/WebView는 여기서 컨텍스트 로스 또는 탭 강제 종료됩니다.
+- `CharacterSelectScene`에서 상세 패널을 열고 일러스트를 탭할 때마다(`:870 illust.on('pointerup', startVideo)`) 새 Video GO → 새 UUID 텍스처 → **패널 여닫이 반복 = 5 MB씩 선형 증가.**
+
+**수정 방향**
+```ts
+// Video 파괴 직전에 UUID 텍스처를 직접 제거
+const vidTexKey = (vid as any)._key;
+vid.destroy();
+if (vidTexKey &amp;&amp; this.textures.exists(vidTexKey)) this.textures.remove(vidTexKey);
+```
+`CharacterSelectScene.hideCharacterDetail()`, `GachaScene.playCommonVideo/doResolve`, `showNextReveal/proceed`, `clearUI()` 4곳 모두에 적용해야 합니다. 더 안전하게는 Video GO를 재사용(`changeSource()`)해 GO 자체를 하나만 유지하는 방식이 낫습니다.
+
+---
+
+### A-2. `CharacterSelectScene.preload` — 씬 1회 진입에 약 148 MB 텍스처
+
+`/Users/johyunduk/Projects/ddong-avoid-game/src/scenes/CharacterSelectScene.ts:112-134`
+
+| 항목 | 개수 | 해상도 | 디코드 후(RGBA) |
+|---|---|---|---|
+| `char.illustKey` (`:117-119`) | **23장** | 전부 768×1344 | **94.96 MB** |
+| `char.imageKey` (`:114-116`) | 23장 | 20장 208×312 / **mugi·gumi·k 3장은 768×1344** | 17.58 MB |
+| 배경화면 `bgKey` (`:125-129`) | **8장** | 5장 1024×1024 + 3장 400×600 | 23.85 MB |
+| 등급 이미지 (`:131-133`) | 3장 | r/sr 1024×1024, ur 960×960 | **12.08 MB** |
+| **합계** | **57 텍스처** | | **≈ 148.5 MB** |
+
+세부 문제:
+
+1. **일러스트 23장 전량 프리로드** — 화면에 동시에 보이는 것은 배경 1장 + 상세 패널 1장뿐인데 23장을 상주시킵니다. 768×1344는 `bgImage.setDisplaySize(W, H)`로 어차피 축소 렌더됩니다. 카드 그리드는 `imageKey`(픽셀 스프라이트)를 쓰므로 일러스트는 **선택된 것만 온디맨드 로드**하면 됩니다.
+2. **`:124` 주석과 코드 불일치**
+   ```ts
+   // 배경화면 bgKey(세로 이미지) 사전 로드 — 표시 대상 3종만
+   for (const wp of WALLPAPERS.filter(w =&gt; AVAILABLE_WP_SET.has(w.id))) {
+   ```
+   `AVAILABLE_WP_SET = new Set([...DEFAULT_WP_IDS, ...GACHA_WP_IDS])` (`:45`) 인데, `wallpaper.ts`의 `GACHA_WP_IDS`는 "DEFAULT가 아닌 전부"에서 파생되므로 **합집합 = WALLPAPERS 전체(8장)** 입니다. 주석의 "3종만"은 사실이 아니고 8장 전부 로드됩니다.
+3. **등급 배지 3장이 1024×1024** — 실제 표시 크기는 26×26(`:667`), 28×28(`:800`), 24×24(`:994`)입니다. 12 MB를 배지 아이콘에 쓰고 있습니다. 64×64로 리사이즈하면 12 MB → 0.05 MB.
+4. **mugi / gumi / k 카드 스프라이트가 768×1344** — 카드에서 58×85로 그립니다(`:652`). 3장에 12.4 MB.
+
+---
+
+### A-3. `LeaderboardScene.preload` — 썸네일용으로 일러스트 23장 전량 로드
+
+`/Users/johyunduk/Projects/ddong-avoid-game/src/scenes/LeaderboardScene.ts:58-65`
+```ts
+CHARACTERS.forEach(char =&gt; {
+  if (!this.textures.exists(char.imageKey))  this.load.image(char.imageKey,  char.imagePath);
+  if (!this.textures.exists(char.illustKey)) this.load.image(char.illustKey, char.illustPath);
+});
+```
+- 이 일러스트가 쓰이는 유일한 곳은 `:612` — **EXTREME 난이도에서 캐릭터 필터 오버레이를 열었을 때의 84×106 카드**뿐입니다.
+- 즉 "랭킹만 보고 나가는" 대다수 유저도 **768×1344 × 23장 = 95 MB + 3.5 MB 다운로드**를 강제로 떠안습니다.
+- 오버레이를 열 때 온디맨드 로드하거나, 별도의 저해상도 썸네일(예: 168×212)을 쓰는 것이 맞습니다.
+
+---
+
+## B. 의심 (조건부 문제 / 코드 스멜)
+
+### B-1. `fitVideoTimers` 배열의 무제한 증가 — CharacterSelectScene
+`src/scenes/CharacterSelectScene.ts:885-903`
+```ts
+vid.once('play', applyContain);
+this.fitVideoTimers.push(this.time.delayedCall(100, applyContain));
+this.fitVideoTimers.push(this.time.delayedCall(500, applyContain));
+```
+`fitVideoToPanel`은 `startVideo`(`:862`)가 호출될 때마다 실행되는데, 배열은 `hideCharacterDetail()`(`:907`)에서만 비워집니다. 패널을 닫지 않고 **일러스트↔비디오 탭을 반복하면** 이미 만료된 TimerEvent 참조 + `once('play')` 핸들러가 계속 쌓입니다. 한 세션 내 유한하지만 정리 누락입니다.
+
+### B-2. `el.src = ''` 안티패턴 — CharacterSelectScene
+`src/scenes/CharacterSelectScene.ts:915`
+```ts
+if (el) { el.src = ''; }
+```
+빈 문자열 `src`는 브라우저가 **현재 문서 URL로 해석**해 HTML 문서를 비디오로 받으려는 불필요한 네트워크 요청 + 콘솔 에러를 유발합니다. 올바른 형태는 `el.removeAttribute('src'); el.load();` 입니다. (참고: 바로 뒤 `panel.destroy()` → `Video.preDestroy` → `removeVideoElement()`가 `removeAttribute('src')`를 수행하므로 이 줄은 사실상 불필요합니다.)
+
+### B-3. 씬 종료 시 초기화되지 않는 인스턴스 필드 (Phaser는 Scene 인스턴스를 재사용)
+
+| 파일:라인 | 필드 | 위험 |
+|---|---|---|
+| `LeaderboardScene.ts:27` | `charOverlayObjects` | `showCharSelectOverlay()`의 가드 `if (this.charOverlayObjects.length &gt; 0) return;` (`:505`) 때문에, 오버레이가 열린 채 씬이 종료되면 **재진입 후 오버레이가 영영 안 열림** |
+| `LeaderboardScene.ts:28` | `overlayCleanup` | shutdown 콜백(`:71`)에서 호출만 하고 `undefined`로 되돌리지 않음 → 다음 세션 종료 시 stale 핸들러 재호출(무해하지만 혼란) |
+| `ModeSelectScene.ts:9` | `settingsPanel` | `closePanel()`(`:282`)에서만 null로 리셋. 패널이 열린 채 씬 종료 시 stale 참조 → 재진입 후 `showSettingsPanel()`이 `:240`에서 조기 반환하여 **설정 버튼 무반응** |
+| `CharacterSelectScene.ts:99-102` | `detailPanel` / `detailVideo` / `fitVideoTimers` | shutdown 시 리셋 없음. 다행히 `Video.stop()`은 `if (video)` 가드가 있어 크래시는 안 나지만 destroy된 객체를 계속 참조 |
+
+**권장:** 각 씬의 `init()` 또는 `events.once('shutdown')`에서 이 필드들을 초기화하세요. `LeaderboardScene`은 이미 `:71`에 shutdown 훅이 있으니 거기서 `this.charOverlayObjects = []` 등을 같이 처리하면 됩니다.
+
+### B-4. `GachaScene.clearUI()`와 BaseScene 입력 가드 타이머의 위험한 상호작용
+`src/scenes/GachaScene.ts:970-983`
+```ts
+private clearUI() {
+  ...
+  this.time.removeAllEvents();
+  this.input.off('pointerdown');
+  this.children.getAll().forEach(c =&gt; c.destroy());
+}
+```
+`GachaScene.create()`(`:87`) → `super.create()`가 `BaseScene.ts:23`에서 `delayedCall(200, → input.enabled = true)`를 등록 → 곧바로 `buildLobby()`(`:93`) → `clearUI()`(`:102`)가 **같은 프레임에** `time.removeAllEvents()` 실행.
+
+현재 동작하는 이유는 우연입니다 — `Clock.removeAllEvents()`(`node_modules/phaser/src/time/Clock.js:291`)가
+```js
+this._pendingRemoval = this._pendingRemoval.concat(this._active);
+```
+로 `_active`만 대상으로 하고 `_pendingInsertion`은 건드리지 않기 때문입니다. Phaser 내부 구현이 바뀌면 **GachaScene 입력이 영구 비활성화**됩니다. `clearUI()`가 무차별 `removeAllEvents()`를 쓰는 대신 자기가 만든 타이머만 추적/해제하도록 바꾸는 게 안전합니다.
+
+### B-5. `this.load.once()` 댕글링 리스너 — GachaScene
+`src/scenes/GachaScene.ts:470-471`, `:598-599`
+```ts
+this.load.once(Phaser.Loader.Events.COMPLETE, resolve);
+this.load.once(Phaser.Loader.Events.FILE_LOAD_ERROR, resolve);
+```
+둘 중 하나가 발화하면 나머지 하나는 **해제되지 않고 LoaderPlugin에 남습니다.** 뽑기를 반복할수록 누적됩니다(씬 shutdown 시 `LoaderPlugin.removeAllListeners()`로 회수되므로 세션 내 유한). 한쪽 발화 시 다른 쪽을 `off` 해주세요.
+
+### B-6. GachaScene 로비 슬라이드쇼의 상시 렌더 비용
+`src/scenes/GachaScene.ts:117-118, 162-167, 196-197`
+- 768×1344 풀스크린 이미지 **2장을 항상 겹쳐 두고** 2초마다 600 ms 크로스페이드합니다. 페이드 구간에서 풀스크린 알파 블렌딩 오버드로가 2배가 되고, 11장의 일러스트를 계속 순환하며 텍스처 바인딩이 교체됩니다.
+- 누수는 아니지만 저사양 모바일에서 로비 체감 프레임 저하 요인입니다. 페이드가 끝난 뒤 뒤쪽 레이어를 `setVisible(false)` 처리하는 것만으로도 개선됩니다.
+
+### B-7. LeaderboardScene 마스크 Graphics가 디스플레이 리스트에 올라가 있음
+`src/scenes/LeaderboardScene.ts:585-589`
+```ts
+const maskGfx = this.add.graphics();   // ← add: 디스플레이 리스트에 추가됨
+maskGfx.fillRect(0, SCROLL_TOP, W, scrollAreaH);
+const mask = maskGfx.createGeometryMask();
+```
+`CharacterSelectScene.ts:259`는 올바르게 `this.make.graphics()`를 쓰는데 여기는 `this.add`입니다. depth 0이라 depth 500 오버레이에 가려져 눈에 안 띄지만 **불필요한 풀스크린 흰색 rect 드로우 콜**이 매 프레임 발생합니다. 또 `GeometryMask` 객체 자체는 `hideCharSelectOverlay()`에서 해제되지 않습니다.
+
+### B-8. `CHARS_WITH_VIDS`에 `gumi` 누락 (기능 버그)
+`src/scenes/GachaScene.ts:9-11`의 집합에 `gumi`가 없는데, `character.ts:76-77`의 gumi는 `videoKey: 'vid_gumi'`를 갖고 `public/assets/vids/gumi.mp4`(5.0 MB)도 존재합니다. → **gumi를 뽑아도 리빌 영상이 재생되지 않습니다.** 누수는 아니지만 발견되어 함께 보고합니다.
+
+---
+
+## C. 문제없음 (검증 완료)
+
+1. **`this.load.video()`는 실제로 파일을 받지 않습니다.**
+   `node_modules/phaser/src/loader/filetypes/VideoFile.js:97-107`
+   ```js
+   load: function () {
+       //  We set these, but we don't actually load anything (the Video Game Object does that)
+       this.src = GetURL(this, this.loader.baseURL);
+       this.state = CONST.FILE_LOADED;
+   ```
+   `onProcess`가 캐시에 넣는 것은 `{ url, noAudio, crossOrigin }` 객체 하나뿐입니다.
+   → `CharacterSelectScene.ts:120-122`의 **비디오 13개 프리로드는 32 MB를 받지 않습니다.** 영구 잔존하지만 수십 바이트라 무시 가능합니다. (이 항목에 대한 우려는 기우입니다 — 진짜 문제는 A-1입니다.)
+
+2. **씬 이탈 시 Video GameObject의 stop/destroy는 정상 처리됩니다.**
+   `DisplayList.shutdown()`(`node_modules/phaser/src/gameobjects/DisplayList.js:235-248`)이 모든 자식에 `destroy(true)`를 호출하고, `Video.preDestroy`가 `stop(false)` → `video.pause()` → `removeVideoElement()`를 수행합니다.
+   → **"상세 패널에서 영상 재생 중 씬 전환 시 백그라운드 재생"은 발생하지 않습니다.** (단, GL 텍스처는 남습니다 = A-1)
+
+3. **`this.input.on(...)` 미해제는 문제없습니다.**
+   `InputPlugin`은 씬 단위 플러그인이며 `shutdown()`에서 `this.removeAllListeners()`(`InputPlugin.js:3134`), `start()`에서 `this.enabled = true`(`:437`)로 복구됩니다.
+   → `CharacterSelectScene.ts:265/274/289/299`, `LeaderboardScene.ts:673-675`, `GachaScene.ts:579/684/795`의 리스너는 씬 재진입 시 중복 누적되지 않습니다.
+
+4. **`this.scale` / `game.events` 전역 이미터에 등록된 미해제 리스너 없음.**
+   ```
+   grep -rn "scale\.on(\|game\.events\.on(\|sys\.events\.on(" src/   →  결과 없음
+   ```
+   전역 `window`/`document` 리스너는 `main.ts:94/102/106`(앱 수명 동안 1회) 및 `GameScene.ts:523`, `Player.ts:67/68/102`뿐으로, **감사 대상 4개 씬에는 없습니다.**
+
+5. **`CharacterSelectScene`의 `maskGfx` 정리는 모범 사례입니다.**
+   `:259`에서 `this.make.graphics()`(디스플레이 리스트 미등록), `:316`에서 `events.once('shutdown', () =&gt; this.maskGfx.destroy())`. 올바릅니다.
+
+6. **`this.load.image()` 중복 로드 없음** — 모든 호출이 `this.textures.exists()` 가드를 통과합니다. 씬 재진입 시 재다운로드는 발생하지 않습니다.
+
+7. **`GachaScene.clearUI()`의 `this.children.getAll()`은 안전합니다** — `List.getAll()`(`node_modules/phaser/src/structs/List.js:301`)이 `ArrayUtils.GetAll`로 **새 배열**을 반환하므로 순회 중 destroy해도 객체가 누락되지 않습니다.
+
+8. **감사 대상 4개 씬에 raw `setInterval` / `setTimeout` 누수 없음** — 해당 패턴은 `BattleMatchScene` / `BattleGameScene`에만 존재하며 필드로 추적됩니다.
+
+9. **`ModeSelectScene`은 전반적으로 깨끗합니다** — 프리로드 텍스처 2장(`background2` 1024×1024, `title`), 리스너는 전부 GameObject 로컬. 유일한 지적은 B-3의 `settingsPanel` stale 참조입니다.
+
+---
+
+## D. 실측 에셋 데이터
+
+```
+public/assets 폴더 크기
+ 24K  title.webp          300K  backgrounds/       6.1M  rank/
+ 36K  stars/              976K  wallpapers/        6.5M  illustrations/
+ 40K  items/              1.3M  poops/              32M  vids/
+292K  skor.png            1.9M  players/            43M  vids_bak/   ← 배포 불필요(정리 권장)
+                          2.5M  character_ranks/    4.4M bgms/
+```
+
+**일러스트 (`illustrations/`) — 27개 파일 전부 768×1344, 디코드 시 각 4.13 MB**
+```
+knight.webp  1,316,886 B  ← 압축본이 1.3MB (다른 것들의 13배, 재인코딩 필요)
+gumi.webp      242,524    mugi.webp   170,262    glitch.webp  115,276
+hacker.webp    115,146    legacy.webp 116,080    index.webp   114,794
+... (나머지 20장은 58K~110K)
+미사용 추정: heidi_ill.jpg(242K), k_ill.jpg(316K), red_ill.png(1.38M), ted_ill.png(1.29M)
+```
+
+**영상 (`vids/`) — 캐릭터 13종 합계 31.9 MB**
+```
+knight.mp4  6,144,981 B  720×1280      gumi.mp4  5,049,418 B  720×1264
+mugi.mp4    4,425,770    720×1280      maehwa    2,486,752    832×1504
+archieve    2,215,132    832×1504      legacy    2,135,013    832×1504
+k.mp4       2,106,104    464×688       sentinel  1,704,369    832×1504
+miner       1,553,811    832×1504      noise     1,456,447    832×1504
+hacker      1,302,680    832×1504      chibi       842,338    832×1504
+glitch        487,914    832×1504
+공통연출: gacha 486,735(416×752) / gatcha_red 725,704 / gatcha_green 439,671
+```
+
+**과대 해상도 스프라이트** (`players/`, 실제 렌더 58×85 ~ 130×205)
+```
+mugi_front / gumi_front / k_front  →  768×1344  (나머지 20종은 208×312)
+ktei_*, gold_mugi_* 도 768×1344 (다른 씬 사용)
+```
+
+**등급 배지** (`character_ranks/`, 실제 렌더 24×24 ~ 52×52)
+```
+r.png 1024×1024 · sr.png 1024×1024 · ur.png 960×960   → 합계 12.08 MB VRAM
+```
+
+---
+
+## E. 권장 수정 우선순위
+
+| 순위 | 조치 | 예상 효과 |
+|---|---|---|
+| 1 | Video destroy 시 `textures.remove((vid as any)._key)` 추가 (4곳) | **10연차당 51 MB 영구 누수 제거** |
+| 2 | `LeaderboardScene.preload`에서 `illustKey` 로드 제거 → 오버레이 열 때 온디맨드 | 랭킹 진입 시 **95 MB 절감** |
+| 3 | `CharacterSelectScene.preload`에서 `illustKey` 전량 로드 제거 → 선택/상세 시점 온디맨드 | **95 MB 절감** |
+| 4 | `character_ranks/{r,sr,ur}.png`를 64×64로 리사이즈 | **12 MB → 0.05 MB** |
+| 5 | `mugi/gumi/k_front.webp`를 208×312로 리사이즈 | **12.4 MB → 0.8 MB** |
+| 6 | B-3의 stale 필드 4건을 `init()`/shutdown에서 리셋 | 재진입 시 UI 무반응 버그 예방 |
+| 7 | `public/assets/vids_bak/` (43 MB) 배포 제외 확인 | 빌드/배포 용량 |
+| 8 | `knight.webp`(1.3 MB), `red_ill.png`/`ted_ill.png`(각 1.3 MB) 재인코딩 또는 제거 | 초기 다운로드 |
+
+1~5번만 적용해도 감사 대상 씬의 텍스처 메모리가 **약 148 MB → 약 30 MB**로 떨어지고, 가챠 반복 플레이 시의 선형 증가가 사라집니다.</result>
+<usage><subagent_tokens>131577</subagent_tokens><tool_uses>40</tool_uses><duration_ms>1539363</duration_ms></usage>
+</task-notification>
+
+---
+
+전부 다 해줘봐. 전부 수정하고 나서 herdr 스킬로 이 워크스페이스에 pane 하나 추가해서 codex 키고 코덱스한데 리뷰 받아봐. 코덱스 리뷰가 과한지 판단까지 하고.
+
+---
+
+Base directory for this skill: /Users/johyunduk/.claude/skills/herdr
+
+# Herdr
+
+Herdr organizes terminals into workspaces, tabs, and panes, recognizes coding agents running inside panes, and exposes the current session through the `herdr` CLI.
+
+Before issuing any control command, verify that this agent is running inside a Herdr-managed pane:
+
+```bash
+test "${HERDR_ENV:-}" = 1
+```
+
+If the check fails, say that you are not running inside Herdr and stop. Do not inspect or control the focused Herdr session from outside Herdr.
+
+When the check passes, the `herdr` binary in `PATH` talks to the current session. Use it to inspect neighboring work, create terminal layout, start agents and commands, read output, and wait for state changes.
+
+## Learn the current CLI
+
+The installed binary is the authority for command syntax. Start with:
+
+```bash
+herdr --help
+```
+
+Then print the relevant command group by running the group without a subcommand:
+
+```bash
+herdr agent
+herdr pane
+herdr workspace
+herdr tab
+herdr worktree
+herdr terminal
+herdr notification
+herdr integration
+herdr session
+```
+
+Do not run bare `herdr` for discovery; it launches or attaches the TUI. Do not probe a mutating nested command by omitting arguments. Commands such as `herdr workspace create` are valid with defaults and will execute.
+
+Most control commands return JSON. Read identifiers and state from those responses instead of predicting them.
+
+## Understand layout, panes, and agents
+
+Choose the primitive that matches the job:
+
+- Workspace, tab, and pane topology organize terminal locations.
+- Pane commands control raw terminals, shells, tests, servers, input, and output.
+- Agent commands control the recognized coding agent currently occupying a pane.
+
+A pane exists whether or not it contains an agent. `agent start` requires an existing available shell pane and never creates, splits, or moves layout. Use pane commands for ordinary processes. Use agent commands when Herdr must validate agent identity or interpret `idle`, `working`, `blocked`, `done`, and `unknown` lifecycle states.
+
+Agent commands accept either a unique live agent name or the pane ID currently hosting that agent. They do not accept terminal IDs or bare agent-kind labels. Names must match `[a-z][a-z0-9_-]{0,31}` and be unique among live agents. A name follows the current pane occupant and is cleared when that agent exits, is released, or is replaced.
+
+`idle` means the agent is ready for input and its tab has been seen in the focused Herdr UI. `done` is the same underlying idle state after unseen background work finishes. Focusing the tab or targeting the pane or agent with a focus command marks it seen. CLI reads do not mark it seen. `blocked` means Herdr recognized an approval or question UI. `unknown` means an agent is present but Herdr cannot classify it confidently; it does not prove completion.
+
+## Use IDs and caller context
+
+Public IDs are opaque stable handles:
+
+- workspace: `w1`
+- tab: `w1:t1`
+- pane: `w1:p1`
+
+Closed tab and pane IDs are not reused. A pane moved into another workspace receives a new workspace-qualified pane ID. After `pane move`, continue with `.result.move_result.pane.pane_id` or the live agent name. The old value is reported as `.result.move_result.previous_pane_id`; only the moved process's inherited caller context keeps resolving that old ID, so do not use it as a general agent target.
+
+Herdr injects the caller's context into each managed pane:
+
+```bash
+printf '%s\n' "$HERDR_WORKSPACE_ID" "$HERDR_TAB_ID" "$HERDR_PANE_ID"
+```
+
+Prefer `--current` when a pane command should target the calling pane. Omitting a target may use the UI-focused pane, which can belong to the user or another client.
+
+Discover live state with:
+
+```bash
+herdr workspace list
+herdr tab list --workspace "$HERDR_WORKSPACE_ID"
+herdr pane current --current
+herdr pane list --workspace "$HERDR_WORKSPACE_ID"
+herdr agent list
+```
+
+Creation responses expose the IDs to use next. `workspace create` returns `.result.workspace`, `.result.tab`, and `.result.root_pane`. `tab create` returns `.result.tab` and `.result.root_pane`. `pane split` returns the new pane as `.result.pane`.
+
+## Start and coordinate an agent
+
+Default to a sibling pane in the current tab and the current working directory. Do not create a workspace, tab, worktree, or different cwd unless the user explicitly requests that topology or location.
+
+Honor a direction requested by the user. Otherwise inspect the caller pane:
+
+```bash
+herdr pane layout --pane "$HERDR_PANE_ID"
+```
+
+Split a wide pane to the right and a narrow or tall pane down. Avoid repeated same-direction splits that create unusably narrow columns or short rows. Keep the user's focus in the calling pane and explicitly preserve the caller's working directory:
+
+```bash
+herdr pane split --current --direction right --cwd "$PWD" --no-focus
+```
+
+Replace `right` with `down` when appropriate. Read the new pane ID from `.result.pane.pane_id`.
+
+An available shell pane must be at its interactive prompt, with the shell itself in the foreground and no foreground command, editor, or agent running. Start a supported agent in that pane with a useful unique name:
+
+```bash
+herdr agent start reviewer --kind codex --pane <returned-pane-id>
+```
+
+Use the kind requested by the user. Run `herdr agent` to inspect the installed kind list and options. Pass native agent arguments only after `--`:
+
+```bash
+herdr agent start reviewer --kind codex --pane <returned-pane-id> -- <agent-args...>
+```
+
+`agent start` returns only after Herdr detects the expected agent in the same pane and considers it ready for interactive input. It defaults to a 30-second startup timeout.
+
+Submit work through the agent surface:
+
+```bash
+herdr agent prompt reviewer "Review the current diff and report only actionable findings." --wait --timeout 120000
+```
+
+`agent prompt` atomically submits text and encoded Enter while honoring the pane's live bracketed-paste mode. For normal agent work, `--wait` is enough: it waits for the first settled `idle`, `done`, or `blocked` state. Do not repeat those defaults with `--until`.
+
+A prompt sent from a non-working state must produce an observed lifecycle change within five seconds. Otherwise Herdr returns `agent_prompt_stalled` instead of waiting indefinitely. This wait tracks lifecycle state, not an individual turn; if the agent is already working, completion of the active turn may satisfy it.
+
+Use `--until` only for a state-specific workflow, such as waiting for an already-running agent to request input:
+
+```bash
+herdr agent wait reviewer --until blocked --timeout 120000
+```
+
+Without `--until`, standalone `agent wait` uses the same settled-state defaults as `agent prompt --wait`.
+
+Use logical keys for interactive agent UI controls:
+
+```bash
+herdr agent send-keys reviewer esc
+herdr agent send-keys reviewer ctrl+c
+```
+
+Herdr validates all keys before writing any bytes. Read the result through the resolved agent:
+
+```bash
+herdr agent get reviewer
+herdr agent read reviewer --source recent-unwrapped --lines 120
+```
+
+If a wait fails or returns `blocked`, inspect `agent get` and `agent read` before deciding what input to send. Use the pane surface only when raw terminal control is intentional.
+
+## Run an ordinary command in another pane
+
+Create a sibling pane with the same geometry rule, preserve the caller's working directory, and keep user focus unchanged:
+
+```bash
+herdr pane split --current --direction right --cwd "$PWD" --no-focus
+```
+
+Read the new pane ID from `.result.pane.pane_id`, then run and inspect the command:
+
+```bash
+herdr pane run <returned-pane-id> "just test"
+herdr pane wait-output <returned-pane-id> --match "test result" --timeout 120000
+herdr pane read <returned-pane-id> --source recent-unwrapped --lines 120
+```
+
+`pane run` atomically sends command text and Enter. `pane wait-output` searches the selected snapshot immediately, so output that already exists can match. Use `--match <text>` for a literal substring or `--regex <pattern>` for a Rust regular expression. Omitting `--timeout` allows an indefinite wait.
+
+Use the read source that matches the task:
+
+- `visible`: the currently rendered viewport.
+- `recent`: recent rendered output, including soft wraps.
+- `recent-unwrapped`: recent output with soft wraps joined; prefer it for logs and transcripts.
+- `detection`: the plain-text bottom-buffer snapshot used for agent detection.
+
+Use `--format ansi` when colors and terminal styling are evidence. Otherwise use text.
+
+`--lines` asks Herdr for more rows from the pane's available screen and host scrollback. If increasing it does not reveal more of a completed response, the pane is probably running the agent on the terminal's alternate screen. Rows that leave the alternate screen do not enter Herdr's host scrollback, so a larger line count cannot recover them.
+
+After that failed read, ask the agent to write its complete response as Markdown in a temporary directory and reply only with the file path, then read the file directly. Use this only as a fallback; do not request file output in the initial prompt.
+
+## Safety and coordination rules
+
+- Use `--no-focus` for background work unless the user asked to switch context.
+- Use `--current`, an explicit pane ID, or a unique agent name. Do not rely on another client's focused pane.
+- Parse IDs from JSON responses. Do not derive them from sidebar order or examples.
+- Do not close workspaces, tabs, panes, or sessions you did not create unless the user explicitly asked.
+- Never run `herdr server stop` from an active session unless the user explicitly intends to stop the server and its pane processes.
+- Never kill the main Herdr process. Use named test sessions for experiments that need an isolated server.
+- CLI server errors are JSON on stderr with exit status 1. CLI syntax errors exit with status 2.
+
+
+ARGUMENTS: 이 워크스페이스에 pane 추가해서 codex 실행 후 리뷰 요청
+
+---
+
+이 결과를 이 워크스페이스 첫번째 페인에 전달할 수 있니? herdr 스킬로?
