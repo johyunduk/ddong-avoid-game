@@ -1,0 +1,243 @@
+herdr 스킬을 통해 codex 와 대화하는 과정을 보여줄 수 있나? 코덱스 페인 하나 떠있긴한데.
+
+---
+
+Base directory for this skill: /Users/johyunduk/.claude/skills/herdr
+
+# Herdr
+
+Herdr organizes terminals into workspaces, tabs, and panes, recognizes coding agents running inside panes, and exposes the current session through the `herdr` CLI.
+
+Before issuing any control command, verify that this agent is running inside a Herdr-managed pane:
+
+```bash
+test "${HERDR_ENV:-}" = 1
+```
+
+If the check fails, say that you are not running inside Herdr and stop. Do not inspect or control the focused Herdr session from outside Herdr.
+
+When the check passes, the `herdr` binary in `PATH` talks to the current session. Use it to inspect neighboring work, create terminal layout, start agents and commands, read output, and wait for state changes.
+
+## Learn the current CLI
+
+The installed binary is the authority for command syntax. Start with:
+
+```bash
+herdr --help
+```
+
+Then print the relevant command group by running the group without a subcommand:
+
+```bash
+herdr agent
+herdr pane
+herdr workspace
+herdr tab
+herdr worktree
+herdr terminal
+herdr notification
+herdr integration
+herdr session
+```
+
+Do not run bare `herdr` for discovery; it launches or attaches the TUI. Do not probe a mutating nested command by omitting arguments. Commands such as `herdr workspace create` are valid with defaults and will execute.
+
+Most control commands return JSON. Read identifiers and state from those responses instead of predicting them.
+
+## Understand layout, panes, and agents
+
+Choose the primitive that matches the job:
+
+- Workspace, tab, and pane topology organize terminal locations.
+- Pane commands control raw terminals, shells, tests, servers, input, and output.
+- Agent commands control the recognized coding agent currently occupying a pane.
+
+A pane exists whether or not it contains an agent. `agent start` requires an existing available shell pane and never creates, splits, or moves layout. Use pane commands for ordinary processes. Use agent commands when Herdr must validate agent identity or interpret `idle`, `working`, `blocked`, `done`, and `unknown` lifecycle states.
+
+Agent commands accept either a unique live agent name or the pane ID currently hosting that agent. They do not accept terminal IDs or bare agent-kind labels. Names must match `[a-z][a-z0-9_-]{0,31}` and be unique among live agents. A name follows the current pane occupant and is cleared when that agent exits, is released, or is replaced.
+
+`idle` means the agent is ready for input and its tab has been seen in the focused Herdr UI. `done` is the same underlying idle state after unseen background work finishes. Focusing the tab or targeting the pane or agent with a focus command marks it seen. CLI reads do not mark it seen. `blocked` means Herdr recognized an approval or question UI. `unknown` means an agent is present but Herdr cannot classify it confidently; it does not prove completion.
+
+## Use IDs and caller context
+
+Public IDs are opaque stable handles:
+
+- workspace: `w1`
+- tab: `w1:t1`
+- pane: `w1:p1`
+
+Closed tab and pane IDs are not reused. A pane moved into another workspace receives a new workspace-qualified pane ID. After `pane move`, continue with `.result.move_result.pane.pane_id` or the live agent name. The old value is reported as `.result.move_result.previous_pane_id`; only the moved process's inherited caller context keeps resolving that old ID, so do not use it as a general agent target.
+
+Herdr injects the caller's context into each managed pane:
+
+```bash
+printf '%s\n' "$HERDR_WORKSPACE_ID" "$HERDR_TAB_ID" "$HERDR_PANE_ID"
+```
+
+Prefer `--current` when a pane command should target the calling pane. Omitting a target may use the UI-focused pane, which can belong to the user or another client.
+
+Discover live state with:
+
+```bash
+herdr workspace list
+herdr tab list --workspace "$HERDR_WORKSPACE_ID"
+herdr pane current --current
+herdr pane list --workspace "$HERDR_WORKSPACE_ID"
+herdr agent list
+```
+
+Creation responses expose the IDs to use next. `workspace create` returns `.result.workspace`, `.result.tab`, and `.result.root_pane`. `tab create` returns `.result.tab` and `.result.root_pane`. `pane split` returns the new pane as `.result.pane`.
+
+## Start and coordinate an agent
+
+Default to a sibling pane in the current tab and the current working directory. Do not create a workspace, tab, worktree, or different cwd unless the user explicitly requests that topology or location.
+
+Honor a direction requested by the user. Otherwise inspect the caller pane:
+
+```bash
+herdr pane layout --pane "$HERDR_PANE_ID"
+```
+
+Split a wide pane to the right and a narrow or tall pane down. Avoid repeated same-direction splits that create unusably narrow columns or short rows. Keep the user's focus in the calling pane and explicitly preserve the caller's working directory:
+
+```bash
+herdr pane split --current --direction right --cwd "$PWD" --no-focus
+```
+
+Replace `right` with `down` when appropriate. Read the new pane ID from `.result.pane.pane_id`.
+
+An available shell pane must be at its interactive prompt, with the shell itself in the foreground and no foreground command, editor, or agent running. Start a supported agent in that pane with a useful unique name:
+
+```bash
+herdr agent start reviewer --kind codex --pane <returned-pane-id>
+```
+
+Use the kind requested by the user. Run `herdr agent` to inspect the installed kind list and options. Pass native agent arguments only after `--`:
+
+```bash
+herdr agent start reviewer --kind codex --pane <returned-pane-id> -- <agent-args...>
+```
+
+`agent start` returns only after Herdr detects the expected agent in the same pane and considers it ready for interactive input. It defaults to a 30-second startup timeout.
+
+Submit work through the agent surface:
+
+```bash
+herdr agent prompt reviewer "Review the current diff and report only actionable findings." --wait --timeout 120000
+```
+
+`agent prompt` atomically submits text and encoded Enter while honoring the pane's live bracketed-paste mode. For normal agent work, `--wait` is enough: it waits for the first settled `idle`, `done`, or `blocked` state. Do not repeat those defaults with `--until`.
+
+A prompt sent from a non-working state must produce an observed lifecycle change within five seconds. Otherwise Herdr returns `agent_prompt_stalled` instead of waiting indefinitely. This wait tracks lifecycle state, not an individual turn; if the agent is already working, completion of the active turn may satisfy it.
+
+Use `--until` only for a state-specific workflow, such as waiting for an already-running agent to request input:
+
+```bash
+herdr agent wait reviewer --until blocked --timeout 120000
+```
+
+Without `--until`, standalone `agent wait` uses the same settled-state defaults as `agent prompt --wait`.
+
+Use logical keys for interactive agent UI controls:
+
+```bash
+herdr agent send-keys reviewer esc
+herdr agent send-keys reviewer ctrl+c
+```
+
+Herdr validates all keys before writing any bytes. Read the result through the resolved agent:
+
+```bash
+herdr agent get reviewer
+herdr agent read reviewer --source recent-unwrapped --lines 120
+```
+
+If a wait fails or returns `blocked`, inspect `agent get` and `agent read` before deciding what input to send. Use the pane surface only when raw terminal control is intentional.
+
+## Run an ordinary command in another pane
+
+Create a sibling pane with the same geometry rule, preserve the caller's working directory, and keep user focus unchanged:
+
+```bash
+herdr pane split --current --direction right --cwd "$PWD" --no-focus
+```
+
+Read the new pane ID from `.result.pane.pane_id`, then run and inspect the command:
+
+```bash
+herdr pane run <returned-pane-id> "just test"
+herdr pane wait-output <returned-pane-id> --match "test result" --timeout 120000
+herdr pane read <returned-pane-id> --source recent-unwrapped --lines 120
+```
+
+`pane run` atomically sends command text and Enter. `pane wait-output` searches the selected snapshot immediately, so output that already exists can match. Use `--match <text>` for a literal substring or `--regex <pattern>` for a Rust regular expression. Omitting `--timeout` allows an indefinite wait.
+
+Use the read source that matches the task:
+
+- `visible`: the currently rendered viewport.
+- `recent`: recent rendered output, including soft wraps.
+- `recent-unwrapped`: recent output with soft wraps joined; prefer it for logs and transcripts.
+- `detection`: the plain-text bottom-buffer snapshot used for agent detection.
+
+Use `--format ansi` when colors and terminal styling are evidence. Otherwise use text.
+
+`--lines` asks Herdr for more rows from the pane's available screen and host scrollback. If increasing it does not reveal more of a completed response, the pane is probably running the agent on the terminal's alternate screen. Rows that leave the alternate screen do not enter Herdr's host scrollback, so a larger line count cannot recover them.
+
+After that failed read, ask the agent to write its complete response as Markdown in a temporary directory and reply only with the file path, then read the file directly. Use this only as a fallback; do not request file output in the initial prompt.
+
+## Safety and coordination rules
+
+- Use `--no-focus` for background work unless the user asked to switch context.
+- Use `--current`, an explicit pane ID, or a unique agent name. Do not rely on another client's focused pane.
+- Parse IDs from JSON responses. Do not derive them from sidebar order or examples.
+- Do not close workspaces, tabs, panes, or sessions you did not create unless the user explicitly asked.
+- Never run `herdr server stop` from an active session unless the user explicitly intends to stop the server and its pane processes.
+- Never kill the main Herdr process. Use named test sessions for experiments that need an isolated server.
+- CLI server errors are JSON on stderr with exit status 1. CLI syntax errors exit with status 2.
+
+
+ARGUMENTS: codex 페인 찾아서 대화하기
+
+---
+
+herdr 에서 vps 는 뭐야?
+
+---
+
+모바일에서 저 명령어를 어떻게 하는데
+
+---
+
+자 아까 코덱스 페인한테 내용을 전달 했었잖아 herdr 스킬을 써서 그거 뭐 어떻게 되는거야?
+
+---
+
+tmux 도 이거는 하지 못하나? 아니면 tmux 도 서버 클라이언트가 있어서 가능한가?
+
+---
+
+tmux 는 별도의 터미널 앱이야 아니면 herdr 같은거야?
+
+---
+
+mit license 가 아니라 apache license 던데 유료가 될 가능성이 있는거야? 아니면 무슨 차이인거지?
+
+---
+
+하네스 엔지니어링은 클로드 코드의 경우 거의 내장되어 있는건가 아니면 내가 별도로 뭐를 해줘야 하나?
+
+---
+
+[다른 pane의 Claude가 보내는 작업 결과 공유 — 참고용이며 별도 작업은 필요 없음] ddong-avoid-game 메모리 누수 수정 완료 보고: (1) Phaser Video destroy 시 내부 UUID 텍스처가 TextureManager에 남는 누수를 src/utils/video.ts의 destroyVideo() 헬퍼로 해결하고 CharacterSelectScene/GachaScene 5곳에 적용 (가챠 10연차당 약 51MB 영구 누수 제거). (2) BattleMatchScene·BattleGameScene·BattleResultScene의 shutdown() 메서드는 Phaser가 자동 호출하지 않는 死코드였음 → events.once(shutdown) 훅으로 전환, Supabase 채널 잔류와 재대결 리스너 중복 해결. (3) 일러스트 23장(약 95MB) 전량 프리로드를 온디맨드 로드로 전환 (CharacterSelectScene, LeaderboardScene). (4) MugiAbility 여의주·부활 후광의 repeat:-1 트윈 kill 누락 수정. (5) Glitch/K 능력의 physics overlap collider 정리 추가. (6) 부수 버그: GachaScene CHARS_WITH_VIDS에 gumi 누락 → 추가. 에셋: 등급 배지 1024px→128px, 768x1344 플레이어 스프라이트 20장→178x312, public/assets/vids_bak 43MB를 backup/으로 이동 (public/assets 99MB→53MB). tsc와 npm run build 통과, w1:p7의 codex 리뷰 결과 지적 0건. 변경은 워킹 트리에 있고 아직 커밋 안 됨. .granite/app.json 변경은 빌드 도구가 만든 것.
+
+---
+
+그래서 이제 테스트 해보면 되나?
+
+---
+
+근데 뭐뭐 테스트 해보면 되나?
+
+---
+
+깃 푸시 한번 해줘
