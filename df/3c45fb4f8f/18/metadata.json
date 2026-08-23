@@ -1,0 +1,27 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "df3c45fb4f8f",
+  "session_id": "c0d5e539-200c-4ee4-a787-07ea6611bfc0",
+  "strategy": "manual-commit",
+  "created_at": "2026-08-23T13:40:08.85672Z",
+  "branch": "main",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "public/assets/players/mugi_front.webp",
+    "public/assets/players/mugi_left.webp",
+    "public/assets/players/mugi_right.webp"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "2afc5c5d510b",
+  "transcript_identifier_at_start": "b192f52f-ae62-40b6-9554-14c445605de1",
+  "initial_attribution": {
+    "calculated_at": "2026-08-23T13:40:08.811211Z",
+    "agent_lines": 0,
+    "human_added": 145,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 145,
+    "agent_percentage": 0
+  },
+  "transcript_path": ".claude/projects/-Users-johyunduk-Projects-ddong-avoid-game/c0d5e539-200c-4ee4-a787-07ea6611bfc0.jsonl"
+}
