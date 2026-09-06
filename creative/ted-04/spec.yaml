@@ -1,0 +1,34 @@
+# Creative Spec — 이미지/음악/게임/SNS 의 공통 기준 (Single Source of Truth)
+id: ted-04
+
+character:
+  name: Ted
+  concept: 기존 Ted 리파인 — 배경 분위기만 교체 (요청 20260905045919-qkg1kd)
+  source: C:\ComfyUI\user\default\workflows\[main]일러스트_ted.json
+  source_prompt: creative/ted-04/source-prompt.txt
+  model: novaAnimeXL_ilV160.safetensors (768x1344 · dpmpp_2m karras · 25steps · cfg6)
+
+visual:
+  method: |
+    원본 positive 를 BREAK 로 잘라 앞부분(인물·의상·포즈)은 한 글자도 바꾸지 않고,
+    뒤쪽 배경 블록만 후보별로 교체했다. 네거티브도 원본 그대로.
+    (--no-prefix — 원본 프롬프트에 품질 프리픽스가 이미 포함)
+  fixed_part: |
+    1boy, solo, male focus / fair skin, soft masculine features, defined jawline but not harsh /
+    short black hair, neat short hair / almond eyes, dark brown eyes, calm expression, sharp eyebrows /
+    open ivory long sleeve dress shirt, untucked shirt, long shirt hem, rolled up sleeves /
+    light blue faded jeans, slim fit jeans, sneakers /
+    standing, one hand in pocket, slight lean, upper body, three-quarter view, dutch angle
+  background_variants:
+    - 01 이른 아침 거리 — 맑고 서늘한 아침 햇살, 차분한 공기 (cool bright)
+    - 02 비 갠 뒤 저녁 — 젖은 아스팔트 반사, 물웅덩이 (cool blue)
+    - 03 가을 공원 길 — 노란 은행·단풍, 따뜻한 오후 햇살 (warm amber)
+    - 04 밤 강변 — 강 건너 도시 불빛, 조용한 밤공기 (deep blue)
+  # 원본 네거티브의 hoodie / zip-up hoodie / jacket / formal suit / tie 는 절대 포지티브에 넣지 않는다
+
+game:
+  grade: null                  # 미등록 에셋 — 등급은 채택 후 별도 제안
+  character_type: illustration_only
+  basic_effect: null
+  special_ability: null
+  player_display_size: null

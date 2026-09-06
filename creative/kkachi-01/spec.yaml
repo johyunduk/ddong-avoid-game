@@ -1,0 +1,55 @@
+# Creative Spec — 이미지/음악/게임/SNS 의 공통 기준 (Single Source of Truth)
+id: kkachi-01
+
+character:
+  name: 까치
+  concept: 반가운 소식을 물어다 주는 길조 (전통 민화의 까치) — IT 용어를 쓰지 않는 계열
+  personality: 수다스럽고 부지런하다. 좋은 일이 생기면 제일 먼저 알려 주러 온다.
+  backstory: |
+    아침에 감나무 가지에서 울면 그날은 반가운 손님이 온다고들 했다.
+    누가 시킨 것도 아닌데 온 동네의 소식을 물고 다니느라
+    정작 자기 몫의 홍시는 늘 마지막에야 챙긴다.
+
+visual:
+  style: soft anime illustration
+  mood: bright
+  palette: 눈 흰색 · 먹빛 검정 · 홍시 주홍 포인트 · 한지 베이지 (겨울 아침)
+  hair: 흰 단발, 끝만 먹빛으로 물든 깃털 같은 뻗침
+  eyes: 호박색, 장난기 있는 눈매
+  clothes: 흑백 배색 개량 한복 저고리, 까치 날개 실루엣의 짧은 망토, 붉은 댕기 매듭
+  background: 눈 내린 아침 소나무 가지, 감나무 홍시, 한지빛 하늘
+  # danbooru 태그 나열 (품질 프리픽스는 스크립트가 자동으로 붙인다)
+  # 후보 4장은 아래 base 에 pose 를 하나씩 갈아 끼워 생성한다
+  prompt: >
+    1girl, solo, cheerful, bright smile, playful eyes,
+    white hair, short bob hair, black hair tips, feathery messy strands, amber eyes,
+    korean hanbok jeogori, black and white color blocking, short feathered cape,
+    red hair ribbon knot, magpie feather motif,
+    upper body portrait, three-quarter view, looking at viewer,
+    snowy winter morning, pine branch, persimmon fruit on bare tree,
+    hanji paper beige sky, (soft morning light:1.2), rim light, cinematic lighting
+    BREAK
+    detailed background, bokeh, depth of field, volumetric lighting
+  pose_variants:
+    - upper body portrait, three-quarter view, looking at viewer, hand raised
+    - upper body, facing to the side, looking away, head tilt
+    - upper body portrait, dynamic angle, arm reaching out, looking at viewer
+    - upper body portrait, from below, looking up, arms crossed
+  negative_extra: >
+    1boy, male, sexy, seductive, cleavage, large breasts, revealing clothes,
+    sultry, nsfw, full body, chibi, shiny, latex, bodysuit, skintight,
+    cyber, neon, sci-fi, chain, plum blossom, cherry blossom, night, dark background
+
+music:
+  genre: korean pop
+  mood: [bright, playful, folk]
+  vocal: female bright vocal
+  bpm: 118
+  instruments: [gayageum, janggu, acoustic guitar]
+
+game:
+  grade: SR
+  character_type: playable
+  basic_effect: 아이템 등장 확률이 조금 올라간다 (좋은 소식) — 제안, 구현 단계에서 확정
+  special_ability: 일정 점수마다 '까치소식' — 날아와 보너스 똥을 물어다 준다 (제안 — 구현 단계에서 확정)
+  player_display_size: null

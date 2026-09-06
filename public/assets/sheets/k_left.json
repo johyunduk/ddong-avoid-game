@@ -1,0 +1,35 @@
+{
+  "image": "k_left.webp",
+  "frameWidth": 178,
+  "frameHeight": 312,
+  "frames": [
+    "walk-1",
+    "walk-2",
+    "walk-3",
+    "walk-4",
+    "walk-5",
+    "walk-6",
+    "hit"
+  ],
+  "anims": {
+    "walk": {
+      "frames": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "frameRate": 12,
+      "repeat": -1
+    },
+    "hit": {
+      "frames": [
+        6
+      ],
+      "frameRate": 1,
+      "repeat": 0
+    }
+  }
+}

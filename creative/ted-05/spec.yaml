@@ -1,0 +1,69 @@
+# Creative Spec — 이미지/음악/게임/SNS 의 공통 기준 (Single Source of Truth)
+id: ted-05
+
+character:
+  name: Ted (고블린 버전)
+  concept: 기존 Ted 리파인 — 고블린 버전 (요청 20260905053124-an1a91)
+  source: C:\ComfyUI\user\default\workflows\[main]일러스트_ted.json
+  source_prompt: creative/ted-05/source-prompt.txt
+  ip_note: |
+    요청은 "스파이더맨 그린 고블린 버전". 그린 고블린은 마블 등록 캐릭터이므로
+    상용 게임(토스 인앱)에 고유 코스튬·로고를 그대로 쓰면 IP 리스크가 있다.
+    → 마블 고유 디자인(글라이더·펌킨밤·특유의 마스크 조형·로고)은 재현하지 않고,
+      고블린 모티프(초록 피부·뾰족귀·보라 후드·앞뒤가 다른 이중성)로 해석했다.
+    최종 사용 여부는 심사에서 판단.
+
+visual:
+  method: |
+    원본 프롬프트에서 얼굴·의상 줄만 고블린 해석으로 교체. 상반신 규격은 (upper body:1.4) 로 강제.
+    이번 라운드에 한해 원본 네거티브의 hoodie/jacket 금지는 해제했다 (후드가 컨셉의 핵심이라).
+    marvel logo / spider-man / comic cover / text 는 네거티브로 차단. gore·blood 도 차단.
+  variants:
+    - 01 가면을 든 Ted — 초록 고블린 가면을 손에 들고 웃는 순간
+    - 02 반쪽 변신 — 얼굴 절반만 고블린, 보라 후드, 밤 골목
+    - 03 완전 변신 — 초록 피부·보라 망토·갑주, 도시 위 밤하늘
+    - 04 후드 실루엣 — 그림자 속 Ted 의 얼굴 + 초록빛 눈, 옥상 야경
+  identity_note: 04 가 원본 Ted 의 얼굴을 가장 많이 남긴다. 03 은 완전 변신이라 Ted 식별이 어렵다.
+
+  r2:
+    feedback: "이렇게 인간인데 그린 고블린 느낌을 원한거야. 이거 기준으로 다시 만들어줘"
+    base: r1 04.webp (seed 1928906934)
+    rule: |
+      초록 피부·뾰족귀·가면은 네거티브로 강하게 차단((green skin:1.5) 등) — 얼굴은 인간 그대로.
+      고블린 느낌은 보라 후드·초록 발광·야경으로만 낸다.
+    variants:
+      - 01 기준안 재현 — 후드 + 초록 눈
+      - 02 후드를 어깨로 내려 얼굴이 더 보임
+      - 03 초록 연기 강조 + 돌아보는 시선
+      - 04 근접 — 그늘 속 미소
+
+  r3:
+    reference: creative/ted-05/reference-r3.jpg   # 사용자가 준 그린 고블린 이미지
+    rule: |
+      얼굴·머리·상반신 규격은 원본 Ted 프롬프트 그대로. 참고 이미지에서 가져온 것은
+      초록 갑주·찢어진 스카프·발광 초록 눈·불타는 도시 야경뿐이다.
+      마블 고유 요소(글라이더·가면·로고)와 초록 피부·뾰족귀는 네거티브로 차단.
+    variants:
+      - 01 정면 응시 — 갑주 + 스카프
+      - 02 돌아보는 시선 — 스카프 휘날림
+      - 03 원본 아이보리 셔츠 + 어깨 갑주 (정체 유지)
+      - 04 근접 — 불빛 속 미소
+
+  r4:
+    request: "글라이더 타고 나는 것도 해줘"
+    rule: |
+      r3 의 인물 기준선(원본 Ted 얼굴·검은머리 + 초록 갑주·스카프)을 그대로 두고 비행 구도만 추가.
+      글라이더는 마블 고유 조형을 피해 각진 금속 호버 보드 + 초록 발광 추진부로 재해석.
+      pumpkin bomb / bat wings glider / marvel logo 는 네거티브.
+    variants:
+      - 01 정면 돌진 (상반신 강조)
+      - 02 전신 활공 — 글라이더가 가장 잘 보임
+      - 03 급강하 — 위에서 내려다본 구도
+      - 04 측면 활공 — 돌아보는 시선
+
+game:
+  grade: null
+  character_type: illustration_only
+  basic_effect: null
+  special_ability: null
+  player_display_size: null

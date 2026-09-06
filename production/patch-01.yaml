@@ -1,0 +1,45 @@
+# patch-01 — 수선사 패치 (요청 20260904224656-scrsbg · 컨셉 미지정 → 자체 기획)
+id: patch-01            # 예: summer-pool-01
+name: 패치
+grade: SR                      # 등급외 | R | SR | UR
+phase: illustration            # illustration | music | game | review | social | publish | done
+
+illustration:
+  status: WAITING_APPROVAL     # PENDING/RUNNING/WAITING_APPROVAL/SUCCESS/REJECTED/FAILED
+  candidates: creative/patch-01/candidates/
+  selected: null               # 예: 04.png
+  attempts: 1
+  batch: patch-01-r1
+
+music:
+  status: PENDING
+  title: null
+  selected: null               # 예: song-b.mp3
+  attempts: 0
+
+game:
+  status: PENDING              # 캐릭터 등록 + 에셋 연결 + verify.ps1 통과
+  character_id: patch-01
+  assets:
+    player: null               # public/assets/players/patch-01_front.webp
+    illust: null               # public/assets/illustrations/patch-01.webp
+    bgm: null                  # public/assets/bgms/patch-01.mp3
+
+review:
+  status: PENDING              # Codex(reviewer) 판정
+  verdict: null                # PASS | PASS WITH ISSUES | FAIL
+  iterations: 0
+  max_iterations: 3
+
+social:
+  status: PENDING
+  outputs: release/social/patch-01/
+
+publish:
+  status: PENDING              # WAITING_APPROVAL 에서 사람의 "PUBLISH" 를 기다린다
+  youtube: pending
+  instagram: pending
+
+log:
+  - { at: "2026-09-05", step: illustration, note: "컨셉 미지정 요청 → 기존 23종 + 진행 중 배치(가비지·롤백·크론·파이어월) 와 이름/색/모티프 대조 후 패치(Patch) 기획. 로스터가 전부 차갑고 야간 톤이라 낮·따뜻한 색(머스터드·테라코타·크림)으로 축을 벌렸다" }
+  - { at: "2026-09-05", step: illustration, note: "후보 4장 생성(앵글·자세 각각 다름) → 업로드, 심사 대기 (배치 patch-01-r1)" }

@@ -1,0 +1,250 @@
+{
+  "id": "a3f82c14-7e91-4b5d-9c23-wai-shuffle-noob",
+  "revision": 0,
+  "last_node_id": 10,
+  "last_link_id": 18,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "CheckpointLoaderSimple",
+      "pos": [50, 500],
+      "size": [329.4224609375, 98],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "체크포인트 파일명",
+          "name": "ckpt_name",
+          "type": "COMBO",
+          "widget": { "name": "ckpt_name" },
+          "link": null
+        }
+      ],
+      "outputs": [
+        { "localized_name": "모델", "name": "MODEL", "type": "MODEL", "slot_index": 0, "links": [1] },
+        { "localized_name": "CLIP", "name": "CLIP", "type": "CLIP", "slot_index": 1, "links": [2, 3] },
+        { "localized_name": "VAE", "name": "VAE", "type": "VAE", "slot_index": 2, "links": [4] }
+      ],
+      "title": "모델 로드 (WAI-SHUFFLE-NOOB v-pred-04)",
+      "properties": { "Node name for S&R": "CheckpointLoaderSimple" },
+      "widgets_values": ["waiSHUFFLENOOB_vPred04.safetensors"]
+    },
+    {
+      "id": 2,
+      "type": "ModelSamplingDiscrete",
+      "pos": [62.96663589477515, 360.0916820526122],
+      "size": [315, 82],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        { "localized_name": "모델", "name": "model", "type": "MODEL", "link": 1 },
+        { "localized_name": "샘플링", "name": "sampling", "type": "COMBO", "widget": { "name": "sampling" }, "link": null },
+        { "localized_name": "zsnr", "name": "zsnr", "type": "BOOLEAN", "widget": { "name": "zsnr" }, "link": null }
+      ],
+      "outputs": [
+        { "localized_name": "모델", "name": "MODEL", "type": "MODEL", "slot_index": 0, "links": [5, 6] }
+      ],
+      "title": "V-Prediction 설정 (v-pred 모델 필수)",
+      "properties": { "Node name for S&R": "ModelSamplingDiscrete" },
+      "widgets_values": ["v_prediction", true]
+    },
+    {
+      "id": 3,
+      "type": "CLIPTextEncode",
+      "pos": [417.9, 104.20000000000006],
+      "size": [542.9417282104491, 383.3499999999999],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        { "localized_name": "clip", "name": "clip", "type": "CLIP", "link": 2 },
+        { "localized_name": "프롬프트 텍스트", "name": "text", "type": "STRING", "widget": { "name": "text" }, "link": null }
+      ],
+      "outputs": [
+        { "localized_name": "조건", "name": "CONDITIONING", "type": "CONDITIONING", "slot_index": 0, "links": [7, 8] }
+      ],
+      "title": "Positive Prompt",
+      "properties": { "Node name for S&R": "CLIPTextEncode" },
+      "widgets_values": [",masterpiece, best quality, newest, absurdres, highres, very awa,\n1girl, solo, [여기에 네가 원하는 설명을 자세히 적어주세요] (예: long pink hair, red eyes, school uniform, dynamic pose...)"]
+    },
+    {
+      "id": 4,
+      "type": "CLIPTextEncode",
+      "pos": [406.8082717895507, 544.0417282104495],
+      "size": [545.9665435791017, 399.9833641052246],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        { "localized_name": "clip", "name": "clip", "type": "CLIP", "link": 3 },
+        { "localized_name": "프롬프트 텍스트", "name": "text", "type": "STRING", "widget": { "name": "text" }, "link": null }
+      ],
+      "outputs": [
+        { "localized_name": "조건", "name": "CONDITIONING", "type": "CONDITIONING", "slot_index": 0, "links": [9, 10] }
+      ],
+      "title": "Negative Prompt",
+      "properties": { "Node name for S&R": "CLIPTextEncode" },
+      "widgets_values": ["low quality, worst quality, normal quality, text, signature, jpeg artifacts, bad anatomy, old, early, watermark, artist name,\n1boy, male, multiple boys, child, loli, shota, realistic, photorealistic, 3d, photo"]
+    },
+    {
+      "id": 5,
+      "type": "EmptyLatentImage",
+      "pos": [991.4292559051516, -217.45165897369438],
+      "size": [315, 106],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        { "localized_name": "너비", "name": "width", "type": "INT", "widget": { "name": "width" }, "link": null },
+        { "localized_name": "높이", "name": "height", "type": "INT", "widget": { "name": "height" }, "link": null },
+        { "localized_name": "배치 크기", "name": "batch_size", "type": "INT", "widget": { "name": "batch_size" }, "link": null }
+      ],
+      "outputs": [
+        { "localized_name": "잠재 데이터", "name": "LATENT", "type": "LATENT", "slot_index": 0, "links": [11] }
+      ],
+      "title": "해상도 설정 (1024x1536)",
+      "properties": { "Node name for S&R": "EmptyLatentImage" },
+      "widgets_values": [1024, 1536, 1]
+    },
+    {
+      "id": 6,
+      "type": "KSampler",
+      "pos": [631.5417282104492, -233.06668205261224],
+      "size": [315, 262],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [
+        { "localized_name": "모델", "name": "model", "type": "MODEL", "link": 5 },
+        { "localized_name": "긍정 조건", "name": "positive", "type": "CONDITIONING", "link": 7 },
+        { "localized_name": "부정 조건", "name": "negative", "type": "CONDITIONING", "link": 9 },
+        { "localized_name": "잠재 데이터", "name": "latent_image", "type": "LATENT", "link": 11 },
+        { "localized_name": "시드", "name": "seed", "type": "INT", "widget": { "name": "seed" }, "link": null },
+        { "localized_name": "스텝 수", "name": "steps", "type": "INT", "widget": { "name": "steps" }, "link": null },
+        { "localized_name": "cfg", "name": "cfg", "type": "FLOAT", "widget": { "name": "cfg" }, "link": null },
+        { "localized_name": "샘플러 이름", "name": "sampler_name", "type": "COMBO", "widget": { "name": "sampler_name" }, "link": null },
+        { "localized_name": "스케줄러", "name": "scheduler", "type": "COMBO", "widget": { "name": "scheduler" }, "link": null },
+        { "localized_name": "노이즈 제거양", "name": "denoise", "type": "FLOAT", "widget": { "name": "denoise" }, "link": null }
+      ],
+      "outputs": [
+        { "localized_name": "잠재 데이터", "name": "LATENT", "type": "LATENT", "slot_index": 0, "links": [12] }
+      ],
+      "title": "KSampler (Base - 1단계 생성)",
+      "properties": { "Node name for S&R": "KSampler" },
+      "widgets_values": [0, "randomize", 30, 6, "euler_ancestral", "karras", 1]
+    },
+    {
+      "id": 7,
+      "type": "LatentUpscale",
+      "pos": [1002.6084564208975, -53.3259010314941],
+      "size": [315, 130],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [
+        { "localized_name": "잠재 데이터", "name": "samples", "type": "LATENT", "link": 12 },
+        { "localized_name": "업스케일 방법", "name": "upscale_method", "type": "COMBO", "widget": { "name": "upscale_method" }, "link": null },
+        { "localized_name": "너비", "name": "width", "type": "INT", "widget": { "name": "width" }, "link": null },
+        { "localized_name": "높이", "name": "height", "type": "INT", "widget": { "name": "height" }, "link": null },
+        { "localized_name": "자르기", "name": "crop", "type": "COMBO", "widget": { "name": "crop" }, "link": null }
+      ],
+      "outputs": [
+        { "localized_name": "잠재 데이터", "name": "LATENT", "type": "LATENT", "slot_index": 0, "links": [13] }
+      ],
+      "title": "Latent 업스케일 (1.5배)",
+      "properties": { "Node name for S&R": "LatentUpscale" },
+      "widgets_values": ["bicubic", 1536, 2304, "disabled"]
+    },
+    {
+      "id": 8,
+      "type": "KSampler",
+      "pos": [1340.1575000000005, -209.31492845535308],
+      "size": [315, 262],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [
+        { "localized_name": "모델", "name": "model", "type": "MODEL", "link": 6 },
+        { "localized_name": "긍정 조건", "name": "positive", "type": "CONDITIONING", "link": 8 },
+        { "localized_name": "부정 조건", "name": "negative", "type": "CONDITIONING", "link": 10 },
+        { "localized_name": "잠재 데이터", "name": "latent_image", "type": "LATENT", "link": 13 },
+        { "localized_name": "시드", "name": "seed", "type": "INT", "widget": { "name": "seed" }, "link": null },
+        { "localized_name": "스텝 수", "name": "steps", "type": "INT", "widget": { "name": "steps" }, "link": null },
+        { "localized_name": "cfg", "name": "cfg", "type": "FLOAT", "widget": { "name": "cfg" }, "link": null },
+        { "localized_name": "샘플러 이름", "name": "sampler_name", "type": "COMBO", "widget": { "name": "sampler_name" }, "link": null },
+        { "localized_name": "스케줄러", "name": "scheduler", "type": "COMBO", "widget": { "name": "scheduler" }, "link": null },
+        { "localized_name": "노이즈 제거양", "name": "denoise", "type": "FLOAT", "widget": { "name": "denoise" }, "link": null }
+      ],
+      "outputs": [
+        { "localized_name": "잠재 데이터", "name": "LATENT", "type": "LATENT", "slot_index": 0, "links": [14] }
+      ],
+      "title": "KSampler (Hires Fix - 2단계 디테일)",
+      "properties": { "Node name for S&R": "KSampler" },
+      "widgets_values": [0, "fixed", 25, 5.5, "euler_ancestral", "karras", 0.5]
+    },
+    {
+      "id": 9,
+      "type": "VAEDecode",
+      "pos": [1679.1181425476077, -2.8083825683595762],
+      "size": [210, 46],
+      "flags": {},
+      "order": 10,
+      "mode": 0,
+      "inputs": [
+        { "localized_name": "잠재 데이터", "name": "samples", "type": "LATENT", "link": 14 },
+        { "localized_name": "vae", "name": "vae", "type": "VAE", "link": 4 }
+      ],
+      "outputs": [
+        { "localized_name": "이미지", "name": "IMAGE", "type": "IMAGE", "slot_index": 0, "links": [15] }
+      ],
+      "properties": { "Node name for S&R": "VAEDecode" },
+      "widgets_values": []
+    },
+    {
+      "id": 10,
+      "type": "SaveImage",
+      "pos": [990.2107348632829, 135.7366635894774],
+      "size": [749.4749999999999, 798.3667282104491],
+      "flags": {},
+      "order": 11,
+      "mode": 0,
+      "inputs": [
+        { "localized_name": "이미지", "name": "images", "type": "IMAGE", "link": 15 },
+        { "localized_name": "파일명 접두사", "name": "filename_prefix", "type": "STRING", "widget": { "name": "filename_prefix" }, "link": null }
+      ],
+      "outputs": [],
+      "properties": { "Node name for S&R": "SaveImage" },
+      "widgets_values": ["wai_shuffle_noob/output"]
+    }
+  ],
+  "links": [
+    [1,1,0,2,0,"MODEL"],
+    [2,1,1,3,0,"CLIP"],
+    [3,1,1,4,0,"CLIP"],
+    [4,1,2,9,1,"VAE"],
+    [5,2,0,6,0,"MODEL"],
+    [6,2,0,8,0,"MODEL"],
+    [7,3,0,6,1,"CONDITIONING"],
+    [8,3,0,8,1,"CONDITIONING"],
+    [9,4,0,6,2,"CONDITIONING"],
+    [10,4,0,8,2,"CONDITIONING"],
+    [11,5,0,6,3,"LATENT"],
+    [12,6,0,7,0,"LATENT"],
+    [13,7,0,8,3,"LATENT"],
+    [14,8,0,9,0,"LATENT"],
+    [15,9,0,10,0,"IMAGE"]
+  ],
+  "groups": [
+    { "id": 1, "title": "1단계: 모델 & V-Prediction 설정", "bounding": [30,60,720,860], "color": "#3f789e", "flags": {} },
+    { "id": 2, "title": "2단계: Base 생성 (1024x1536)", "bounding": [980,340,420,460], "color": "#6a4f9e", "flags": {} },
+    { "id": 3, "title": "3단계: Hires Fix (1536x2304)", "bounding": [1020,660,1560,360], "color": "#4f9e6a", "flags": {} }
+  ],
+  "config": {},
+  "extra": {
+    "ds": { "scale": 0.7272727272727274, "offset": [-253.34714394171112, 216.33868763935072] },
+    "workflowRendererVersion": "LG"
+  },
+  "version": 0.4
+}

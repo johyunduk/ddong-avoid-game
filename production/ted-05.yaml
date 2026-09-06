@@ -1,0 +1,60 @@
+# ted-05 — Ted 고블린 버전 (요청 20260905053124-an1a91)
+id: ted-05            # 예: summer-pool-01
+name: Ted (고블린)
+grade: null                      # 등급외 | R | SR | UR
+phase: illustration            # 폐기됨 (illustration REJECTED) — 재개하려면 사람이 심사실에서 새로 요청
+
+illustration:
+  status: REJECTED             # PENDING/RUNNING/WAITING_APPROVAL/SUCCESS/REJECTED/FAILED
+  candidates: creative/ted-05/candidates-r4/   # r1 candidates/ · r2 candidates-r2/ · r3 candidates-r3/
+  selected: null               # 예: 04.png
+  attempts: 4
+  batch: ted-05-r4
+  rejected_rounds:                 # 기각된 라운드 (현재 진행 라운드는 batch 참조)
+    - { round: ted-05-r2, at: "2026-09-06", status: REJECTED, reason: "심사 결정 reject · 피드백 note 없음. 후드+초록 눈 방향(보라 후드·초록 발광만으로 고블린 느낌)은 폐기" }
+    - { round: ted-05-r3, at: "2026-09-06", status: REJECTED, reason: "심사 결정 reject · 피드백 note 없음. 참고 이미지 기반 초록 갑주+스카프+불타는 도시 방향(비행 없음)은 폐기" }
+    - { round: ted-05-r4, at: "2026-09-06", status: REJECTED, reason: "심사 결정 reject · 피드백 note 없음. 글라이더 비행 구도까지 폐기 — 이로써 ted-05 전 라운드 기각" }
+
+music:
+  status: PENDING
+  title: null
+  selected: null               # 예: song-b.mp3
+  attempts: 0
+
+game:
+  status: PENDING              # 캐릭터 등록 + 에셋 연결 + verify.ps1 통과
+  character_id: ted-05
+  assets:
+    player: null               # public/assets/players/ted-05_front.webp
+    illust: null               # public/assets/illustrations/ted-05.webp
+    bgm: null                  # public/assets/bgms/ted-05.mp3
+
+review:
+  status: PENDING              # Codex(reviewer) 판정
+  verdict: null                # PASS | PASS WITH ISSUES | FAIL
+  iterations: 0
+  max_iterations: 3
+
+social:
+  status: PENDING
+  outputs: release/social/ted-05/
+
+publish:
+  status: PENDING              # WAITING_APPROVAL 에서 사람의 "PUBLISH" 를 기다린다
+  youtube: pending
+  instagram: pending
+
+log:
+  - { at: "2026-09-05", step: illustration, note: "요청은 '스파이더맨 그린 고블린 버전'. 마블 등록 캐릭터라 고유 코스튬·로고는 재현하지 않고 고블린 모티프(초록 피부·뾰족귀·보라 후드·이중성)로 해석. marvel logo/spider-man/comic cover 는 네거티브로 차단. IP 판단은 심사에 맡김" }
+  - { at: "2026-09-05", step: illustration, note: "후보 4장 업로드 → 심사 대기 (배치 ted-05-r1). 변신 정도를 4단계로 벌림 — 가면 소지 / 반쪽 변신 / 완전 변신 / 후드 실루엣. 04 가 원본 Ted 얼굴을 가장 많이 남기고 03 은 식별이 어렵다" }
+  - { at: "2026-09-05", step: illustration, note: "ted-05-r1 결정: revise · 선택 04.webp(seed 1928906934). 피드백: '이렇게 인간인데 그린 고블린 느낌을 원한거야'" }
+  - { at: "2026-09-05", step: illustration, note: "r2 생성: 선택 시드 1928906934~937 고정. (green skin:1.5)/(pointed ears:1.4)/mask/monster 를 네거티브로 강하게 차단해 얼굴은 인간 그대로 두고, 고블린 느낌은 보라 후드·초록 발광·야경으로만 냈다" }
+  - { at: "2026-09-05", step: illustration, note: "후보 4장 업로드 → 심사 대기 (배치 ted-05-r2)" }
+  - { at: "2026-09-06", step: illustration, note: "사용자가 그린 고블린 참고 이미지(creative/ted-05/reference-r3.jpg)를 주고 'ted 일러스트 기준으로' 재요청. r3: 얼굴·검은머리·상반신 규격은 원본 프롬프트 그대로 두고, 참고 이미지에서 초록 갑주·찢어진 스카프·불타는 야경만 가져왔다. 초록 피부/뾰족귀/가면/글라이더는 계속 네거티브" }
+  - { at: "2026-09-06", step: illustration, note: "1차 생성은 배경에 불이 안 잡히고 인상이 어려서, 화염 가중치와 mature adult man 앵커를 넣어 재생성. 02 는 스카프가 붉은 무늬로 나와 시드 교체(1928906962). 후보 4장 업로드 → 심사 대기 (배치 ted-05-r3)" }
+  - { at: "2026-09-06", step: illustration, note: "추가 요청 '글라이더 타고 나는 것도'. 글라이더는 그린 고블린의 상징적 장비라 마블 고유 조형(호박 모양 앞머리·박쥐 날개)은 피하고, 초록 발광 추진부가 달린 각진 금속 호버 보드로 다르게 디자인했다. pumpkin bomb / bat wings glider 는 네거티브" }
+  - { at: "2026-09-06", step: illustration, note: "글라이더가 흰 종이비행기처럼 나와 재질·색(dark green metal, 추진부 발광)을 못 박고 재생성. 04 는 배경에 별개 비행체가 끼어들어 측면 전신 구도로 두 번 더 돌렸다. 후보 4장 업로드 → 심사 대기 (배치 ted-05-r4)" }
+  - { at: "2026-09-06", step: illustration, note: "ted-05-r2 결정: reject (note 없음). 해당 라운드 REJECTED 로 기록. r2 방향(보라 후드 + 초록 발광)은 폐기하고, 이후 진행은 참고 이미지 기반의 r3/r4(초록 갑주·스카프·불타는 도시)로 이어진다. 새 컨셉은 자동 생성하지 않음" }
+  - { at: "2026-09-06", step: illustration, note: "ted-05-r3 결정: reject (note 없음). 해당 라운드 REJECTED 로 기록. 남은 미판정은 ted-05-r4(글라이더 비행)뿐. 새 컨셉은 자동 생성하지 않음" }
+  - { at: "2026-09-06", step: illustration, note: "ted-05-r4 결정: reject (note 없음). r1~r4 전 라운드 기각 → 캐릭터 ted-05(Ted 고블린 버전) 폐기, illustration.status = REJECTED. 후보·프롬프트·참고 이미지는 creative/ted-05/ 에 그대로 보존" }
+  - { at: "2026-09-06", step: illustration, note: "r2·r3·r4 판정 타임스탬프가 01:04:21 / 01:04:14 / 01:04:07 로 14초 안에 몰려 있고 note 가 모두 비어 있음 — 일괄 기각으로 보인다. 어떤 축(얼굴·갑주·고블린 해석 자체)이 걸렸는지 정보 없음. 다음 요청 때 note 필요" }

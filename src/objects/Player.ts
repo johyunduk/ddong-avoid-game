@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { charAnimKey, sheetTextureKey, type CharDir } from '../utils/charAnim';
 
 export default class Player extends Phaser.Physics.Arcade.Sprite {
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -21,7 +22,19 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
   private readonly onResize: () => void;
 
   // 현재 텍스처 방향 캐시 — setTexture를 매 프레임 호출하지 않기 위해
-  private currentDir: string = 'front';
+  private currentDir: CharDir = 'front';
+
+  // ── 애니메이션 (시트가 있는 캐릭터만) ──
+  /** 시트 캐릭터 id. null 이면 기존 정적 텍스처 방식으로 동작한다 */
+  private animId: string | null = null;
+  /** 재생 중인 애니메이션 키 — 매 프레임 play() 재호출을 막는다 */
+  private currentAnimKey: string | null = null;
+  /** 피격 애니메이션 재생 중이면 idle/walk 로 덮어쓰지 않는다 */
+  private isHitAnim: boolean = false;
+  private hitAnimTimer?: Phaser.Time.TimerEvent;
+  // resize 인자 보관 — 텍스처가 바뀌어도 표시 크기·히트박스를 그대로 되돌리기 위해
+  private displayW: number = 0;
+  private displayH: number = 0;
 
   // 아이템 효과 상태
   private isInvincible: boolean = false;
@@ -32,7 +45,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
   private speedBoostTimer?: Phaser.Time.TimerEvent;
   private rainbowTimer?: Phaser.Time.TimerEvent;
 
-  constructor(scene: Phaser.Scene, x: number, y: number, speed: number = 300, texturePrefix: string = '', displayW: number = 50, displayH: number = 80) {
+  constructor(scene: Phaser.Scene, x: number, y: number, speed: number = 300, texturePrefix: string = '', displayW: number = 50, displayH: number = 80, animId: string | null = null) {
     // 기본 텍스처는 front (정면)
     super(scene, x, y, `${texturePrefix}front`);
     this.speed = speed;
@@ -42,6 +55,13 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     // 씬에 추가
     scene.add.existing(this);
     scene.physics.add.existing(this);
+
+    // 시트가 준비돼 있으면 애니메이션 텍스처로 전환한다.
+    // resize() 전에 바꿔야 표시 크기·히트박스가 시트 프레임 기준으로 정확히 잡힌다.
+    if (animId && scene.textures.exists(sheetTextureKey(animId, 'front'))) {
+      this.animId = animId;
+      this.setTexture(sheetTextureKey(animId, 'front'), 0);
+    }
 
     // 캐릭터 크기 + 히트박스 설정 (resize에 world 16×40 히트박스 계산이 있음)
     this.resize(displayW, displayH);
@@ -151,22 +171,71 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
       nextDir = 'front';
     }
 
-    // 방향이 실제로 바뀔 때만 setTexture 호출 (매 프레임 호출 방지)
+    // 방향이 실제로 바뀔 때만 텍스처 교체 (매 프레임 호출 방지)
     if (nextDir !== this.currentDir) {
-      this.setTexture(`${this.texturePrefix}${nextDir}`);
-      this.currentDir = nextDir;
+      if (!this.animId) this.setTexture(`${this.texturePrefix}${nextDir}`);
+      this.currentDir = nextDir as CharDir;
     }
+
+    if (this.animId) this.updateAnimState(isMoving);
+  }
+
+  /**
+   * 정지 → front 시트의 idle, 좌/우 이동 → 해당 방향 시트의 walk.
+   * 피격 애니메이션 중에는 건드리지 않는다.
+   */
+  private updateAnimState(isMoving: boolean): void {
+    if (!this.animId || this.isHitAnim) return;
+
+    const key = charAnimKey(this.animId, this.currentDir, isMoving ? 'walk' : 'idle');
+    if (key === this.currentAnimKey) return;
+    if (!this.scene.anims.exists(key)) return;
+
+    this.currentAnimKey = key;
+    this.play(key, true);
+  }
+
+  /**
+   * 피격 — 현재 방향 시트의 hit 프레임을 짧게 보여주고 이전 상태로 복귀한다.
+   * 시트가 없는 캐릭터에서는 아무 일도 하지 않는다.
+   */
+  playHitAnim(duration: number = 260): void {
+    if (!this.animId) return;
+    const key = charAnimKey(this.animId, this.currentDir, 'hit');
+    if (!this.scene.anims.exists(key)) return;
+
+    this.isHitAnim = true;
+    this.currentAnimKey = key;
+    this.play(key, true);
+
+    this.hitAnimTimer?.remove();
+    this.hitAnimTimer = this.scene.time.delayedCall(duration, () => {
+      this.isHitAnim = false;
+      this.currentAnimKey = null; // 다음 update 에서 idle/walk 로 복귀
+    });
   }
 
   // 텍스처 프리픽스 변경 (골드 스프라이트 전환 등)
   setTexturePrefix(prefix: string): void {
     this.texturePrefix = prefix;
+    // 프리픽스 전환은 정적 스프라이트 전용이다 — 시트 캐릭터라면 정적 모드로 내려간다
+    if (this.animId) {
+      this.animId = null;
+      this.currentAnimKey = null;
+      this.isHitAnim = false;
+      this.hitAnimTimer?.remove();
+      this.stop();
+    }
     this.setTexture(`${prefix}${this.currentDir}`);
+    // 프레임 크기가 달라졌을 수 있으므로 표시 크기·히트박스를 다시 잡는다
+    if (this.displayW > 0) this.resize(this.displayW, this.displayH);
   }
 
   // 표시 크기 + 히트박스 재설정 (승계 시 태이 크기로 변경 등)
   // 생성자와 동일하게 world 16×40 히트박스를 유지한다.
   resize(displayW: number, displayH: number): void {
+    this.displayW = displayW;
+    this.displayH = displayH;
     this.setDisplaySize(displayW, displayH);
     const sx = this.scaleX;
     const sy = this.scaleY;
@@ -303,6 +372,9 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     }
     if (this.rainbowTimer) {
       this.rainbowTimer.remove();
+    }
+    if (this.hitAnimTimer) {
+      this.hitAnimTimer.remove();
     }
   }
 }

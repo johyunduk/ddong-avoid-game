@@ -1,0 +1,47 @@
+# ted-01 — Ted 리파인 (요청 20260905024517-b95y7u · "기존에 있는 Ted 좀 더 멋지게")
+id: ted-01            # 예: summer-pool-01
+name: Ted
+grade: null                      # 등급외 | R | SR | UR
+phase: illustration            # 폐기 — 대체 컨셉 없음(사람이 심사실에서 요청) # illustration | music | game | review | social | publish | done
+
+illustration:
+  status: REJECTED             # PENDING/RUNNING/WAITING_APPROVAL/SUCCESS/REJECTED/FAILED
+  candidates: creative/ted-01/candidates/
+  selected: null               # 예: 04.png
+  attempts: 1
+  batch: ted-01-r1
+
+music:
+  status: PENDING
+  title: null
+  selected: null               # 예: song-b.mp3
+  attempts: 0
+
+game:
+  status: PENDING              # 캐릭터 등록 + 에셋 연결 + verify.ps1 통과
+  character_id: ted-01
+  assets:
+    player: null               # public/assets/players/ted-01_front.webp
+    illust: null               # public/assets/illustrations/ted-01.webp
+    bgm: null                  # public/assets/bgms/ted-01.mp3
+
+review:
+  status: PENDING              # Codex(reviewer) 판정
+  verdict: null                # PASS | PASS WITH ISSUES | FAIL
+  iterations: 0
+  max_iterations: 3
+
+social:
+  status: PENDING
+  outputs: release/social/ted-01/
+
+publish:
+  status: PENDING              # WAITING_APPROVAL 에서 사람의 "PUBLISH" 를 기다린다
+  youtube: pending
+  instagram: pending
+
+log:
+  - { at: "2026-09-05", step: illustration, note: "Ted 는 CHARACTERS 미등록 — public/assets/illustrations/ted_ill.png 에만 있는 기존 일러스트였다(코드 참조 없음). 신규 컨셉이 아니라 리파인으로 처리: 정체성 앵커(다크브라운 단발·갈색 눈·화이트 셔츠·밤거리)는 유지하고 실루엣·조명·태도만 강화. 원본은 creative/ted-01/reference-original.png 로 보관" }
+  - { at: "2026-09-05", step: illustration, note: "03·04 만 재생성 — 1차는 인물이 원본보다 어려 보이고 카라 셔츠가 티셔츠로 바뀌어 '더 멋지게' 요구에서 후퇴했다. 네거티브에 child/shota/teenager/baby face/t-shirt 추가하고 mature adult·collared dress shirt 앵커를 넣어 다시 뽑음" }
+  - { at: "2026-09-05", step: illustration, note: "후보 4장 업로드 → 심사 대기 (배치 ted-01-r1)" }
+  - { at: "2026-09-05", step: illustration, note: "ted-01-r1 결정: reject (selected 없음, note 없음). 직후 들어온 요청 20260905043006-4rm34x('기존 ted 분위기만 좀 바꿔줘봐')에 따라 인물은 그대로 두고 분위기 축만 바꾼 ted-02 로 이어간다" }

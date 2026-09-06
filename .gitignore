@@ -30,3 +30,15 @@ dist-ssr
 .granite
 poop-avoid.ait
 public/assets_backup
+# 콘텐츠 파이프라인 생성물 (creative/ 의 텍스트·spec 은 커밋한다)
+creative/*/candidates/
+creative/*/selected.png
+creative/*/gameplay.mp4
+creative/*/song*.mp3
+release/social/*/
+
+# graphify 코드 지식 그래프 (재생성 가능)
+graphify-out/
+
+# 워커 로컬 상태
+scripts/.worker-state.json

@@ -1,0 +1,56 @@
+# Creative Spec — 이미지/음악/게임/SNS 의 공통 기준 (Single Source of Truth)
+id: beodeul-01
+
+character:
+  name: 버들
+  concept: 늘어진 가지로 지나가는 것을 붙잡아 두는 아이 (수양버들) — IT 용어를 쓰지 않는 계열
+  personality: 느리고 다정하다. 붙잡아 두는 걸 좋아하면서도 결국은 다 놓아 준다.
+  backstory: |
+    봄이 되면 강가에 서서 가지를 길게 늘어뜨린다.
+    바람에 실려 온 것도, 물 위로 떠내려가던 것도
+    그 가지에 한 번씩 걸렸다가 다시 제 갈 길로 간다.
+
+visual:
+  style: soft anime illustration
+  mood: gentle spring
+  palette: 연둣빛 초록 · 흰 버들솜 · 맑은 봄 하늘 (한낮의 강가)
+  hair: 연둣빛 밝은 초록 긴 머리, 버들가지처럼 가늘게 흘러내림, 흰 솜이 붙어 있음
+  eyes: 맑은 초록
+  clothes: 연둣빛 얇은 봄 겉옷, 흰 속깃, 버들가지를 엮어 만든 허리끈
+  background: 봄날 강가의 수양버들, 흩날리는 버들솜, 연둣빛 새싹, 맑은 낮 하늘
+  # danbooru 태그 나열 (품질 프리픽스는 스크립트가 자동으로 붙인다)
+  # 후보 4장은 아래 base 에 pose 를 하나씩 갈아 끼워 생성한다
+  prompt: >
+    1girl, solo, gentle calm smile, soft eyes,
+    light green hair, very long straight hair, thin flowing strands, white fluff in hair,
+    clear green eyes,
+    light green thin spring coat, white inner collar, woven willow branch belt,
+    upper body portrait, three-quarter view, looking at viewer,
+    spring riverside, weeping willow tree, floating willow catkins, fresh green sprouts,
+    clear daytime sky, (soft spring light:1.2), rim light, cinematic lighting
+    BREAK
+    detailed background, bokeh, depth of field, volumetric lighting
+  pose_variants:
+    - upper body portrait, three-quarter view, looking at viewer, hand holding a willow branch
+    - upper body, facing to the side, looking away, head tilt
+    - upper body portrait, dynamic angle, arm reaching out, looking at viewer
+    - upper body portrait, from below, looking up, arms crossed
+  negative_extra: >
+    1boy, male, sexy, seductive, cleavage, large breasts, revealing clothes,
+    sultry, nsfw, full body, chibi, shiny, latex, bodysuit, skintight,
+    cyber, neon, sci-fi, chain, snow, persimmon, dragon horns, seashell, ocean,
+    sunset, reed field, rain, lotus leaf, plum blossom, cherry blossom
+
+music:
+  genre: korean pop
+  mood: [gentle, warm, spring]
+  vocal: female soft vocal
+  bpm: 96
+  instruments: [acoustic guitar, gayageum, light strings]
+
+game:
+  grade: SR
+  character_type: playable
+  basic_effect: 화면 위쪽에 늘어진 가지가 떨어지는 똥을 잠깐 걸어 낙하를 늦춘다 (제안 — 구현 단계에서 확정)
+  special_ability: 일정 점수마다 '버들그물' — 가지가 넓게 펼쳐져 걸린 똥을 점수로 바꾸고 놓아 준다 (제안 — 구현 단계에서 확정)
+  player_display_size: null

@@ -1,0 +1,48 @@
+# Creative Spec — 이미지/음악/게임/SNS 의 공통 기준 (Single Source of Truth)
+id: garbage-collector-01
+
+character:
+  name: 가비지
+  concept: 밤새 도시의 쓰레기를 수거해 없애는 청소부 (Garbage Collector)
+  personality: 무뚝뚝하지만 성실하다. 말수가 적고 일은 확실하게 끝낸다.
+  backstory: |
+    모두가 잠든 시간에만 나타나 도시에 쌓인 것들을 조용히 수거해 간다.
+    집게 하나와 자루 하나면 무엇이든 사라지게 만들 수 있어서,
+    아침이 되면 아무도 어젯밤 무엇이 있었는지 기억하지 못한다.
+
+visual:
+  style: soft anime illustration
+  mood: cool
+  palette: lime green · charcoal gray (야간 형광)
+  hair: 라임 그린 짧은 포니테일
+  eyes: 노란색, 무심한 눈매
+  clothes: 회색 작업 점프수트, 반사 형광 테이프, 큰 장갑, 고글을 이마에 올림
+  background: 심야 도시의 재활용장, 빨려 들어가는 빛 조각들
+  # danbooru 태그 나열 (품질 프리픽스는 스크립트가 자동으로 붙인다)
+  prompt: >
+    1girl, solo, expressionless, slight smirk, looking at viewer, half-closed eyes,
+    lime green hair, short ponytail, yellow eyes,
+    goggles on head, gray work jumpsuit, reflective safety tape, oversized work gloves,
+    holding grabber tool, large sack over shoulder,
+    upper body, portrait, dutch angle,
+    night city, recycling yard, streetlight, floating glowing fragments drawn in,
+    (green light particles:1.2), rim light, backlit, cinematic lighting
+    BREAK
+    detailed background, bokeh, depth of field, volumetric lighting
+  negative_extra: >
+    1boy, male, sexy, seductive, cleavage, large breasts, revealing clothes, bikini,
+    swimsuit, navel focus, thighs focus, sultry, nsfw, full body
+
+music:
+  genre: korean pop
+  mood: [cool, steady, night]
+  vocal: female low vocal
+  bpm: 96
+  instruments: [bass, drum machine, synth pad]
+
+game:
+  grade: SR
+  character_type: playable
+  basic_effect: 일정 주기로 화면 아래쪽 똥을 수거해 소멸시킨다 (제안 — 구현 단계에서 확정)
+  special_ability: 일정 점수마다 수거 모드 — 잠시 화면의 똥을 자루로 빨아들여 점수로 환산 (제안 — 구현 단계에서 확정)
+  player_display_size: null

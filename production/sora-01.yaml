@@ -1,0 +1,48 @@
+# sora-01 — 소라 (proxy-01 기각의 대체 컨셉 · 비IT 계열)
+id: sora-01            # 예: summer-pool-01
+name: 소라
+grade: SR                      # 등급외 | R | SR | UR
+phase: music                   # illustration | music | game | review | social | publish | done
+
+illustration:
+  status: SUCCESS              # PENDING/RUNNING/WAITING_APPROVAL/SUCCESS/REJECTED/FAILED
+  candidates: creative/sora-01/candidates/
+  selected: 03.png             # seed 1290484387
+  attempts: 1
+  batch: sora-01-r1
+
+music:
+  status: PENDING
+  title: null
+  selected: null               # 예: song-b.mp3
+  attempts: 0
+
+game:
+  status: PENDING              # 캐릭터 등록 + 에셋 연결 + verify.ps1 통과
+  character_id: sora-01
+  assets:
+    player: null               # public/assets/players/sora-01_front.webp
+    illust: null               # public/assets/illustrations/sora-01.webp
+    bgm: null                  # public/assets/bgms/sora-01.mp3
+
+review:
+  status: PENDING              # Codex(reviewer) 판정
+  verdict: null                # PASS | PASS WITH ISSUES | FAIL
+  iterations: 0
+  max_iterations: 3
+
+social:
+  status: PENDING
+  outputs: release/social/sora-01/
+
+publish:
+  status: PENDING              # WAITING_APPROVAL 에서 사람의 "PUBLISH" 를 기다린다
+  youtube: pending
+  instagram: pending
+
+log:
+  - { at: "2026-09-05", step: illustration, note: "proxy-01 기각(note 없음)에 따른 대체 컨셉. 최근 요청들의 IT 용어 금지 방침을 따라 비IT 계열로 잡고, 남아 있던 색축인 짙은 남색 밤바다+진주빛+산호 분홍을 가져갔다" }
+  - { at: "2026-09-05", step: illustration, note: "02번만 재생성 — 머리색이 분홍으로 튀어 나머지 3장과 캐릭터가 달라 보였다. 네거티브에 pink hair 추가. 실제 결과에 맞춰 spec 의 머리색을 옅은 얼음빛 하늘색으로 정정(남색은 케이프)" }
+  - { at: "2026-09-05", step: illustration, note: "후보 4장(앵글·자세 각각 다름) 업로드 → 심사 대기 (배치 sora-01-r1)" }
+  - { at: "2026-09-05", step: illustration, note: "sora-01-r1 결정: accept · 03.webp (note 없음). selected.png 복사, illustration SUCCESS, phase: music. 능력 제안은 별도 지시 대기" }
+  - { at: "2026-09-05", step: game, note: "sora-01-r1 확정(accept · 03.webp) 기준 캐릭터 설정 제안 등록 — 등급 SR + 기본효과 3안 + 특수능력 3안. 심사실에서 사람 선택 대기" }

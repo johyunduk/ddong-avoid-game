@@ -1,0 +1,50 @@
+# ted-04 — Ted 리파인 · 배경 분위기 교체 (요청 20260905045919-qkg1kd)
+id: ted-04            # 예: summer-pool-01
+name: Ted
+grade: null                      # 등급외 | R | SR | UR
+phase: illustration            # 폐기 — 대체 컨셉 없음(사람이 심사실에서 요청) # illustration | music | game | review | social | publish | done
+
+illustration:
+  status: REJECTED             # PENDING/RUNNING/WAITING_APPROVAL/SUCCESS/REJECTED/FAILED
+  candidates: creative/ted-04/candidates-r2/   # r1 은 creative/ted-04/candidates/
+  selected: null               # 예: 04.png
+  attempts: 2
+  batch: ted-04-r2
+
+music:
+  status: PENDING
+  title: null
+  selected: null               # 예: song-b.mp3
+  attempts: 0
+
+game:
+  status: PENDING              # 캐릭터 등록 + 에셋 연결 + verify.ps1 통과
+  character_id: ted-04
+  assets:
+    player: null               # public/assets/players/ted-04_front.webp
+    illust: null               # public/assets/illustrations/ted-04.webp
+    bgm: null                  # public/assets/bgms/ted-04.mp3
+
+review:
+  status: PENDING              # Codex(reviewer) 판정
+  verdict: null                # PASS | PASS WITH ISSUES | FAIL
+  iterations: 0
+  max_iterations: 3
+
+social:
+  status: PENDING
+  outputs: release/social/ted-04/
+
+publish:
+  status: PENDING              # WAITING_APPROVAL 에서 사람의 "PUBLISH" 를 기다린다
+  youtube: pending
+  instagram: pending
+
+log:
+  - { at: "2026-09-05", step: illustration, note: "SKILL.md 새 규칙대로 원본 워크플로 프롬프트를 기준선으로 사용. BREAK 앞(인물·의상·포즈)과 네거티브는 원본 그대로 두고 BREAK 뒤 배경 블록만 4가지로 교체 — 아침/비 갠 뒤 저녁/가을 공원/밤 강변" }
+  - { at: "2026-09-05", step: illustration, note: "후보 4장 업로드 → 심사 대기 (배치 ted-04-r1). 재생성 없이 1차 통과, 인물·의상·포즈는 4장 모두 동일" }
+  - { at: "2026-09-05", step: illustration, note: "ted-04-r1 결정: revise · 선택 01.webp(seed 987225323, 이른 아침 거리). 피드백: '약간의 폭력성 — 그린 고블린처럼 앞뒤가 다른 느낌, 대놓고 보이지는 않게'" }
+  - { at: "2026-09-05", step: illustration, note: "r2 생성: 선택 시드 987225323~326 근처 고정. 인물·의상·포즈는 원본 그대로 두고 (1)표정 줄만 교체 (2)배경 광질을 맑은 아침 순광 → 해뜨기 전 흐림·빈 거리·긴 그림자로 변경. 유혈·무기·호러는 네거티브로 차단해 대놓고 드러나지 않게 유지" }
+  - { at: "2026-09-05", step: illustration, note: "r2 는 내부적으로 3회 시도 — 1차는 위화감이 전혀 안 실렸고 2차는 02가 전신으로 빠졌다. 맑은 순광이 원인이라 광질을 바꾸고 (upper body:1.4) + full body 네거티브로 규격을 강제해 확정" }
+  - { at: "2026-09-05", step: illustration, note: "후보 4장 업로드 → 심사 대기 (배치 ted-04-r2)" }
+  - { at: "2026-09-05", step: illustration, note: "ted-04-r2 결정: reject (selected 없음, note 없음, 후보별 판정 없음). r1 revise 피드백(은근한 위화감)을 반영한 라운드였으나 기각 → status REJECTED. Ted 줄기는 ted-01~04 네 번 모두 종료. 지시에 따라 대체 컨셉은 자동 생성하지 않는다" }

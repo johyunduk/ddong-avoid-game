@@ -26,6 +26,8 @@ import type { CharacterAbility, GameSceneAPI } from '../abilities/types';
 import { getCharacterAbility } from '../abilities/index';
 import { BaseAbility } from '../abilities/BaseAbility';
 import { realNow } from '../utils/realTime';
+import { preloadFxAssets } from '../utils/vfx';
+import { preloadCharSheets, ensureCharAnims } from '../utils/charAnim';
 import BaseScene from './BaseScene';
 
 export default class GameScene extends BaseScene {
@@ -102,6 +104,7 @@ export default class GameScene extends BaseScene {
   /** 레인보우 피버 변환 시 방울 터짐 효과 색상 */
   private static readonly BUBBLE_COLORS = [0xff00ff, 0x00ffff, 0xffee00, 0x00ff88, 0xff6600, 0xcc00ff];
   private selectedCharId: string = 'chibi'; // 선택된 캐릭터 ID
+  private charAnimEnabled: boolean = false; // 시트 애니메이션 사용 여부 (init에서 초기화)
   private selectedCharGrade: string = '등급외'; // 선택된 캐릭터 등급
   private charAwakeLevel: number = 0; // 각성 단계 (init에서 계산, create에서 사용)
   private selectedWpId: string | null = null; // 선택된 배경화면 ID (null = 기본)
@@ -151,6 +154,7 @@ export default class GameScene extends BaseScene {
     // 캐릭터 선택 화면에서 저장한 캐릭터 & 배경화면 사용
     this.selectedCharId = getSafeSelectedCharacter();
     this.selectedWpId = getSafeSelectedWallpaper();
+    this.charAnimEnabled = false; // 씬 재시작 시 이전 상태가 남지 않게 초기화
     const charDef        = getCharacterDef(this.selectedCharId);
     const dupCount       = getDuplicateCount(this.selectedCharId);
     const awakeLevel     = getAwakeningLevel(charDef.grade, dupCount);
@@ -182,6 +186,15 @@ export default class GameScene extends BaseScene {
   }
 
   preload() {
+    // VFX 파티클 텍스처 (이미 캐시에 있으면 건너뜀)
+    preloadFxAssets(this);
+    // 캐릭터 애니메이션 시트 — 시트가 있는 캐릭터만, 없으면 조용히 건너뜀
+    preloadCharSheets(this, this.getAnimSheetId());
+    // 동반자 시트 (k의 태이 등) — 플레이어가 아니라 능력이 만드는 스프라이트가 쓴다
+    for (const id of getCharacterDef(this.selectedCharId).extraSheets ?? []) {
+      preloadCharSheets(this, id);
+    }
+
     // 선택된 배경화면 조건부 로딩 (DifficultySelectScene에서 미리 로드 안 된 경우 fallback)
     const wpDef = this.selectedWpId ? getWallpaperDef(this.selectedWpId) : null;
     if (wpDef && !this.textures.exists(wpDef.bgKey)) {
@@ -243,6 +256,13 @@ export default class GameScene extends BaseScene {
     } else {
       if (!this.cache.audio.exists('bgMusic')) this.load.audio('bgMusic', 'assets/bgms/poop.mp3');
     }
+  }
+
+  /** 시트 조회용 캐릭터 id — 전용 스프라이트가 없는 캐릭터는 치비로 폴백한다 */
+  private getAnimSheetId(): string {
+    return GameScene.CHARS_WITH_SPRITES.includes(this.selectedCharId)
+      ? this.selectedCharId
+      : 'chibi';
   }
 
   private getDefaultBackgroundKey(): string {
@@ -322,7 +342,14 @@ export default class GameScene extends BaseScene {
       : this.charAwakeLevel >= 1 ? _gs(5, 10, 15)
       : 0;
     const [playerW, playerH] = getCharacterDef(this.selectedCharId).playerDisplaySize ?? [50, 80];
-    this.player = new Player(this, cx, H - 80, this.difficultyConfig.playerSpeed + this.ability.getPlayerSpeedBonus() + gradeAwakeSpeed + (this.activeSynergy?.speedBonus ?? 0), playerTexturePrefix, playerW, playerH);
+    // 시트가 다 준비된 경우에만 애니메이션 모드 — 아니면 기존 정적 텍스처로 동작한다
+    const animSheetId = this.getAnimSheetId();
+    this.charAnimEnabled = ensureCharAnims(this, animSheetId);
+    // 동반자 시트도 애니메이션을 등록해 둔다 (능력 쪽에서 anims.exists 로 확인하고 쓴다)
+    for (const id of getCharacterDef(this.selectedCharId).extraSheets ?? []) {
+      ensureCharAnims(this, id);
+    }
+    this.player = new Player(this, cx, H - 80, this.difficultyConfig.playerSpeed + this.ability.getPlayerSpeedBonus() + gradeAwakeSpeed + (this.activeSynergy?.speedBonus ?? 0), playerTexturePrefix, playerW, playerH, this.charAnimEnabled ? animSheetId : null);
 
     // 💩 그룹 생성 (Object Pool: maxSize로 상한 설정)
     this.poops = this.physics.add.group({
@@ -810,7 +837,8 @@ export default class GameScene extends BaseScene {
     counterIncrement: () => void,
   ) {
     if (this.gameOver) return;
-    (poop as PoolablePoopBase).recycle();
+    // 획득은 파괴가 아니다 — 타격 이펙트도, 별도 획득 연출도 넣지 않는다
+    (poop as PoolablePoopBase).recycle(true);
     counterIncrement();
     const bonus = this.ability.onCollectSpecial(type) + (this.activeSynergy?.collectBonus ?? 0);
     const total = baseScore + bonus;
@@ -989,7 +1017,7 @@ export default class GameScene extends BaseScene {
         const body = s.body as Phaser.Physics.Arcade.Body;
         if (!body) return;
         positions.push({ x: s.x, y: s.y, velocity: body.velocity.y });
-        s.recycle();
+        s.recycle(true); // 피버 변환 — 버블 연출이 따로 있다
       });
       [this.goldPoops, this.diamondPoops].forEach((group) => {
         group.children.entries.forEach((item) => {
@@ -998,7 +1026,7 @@ export default class GameScene extends BaseScene {
           const body = s.body as Phaser.Physics.Arcade.Body;
           if (!body) return;
           positions.push({ x: s.x, y: s.y, velocity: body.velocity.y });
-          s.recycle();
+          s.recycle(true); // 피버 변환
         });
       });
 
@@ -1039,7 +1067,7 @@ export default class GameScene extends BaseScene {
           const body = poopSprite.body as Phaser.Physics.Arcade.Body;
           if (!body) return;
           poopPositions.push({ x: poopSprite.x, y: poopSprite.y, velocity: body.velocity.y });
-          poopSprite.recycle();
+          poopSprite.recycle(true); // 피버 변환
         });
 
         poopPositions.forEach((pos) => {
@@ -1319,7 +1347,8 @@ export default class GameScene extends BaseScene {
     };
 
     // 모든 똥 recycle (점수는 개별이 아닌 고정 보너스로 일괄 지급)
-    const recycleAll = (sp: Phaser.Physics.Arcade.Sprite) => (sp as unknown as PoolablePoopBase).recycle();
+    // 매화 시너지 버스트는 자체 연출(spawnMaehwaBurst)이 있으므로 타격 이펙트는 생략
+    const recycleAll = (sp: Phaser.Physics.Arcade.Sprite) => (sp as unknown as PoolablePoopBase).recycle(true);
     collectGroup(this.poops, recycleAll);
     collectGroup(this.goldPoops, recycleAll);
     collectGroup(this.diamondPoops, recycleAll);
@@ -1443,10 +1472,12 @@ export default class GameScene extends BaseScene {
 
     // 센티넬: 보호막이 있으면 게임오버 대신 보호막 소모 + 똥 반환
     if (this.ability.onHitPoop(this.abilityAPI)) {
+      this.player.playHitAnim();
       (poop as unknown as PoolablePoopBase).recycle();
       return;
     }
 
+    this.player.playHitAnim();
     this.gameOver = true;
     this.manualHitboxDebug?.clear();
     this.ability.onDestroy(this.abilityAPI);

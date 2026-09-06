@@ -1,0 +1,56 @@
+# Creative Spec — 이미지/음악/게임/SNS 의 공통 기준 (Single Source of Truth)
+id: noeul-01
+
+character:
+  name: 노을
+  concept: 하루의 마지막 빛을 지키는 아이 (deadlock-01 기각의 대체 컨셉)
+  personality: 조용하고 느긋하다. 끝나는 것을 아쉬워하지 않고 끝까지 예쁘게 보내 준다.
+  backstory: |
+    해가 다 넘어갈 때까지 갈대밭에 앉아 있는 버릇이 있다.
+    마지막 빛이 제일 붉고 제일 짧다는 걸 알아서,
+    그 잠깐 동안은 무엇이든 두 배로 반짝인다고 믿는다.
+
+visual:
+  style: soft anime illustration
+  mood: warm quiet
+  palette: 자주빛 보라 · 진홍 노을 · 금빛 구름 (해질녘)
+  hair: 자주빛 보라 긴 머리, 끝이 노을빛 주홍으로 물듦, 낮게 묶음
+  eyes: 노을빛 주홍, 나른한 눈매
+  clothes: 자주빛 긴 겉옷, 금실 테두리, 어깨에 걸친 얇은 천, 종이 등 하나
+  background: 해질녘 갈대밭, 줄지어 나는 기러기, 금빛으로 타는 구름
+  # danbooru 태그 나열 (품질 프리픽스는 스크립트가 자동으로 붙인다)
+  # 후보 4장은 아래 base 에 pose 를 하나씩 갈아 끼워 생성한다
+  prompt: >
+    1girl, solo, serene calm expression, relaxed half-lidded eyes, faint smile,
+    purple magenta hair, long hair, low ponytail, sunset orange hair ends,
+    orange red eyes,
+    long plum purple outer robe, gold trim, thin shawl on shoulder,
+    holding a small paper lantern,
+    upper body portrait, three-quarter view, looking at viewer,
+    sunset reed field, flock of geese in the sky, burning golden clouds,
+    (warm sunset glow:1.2), rim light, backlit, cinematic lighting
+    BREAK
+    detailed background, bokeh, depth of field, volumetric lighting
+  pose_variants:
+    - upper body portrait, three-quarter view, looking at viewer, holding a paper lantern
+    - upper body, facing to the side, looking away, head tilt
+    - upper body portrait, dynamic angle, arm reaching out, looking at viewer
+    - upper body portrait, from below, looking up, arms crossed
+  negative_extra: >
+    1boy, male, sexy, seductive, cleavage, large breasts, revealing clothes,
+    sultry, nsfw, full body, chibi, shiny, latex, bodysuit, skintight,
+    cyber, neon, sci-fi, chain, snow, persimmon, dragon horns, seashell, ocean, plum blossom
+
+music:
+  genre: korean pop
+  mood: [warm, wistful, evening]
+  vocal: female soft vocal
+  bpm: 90
+  instruments: [acoustic guitar, strings, haegeum]
+
+game:
+  grade: SR
+  character_type: playable
+  basic_effect: 게임 후반으로 갈수록 획득 점수가 조금씩 늘어난다 (해가 기울수록) — 제안, 구현 단계에서 확정
+  special_ability: 일정 점수마다 '노을빛' — 화면이 노을로 물드는 동안 획득 점수 2배 (제안 — 구현 단계에서 확정)
+  player_display_size: null

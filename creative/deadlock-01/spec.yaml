@@ -1,0 +1,55 @@
+# Creative Spec — 이미지/음악/게임/SNS 의 공통 기준 (Single Source of Truth)
+id: deadlock-01
+
+character:
+  name: 데드락
+  concept: 서로 물고 놓지 않아 아무것도 움직이지 못하는 교착 (Deadlock) — 세상을 잠깐 멈춘다
+  personality: 고집이 세고 물러서지 않는다. 한번 붙잡은 것은 끝까지 놓지 않는다.
+  backstory: |
+    두 개의 자물쇠가 서로의 열쇠를 쥐고 있다.
+    누구도 먼저 놓지 않기 때문에 그 앞에서는 시간마저 걸음을 멈춘다.
+    떨어지던 것도, 쫓아오던 것도, 잠깐은 전부 그대로다.
+
+visual:
+  style: soft anime illustration
+  mood: cool
+  palette: 버건디 레드 · 무광 블랙 · 콜드 실버 (붉은 금속)
+  hair: 다크 버건디 긴 생머리, 한쪽만 땋아 내림
+  eyes: 아이스 그레이, 흔들리지 않는 눈매
+  clothes: 검은 하이칼라 롱코트, 은빛 버클, 양 손목에 서로 맞물린 사슬 커프
+  background: 공중에서 멈춘 사슬과 정지한 파편, 어두운 회색 공간의 붉은 라인
+  # danbooru 태그 나열 (품질 프리픽스는 스크립트가 자동으로 붙인다)
+  # 후보 4장은 아래 base 에 pose 를 하나씩 갈아 끼워 생성한다
+  prompt: >
+    1girl, solo, stern unwavering expression, firm gaze,
+    dark burgundy hair, long straight hair, single side braid, ice grey eyes,
+    black high-collar long coat, silver buckles, interlocked chain cuffs on both wrists,
+    frozen chains floating in mid air, stopped debris hanging still,
+    upper body portrait, three-quarter view, looking at viewer,
+    dark grey space, crimson accent lines, cold silver reflections,
+    (red rim light:1.2), backlit, cinematic lighting
+    BREAK
+    detailed background, bokeh, depth of field, volumetric lighting
+  pose_variants:
+    - upper body portrait, three-quarter view, looking at viewer, hand raised
+    - upper body, facing to the side, looking away, head tilt
+    - upper body portrait, dynamic angle, arm reaching out, looking at viewer
+    - upper body portrait, from below, looking up, arms crossed
+  negative_extra: >
+    1boy, male, sexy, seductive, cleavage, large breasts, revealing clothes,
+    sultry, nsfw, full body, chibi, shiny, latex, bodysuit, skintight,
+    orange, green, cyan, yellow, purple
+
+music:
+  genre: korean pop
+  mood: [tense, heavy, still]
+  vocal: female low vocal
+  bpm: 84
+  instruments: [distorted bass, taiko drum, strings]
+
+game:
+  grade: SR
+  character_type: playable
+  basic_effect: 떨어지는 똥의 속도가 아주 조금 느려진다 (제안 — 구현 단계에서 확정)
+  special_ability: 일정 점수마다 '교착' — 화면의 모든 똥이 잠깐 그 자리에 멈춘다 (제안 — 구현 단계에서 확정)
+  player_display_size: null

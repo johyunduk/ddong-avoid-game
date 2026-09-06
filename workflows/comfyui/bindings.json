@@ -1,0 +1,93 @@
+{
+  "_comment": "comfyui-generate.py 가 워크플로 JSON 을 패치할 때 쓰는 노드 바인딩. 값은 \"<노드ID>.<입력이름>\" 형식.",
+  "character": {
+    "workflow": "character.json",
+    "_note": "ComfyUI 의 [main]일러스트.json 사본. 확정 캐릭터들과 같은 베이스(모델·샘플러·해상도·프롬프트 관용구). 연결 안 된 CLIPTextEncode 55개는 기존 캐릭터 프롬프트 보관용이며 실행에서 자동 제외된다.",
+    "positive": [
+      "2.text"
+    ],
+    "negative": [
+      "3.text"
+    ],
+    "seed": [
+      "5.seed"
+    ],
+    "width": [
+      "4.width"
+    ],
+    "height": [
+      "4.height"
+    ],
+    "batch": [
+      "4.batch_size"
+    ],
+    "filename_prefix": [
+      "7.filename_prefix"
+    ],
+    "model": [
+      "1.ckpt_name"
+    ],
+    "defaults": {
+      "width": 768,
+      "height": 1344,
+      "positive_prefix": "masterpiece, best quality, amazing quality, 4k, very aesthetic, high resolution, ultra-detailed, absurdres, newest, scenery,\n",
+      "negative_required": "nsfw, cleavage, low neckline, revealing outfit, exposed chest, sexy pose, seductive, large breasts, oversized breasts",
+      "negative": "nsfw, cleavage, low neckline, revealing outfit, exposed chest, sexy pose, seductive, large breasts, oversized breasts, low quality, bad quality, worst quality, lowres, bad anatomy, bad hands, missing fingers, extra digits, deformed, mutated, ugly, disfigured, blurry, jpeg artifacts, text, watermark, signature, username, logo, censored, cartoon, graphic, painting, crayon, graphite, abstract, glitch, chibi, pixel art, 2d sprite, game sprite, duplicate",
+      "model": "novaAnimeXL_ilV160.safetensors",
+      "models": {
+        "nova": "novaAnimeXL_ilV160.safetensors",
+        "nova180": "novaAnimeXL_ilV180.safetensors",
+        "wai": "waiIllustriousSDXL_v170.safetensors"
+      }
+    }
+  },
+  "character-shuffle": {
+    "workflow": "character-shuffle.json",
+    "_note": "WAI-SHUFFLE-NOOB vPred. v-prediction 전용이라 위 모델들과 섞어 쓰지 않는다. 1024x1536 생성 후 1.5배 업스케일 리파인.",
+    "positive": [
+      "3.text"
+    ],
+    "negative": [
+      "4.text"
+    ],
+    "seed": [
+      "6.seed",
+      "8.seed"
+    ],
+    "width": [
+      "5.width"
+    ],
+    "height": [
+      "5.height"
+    ],
+    "batch": [
+      "5.batch_size"
+    ],
+    "filename_prefix": [
+      "10.filename_prefix"
+    ],
+    "model": [
+      "1.ckpt_name"
+    ],
+    "derived": [
+      {
+        "target": "7.width",
+        "from": "width",
+        "scale": 1.5
+      },
+      {
+        "target": "7.height",
+        "from": "height",
+        "scale": 1.5
+      }
+    ],
+    "defaults": {
+      "width": 1024,
+      "height": 1536,
+      "positive_prefix": "masterpiece, best quality, newest, absurdres, highres, very awa,\n",
+      "negative_required": "nsfw, cleavage, low neckline, revealing outfit, exposed chest, sexy pose, seductive, large breasts, oversized breasts",
+      "negative": "nsfw, cleavage, low neckline, revealing outfit, exposed chest, sexy pose, seductive, large breasts, oversized breasts, low quality, worst quality, normal quality, text, signature, jpeg artifacts, bad anatomy, old, early, watermark, artist name,\n1boy, male, multiple boys, child, loli, shota, realistic, photorealistic, 3d, photo",
+      "model": "waiSHUFFLENOOB_vPred04.safetensors"
+    }
+  }
+}

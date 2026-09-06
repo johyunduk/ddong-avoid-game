@@ -1,0 +1,29 @@
+# Creative Spec — 이미지/음악/게임/SNS 의 공통 기준 (Single Source of Truth)
+id: ted-03
+
+character:
+  name: Ted
+  concept: 기존 Ted 재현 — 원본 워크플로 프롬프트를 기준선으로 삼은 라운드
+  # ted-01(리파인)·ted-02(분위기 변주) 는 이미지에서 역추정한 프롬프트로 만들어 둘 다 기각됐다.
+  # 이번 라운드는 ted_ill.png 를 만든 실제 워크플로의 프롬프트를 그대로 쓴다.
+  source: C:\ComfyUI\user\default\workflows\[main]일러스트_ted.json
+  source_prompt: creative/ted-03/source-prompt.txt   # positive/negative 원문
+  model: novaAnimeXL_ilV160.safetensors (768x1344 · dpmpp_2m karras · 25steps · cfg6)
+
+visual:
+  style: 원본 워크플로 그대로 (품질 프리픽스 포함되어 있으므로 --no-prefix 로 생성)
+  # 이번 라운드에서 바꾼 것: 후보 03·04 의 포즈 줄 한 군데뿐
+  variants:
+    - 01 원본 그대로
+    - 02 원본 그대로 (다른 시드)
+    - 03 원본 + `head tilt` 추가
+    - 04 원본 + `from slightly below` 추가
+  # 원본 네거티브에 hoodie / zip-up hoodie / jacket / formal suit / tie 가 있다.
+  # 이 항목들을 포지티브에 넣지 않는다 (ted-01 에서 coat·necklace, ted-02 에서 tie 를 넣어 실패했다).
+
+game:
+  grade: null                  # 미등록 에셋 — 등급은 채택 후 별도 제안
+  character_type: illustration_only
+  basic_effect: null
+  special_ability: null
+  player_display_size: null

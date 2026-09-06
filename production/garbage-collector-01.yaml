@@ -1,0 +1,47 @@
+# garbage-collector-01 — 청소부 가비지 (요청 20260904135837-xb4ig7 · 컨셉 미지정 → 자체 기획)
+id: garbage-collector-01            # 예: summer-pool-01
+name: 가비지
+grade: SR                      # 등급외 | R | SR | UR
+phase: music            # illustration | music | game | review | social | publish | done
+
+illustration:
+  status: SUCCESS              # PENDING/RUNNING/WAITING_APPROVAL/SUCCESS/REJECTED/FAILED
+  candidates: creative/garbage-collector-01/candidates/
+  selected: 03.png
+  attempts: 1
+
+music:
+  status: PENDING
+  title: null
+  selected: null               # 예: song-b.mp3
+  attempts: 0
+
+game:
+  status: PENDING              # 캐릭터 등록 + 에셋 연결 + verify.ps1 통과
+  character_id: garbage-collector-01
+  assets:
+    player: null               # public/assets/players/garbage-collector-01_front.webp
+    illust: null               # public/assets/illustrations/garbage-collector-01.webp
+    bgm: null                  # public/assets/bgms/garbage-collector-01.mp3
+
+review:
+  status: PENDING              # Codex(reviewer) 판정
+  verdict: null                # PASS | PASS WITH ISSUES | FAIL
+  iterations: 0
+  max_iterations: 3
+
+social:
+  status: PENDING
+  outputs: release/social/garbage-collector-01/
+
+publish:
+  status: PENDING              # WAITING_APPROVAL 에서 사람의 "PUBLISH" 를 기다린다
+  youtube: pending
+  instagram: pending
+
+log:
+  - { at: "2026-09-04", step: illustration, note: "컨셉 미지정 요청 → 개발 용어 작명 규칙에 따라 가비지(Garbage Collector) 기획" }
+  - { at: "2026-09-04", step: illustration, note: "후보 4장 업로드 → 심사 대기 (배치 garbage-collector-01-r1)" }
+  - { at: "2026-09-04", step: illustration, note: "r1 판정 수거: 01·03 good / 02·04 reject (note 없음). good 2장 → 최종 1장 확인 대기" }
+  - { at: "2026-09-04", step: illustration, note: "03.png 확정 → selected.png 복사, phase: music" }
+  - { at: "2026-09-05", step: game, note: "garbage-collector-01-r1 확정(accept · 03.webp) 확인 후 캐릭터 설정 제안 등록 — 등급 SR + 기본효과 3안 + 특수능력 3안. 심사실에서 사람 선택 대기" }

@@ -1,0 +1,56 @@
+# Creative Spec — 이미지/음악/게임/SNS 의 공통 기준 (Single Source of Truth)
+id: proxy-01
+
+character:
+  name: 프록시
+  concept: 남을 대신해 앞에 서는 대역 (Proxy) — 잔상을 미끼로 내보낸다
+  personality: 감정을 거의 드러내지 않는다. 자기 이야기를 하지 않고 늘 남의 자리를 대신 선다.
+  backstory: |
+    진짜가 어느 쪽인지 아무도 확신하지 못한다.
+    앞에 선 것이 언제나 잔상이고, 잔상이 사라진 자리에 또 하나가 서 있다.
+    본인조차 몇 번째 자신이 지금 여기 있는지 세지 않는다.
+
+visual:
+  style: soft anime illustration
+  mood: cool
+  palette: 틸 시안 · 딥 네이비 · 오프 화이트 (차가운 청록)
+  hair: 잉크 블랙 단발, 안쪽만 시안으로 물든 이너 컬러
+  eyes: 시안, 무표정한 눈매
+  clothes: 오프화이트 하이칼라 코트(레이어드), 시안 라인 트림, 검은 터틀넥, 반투명 시안 숄
+  background: 흰 무한 공간에 겹쳐 서 있는 자신의 반투명 잔상들
+  # danbooru 태그 나열 (품질 프리픽스는 스크립트가 자동으로 붙인다)
+  # 후보 4장은 아래 base 에 pose 를 하나씩 갈아 끼워 생성한다
+  prompt: >
+    1girl, solo, expressionless, calm blank stare, cool detached mood,
+    black hair, short bob hair, cyan inner hair color, cyan eyes,
+    black turtleneck, layered matte charcoal high-collar coat, cyan line trim,
+    translucent cyan shawl, loose fit clothes,
+    faint afterimage duplicates of herself behind, motion echo silhouettes,
+    upper body portrait, three-quarter view, looking at viewer,
+    white void background, teal cyan glow, deep navy shadow,
+    (cyan rim light:1.2), backlit, cinematic lighting
+    BREAK
+    detailed background, bokeh, depth of field, volumetric lighting
+  pose_variants:
+    - upper body portrait, three-quarter view, looking at viewer, hand raised
+    - upper body, facing to the side, looking away, head tilt
+    - upper body to waist, dynamic angle, leaning forward, arm reaching out
+    - upper body portrait, from below, looking up, arms crossed
+  negative_extra: >
+    1boy, male, sexy, seductive, cleavage, large breasts, revealing clothes,
+    sultry, nsfw, full body, chibi, warm colors, orange, purple, green,
+    shiny, latex, bodysuit, skintight, breasts focus, bent over
+
+music:
+  genre: korean pop
+  mood: [cool, detached, minimal]
+  vocal: female low vocal
+  bpm: 104
+  instruments: [synth bass, glitch percussion, pad]
+
+game:
+  grade: SR
+  character_type: playable
+  basic_effect: 잔상 하나가 뒤를 따라다닌다 (연출) — 제안, 구현 단계에서 확정
+  special_ability: 일정 점수마다 '대역' — 잔상을 옆으로 내보내 떨어지는 똥을 그쪽으로 유인해 궤도를 튼다 (제안 — 구현 단계에서 확정)
+  player_display_size: null

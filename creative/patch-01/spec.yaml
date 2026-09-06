@@ -1,0 +1,54 @@
+# Creative Spec — 이미지/음악/게임/SNS 의 공통 기준 (Single Source of Truth)
+id: patch-01
+
+character:
+  name: 패치
+  concept: 망가진 것을 기워 붙이는 수선사 (Patch) — 로스터에서 유일한 낮·따뜻한 색 캐릭터
+  personality: 느긋하고 다정하다. 서두르지 않고, 끊어진 것을 하나씩 이어 붙인다.
+  backstory: |
+    부서진 것은 버리지 않고 전부 기워 놓는 버릇이 있다.
+    실 한 타래와 바늘 하나로 찢어진 자리를 메우면
+    원래보다 조금 더 두껍고, 조금 더 튼튼해진다.
+
+visual:
+  style: soft anime illustration
+  mood: warm
+  palette: 머스터드 옐로우 · 테라코타 · 크림 아이보리 (한낮의 따뜻한 색)
+  hair: 허니 블론드, 웨이브 미디엄, 천 리본으로 묶음
+  eyes: 웜 브라운, 눈매가 부드럽다
+  clothes: 패치워크 니트 케이프, 머스터드 앞치마, 골무, 바늘과 실, 어깨의 실타래
+  background: 햇빛 드는 낮의 재봉 공방, 공중에 떠다니는 천 조각
+  # danbooru 태그 나열 (품질 프리픽스는 스크립트가 자동으로 붙인다)
+  # 후보 4장은 아래 base 에 pose 를 하나씩 갈아 끼워 생성한다
+  prompt: >
+    1girl, solo, warm gentle smile, light freckles, soft eyes,
+    honey blonde hair, wavy medium hair, cloth ribbon hair tie, warm brown eyes,
+    patchwork knit cape, mustard yellow apron, high collar shirt, thimble on finger,
+    holding needle and thread, ball of yarn on shoulder, floating fabric scraps,
+    upper body portrait, three-quarter view, looking at viewer, hand raised,
+    sunlit sewing atelier, daytime window light, terracotta and cream interior,
+    (warm golden light:1.2), soft rim light, cinematic lighting
+    BREAK
+    detailed background, bokeh, depth of field, volumetric lighting
+  pose_variants:
+    - upper body portrait, three-quarter view, looking at viewer, hand raised
+    - upper body, from below, looking away, head tilt
+    - upper body to waist, dynamic angle, leaning forward, mending a floating fabric scrap
+    - upper body portrait, facing to the side, looking up, arms crossed
+  negative_extra: >
+    1boy, male, sexy, seductive, cleavage, large breasts, revealing clothes,
+    sultry, nsfw, full body, chibi, night, dark background, neon
+
+music:
+  genre: korean pop
+  mood: [warm, gentle, cozy]
+  vocal: female soft vocal
+  bpm: 92
+  instruments: [acoustic guitar, ukulele, glockenspiel]
+
+game:
+  grade: SR
+  character_type: playable
+  basic_effect: 특수 똥 효과의 지속 시간이 늘어난다 (기워서 이어 붙임) — 제안, 구현 단계에서 확정
+  special_ability: 일정 점수마다 '누비기' — 천 조각을 기워 만든 짧은 방패로 똥 몇 개를 막아낸다 (제안 — 구현 단계에서 확정)
+  player_display_size: null

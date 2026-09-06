@@ -1,0 +1,61 @@
+# Creative Spec — 이미지/음악/게임/SNS 의 공통 기준 (Single Source of Truth)
+id: ted-01
+
+character:
+  name: Ted
+  concept: 기존 일러스트(public/assets/illustrations/ted_ill.png) 리파인 — "좀 더 멋지게"
+  # 신규 컨셉이 아니라 기존 인물의 업그레이드. 정체성 앵커는 유지한다.
+  identity_anchors:
+    - 1boy, 20대 남성
+    - 짧은 다크브라운 머리, 앞머리가 살짝 흘러내림
+    - 갈색 눈, 무심한 눈매
+    - 화이트 셔츠 (소매 걷음)
+    - 저녁 도시 거리, 네온·가로등, 젖은 노면
+  upgrade_direction: |
+    원본은 셔츠+청바지에 정면 직립이라 인상이 밋밋했다.
+    실루엣(어깨에 걸친 다크 코트·레이어드), 조명(강한 네온 림라이트·역광),
+    태도(무심하고 자신감 있는 표정, 각도 있는 포즈)를 올려 "멋짐" 축만 강화한다.
+  personality: 말수 적고 여유롭다. 서두르지 않는다.
+
+visual:
+  style: soft anime illustration
+  mood: cool night city
+  palette: 화이트 셔츠 · 차콜 · 네온 시안/앰버 반사 (밤거리)
+  hair: 짧은 다크브라운, 흘러내린 앞머리
+  eyes: 갈색, 무심한 눈매
+  clothes: 화이트 셔츠(소매 걷음) + 어깨에 걸친 다크 차콜 코트, 얇은 체인 목걸이
+  background: 저녁 도시 거리, 네온 간판, 가로등, 젖은 노면의 반사
+  # danbooru 태그 나열 (품질 프리픽스는 스크립트가 자동으로 붙인다)
+  prompt: >
+    1boy, solo, male focus, handsome young man, cool composed expression, sharp gaze,
+    short dark brown hair, messy bangs, brown eyes,
+    white shirt, rolled up sleeves, dark charcoal coat draped over shoulders,
+    thin chain necklace,
+    upper body portrait, three-quarter view, looking at viewer,
+    evening city street, neon signs, street lamp, wet pavement reflections,
+    (strong neon rim light:1.3), backlit, cinematic lighting, high contrast
+    BREAK
+    detailed background, bokeh, depth of field, volumetric lighting
+  pose_variants:
+    - upper body portrait, three-quarter view, looking at viewer, hand in pocket
+    - upper body, facing to the side, looking away, head tilt
+    - upper body portrait, dynamic angle, adjusting collar, looking at viewer
+    - upper body portrait, from below, looking at viewer, arms crossed
+  negative_extra: >
+    1girl, female, breasts, nsfw, sexy, revealing clothes, shirtless, open shirt,
+    full body, chibi, cyber, sci-fi armor, dragon horns, hanbok, sword,
+    old man, child
+
+music:
+  genre: korean pop
+  mood: [cool, night, city]
+  vocal: male low vocal
+  bpm: 100
+  instruments: [electric guitar, synth bass, drums]
+
+game:
+  grade: null                  # 기존 미등록 에셋 — 등급은 채택 후 별도 제안
+  character_type: illustration_only
+  basic_effect: null
+  special_ability: null
+  player_display_size: null

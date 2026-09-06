@@ -1,0 +1,62 @@
+# Creative Spec — 이미지/음악/게임/SNS 의 공통 기준 (Single Source of Truth)
+id: ted-02
+
+character:
+  name: Ted
+  concept: 기존 Ted 의 "분위기만" 바꾼 변주 (요청 20260905043006-4rm34x)
+  # 신규 인물이 아니다. ted-01(밤 네온 거리 + 코트 실루엣 강화)이 기각됐으므로
+  # 이번 라운드는 실루엣·의상을 원본 쪽으로 되돌리고 **분위기(시간대·날씨·조명·톤)만** 바꾼다.
+  identity_anchors:
+    - 1boy, 20대 남성, 성인 얼굴
+    - 짧은 다크브라운 머리, 앞머리가 살짝 흘러내림
+    - 갈색 눈, 무심한 눈매
+    - 화이트 셔츠 (소매 걷음) — 원본 그대로
+  changed_axis: |
+    후보 4장은 각도 변주가 아니라 **분위기 변주**다.
+    01 아침 카페 창가 (따뜻한 자연광) / 02 비 오는 밤 골목 (차분·쓸쓸)
+    03 해질녘 옥상 (황금빛 역광) / 04 눈 내리는 겨울 거리 (차갑고 담백)
+    ted-01 의 네온 밤거리 톤은 기각됐으므로 재사용하지 않는다.
+  personality: 말수 적고 여유롭다.
+
+visual:
+  style: soft anime illustration
+  mood: 후보마다 다름 (아침 / 비 / 해질녘 / 겨울)
+  palette: 화이트 셔츠 기준, 배경 조명색만 후보별로 바뀜
+  hair: 짧은 다크브라운, 흘러내린 앞머리
+  eyes: 갈색, 무심한 눈매
+  clothes: 화이트 셔츠(소매 걷음) — 코트·체인 등 ted-01 의 추가 장식은 뺀다
+  background: 후보별 분위기 참조
+  # danbooru 태그 나열 (품질 프리픽스는 스크립트가 자동으로 붙인다)
+  prompt: >
+    1boy, solo, male focus, handsome adult man, mid 20s, mature face,
+    calm relaxed expression, soft gaze,
+    short dark brown hair, messy bangs, brown eyes,
+    white collared shirt, rolled up sleeves,
+    upper body portrait, three-quarter view, looking at viewer,
+    <분위기 태그가 여기에 들어간다>
+    rim light, cinematic lighting
+    BREAK
+    detailed background, bokeh, depth of field, volumetric lighting
+  mood_variants:
+    - morning cafe window seat, warm sunlight, sheer curtain, coffee cup, cozy interior
+    - rainy night alley, holding umbrella, wet reflections, quiet melancholic mood, cool blue tone
+    - rooftop at sunset, golden hour backlight, city skyline far below, warm orange sky
+    - snowy winter street, falling snow, grey scarf, cold pale daylight, breath fog
+  negative_extra: >
+    1girl, female, breasts, nsfw, sexy, revealing clothes, shirtless, open shirt, t-shirt,
+    child, shota, teenager, baby face, full body, chibi,
+    neon signs, cyberpunk, sci-fi, hanbok, sword, old man
+
+music:
+  genre: korean pop
+  mood: [calm, warm, city]
+  vocal: male soft vocal
+  bpm: 92
+  instruments: [acoustic guitar, piano, light drums]
+
+game:
+  grade: null                  # 기존 미등록 에셋 — 등급은 채택 후 별도 제안
+  character_type: illustration_only
+  basic_effect: null
+  special_ability: null
+  player_display_size: null

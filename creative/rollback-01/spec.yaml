@@ -1,0 +1,45 @@
+# Creative Spec — 이미지/음악/게임/SNS 의 공통 기준 (Single Source of Truth)
+id: rollback-01
+
+character:
+  name: 롤백
+  concept: 되돌린다 — 이미 벌어진 일을 한 번만 없던 것으로 만드는 아이 (Rollback)
+  personality: 표정이 거의 없고 말이 짧다. 감정을 드러내지 않지만 남의 실수를 조용히 지워 준다.
+  backstory: |
+    깨진 것이 다시 붙는 순간에만 모습을 보인다.
+    누구도 그 애가 무엇을 되돌렸는지 기억하지 못하고,
+    본인도 되돌린 것을 세지 않는다 — 한 번 쓰면 그걸로 끝이니까.
+
+visual:
+  style: soft anime illustration
+  mood: cool
+  palette: silver-lilac · violet · deep indigo (차가운 무채색 + 보랏빛 발광)
+  hair: 은빛 라일락, 어깨 길이, 시간이 거꾸로 가듯 위로 떠오르는 잔머리
+  eyes: 바이올렛, 차분하고 날 선 눈매
+  clothes: 하이칼라 화이트 테크니컬 코트, 반투명 레이어 패널, 소매의 되감기 글리프
+  background: 공중에서 다시 맞춰지는 유리 파편, 깊은 인디고 보이드
+  # danbooru 태그 나열 (품질 프리픽스는 스크립트가 자동으로 붙인다)
+  prompt: >
+    upper body portrait, looking at viewer, composed unreadable expression,
+    1girl, solo, East Asian face, pale ivory skin, monolid eyes, violet eyes, sharp calm gaze,
+    long silver-lilac hair, floating strands drifting upward as if time reversed,
+    high-collar white technical coat, layered translucent panels, glowing rewind glyphs on sleeves,
+    BREAK
+    shattered glass fragments reassembling in mid air, deep indigo void, cool rim light, cinematic
+  negative_extra: >
+    1boy, male, sexy, seductive, cleavage, large breasts, revealing clothes,
+    sultry, nsfw, full body, chibi
+
+music:
+  genre: korean pop
+  mood: [cool, quiet, tense]
+  vocal: female clear vocal
+  bpm: 88
+  instruments: [piano, strings, synth pad]
+
+game:
+  grade: UR
+  character_type: playable
+  basic_effect: 게임당 1회, 똥에 맞아도 그 순간을 되돌려 죽지 않는다 (제안 — 구현 단계에서 확정)
+  special_ability: 되돌리기 발동 시 화면의 똥이 잠시 역재생되며 위로 빨려 올라간다 (제안 — 구현 단계에서 확정)
+  player_display_size: null

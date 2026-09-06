@@ -24,6 +24,8 @@ export interface CharacterDef {
   cardDisplaySize?: [number, number];
   /** 변신·동반자 등 추가로 로드할 스프라이트 텍스처 키 (assets/players/{key}.webp). GameScene preload가 순회 로드 */
   extraSprites?: string[];
+  /** 동반자 등 플레이어가 아닌 스프라이트가 쓸 애니메이션 시트 id. GameScene이 preload + 등록 */
+  extraSheets?: string[];
 }
 
 /** 등급 이미지 텍스처 키 반환. 등급외 → null */
@@ -129,6 +131,8 @@ export const CHARACTERS: CharacterDef[] = [
       'ktei_front', 'ktei_left', 'ktei_right',
       'ktei_ss_front', 'ktei_ss_left', 'ktei_ss_right',
     ],
+    // 태이는 플레이어가 아니라 KAbility 가 만드는 동반자라 시트를 따로 로드해야 한다
+    extraSheets: ['ktei'],
   },
   {
     id: 'knight',

@@ -1,0 +1,46 @@
+# mireu-01 — 미르 (요청 20260904235445-gqt0ay · 컨셉 미지정 + IT 용어 금지 → 자체 기획)
+id: mireu-01            # 예: summer-pool-01
+name: 미르
+grade: UR                      # 등급외 | R | SR | UR
+phase: illustration            # 폐기 — 대체 컨셉 없음(사람이 심사실에서 요청) # illustration | music | game | review | social | publish | done
+
+illustration:
+  status: REJECTED             # PENDING/RUNNING/WAITING_APPROVAL/SUCCESS/REJECTED/FAILED
+  candidates: creative/mireu-01/candidates/
+  selected: null               # 예: 04.png
+  attempts: 1
+  batch: mireu-01-r1
+
+music:
+  status: PENDING
+  title: null
+  selected: null               # 예: song-b.mp3
+  attempts: 0
+
+game:
+  status: PENDING              # 캐릭터 등록 + 에셋 연결 + verify.ps1 통과
+  character_id: mireu-01
+  assets:
+    player: null               # public/assets/players/mireu-01_front.webp
+    illust: null               # public/assets/illustrations/mireu-01.webp
+    bgm: null                  # public/assets/bgms/mireu-01.mp3
+
+review:
+  status: PENDING              # Codex(reviewer) 판정
+  verdict: null                # PASS | PASS WITH ISSUES | FAIL
+  iterations: 0
+  max_iterations: 3
+
+social:
+  status: PENDING
+  outputs: release/social/mireu-01/
+
+publish:
+  status: PENDING              # WAITING_APPROVAL 에서 사람의 "PUBLISH" 를 기다린다
+  youtube: pending
+  instagram: pending
+
+log:
+  - { at: "2026-09-05", step: illustration, note: "IT 용어 금지 요청 → 용의 순우리말 미르로 기획. 까치(겨울 한복·홍시)와 실루엣·배경이 겹치지 않게 도포+구름으로 잡고, 프록시(형광 시안 SF)와 구분되게 옥빛 청록+금 으로 색을 눌렀다. 네거티브에 snow/persimmon/hanbok jeogori/chain 추가" }
+  - { at: "2026-09-05", step: illustration, note: "후보 4장(앵글·자세 각각 다름) 업로드 → 심사 대기 (배치 mireu-01-r1). 재생성 없이 1차 통과. 배경이 먹빛 구름 대신 서양식 회랑으로 나온 점은 확정 후 보정 대상" }
+  - { at: "2026-09-05", step: illustration, note: "mireu-01-r1 결정: reject (selected 없음, note 없음, 후보별 판정 없음). 컨셉 폐기 → status REJECTED. 배경이 먹빛 구름 대신 서양식 회랑으로 나온 점이 후보 4장 공통 약점이었다(업로드 시 이미 기록). 지시에 따라 대체 컨셉은 자동 생성하지 않는다 — 새 컨셉은 사람이 심사실 버튼으로 요청" }

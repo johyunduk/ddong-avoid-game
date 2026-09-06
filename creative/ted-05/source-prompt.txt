@@ -1,0 +1,35 @@
+# 출처: C:\ComfyUI\user\default\workflows\[main]일러스트_ted.json
+# ted_ill.png 를 만든 원본 워크플로. 모델 novaAnimeXL_ilV160 / 768x1344 / dpmpp_2m karras 25steps cfg6
+# Ted 관련 요청은 반드시 이 프롬프트를 기준선으로 삼는다. 네거티브의 hoodie/jacket/formal suit/tie 위반 금지.
+
+=== POSITIVE ===
+masterpiece, best quality, amazing quality, 4k, very aesthetic, high resolution,
+ultra-detailed, absurdres, newest, scenery,
+1boy, solo, male focus,
+
+fair skin, soft masculine features, defined jawline but not harsh,
+short black hair, neat short hair,
+almond eyes, dark brown eyes, calm expression, sharp eyebrows,
+looking at viewer,
+
+open ivory long sleeve dress shirt, open collar, buttoned shirt,
+untucked shirt, long shirt hem, rolled up sleeves,
+casual layered outfit, light blue faded jeans, slim fit jeans, sneakers,
+
+standing, one hand in pocket, slight lean,
+upper body, three-quarter view, dutch angle,
+clean character illustration,
+BREAK
+modern city street at dusk, soft warm street lights,
+blurred buildings and cafe in background, mild evening atmosphere,
+volumetric lighting, depth of field, bokeh, cinematic lighting,
+warm cool color palette
+
+=== NEGATIVE ===
+worst quality, bad quality, lowres, bad anatomy, bad hands,
+missing fingers, extra digits, deformed, mutated, ugly, disfigured,
+cropped, very displeasing, sketch, jpeg artifacts,
+watermark, signature, username, logo, text,
+censored, bad ai-generated,
+chibi, pixel art, duplicate,
+hoodie, zip-up hoodie, jacket, formal suit, tie

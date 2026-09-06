@@ -1,0 +1,46 @@
+# ted-03 — Ted 원본 프롬프트 기준 재현 (ted-01·ted-02 기각 후속)
+id: ted-03            # 예: summer-pool-01
+name: Ted
+grade: null                      # 등급외 | R | SR | UR
+phase: illustration            # 폐기 — 대체 컨셉 없음(사람이 심사실에서 요청) # illustration | music | game | review | social | publish | done
+
+illustration:
+  status: REJECTED             # PENDING/RUNNING/WAITING_APPROVAL/SUCCESS/REJECTED/FAILED
+  candidates: creative/ted-03/candidates/
+  selected: null               # 예: 04.png
+  attempts: 1
+  batch: ted-03-r1
+
+music:
+  status: PENDING
+  title: null
+  selected: null               # 예: song-b.mp3
+  attempts: 0
+
+game:
+  status: PENDING              # 캐릭터 등록 + 에셋 연결 + verify.ps1 통과
+  character_id: ted-03
+  assets:
+    player: null               # public/assets/players/ted-03_front.webp
+    illust: null               # public/assets/illustrations/ted-03.webp
+    bgm: null                  # public/assets/bgms/ted-03.mp3
+
+review:
+  status: PENDING              # Codex(reviewer) 판정
+  verdict: null                # PASS | PASS WITH ISSUES | FAIL
+  iterations: 0
+  max_iterations: 3
+
+social:
+  status: PENDING
+  outputs: release/social/ted-03/
+
+publish:
+  status: PENDING              # WAITING_APPROVAL 에서 사람의 "PUBLISH" 를 기다린다
+  youtube: pending
+  instagram: pending
+
+log:
+  - { at: "2026-09-05", step: illustration, note: "ted-01·ted-02 기각 원인 확인: 두 라운드 모두 ted_ill.png 를 눈으로 보고 프롬프트를 새로 썼다. 실제 원본은 C:/ComfyUI/user/default/workflows/[main]일러스트_ted.json 에 있었고, 그 네거티브의 jacket/tie 를 내가 포지티브에 넣고 있었다(코트·체인·넥타이). 이번 라운드는 원본 positive/negative 를 그대로 사용" }
+  - { at: "2026-09-05", step: illustration, note: "후보 4장 업로드 → 심사 대기 (배치 ted-03-r1). 01·02 는 원본 프롬프트 그대로 시드만 다름, 03·04 는 포즈 줄에 head tilt / from slightly below 만 추가" }
+  - { at: "2026-09-05", step: illustration, note: "ted-03-r1 결정: reject (selected 없음, note 없음, 후보별 판정 없음). 컨셉 폐기 → status REJECTED. 이 라운드는 원본 워크플로 프롬프트를 그대로 쓴 재현이었는데도 기각 — 프롬프트 불일치가 유일한 원인은 아니었다는 뜻이다. 04:59 시점 기준 ted-04-r1(배경 분위기 교체)은 별개로 심사 대기 중. 지시에 따라 대체 컨셉은 자동 생성하지 않는다" }

@@ -1,0 +1,43 @@
+# 새 릴리스: 이 파일을 production/<id>.yaml 로 복사하고 id/phase 를 채운다.
+id: <kebab-case-id>            # 예: summer-pool-01
+name: <캐릭터 한글 이름>
+grade: UR                      # 등급외 | R | SR | UR
+phase: illustration            # illustration | music | game | review | social | publish | done
+
+illustration:
+  status: PENDING              # PENDING/RUNNING/WAITING_APPROVAL/SUCCESS/REJECTED/FAILED
+  candidates: creative/<id>/candidates/
+  selected: null               # 예: 04.png
+  attempts: 0
+
+music:
+  status: PENDING
+  title: null
+  selected: null               # 예: song-b.mp3
+  attempts: 0
+
+game:
+  status: PENDING              # 캐릭터 등록 + 에셋 연결 + verify.ps1 통과
+  character_id: <id>
+  assets:
+    player: null               # public/assets/players/<id>_front.webp
+    illust: null               # public/assets/illustrations/<id>.webp
+    bgm: null                  # public/assets/bgms/<id>.mp3
+
+review:
+  status: PENDING              # Codex(reviewer) 판정
+  verdict: null                # PASS | PASS WITH ISSUES | FAIL
+  iterations: 0
+  max_iterations: 3
+
+social:
+  status: PENDING
+  outputs: release/social/<id>/
+
+publish:
+  status: PENDING              # WAITING_APPROVAL 에서 사람의 "PUBLISH" 를 기다린다
+  youtube: pending
+  instagram: pending
+
+log:
+  - { at: null, step: null, note: null }

@@ -1,0 +1,47 @@
+# deadlock-01 — 교착 데드락 (요청 20260904232654-n8ygf4 · 컨셉 미지정 → 자체 기획)
+id: deadlock-01            # 예: summer-pool-01
+name: 데드락
+grade: SR                      # 등급외 | R | SR | UR
+phase: illustration            # 폐기 — 대체 컨셉 noeul-01 로 이관 # illustration | music | game | review | social | publish | done
+
+illustration:
+  status: REJECTED             # PENDING/RUNNING/WAITING_APPROVAL/SUCCESS/REJECTED/FAILED
+  candidates: creative/deadlock-01/candidates/
+  selected: null               # 예: 04.png
+  attempts: 1
+  batch: deadlock-01-r1
+
+music:
+  status: PENDING
+  title: null
+  selected: null               # 예: song-b.mp3
+  attempts: 0
+
+game:
+  status: PENDING              # 캐릭터 등록 + 에셋 연결 + verify.ps1 통과
+  character_id: deadlock-01
+  assets:
+    player: null               # public/assets/players/deadlock-01_front.webp
+    illust: null               # public/assets/illustrations/deadlock-01.webp
+    bgm: null                  # public/assets/bgms/deadlock-01.mp3
+
+review:
+  status: PENDING              # Codex(reviewer) 판정
+  verdict: null                # PASS | PASS WITH ISSUES | FAIL
+  iterations: 0
+  max_iterations: 3
+
+social:
+  status: PENDING
+  outputs: release/social/deadlock-01/
+
+publish:
+  status: PENDING              # WAITING_APPROVAL 에서 사람의 "PUBLISH" 를 기다린다
+  youtube: pending
+  instagram: pending
+
+log:
+  - { at: "2026-09-05", step: illustration, note: "컨셉 미지정 요청 → 기존 23종 + 진행 중 배치(프록시·패치·가비지·롤백·크론·파이어월) 와 이름/색/모티프 대조 후 데드락(Deadlock) 기획. 남은 팔레트 축인 버건디·콜드실버를 잡고, abilityParams.ts 에 정지 계열 능력이 없는 것을 확인해 능력 훅을 교착(정지)으로 잡았다" }
+  - { at: "2026-09-05", step: illustration, note: "03번만 2회 재생성 — 1차는 누운 회전 구도로 카드 비율에 안 맞았고, 2차는 양팔을 사슬에 매단 구속 구도로 나와 폐기. 네거티브에 lying down/arms up/bound 추가 후 기립 구도로 확정" }
+  - { at: "2026-09-05", step: illustration, note: "후보 4장(앵글·자세 각각 다름) 업로드 → 심사 대기 (배치 deadlock-01-r1)" }
+  - { at: "2026-09-05", step: illustration, note: "deadlock-01-r1 결정: reject (note 없음, 후보별 판정 없음). 컨셉 폐기 → status REJECTED. 프록시에 이어 IT 용어 계열이 연속 기각되어, 대체 컨셉은 비IT 계열(노을)로 잡는다" }

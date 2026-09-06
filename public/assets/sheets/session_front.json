@@ -1,0 +1,33 @@
+{
+  "image": "session_front.webp",
+  "frameWidth": 208,
+  "frameHeight": 312,
+  "frames": [
+    "idle-1",
+    "idle-2",
+    "idle-3",
+    "idle-4",
+    "hit"
+  ],
+  "anims": {
+    "idle": {
+      "frames": [
+        0,
+        1,
+        2,
+        3,
+        2,
+        1
+      ],
+      "frameRate": 4,
+      "repeat": -1
+    },
+    "hit": {
+      "frames": [
+        4
+      ],
+      "frameRate": 1,
+      "repeat": 0
+    }
+  }
+}

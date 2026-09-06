@@ -1,0 +1,47 @@
+# proxy-01 — 대역 프록시 (요청 20260904230731-o4oc8e · 컨셉 미지정 → 자체 기획)
+id: proxy-01            # 예: summer-pool-01
+name: 프록시
+grade: SR                      # 등급외 | R | SR | UR
+phase: illustration            # 폐기 — 대체 컨셉 sora-01 로 이관
+
+illustration:
+  status: REJECTED             # PENDING/RUNNING/WAITING_APPROVAL/SUCCESS/REJECTED/FAILED
+  candidates: creative/proxy-01/candidates/
+  selected: null               # 예: 04.png
+  attempts: 2
+  batch: proxy-01-r1
+
+music:
+  status: PENDING
+  title: null
+  selected: null               # 예: song-b.mp3
+  attempts: 0
+
+game:
+  status: PENDING              # 캐릭터 등록 + 에셋 연결 + verify.ps1 통과
+  character_id: proxy-01
+  assets:
+    player: null               # public/assets/players/proxy-01_front.webp
+    illust: null               # public/assets/illustrations/proxy-01.webp
+    bgm: null                  # public/assets/bgms/proxy-01.mp3
+
+review:
+  status: PENDING              # Codex(reviewer) 판정
+  verdict: null                # PASS | PASS WITH ISSUES | FAIL
+  iterations: 0
+  max_iterations: 3
+
+social:
+  status: PENDING
+  outputs: release/social/proxy-01/
+
+publish:
+  status: PENDING              # WAITING_APPROVAL 에서 사람의 "PUBLISH" 를 기다린다
+  youtube: pending
+  instagram: pending
+
+log:
+  - { at: "2026-09-05", step: illustration, note: "컨셉 미지정 요청 → 기존 23종 + 진행 중 배치(패치·가비지·롤백·크론·파이어월) 와 이름/색/모티프 대조 후 프록시(Proxy) 기획. 남은 팔레트 축인 틸 시안·딥 네이비를 잡고, 모티프는 반투명 잔상 대역" }
+  - { at: "2026-09-05", step: illustration, note: "1차 생성분 폐기 — 광택 라텍스 바디슈트로 뽑혀 전연령 톤에 안 맞음. candidates-discarded-1/ 로 보관, 실루엣을 레이어드 코트+터틀넥으로 바꾸고 네거티브에 shiny/latex/bodysuit/skintight 추가" }
+  - { at: "2026-09-05", step: illustration, note: "재생성 후보 4장(앵글·자세 각각 다름) 업로드 → 심사 대기 (배치 proxy-01-r1)" }
+  - { at: "2026-09-05", step: illustration, note: "proxy-01-r1 결정: reject (note 없음, 후보별 판정 없음). 컨셉 자체 폐기 → status REJECTED. 최근 두 요청이 연속으로 IT 용어 금지였던 점을 반영해 대체 컨셉은 비IT 계열(소라)로 새로 잡는다" }

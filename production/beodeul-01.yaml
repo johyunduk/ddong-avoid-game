@@ -1,0 +1,46 @@
+# beodeul-01 — 버들 (요청 20260905005141-dpp0nb · 컨셉 미지정 + IT 용어 금지 → 자체 기획)
+id: beodeul-01            # 예: summer-pool-01
+name: 버들
+grade: SR                      # 등급외 | R | SR | UR
+phase: illustration            # 폐기 — 대체 컨셉 없음(사람이 심사실에서 요청) # illustration | music | game | review | social | publish | done
+
+illustration:
+  status: REJECTED             # PENDING/RUNNING/WAITING_APPROVAL/SUCCESS/REJECTED/FAILED
+  candidates: creative/beodeul-01/candidates/
+  selected: null               # 예: 04.png
+  attempts: 1
+  batch: beodeul-01-r1
+
+music:
+  status: PENDING
+  title: null
+  selected: null               # 예: song-b.mp3
+  attempts: 0
+
+game:
+  status: PENDING              # 캐릭터 등록 + 에셋 연결 + verify.ps1 통과
+  character_id: beodeul-01
+  assets:
+    player: null               # public/assets/players/beodeul-01_front.webp
+    illust: null               # public/assets/illustrations/beodeul-01.webp
+    bgm: null                  # public/assets/bgms/beodeul-01.mp3
+
+review:
+  status: PENDING              # Codex(reviewer) 판정
+  verdict: null                # PASS | PASS WITH ISSUES | FAIL
+  iterations: 0
+  max_iterations: 3
+
+social:
+  status: PENDING
+  outputs: release/social/beodeul-01/
+
+publish:
+  status: PENDING              # WAITING_APPROVAL 에서 사람의 "PUBLISH" 를 기다린다
+  youtube: pending
+  instagram: pending
+
+log:
+  - { at: "2026-09-05", step: illustration, note: "IT 용어 금지 요청 → 아직 안 쓴 계절 축(봄 낮)을 잡아 수양버들 기획. 소나기(비 여름·짙은 연잎초록)와 구분되게 밝은 연둣빛+흰 버들솜으로 톤을 올리고, 기각된 까치의 겨울·한복 요소는 네거티브로 차단" }
+  - { at: "2026-09-05", step: illustration, note: "후보 4장(앵글·자세 각각 다름) 업로드 → 심사 대기 (배치 beodeul-01-r1). 재생성 없이 1차 통과, 4장 모두 머리·눈·의상 일관" }
+  - { at: "2026-09-05", step: illustration, note: "beodeul-01-r1 결정: reject (selected 없음, note 없음, 후보별 판정 없음). 컨셉 폐기 → status REJECTED. 지시에 따라 대체 컨셉은 자동 생성하지 않는다 — 새 컨셉은 사람이 심사실 버튼으로 요청" }

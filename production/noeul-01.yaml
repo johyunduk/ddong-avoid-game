@@ -1,0 +1,46 @@
+# noeul-01 — 노을 (deadlock-01 기각의 대체 컨셉 · 비IT 계열)
+id: noeul-01            # 예: summer-pool-01
+name: 노을
+grade: SR                      # 등급외 | R | SR | UR
+phase: illustration            # 폐기 — 대체 컨셉 없음(사람이 심사실에서 요청) # illustration | music | game | review | social | publish | done
+
+illustration:
+  status: REJECTED             # PENDING/RUNNING/WAITING_APPROVAL/SUCCESS/REJECTED/FAILED
+  candidates: creative/noeul-01/candidates/
+  selected: null               # 예: 04.png
+  attempts: 1
+  batch: noeul-01-r1
+
+music:
+  status: PENDING
+  title: null
+  selected: null               # 예: song-b.mp3
+  attempts: 0
+
+game:
+  status: PENDING              # 캐릭터 등록 + 에셋 연결 + verify.ps1 통과
+  character_id: noeul-01
+  assets:
+    player: null               # public/assets/players/noeul-01_front.webp
+    illust: null               # public/assets/illustrations/noeul-01.webp
+    bgm: null                  # public/assets/bgms/noeul-01.mp3
+
+review:
+  status: PENDING              # Codex(reviewer) 판정
+  verdict: null                # PASS | PASS WITH ISSUES | FAIL
+  iterations: 0
+  max_iterations: 3
+
+social:
+  status: PENDING
+  outputs: release/social/noeul-01/
+
+publish:
+  status: PENDING              # WAITING_APPROVAL 에서 사람의 "PUBLISH" 를 기다린다
+  youtube: pending
+  instagram: pending
+
+log:
+  - { at: "2026-09-05", step: illustration, note: "deadlock-01 기각(note 없음)에 따른 대체 컨셉. 남아 있던 색축인 자주빛 보라+진홍 노을+금 을 가져가고, 능력 훅은 골든아워 점수 2배로 잡아 기존 무적·피버·정지 계열과 분리했다" }
+  - { at: "2026-09-05", step: illustration, note: "후보 4장(앵글·자세 각각 다름) 업로드 → 심사 대기 (배치 noeul-01-r1). 재생성 없이 1차 통과, 4장 모두 머리·눈·의상 일관" }
+  - { at: "2026-09-05", step: illustration, note: "noeul-01-r1 결정: reject (selected 없음, note 없음, 후보별 판정 없음). 컨셉 폐기 → status REJECTED. deadlock-01 기각의 대체 컨셉이었으므로 그 줄기는 여기서 종료된다. 지시에 따라 대체 컨셉은 자동 생성하지 않는다 — 새 컨셉은 사람이 심사실 버튼으로 요청" }

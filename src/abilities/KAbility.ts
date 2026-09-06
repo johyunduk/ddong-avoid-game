@@ -3,6 +3,7 @@ import { BaseAbility } from './BaseAbility';
 import type { GameSceneAPI } from './types';
 import type PoolablePoopBase from '../objects/PoolablePoopBase';
 import { K_PARAMS } from '../config/abilityParams';
+import { charAnimKey, sheetTextureKey, type CharDir } from '../utils/charAnim';
 
 // ── K (아빠) 능력 ────────────────────────────────────────────────────────
 // K_PARAMS.gmhmInterval 점(초사이언 전)마다 현재 캐릭터(움직이던 그 스프라이트)가
@@ -60,6 +61,7 @@ export class KAbility extends BaseAbility {
   private sonDir: string = 'front';
   private sonWanderDir = -1; // 배회 방향 (-1 왼쪽 / +1 오른쪽)
   private sonFootOffset = 0; // 발을 바닥 라인에 맞추기 위한 y 오프셋 (센터 원점 보정)
+  private sonAnim = false;   // 태이 시트가 로드돼 있으면 달리기 애니메이션으로 동작
 
   // 사망 승계 여부 (1회만 승계 → 이후 정상 게임오버)
   private transformed = false;
@@ -72,8 +74,13 @@ export class KAbility extends BaseAbility {
   onCreate(api: GameSceneAPI): void {
     const { scene, player } = api;
 
-    // '태이' 크기(아빠의 80%)로, 땅(발 라인 정렬)에서 배회
-    const son = scene.physics.add.sprite(scene.scale.width / 2, player.y, 'ktei_front');
+    // '태이' 크기(아빠의 80%)로, 땅(발 라인 정렬)에서 배회.
+    // 태이 시트(ktei)가 로드돼 있으면 달리기 애니메이션으로, 없으면 기존 정적 텍스처로 동작한다.
+    this.sonAnim = scene.textures.exists(sheetTextureKey('ktei', 'left'));
+    const son = scene.physics.add.sprite(
+      scene.scale.width / 2, player.y,
+      this.sonAnim ? sheetTextureKey('ktei', 'left') : 'ktei_front',
+    );
     son.setDisplaySize(player.displayWidth * KTEI_SCALE, player.displayHeight * KTEI_SCALE);
     // 작아진 만큼 아래로 내려 발을 아빠와 같은 바닥 라인에 맞춤 (센터 원점 보정)
     this.sonFootOffset = (player.displayHeight - son.displayHeight) / 2;
@@ -99,6 +106,9 @@ export class KAbility extends BaseAbility {
     );
 
     this.son = son;
+    // 첫 update 전까지 시트 0번 프레임(피격)이 보이지 않도록 시작 방향을 바로 잡는다
+    this.sonDir = this.sonWanderDir > 0 ? 'right' : 'left';
+    this._faceSon(this.sonDir as CharDir);
   }
 
   /** 태이 제거 시 collider도 함께 정리 — 죽은 body를 매 스텝 검사하는 잔여 collider 방지 */
@@ -135,12 +145,29 @@ export class KAbility extends BaseAbility {
     // 바닥 라인 고정 (아빠 y 기준, 발 정렬)
     son.y = player.y + this.sonFootOffset;
 
-    // 이동 방향으로 좌우 스프라이트 전환
+    // 이동 방향으로 좌우 전환 — 시트가 있으면 그 방향의 달리기를 재생한다
     const dir = this.sonWanderDir > 0 ? 'right' : 'left';
     if (dir !== this.sonDir) {
-      son.setTexture(`ktei_${dir}`);
+      this._faceSon(dir as CharDir);
       this.sonDir = dir;
     }
+  }
+
+  /** 태이의 방향 전환. 시트 모드면 달리기 애니메이션, 아니면 정적 텍스처. */
+  private _faceSon(dir: CharDir): void {
+    const son = this.son;
+    if (!son) return;
+    if (this.sonAnim) {
+      const key = charAnimKey('ktei', dir, 'walk');
+      if (son.scene.anims.exists(key)) {
+        // 표시 크기는 프레임을 갈아끼워도 유지돼야 한다 (텍스처가 바뀌므로 다시 잡는다)
+        const w = son.displayWidth, h = son.displayHeight;
+        son.play(key, true);
+        son.setDisplaySize(w, h);
+        return;
+      }
+    }
+    son.setTexture(`ktei_${dir}`);
   }
 
   onDestroy(_api: GameSceneAPI): void {

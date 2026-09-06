@@ -1,0 +1,35 @@
+{
+  "image": "chibi_left.webp",
+  "frameWidth": 208,
+  "frameHeight": 312,
+  "frames": [
+    "hit",
+    "walk-1",
+    "walk-2",
+    "walk-3",
+    "walk-4",
+    "walk-5",
+    "walk-6"
+  ],
+  "anims": {
+    "walk": {
+      "frames": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "frameRate": 12,
+      "repeat": -1
+    },
+    "hit": {
+      "frames": [
+        0
+      ],
+      "frameRate": 1,
+      "repeat": 0
+    }
+  }
+}
