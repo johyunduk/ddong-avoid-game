@@ -678,7 +678,7 @@ def beam_tube(width: int = 512, height: int = 128, sigma: float = 0.42,
     return img.filter(ImageFilter.GaussianBlur(1.0))
 
 
-def beam_core(src: Path, sharpen: float = 2.4) -> Image.Image:
+def beam_core(src: Path, sharpen: float = 2.4, floor: float = 0.0) -> Image.Image:
     """검기 코어 — 같은 형태를 **흰색 하드 엣지**로 뽑는다.
 
     애니메 이펙트는 '납작한 형태 + 늘어난 흰 선'이 있어야 작은 크기에서 읽힌다.
@@ -686,6 +686,10 @@ def beam_core(src: Path, sharpen: float = 2.4) -> Image.Image:
     """
     im = Image.open(src).convert("RGBA")
     a = np.asarray(im.getchannel("A"), dtype=np.float32) / 255.0
+    if floor > 0:
+        # 밝은 원본에서 **가장 밝은 부분만** 심지로 남긴다.
+        # 바닥을 안 깎으면 코어가 형태를 통째로 먹어 색 테두리만 남는다
+        a = np.clip((a - floor) / (1.0 - floor), 0.0, 1.0)
     a = np.clip(a ** sharpen * 1.35, 0.0, 1.0)
     rgb = np.full((*a.shape, 3), 255, dtype=np.uint8)
     return Image.fromarray(np.dstack([rgb, (a * 255).astype(np.uint8)]), "RGBA")
@@ -724,7 +728,10 @@ def main() -> int:
                    help="내부를 비워 반투명하게 (0=끄기, 0.3~0.5 권장). 코어 판을 먼저 뽑고 나서 쓴다")
     p.add_argument("--beam-tip", action="store_true",
                    help="한쪽만 뾰족하게 (손끝에서 뻗는 광선용). 기본은 양끝 테이퍼")
-    p.add_argument("--beam-core", help="검기 코어(흰 하드엣지)로 가공할 png")
+    p.add_argument("--beam-core", help="코어(흰 하드엣지)로 가공할 png")
+    p.add_argument("--core-floor", type=float, default=0.0,
+                   help="이 밝기 아래는 심지에서 제외 (밝은 원본일수록 올린다)")
+    p.add_argument("--core-sharpen", type=float, default=2.4)
     p.add_argument("--frames-from", help="생성한 프레임 스트립 png 를 게임용 시트로 자른다")
     p.add_argument("--frames", type=int, default=8)
     p.add_argument("--frame-size", default="192x192", help="프레임 크기 WxH")
@@ -833,7 +840,7 @@ def main() -> int:
             raise SystemExit("--out-file 이 필요합니다")
         out = Path(a.out_file)
         out.parent.mkdir(parents=True, exist_ok=True)
-        beam_core(Path(a.beam_core)).save(out)
+        beam_core(Path(a.beam_core), sharpen=a.core_sharpen, floor=a.core_floor).save(out)
         print(f"검기 코어: {out}")
         return 0
 

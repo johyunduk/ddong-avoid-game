@@ -1,3 +1,9 @@
+> **폐기됨 (2026-09-06)** — 꼬리와 여우불 둘 다 **프레임 시트**로 옮겼다.
+> `../tail-sheet/README.md` · `../foxfire-sheet/README.md` 참고.
+> 절차 생성 깃(`--plume`)으로 만들던 `tail.png` 는 삭제했다.
+> 아래는 그때의 기록으로 남긴다 — 왜 생성 모델로 꼬리를 못 뽑았는지,
+> 왜 여우불을 원본으로 되돌렸는지는 지금도 유효한 교훈이다.
+
 # 구미 이펙트 텍스처
 
 `public/assets/fx/particles/` 의 `tail.png` · `foxfire.png`.

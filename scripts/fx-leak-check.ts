@@ -210,7 +210,7 @@ async function main() {
   // 구미 꼬리(9개 상시, 가산)가 여기 올라가 렉과 렌더 순서 붕괴를 일으킨 적이 있다.
   const persist = [];
   for (let i = 0; i < 9; i++) {
-    persist.push(fxSprite(scene, 100 + i * 10, 400, 'fx_tail', {
+    persist.push(fxSprite(scene, 100 + i * 10, 400, 'fx_proc_streak', {
       rotation: 0, scale: [0.14, 0.14], origin: [0, 0.5],
       tint: 0xff2200, alpha: 0.9, depth: 3, blend: 'add',
       lifeMs: 60000, slot: 'gumi_tail', maxConcurrent: 12,

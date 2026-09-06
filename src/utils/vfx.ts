@@ -74,8 +74,6 @@ const FX_PARTICLE_ASSETS: Record<string, string> = {
   fx_k_beam_core: 'k-beam-core.png',
   // 무기 여의주 — 어두운 본체 + 속에서 타는 빛 + 흰 반사. 절차 생성(--orb)
   fx_yeoiju: 'yeoiju.png',
-  // 구미 꼬리 — 절차 생성한 깃(--plume). 무채색이라 9색 착색이 탁해지지 않는다
-  fx_tail: 'tail.png',
   // 수학 생성 — 흰색이라 setTint 로 자유롭게 착색
   fx_proc_arc:    'proc-arc.png',
   fx_proc_petal:  'proc-petal.png',
@@ -125,6 +123,16 @@ const FX_SHEETS: FxSheetAsset[] = [
   // 부활 연꽃 — 피어나는 과정이 프레임에 들어 있다. 9fps 로 천천히 핀다
   { fxKey: 'lotusBloom', file: 'lotus_192x192.png', frameCount: 8, frameRate: 9,
     defaultScale: 1, defaultDepth: 353, blend: 'normal', maxConcurrent: 2, preload: true },
+  // 여우불 — 무채색 루프. 9색으로 착색되므로 색을 굽지 않는다
+  { fxKey: 'foxFire', file: 'foxfire_128x192.png', frameCount: 8, frameRate: 14,
+    defaultScale: 1, defaultDepth: 200, blend: 'normal', maxConcurrent: 16, preload: true },
+  // 여우불 심지 — 같은 프레임의 가장 밝은 부분만 남긴 흰 판. 가산으로 얹어
+  // '착색된 외곽 + 흰 심지' 를 만든다 (회색조를 통째로 착색하면 심지까지 물든다)
+  { fxKey: 'foxFireCore', file: 'foxfirecore_128x192.png', frameCount: 8, frameRate: 14,
+    defaultScale: 1, defaultDepth: 202, blend: 'add', maxConcurrent: 16, preload: true },
+  // 구미호 꼬리 — 털이 살랑이는 루프. 9개가 각각 다른 색으로 착색된다
+  { fxKey: 'foxTail', file: 'foxtail_256x96.png', frameCount: 8, frameRate: 10,
+    defaultScale: 1, defaultDepth: 3, blend: 'add', maxConcurrent: 12, preload: true },
   { fxKey: 'itemPop', file: 'puffstars_120x109.png', frameCount: 42, frameRate: 48,
     defaultScale: 0.7, defaultDepth: 123, blend: 'normal', maxConcurrent: 4, preload: false },
   { fxKey: 'sparkleField', file: 'constellation_299x313.png', frameCount: 30, frameRate: 30,
@@ -188,7 +196,9 @@ export type FxKey =
   | 'sparkleField' | 'auraRing'          // 시트 — 아직 미사용(로딩 안 함)
   | 'swordSlash'                         // 시트 — 참격 (프레임마다 형태가 바뀐다)
   | 'boltGold' | 'boltRed'               // 시트 — 낙뢰 (번쩍임이 프레임에 들어 있다)
-  | 'lotusBloom';                        // 시트 — 부활 연꽃 (봉오리 → 만개 → 흩어짐)
+  | 'lotusBloom'                         // 시트 — 부활 연꽃 (봉오리 → 만개 → 흩어짐)
+  | 'foxFire' | 'foxFireCore'            // 시트 — 여우불 (착색 외곽 + 흰 심지 두 겹)
+  | 'foxTail';                           // 시트 — 구미호 꼬리 (털이 살랑이는 루프)
 
 /** 프레임 하나를 캔버스에 그리는 함수. t 는 0(첫 프레임) ~ 1(마지막) 정규화 진행도 */
 type FrameDrawer = (ctx: CanvasRenderingContext2D, t: number, w: number, h: number) => void;
@@ -291,6 +301,21 @@ const FX_REGISTRY: Record<FxKey, FxDefinition> = {
     textureKey: 'fxsheet_lotusBloom',
     frameWidth: 192, frameHeight: 192, frameCount: 8, frameRate: 9,
     defaultScale: 1, defaultDepth: 353, blend: 'normal', maxConcurrent: 2,
+  },
+  foxFire: {
+    textureKey: 'fxsheet_foxFire',
+    frameWidth: 128, frameHeight: 192, frameCount: 8, frameRate: 14,
+    defaultScale: 1, defaultDepth: 200, blend: 'normal', maxConcurrent: 16,
+  },
+  foxFireCore: {
+    textureKey: 'fxsheet_foxFireCore',
+    frameWidth: 128, frameHeight: 192, frameCount: 8, frameRate: 14,
+    defaultScale: 1, defaultDepth: 202, blend: 'add', maxConcurrent: 16,
+  },
+  foxTail: {
+    textureKey: 'fxsheet_foxTail',
+    frameWidth: 256, frameHeight: 96, frameCount: 8, frameRate: 10,
+    defaultScale: 1, defaultDepth: 3, blend: 'add', maxConcurrent: 12,
   },
 };
 
@@ -1206,6 +1231,19 @@ export interface FxSpriteOptions {
   depth?: number;
   blend?: FxBlend;
   /**
+   * 정지 텍스처 대신 **프레임 시트를 반복 재생**한다.
+   *
+   * playFx 는 한 번 재생하고 스스로 사라지지만, 여우불처럼 **호출부가 들고 다니며
+   * 계속 움직이는** 이펙트는 살아 있는 동안 계속 돌아야 한다.
+   * `scale` 은 시트의 프레임 크기 기준이 된다.
+   */
+  sheet?: FxKey;
+  /**
+   * 시트 재생을 시작할 지점 (0~1). 같은 루프를 여러 개 띄울 때 **위상을 어긋나게** 한다 —
+   * 구미호 꼬리 9개가 한 박자로 살랑이면 부채가 통째로 펄럭이는 것처럼 보인다.
+   */
+  sheetStart?: number;
+  /**
    * 블룸 레이어에 올릴지 (기본 **false**).
    *
    * 블룸 레이어는 depth 가 고정(122)이라, 여기 올라가면 **오브젝트가 지정한 depth 를 잃는다** —
@@ -1242,7 +1280,11 @@ export function fxSprite(
   opts: FxSpriteOptions,
 ): Phaser.GameObjects.Image | null {
   if (!isLive(scene)) return null;
-  if (!scene.textures.exists(texture)) return null;
+
+  const sheetDef = opts.sheet ? FX_REGISTRY[opts.sheet] : null;
+  const sheetAnim = opts.sheet && sheetDef ? ensureFxAnim(scene, opts.sheet, sheetDef) : null;
+  if (opts.sheet && !sheetAnim) return null;   // 시트가 아직 안 올라옴
+  if (!sheetDef && !scene.textures.exists(texture)) return null;
 
   const st = getState(scene);
   const slot = opts.slot ?? FX_SPRITE_SLOT;
@@ -1251,7 +1293,10 @@ export function fxSprite(
   const [sx, sy] = opts.scale ?? [1, 1];
   const blend = opts.blend ?? 'normal';
 
-  const img = scene.add.image(x, y, texture)
+  const img: Phaser.GameObjects.Image = sheetDef && sheetAnim
+    ? scene.add.sprite(x, y, sheetDef.textureKey, 0)
+    : scene.add.image(x, y, texture);
+  img
     .setDepth(opts.depth ?? 122)
     .setRotation(opts.rotation ?? 0)
     .setAlpha(opts.alpha ?? 1)
@@ -1259,6 +1304,12 @@ export function fxSprite(
   if (opts.origin) img.setOrigin(opts.origin[0], opts.origin[1]);
   img.setBlendMode(toBlendMode(blend));
   if (opts.tint !== undefined) img.setTint(opts.tint);
+  // 살아 있는 동안 계속 돈다 — 회수는 lifeMs 와 호출부의 destroy 가 맡는다
+  if (sheetDef && sheetAnim) {
+    const sp = img as Phaser.GameObjects.Sprite;
+    sp.play({ key: sheetAnim, repeat: -1 });
+    if (opts.sheetStart !== undefined) sp.anims.setProgress(opts.sheetStart);
+  }
 
   let insurance = -1;
   const done = trackDisposable(scene, st, img, () => {

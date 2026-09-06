@@ -14,14 +14,33 @@ const SWAY_AMP      = 0.50; // 흔들림 진폭 (radians)
 
 // ── 꼬리 ────────────────────────────────────────────────────────────────
 // 원본은 꼬리 하나를 발광 점 14개로 이었다 — 9개면 **가산 스프라이트 126장을
-// 매 프레임 재배치**하는 것이라 게임에서 가장 무거운 상시 비용이었다.
-// 실루엣("밑동 가늘고 중간이 가장 두껍고 끝이 뾰족")은 한 장에 구울 수 있다.
-const TAIL_TEXTURE = 'fx_tail';
+// 매 프레임 재배치**하는 것이라 게임에서 가장 무거운 상시 비용이었다. 지금은 9장이다.
+//
+// 시트라 **털이 프레임마다 살랑인다**. 다만 흔들림 자체는 시트에 굽지 않는다 —
+// 꼬리마다 위상·주기가 다르고 플레이어가 움직이면 반대쪽으로 쏠려야 하는데(트레일링),
+// 그건 baked 로는 안 된다. 시트는 털의 결만 맡고, 흔들림은 회전이 맡는다.
+// 대신 꼬리마다 **시작 프레임을 어긋나게** 줘서 결까지 한 박자로 놀지 않게 한다.
+const TAIL_SHEET   = 'foxTail' as const;
+const TAIL_FRAME_W = 256;
+const TAIL_FRAME_H = 96;
 const TAIL_LEN     = 70;  // 표시 길이(px) — 원본 14 × 5px 과 같다
 const TAIL_WIDTH   = 26;  // 표시 폭(px)
 const TRAIL_MAX  = 0.45;  // 플레이어 이동 방향 트레일링 최대 각도 (radians)
 /** 꼬리는 게임이 끝날 때까지 산다. vfx 보험 타이머는 그보다 길게 */
 const PERSIST_MS = 20 * 60 * 1000;
+
+// ── 여우불 ──────────────────────────────────────────────────────────────
+// 무채색 8프레임 루프. 9색으로 착색되므로 색을 굽지 않는다.
+// 발광 점 + Graphics 코어 2장으로 만들던 것을 시트 한 장이 대신한다 — 게다가 타오른다.
+const FOXFIRE_SHEET   = 'foxFire' as const;
+const FOXFIRE_CORE    = 'foxFireCore' as const;
+const FOXFIRE_FRAME_W = 128;
+const FOXFIRE_WIDTH   = 28;   // 화면상 폭(px)
+/** 반투명 — 배경이 비쳐야 '떠 있는 도깨비불'로 읽힌다. 심지는 조금 더 진하게 */
+const FOXFIRE_ALPHA   = 0.62;
+const FOXFIRE_CORE_ALPHA = 0.68;
+/** 여우불은 화면 밖으로 나가면 스스로 지운다. 보험은 넉넉히 */
+const FOXFIRE_LIFE_MS = 20000;
 
 
 // 꼬리 depth (플레이어 depth 5보다 낮아야 몸통 뒤에 숨음)
@@ -65,7 +84,8 @@ const TAIL_ANGLE_ORDER = [210, 330, 230, 310, 250, 290, 270, 190, 350]
 
 interface FoxFire {
   img: Phaser.GameObjects.Image;
-  core: Phaser.GameObjects.Graphics;
+  /** 흰 심지 — 착색된 외곽 위에 가산으로 얹는다 */
+  core: Phaser.GameObjects.Image;
   x: number;
   y: number;
   baseVx: number;
@@ -128,12 +148,14 @@ export class GumiAbility extends BaseAbility {
     this.spawnReduction = 0;
 
     api.player.setDepth(5);
+
+    // UR 인데 첫 여우불까지 200점을 기다려야 했다 — 시작하자마자 한 번 보여준다
+    this.summonFoxFires(api);
   }
 
   // ── 꼬리 추가 ─────────────────────────────────────────────────────
   private _addTail(api: GameSceneAPI): void {
     const { scene, player } = api;
-    ensureGlowDot(scene);
 
     const i         = this.tailCount;
     const color     = TAIL_COLORS[i] ?? 0xffffff;
@@ -147,11 +169,13 @@ export class GumiAbility extends BaseAbility {
     // index가 낮을수록(앞쪽 꼬리) depth를 높게 설정
     const segDepth = TAIL_DEPTH + (GUMI_PARAMS.maxTails - i) * 0.1;
 
-    const sx = TAIL_LEN / 512;
-    const sy = TAIL_WIDTH / 192;
+    const sx = TAIL_LEN / TAIL_FRAME_W;
+    const sy = TAIL_WIDTH / TAIL_FRAME_H;
 
     // 원점을 밑동에 둔다 — 여기가 회전축이자 몸에 붙는 지점이다
-    const img = fxSprite(scene, player.x, player.y + TAIL_ORIGIN_Y, TAIL_TEXTURE, {
+    const img = fxSprite(scene, player.x, player.y + TAIL_ORIGIN_Y, '', {
+      sheet: TAIL_SHEET,
+      sheetStart: Math.random(),
       rotation: baseAngle,
       scale: [sx * 0.05, sy],
       origin: [0, 0.5],
@@ -243,8 +267,8 @@ export class GumiAbility extends BaseAbility {
       if (!tl.img.active) return;
       scene.tweens.add({
         targets: tl.img,
-        scaleX: (TAIL_LEN * 1.45) / 512,
-        scaleY: (TAIL_WIDTH * 1.45) / 192,
+        scaleX: (TAIL_LEN * 1.45) / TAIL_FRAME_W,
+        scaleY: (TAIL_WIDTH * 1.45) / TAIL_FRAME_H,
         duration: 320, ease: 'Back.easeOut',
       });
     });
@@ -470,7 +494,6 @@ export class GumiAbility extends BaseAbility {
   private summonFoxFires(api: GameSceneAPI): void {
     const { scene, player } = api;
     const N = GUMI_PARAMS.foxFireCount;
-    ensureGlowDot(scene);
 
     for (let i = 0; i < N; i++) {
       const ringAngle = (i / N) * Math.PI * 2;
@@ -478,18 +501,34 @@ export class GumiAbility extends BaseAbility {
       const y = player.y + Math.sin(ringAngle) * 55;
       const color = FOX_FIRE_COLORS[i];
 
-      const img = scene.add.image(x, y, 'glow_dot')
-        .setDepth(200)
-        .setBlendMode(Phaser.BlendModes.ADD)
-        .setTint(color)
-        .setScale(0.45);
+      // 회색조 시트를 통째로 착색하면 **심지까지 물들어** 단색 덩어리가 된다.
+      // 원본처럼 착색된 반투명 외곽 + 흰 심지 두 겹으로 쌓는다.
+      const scale = FOXFIRE_WIDTH / FOXFIRE_FRAME_W;
+      const img = fxSprite(scene, x, y, '', {
+        sheet: FOXFIRE_SHEET,
+        scale: [scale, scale],
+        tint: color,
+        alpha: FOXFIRE_ALPHA,
+        depth: 200,
+        blend: 'normal',
+        lifeMs: FOXFIRE_LIFE_MS,
+        slot: 'gumi_foxfire',
+        maxConcurrent: 14,
+      });
+      if (!img) continue;
 
-      const core = scene.add.graphics().setDepth(202);
-      core.fillStyle(0xffffff, 1);
-      core.fillCircle(0, 0, 5);
-      core.fillStyle(color, 0.85);
-      core.fillCircle(0, 0, 3.5);
-      core.setPosition(x, y);
+      // 심지는 가산 — 밝은 하늘 위에서 흰색으로 포화돼 '속에서 타는 빛'이 된다
+      const core = fxSprite(scene, x, y, '', {
+        sheet: FOXFIRE_CORE,
+        scale: [scale, scale],
+        alpha: FOXFIRE_CORE_ALPHA,
+        depth: 202,
+        blend: 'add',
+        lifeMs: FOXFIRE_LIFE_MS,
+        slot: 'gumi_foxfire_core',
+        maxConcurrent: 14,
+      });
+      if (!core) { img.destroy(); continue; }
 
       this.foxFires.push({
         img, core, x, y, color,
@@ -523,18 +562,7 @@ export class GumiAbility extends BaseAbility {
       fire.img.setPosition(fire.x, fire.y);
       fire.core.setPosition(fire.x, fire.y);
 
-      if (fire.trailTimer % 3 === 0) {
-        const trail = scene.add.image(fire.x, fire.y, 'glow_dot')
-          .setDepth(199)
-          .setBlendMode(Phaser.BlendModes.ADD)
-          .setTint(fire.color)
-          .setScale(0.22);
-        scene.tweens.add({
-          targets: trail, scale: 0, alpha: 0, duration: 200,
-          ease: 'Quad.easeOut',
-          onComplete: () => trail.destroy(),
-        });
-      }
+      // 자취는 남기지 않는다 — 불꽃이 프레임마다 타오르므로 발광 점을 덧대면 지저분해진다
 
       if (fire.y < -30 || fire.x < -30 || fire.x > 430) {
         fire.img.destroy();
