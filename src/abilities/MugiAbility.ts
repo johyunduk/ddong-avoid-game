@@ -4,7 +4,7 @@ import type { GameSceneAPI } from './types';
 import type PoolablePoopBase from '../objects/PoolablePoopBase';
 import { MUGI_PARAMS } from '../config/abilityParams';
 import { ensureGlowDot } from '../utils/glowDot';
-import { beam, burst, fxSprite, impact, playFx } from '../utils/vfx';
+import { burst, fxSprite, impact, playFx } from '../utils/vfx';
 
 interface YeoijuOrb {
   gfx: Phaser.GameObjects.Image;
@@ -24,38 +24,23 @@ const HALO_Y_OFFSET = 28; // 후광 중심을 플레이어 중심보다 위로
 
 // ── 번개 ────────────────────────────────────────────────────────────────
 /**
- * 낙뢰 — 절차 생성한 흰 줄기 세 변형. 착색만으로 금색/검붉은이 갈린다.
- * **번쩍일 때마다 다른 변형을 뽑아야** 깜빡임으로 읽힌다 (같은 그림이 반복되면
- * '한 줄기가 흐려지는 것'으로 보인다).
+ * 낙뢰 — **프레임 시트**다. 8프레임이 각각 다른 경로로 그려져 있어 재생만 하면
+ * 지지직거린다. 색은 시트에 구워 넣었으므로(금색 / 검붉은) 착색하지 않는다.
+ *
+ * 이전엔 흰 줄기 세 변형을 번갈아 뽑아 가며 시작점·두께를 흔들어 네 번 쳤다.
+ * 그 흉내가 통째로 필요 없어졌다.
  */
-const BOLT_TEXTURES   = ['fx_bolt_1', 'fx_bolt_2', 'fx_bolt_3'] as const;
-const BOLT_GOLD_GLOW  = 0xffbb00;
-const BOLT_GOLD_CORE  = 0xfff3a0;
-const BOLT_RED_GLOW   = 0x8a0f0f;
-const BOLT_RED_CORE   = 0xff3311;
-/**
- * 본줄기 두께(px). 텍스처 세로 전체가 이 값에 매핑되므로 **이게 곧 번개가 좌우로
- * 흔들리는 폭**이다 — 작게 잡으면 지그재그가 눌려 직선으로 보인다.
- */
-const BOLT_GOLD_THICK = 120;
-const BOLT_RED_THICK  = 95;
-/** 번쩍임 타이밍 — 자라는 시간은 거의 0 이어야 낙뢰로 읽힌다 */
-/**
- * 본체 알파. **비쳐 보이되 코어는 남겨야 한다** —
- * 통째로 낮추면 하늘색에 섞여 그냥 바랜 그림이 되고, 얇은 코어를 진하게 남기면
- * 몸통 너머로 배경이 비치면서도 줄기 형태는 또렷하다.
- */
-const BOLT_BODY_ALPHA = 0.62;
-const BOLT_APPEAR_MS = 12;
-const BOLT_HOLD_MS   = 55;
-const BOLT_FADE_MS   = 90;
+const BOLT_FRAME_H   = 384;
+const BOLT_GOLD_CORE = 0xfff3a0;
+const BOLT_RED_CORE  = 0xff3311;
 
 /** 여의주 — 어두운 본체 + 불꽃 고리가 그려진 컷아웃 (192px) */
 const YEOIJU_TEXTURE = 'fx_yeoiju';
 const YEOIJU_SIZE    = 24;  // 원본 fillCircle 반지름 11 = 지름 22px 기준
-/** 연꽃 — 부활 연출 (256px) */
-const LOTUS_TEXTURE  = 'fx_lotus';
-const LOTUS_SIZE     = 100;
+/** 연꽃 — 부활 연출. 피어나는 과정이 들어 있는 8프레임 시트 */
+const LOTUS_SHEET    = 'lotusBloom' as const;
+const LOTUS_FRAME    = 192;
+const LOTUS_SIZE     = 136;
 /** 여의주·궤도 구슬은 오래 산다. vfx 보험 타이머는 그보다 길게 */
 const PERSIST_MS     = 20 * 60 * 1000;
 
@@ -368,55 +353,19 @@ export class MugiAbility extends BaseAbility {
   /**
    * 하늘에서 대상으로 내리꽂는 낙뢰.
    *
-   * **번개는 자라지 않는다.** 뻗어나가게 그리면 레이저로 읽히므로 한 번에 나타났다가
-   * 짧게 깜빡이고 꺼진다. 깜빡임은 매번 **다른 줄기**여야 한다 —
-   * 같은 그림을 반복하면 '한 줄기가 흐려지는 것'으로 보인다.
-   * 그래서 번쩍일 때마다 시작점·두께를 흔들고 **다른 줄기 텍스처**를 뽑는다.
+   * **번쩍임이 프레임에 들어 있다.** 8프레임이 각각 다른 경로로 그려져 있어
+   * 재생만 하면 지지직거린다 — 시작점·두께를 흔들고 다른 텍스처를 뽑아 가며
+   * 네 번 치던 코드가 통째로 필요 없어졌다.
    */
   private _bolt(scene: Phaser.Scene, tx: number, ty: number, gold: boolean): void {
-    const glow = gold ? BOLT_GOLD_GLOW : BOLT_RED_GLOW;
-    const core = gold ? BOLT_GOLD_CORE : BOLT_RED_CORE;
-    const base = gold ? BOLT_GOLD_THICK : BOLT_RED_THICK;
-
-    const flash = (thickMul: number, alpha: number, delay: number) => {
-      const fire = () => {
-        const sx = tx + Phaser.Math.Between(-30, 30);
-        const sy = -10;
-        const dx = tx - sx;
-        const dy = (ty + 8) - sy;
-        const thickness = base * thickMul * Phaser.Math.FloatBetween(0.85, 1.15);
-
-        beam(scene, sx, sy, {
-          angle: Math.atan2(dy, dx),
-          length: Math.hypot(dx, dy),
-          thickness,
-          texture: BOLT_TEXTURES[Phaser.Math.Between(0, BOLT_TEXTURES.length - 1)],
-          tint: glow,
-          alpha: alpha * BOLT_BODY_ALPHA,
-          blend: 'normal',
-          depth: 310,
-          // 자라는 시간 없음 — 번쩍 나타나 잠깐 있다 꺼진다
-          extendMs: BOLT_APPEAR_MS,
-          holdMs: BOLT_HOLD_MS,
-          fadeMs: BOLT_FADE_MS,
-          layers: [
-            { thickness: 1.25, alpha: alpha * 0.24, dz: -1, tint: glow },
-            // 코어는 얇게·진하게 — 이 선이 있어야 반투명해져도 형태가 읽힌다
-            { thickness: 0.45, alpha: Math.min(1, alpha), dz: 1, tint: core },
-          ],
-          maxConcurrent: 6,
-        });
-      };
-
-      if (delay <= 0) fire();
-      else scene.time.delayedCall(delay, () => { if (scene.sys.isActive()) fire(); });
-    };
-
-    // 번쩍 — 쉼 — 번쩍. 간격이 일정하면 깜빡임이 아니라 점멸등이 된다
-    flash(1, 0.95, 0);
-    flash(0.8, 0.8, 55);
-    flash(1.05, 0.9, 135);
-    if (gold) flash(0.7, 0.7, 205);
+    // 시트는 프레임 위→아래가 하늘→착지점이다. 원점을 바닥에 두고 대상에 맞춘다
+    const height = ty + 20;
+    playFx(scene, gold ? 'boltGold' : 'boltRed', tx, ty + 8, {
+      scale: height / BOLT_FRAME_H,
+      alpha: gold ? 0.95 : 0.9,
+      depth: 310,
+      origin: [0.5, 1],
+    });
   }
 
   // ── 공통 유틸 ────────────────────────────────────────────────────────
@@ -475,38 +424,19 @@ export class MugiAbility extends BaseAbility {
   /**
    * 부활 — 발밑에서 연꽃이 피어오른다.
    *
-   * 이전엔 꽃잎 9장을 폴리곤으로 각각 그려 Graphics 12개를 만들었다.
-   * 지금은 그려진 연꽃 한 장이 피듯이 커지고, 금빛 기운이 함께 올라온다.
+   * **피어나는 과정이 프레임에 들어 있다** (봉오리 → 벌어짐 → 만개 → 빛으로 흩어짐).
+   * 정지 그림 한 장을 키워서 '피는 것처럼' 보이게 하던 것과 다르다 — 꽃잎이 실제로 벌어진다.
+   * 원점을 꽃 바닥에 두고 발밑에 앉힌다.
    */
   private _playRevivalLotus(px: number, py: number, scene: Phaser.Scene): void {
     const cx = px;
     const cy = py + 38;   // 플레이어 발 바닥
-    const full = LOTUS_SIZE / 256;
 
-    // 아래에서 위로 피어나야 하므로 원점을 꽃 바닥에 둔다
-    const lotus = fxSprite(scene, cx, cy + 6, LOTUS_TEXTURE, {
-      scale: [full * 0.15, full * 0.05],
+    playFx(scene, LOTUS_SHEET, cx, cy + 6, {
+      scale: LOTUS_SIZE / LOTUS_FRAME,
       origin: [0.5, 0.92],
-      alpha: 0,
       depth: 353,
-      blend: 'normal',
-      lifeMs: 2600,
-      slot: 'mugi_lotus',
-      maxConcurrent: 2,
     });
-    if (lotus) {
-      scene.tweens.add({
-        targets: lotus, scaleX: full, scaleY: full, alpha: 1,
-        duration: 420, ease: 'Back.easeOut',
-      });
-      scene.time.delayedCall(900, () => {
-        if (!scene.sys.isActive() || !lotus.active) return;
-        scene.tweens.add({
-          targets: lotus, alpha: 0, duration: 500, ease: 'Quad.easeIn',
-          onComplete: () => lotus.destroy(),
-        });
-      });
-    }
 
     // 금빛 기운 — 꽃이 필 때 바닥에서 위로 흩어진다
     playFx(scene, 'bloom', cx, cy - 34, { scale: 1.1, tint: 0xffe082, depth: 352 });

@@ -72,15 +72,8 @@ const FX_PARTICLE_ASSETS: Record<string, string> = {
   fx_k_beam: 'k-beam.png',
   // 흰 통은 절차 생성 (--beam-tube) — 생성물에서 뽑으면 '선'이지 '통'이 되지 않는다
   fx_k_beam_core: 'k-beam-core.png',
-  // 낙뢰 — 절차 생성(scripts/fx-particle.py --bolt). 흰색이라 착색으로 성격이 갈리고,
-  // 시드가 다른 세 장을 번갈아 써야 번쩍일 때마다 '다른 줄기'로 읽힌다
-  fx_bolt_1: 'bolt-1.png',
-  fx_bolt_2: 'bolt-2.png',
-  fx_bolt_3: 'bolt-3.png',
-  // 무기 — 여의주(어두운 본체 + 불꽃 고리)와 부활 연꽃. 형태가 있는 컷아웃이라
-  // 파티클과 달리 밝기를 알파로 쓰지 않는다 (scripts/fx-particle.py --cutout)
+  // 무기 여의주 — 어두운 본체 + 속에서 타는 빛 + 흰 반사. 절차 생성(--orb)
   fx_yeoiju: 'yeoiju.png',
-  fx_lotus: 'lotus.png',
   // 구미 꼬리 — 절차 생성한 깃(--plume). 무채색이라 9색 착색이 탁해지지 않는다
   fx_tail: 'tail.png',
   // 수학 생성 — 흰색이라 setTint 로 자유롭게 착색
@@ -124,6 +117,14 @@ const FX_SHEETS: FxSheetAsset[] = [
   // 다른 점이 여기다 (뻗음 → 임팩트 → 찢어짐 → 조각 → 잔재)
   { fxKey: 'swordSlash', file: 'slash_256x192.png', frameCount: 8, frameRate: 20,
     defaultScale: 0.4, defaultDepth: 122, blend: 'normal', maxConcurrent: 6, preload: true },
+  // 낙뢰 — 프레임마다 경로가 다르다. 번쩍임을 코드로 흉내 낼 필요가 없어졌다
+  { fxKey: 'boltGold', file: 'boltgold_160x384.png', frameCount: 8, frameRate: 22,
+    defaultScale: 1, defaultDepth: 310, blend: 'normal', maxConcurrent: 4, preload: true },
+  { fxKey: 'boltRed', file: 'boltred_160x384.png', frameCount: 8, frameRate: 22,
+    defaultScale: 1, defaultDepth: 310, blend: 'normal', maxConcurrent: 4, preload: true },
+  // 부활 연꽃 — 피어나는 과정이 프레임에 들어 있다. 9fps 로 천천히 핀다
+  { fxKey: 'lotusBloom', file: 'lotus_192x192.png', frameCount: 8, frameRate: 9,
+    defaultScale: 1, defaultDepth: 353, blend: 'normal', maxConcurrent: 2, preload: true },
   { fxKey: 'itemPop', file: 'puffstars_120x109.png', frameCount: 42, frameRate: 48,
     defaultScale: 0.7, defaultDepth: 123, blend: 'normal', maxConcurrent: 4, preload: false },
   { fxKey: 'sparkleField', file: 'constellation_299x313.png', frameCount: 30, frameRate: 30,
@@ -185,7 +186,9 @@ export type FxKey =
   | 'slash' | 'shockwave' | 'bloom'      // 절차 생성 (폴백 겸용)
   | 'impactHit' | 'itemPop'              // 시트 — 똥 파괴 / 아이템 획득
   | 'sparkleField' | 'auraRing'          // 시트 — 아직 미사용(로딩 안 함)
-  | 'swordSlash';                        // 시트 — 참격 (프레임마다 형태가 바뀐다)
+  | 'swordSlash'                         // 시트 — 참격 (프레임마다 형태가 바뀐다)
+  | 'boltGold' | 'boltRed'               // 시트 — 낙뢰 (번쩍임이 프레임에 들어 있다)
+  | 'lotusBloom';                        // 시트 — 부활 연꽃 (봉오리 → 만개 → 흩어짐)
 
 /** 프레임 하나를 캔버스에 그리는 함수. t 는 0(첫 프레임) ~ 1(마지막) 정규화 진행도 */
 type FrameDrawer = (ctx: CanvasRenderingContext2D, t: number, w: number, h: number) => void;
@@ -273,6 +276,21 @@ const FX_REGISTRY: Record<FxKey, FxDefinition> = {
     textureKey: 'fxsheet_swordSlash',
     frameWidth: 256, frameHeight: 192, frameCount: 8, frameRate: 20,
     defaultScale: 0.4, defaultDepth: 122, blend: 'normal', maxConcurrent: 6,
+  },
+  boltGold: {
+    textureKey: 'fxsheet_boltGold',
+    frameWidth: 160, frameHeight: 384, frameCount: 8, frameRate: 22,
+    defaultScale: 1, defaultDepth: 310, blend: 'normal', maxConcurrent: 4,
+  },
+  boltRed: {
+    textureKey: 'fxsheet_boltRed',
+    frameWidth: 160, frameHeight: 384, frameCount: 8, frameRate: 22,
+    defaultScale: 1, defaultDepth: 310, blend: 'normal', maxConcurrent: 4,
+  },
+  lotusBloom: {
+    textureKey: 'fxsheet_lotusBloom',
+    frameWidth: 192, frameHeight: 192, frameCount: 8, frameRate: 9,
+    defaultScale: 1, defaultDepth: 353, blend: 'normal', maxConcurrent: 2,
   },
 };
 
@@ -704,6 +722,8 @@ export interface PlayFxOptions {
   scale?: number;
   /** 라디안 */
   rotation?: number;
+  /** 표시 원점 [x, y]. 낙뢰처럼 **한쪽 끝을 대상에 맞춰야** 하는 시트에 쓴다 */
+  origin?: [number, number];
   depth?: number;
   tint?: number;
   alpha?: number;
@@ -739,6 +759,7 @@ export function playFx(
     .setScale(scale)
     .setRotation(opts.rotation ?? 0)
     .setAlpha(opts.alpha ?? 1);
+  if (opts.origin) sprite.setOrigin(opts.origin[0], opts.origin[1]);
 
   const blend = opts.blend ?? def.blend;
   sprite.setBlendMode(toBlendMode(blend));

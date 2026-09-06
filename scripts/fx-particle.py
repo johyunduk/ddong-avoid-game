@@ -436,7 +436,7 @@ def sheet_slash(frames: int = 8, width: int = 256, height: int = 160,
 
 def slice_frames(src: Path, count: int = 8, out_w: int = 192, out_h: int = 192,
                  thresh: int = 10, pad: float = 0.10, rotate: int = 0,
-                 ramp: tuple[int, int, int] | None = None) -> "Image.Image":
+                 ramp: tuple[int, int, int] | None = None, hot: float = 0.84) -> "Image.Image":
     """생성한 **한 장짜리 프레임 스트립** → 게임용 플립북 시트.
 
     ChatGPT(GPT Image) 에 "한 장에 N프레임 가로 일렬" 을 시키면 프레임 간 일관성 문제가
@@ -500,13 +500,15 @@ def slice_frames(src: Path, count: int = 8, out_w: int = 192, out_h: int = 192,
             # 심지가 흰색으로 남아야 발광체로 읽힌다
             deep = np.array([c * 0.45 for c in ramp], dtype=np.float32)
             mid = np.array(ramp, dtype=np.float32)
-            hot = np.array([255.0, 255.0, 255.0], dtype=np.float32)
+            white = np.array([255.0, 255.0, 255.0], dtype=np.float32)
             # 흰 심지는 **가장 밝은 구간에서만** 나와야 한다. 경계를 낮게 잡으면
             # 원본이 전반적으로 밝은 탓에 대부분이 흰색이 되고 색은 테두리만 남는다
             t = np.clip(g / 0.30, 0.0, 1.0)[..., None]
-            u = np.clip((g - 0.84) / 0.16, 0.0, 1.0)[..., None] ** 1.4
+            # `hot` 을 올리면 흰 심지가 좁아진다 — 어두운 색(검붉은 번개 등)은
+            # 경계를 높이지 않으면 밝은 원본에 밀려 전부 흰색이 된다
+            u = np.clip((g - hot) / max(1.0 - hot, 1e-3), 0.0, 1.0)[..., None] ** 1.4
             col = deep * (1 - t) + mid * t
-            col = col * (1 - u) + hot * u
+            col = col * (1 - u) + white * u
             rgb = np.clip(col, 0, 255).astype(np.uint8)
         sheet.paste(Image.fromarray(np.dstack([rgb, (a * 255).astype(np.uint8)]), "RGBA"),
                     (i * out_w, 0))
@@ -728,6 +730,10 @@ def main() -> int:
     p.add_argument("--frame-size", default="192x192", help="프레임 크기 WxH")
     p.add_argument("--frames-rotate", type=int, default=0, help="셀을 회전(반시계, 도)")
     p.add_argument("--frames-ramp", help="밝기를 색 계단으로 구워 넣는다 (예: ff9a2e)")
+    p.add_argument("--frames-pad", type=float, default=0.10,
+                   help="셀 여백 비율. 프레임이 붙어 있으면 낮춘다(이웃이 물린다)")
+    p.add_argument("--frames-ramp-hot", type=float, default=0.84,
+                   help="흰 심지가 시작되는 밝기. 올릴수록 심지가 좁아진다")
     p.add_argument("--sheet-slash", action="store_true",
                    help="참격 플립북 시트를 절차 생성 (프레임마다 형태가 바뀐다)")
     p.add_argument("--sheet-frames", type=int, default=8)
@@ -758,7 +764,8 @@ def main() -> int:
             h = a.frames_ramp.lstrip("#")
             ramp = (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
         img = slice_frames(Path(a.frames_from), count=a.frames, out_w=fw, out_h=fh,
-                           rotate=a.frames_rotate, ramp=ramp)
+                           rotate=a.frames_rotate, ramp=ramp, hot=a.frames_ramp_hot,
+                           pad=a.frames_pad)
         out = Path(a.out_file)
         out.parent.mkdir(parents=True, exist_ok=True)
         img.save(out)

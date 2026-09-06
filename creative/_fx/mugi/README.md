@@ -1,54 +1,21 @@
 # 무기 이펙트 텍스처
 
-`public/assets/fx/particles/` 의 `yeoiju.png` · `lotus.png` · `bolt.png` 원본과 재생성 방법.
+`public/assets/fx/particles/yeoiju.png` 원본과 재생성 방법.
+번개와 연꽃은 프레임 시트로 옮겨 갔다 — `../bolt-sheet/` · `../lotus-sheet/`.
 
-## 번개도 그린다
+## 번개는 프레임 시트로 옮겼다
 
-`bolt-1/2/3.png` 는 절차 생성이다.
+절차 생성 번개(`--bolt`, 시드 3변형)를 만들어 썼지만 버렸다 —
+생성 모델이 프레임마다 다른 경로를 한 번에 그린다. `../bolt-sheet/README.md`.
 
-```bash
-for i in 1 2 3; do
-  C:\ComfyUI\.venv\Scripts\python.exe scripts/fx-particle.py     --bolt --bolt-seed $i --out-file public/assets/fx/particles/bolt-$i.png
-done
-```
+지그재그를 손으로 맞추던 규칙은 기록으로 남긴다:
+매 마디 무작위면 흔들리기만 하고, 매 마디 정확히 교대하면 스프링이 된다.
+78% 확률로 교대하고, 마디 간격을 고르지 않게 두고, 꺾이는 폭은 대부분 작게 가끔 크게.
 
-ComfyUI 로 번개 재료를 뽑아 잘라 쓰는 것도 해 봤지만 버렸다 —
-**획이 굵고 뭉툭해서, 좌우로 크게 흔들리게 하려고 늘리면 같이 뚱뚱해진다.**
-얇은 획 + 큰 흔들림을 동시에 얻으려면 그리는 수밖에 없다.
+## 연꽃은 프레임 시트로 옮겼다
 
-### 지그재그를 잡는 규칙
-
-- **매 마디 무작위**로 흩뿌리면 흔들리기만 하고 지그재그로 안 읽힌다
-- **매 마디 정확히 교대**시키면 스프링·코일처럼 보인다
-- → 78% 확률로 교대하고, 마디 간격도 고르지 않게 두고,
-  꺾이는 폭은 **대부분 작게(0.12~0.45) 가끔 크게(0.6~1.0)** 준다
-- **가지도 지그재그여야 한다.** 곧게 뻗은 가지는 번개가 아니라 나뭇가지로 보인다 —
-  가지마다 각도를 크게 꺾어 걷고(`zigzag`), 60% 확률로 잔가지가 한 번 더 갈라진다
-
-흰색이라 착색만으로 성격이 갈린다 — 검붉은 번개(`0x8a0f0f`)와 황금 번개(`0xffbb00`)가
-같은 텍스처에서 나온다. **시드가 다른 세 장을 번갈아 쓴다** — 같은 그림이 반복되면
-'깜빡임'이 아니라 '한 줄기가 흐려지는 것'으로 보인다.
-
-## 연꽃
-
-```bash
-# 연꽃 — 부활 연출
-python scripts/comfyui-generate.py --workflow character --no-prefix \
-  --width 1024 --height 1024 --count 5 --seed random --out creative/_fx/mugi/lotus \
-  --prompt "masterpiece, best quality, high resolution, game vfx asset, a single white lotus flower fully bloomed seen from the side, luminous translucent petals fanning upward, soft golden glow at the center, ethereal light, centered, isolated on pure black background, high contrast, no background details" \
-  --negative "character, person, hand, pond, water, leaf, stem, vase, pot, ground, text, watermark, signature, logo, frame, border, multiple flowers, cluttered, blurry, low quality, worst quality, gray background, white background"
-
-# 알파 컷아웃
-C:\ComfyUI\.venv\Scripts\python.exe scripts/fx-particle.py \
-  --cutout creative/_fx/mugi/src/yeoiju-source.webp --cutout-disc 0.30 --cutout-size 192 \
-  --out-file public/assets/fx/particles/yeoiju.png
-C:\ComfyUI\.venv\Scripts\python.exe scripts/fx-particle.py \
-  --cutout creative/_fx/mugi/src/lotus-source.webp --cutout-size 256 \
-  --out-file public/assets/fx/particles/lotus.png
-```
-
-`--cutout-disc`(본체가 어두운 대상용, 중심 원 안쪽을 불투명으로 유지)는 연꽃엔 필요 없다 —
-꽃잎이 밝아 밝기만으로 깔끔하게 따진다. 여의주 생성물에 써 봤지만 결국 절차 생성으로 갈아탔다.
+정지 컷아웃 한 장을 키워서 '피는 것처럼' 보이게 하던 것을 버리고,
+피어나는 과정이 들어 있는 8프레임 시트로 바꿨다 — `../lotus-sheet/README.md`.
 
 ## 여의주는 그린다
 
