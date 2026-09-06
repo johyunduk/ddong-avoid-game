@@ -37,14 +37,11 @@ const SS_AURA_RADIUS     = 100; // 발사 시 캐릭터 주변 원형 제거 반
 // 비용 상한 (YOU MUST — 늘리기 전에 실기에서 프레임을 재라)
 //   발사 1회 = 빔 3장 + 머즐 섬광 1장. 초사이언은 여기에 충격파 1 + 파티클 2세트.
 //   승계 후 상시 오라는 **2장**이고 트윈만 돌 뿐 다시 그리지 않는다.
-const BEAM_TEXTURE      = 'fx_k_beam';
-/**
- * 에너지파의 **흰 통**. 절차 생성이다 (scripts/fx-particle.py --beam-tube).
- * 생성 텍스처에서 뽑은 코어는 원본이 가느다란 필라멘트라 아무리 굵게 늘려도 '선'이지 '통'이
- * 아니었다. 드래곤볼식 에너지파는 균일한 흰 기둥 + 얇은 색 테두리라 기둥은 그려서 쓴다.
- */
-const BEAM_TUBE_TEXTURE = 'fx_k_beam_core';
-const BEAM_THICKNESS    = 30;   // 본체 두께(px). 초사이언은 SS_BEAM_WIDTH_MUL 배
+/** 화면상 두께(px). 시트 프레임 세로 전체가 이 값에 매핑된다 */
+// 시트 한 프레임이 512×64(=8:1)다. 인게임 두께를 여기에 맞춰 잡아야 늘어나지 않는다 —
+// 780/96 ≈ 8.1:1 이 정확히 시트 비율이고, 굵기 차이는 그림 자체가 만든다
+const BEAM_SS_THICKNESS = 108;
+const BEAM_THICKNESS    = 96;   // 본체 두께(px) — 시트 비율(8:1)에 맞춘 값
 const BEAM_EXTEND_MS    = 110;  // 손끝에서 뻗는 시간 — 짧을수록 '파!' 하고 터져나간다
 const BEAM_HOLD_MS      = 340;  // 에너지파는 번쩍이 아니라 **버티는** 연출이다
 const BEAM_FADE_MS      = 380;  // 훑듯이 사라지는 연출이라 알파 페이드보다 길게 준다
@@ -488,42 +485,35 @@ export class KAbility extends BaseAbility {
     scene: Phaser.Scene,
     ox: number, oy: number, ux: number, uy: number, widthMul: number,
   ): void {
-    const thickness = BEAM_THICKNESS * widthMul;
+    const ss = widthMul > 1;
+    const thickness = (ss ? BEAM_SS_THICKNESS : BEAM_THICKNESS);
 
-    // 텍스처는 자체 색(흰 코어 + 남색 플라즈마)을 가지므로 착색하지 않고 일반 블렌드로 그린다.
-    // 가산으로 올리면 밝은 하늘 배경에서 흰색에 수렴해 사라지고 블룸 패스까지 켜진다.
-    //
-    // **층 비율이 핵심이다.** 에너지파는 굵은 흰 통에 얇은 색 테두리가 둘린 모양이다 —
-    // 얇은 흰 선을 색이 감싸면 레이저가 되고, 흰 통을 색이 감싸면 에너지파가 된다.
+    // **빔의 요동은 시트가, 각도·길이·두께는 코드가 맡는다.**
+    // 초사이언 쪽은 전기 갈래가 프레임마다 다르게 그려져 있어 재생만 하면 지지직거린다 —
+    // 빔을 따라 스파크를 따로 뿌리던 코드가 필요 없어졌다.
+    // 색은 시트에 구워 넣었다. 통째로 착색하면 흰 코어까지 물들고, 시안은 하늘색에 묻힌다.
     beam(scene, ox, oy, {
       angle: Math.atan2(uy, ux),
       length: BEAM_LENGTH,
       thickness,
-      texture: BEAM_TEXTURE,
-      alpha: 0.4,
+      sheet: ss ? 'kBeamSs' : 'kBeam',
+      alpha: 0.92,
       blend: 'normal',
       depth: 315,
       extendMs: BEAM_EXTEND_MS,
       holdMs: BEAM_HOLD_MS,
       fadeMs: BEAM_FADE_MS,
-      layers: [
-        // 파란 테두리 — 통 텍스처를 착색해 쓴다. 생성 텍스처는 색이 번져 테두리가 안 선다
-        { thickness: 1.7, alpha: 0.6, dz: -2, texture: BEAM_TUBE_TEXTURE, tint: SPARK_BLUE },
-        // 굵은 흰 통 — 에너지파의 본체
-        { thickness: 0.95, alpha: 0.98, dz: 1, texture: BEAM_TUBE_TEXTURE },
-      ],
-      waver: { thickness: 0.1, periodMs: 190 },
-      // 손끝부터 훑듯이 사라진다 — 통째로 옅어지면 '꺼졌다'로 보이고,
-      // 꼬리가 머리를 쫓아가면 '빠져나갔다'로 보인다
       dissipate: 'retract',
+      maxConcurrent: 4,
     });
 
-    // 뻗어나가는 머리 — 빔 끝을 앞장서 달린다. 끝이 뭉툭해야 '기운 덩어리'로 읽힌다
+    // 뻗어나가는 머리 — 빔 끝을 앞장서 달린다. 끝이 뭉툭해야 '기운 덩어리'로 읽힌다.
+    // 시트는 균일한 통이라 이건 시트가 대신해 주지 않는다
     projectile(scene, ox, oy, {
       to: { x: ox + ux * BEAM_LENGTH, y: oy + uy * BEAM_LENGTH },
       duration: BEAM_EXTEND_MS,
       texture: CHARGE_TEXTURE,
-      scale: [(thickness * 2.2) / 192, (thickness * 2.2) / 192],
+      scale: [(thickness * 1.3) / 192, (thickness * 1.3) / 192],
       alpha: 0.9,
       blend: 'normal',
       depth: 316,
@@ -534,15 +524,13 @@ export class KAbility extends BaseAbility {
     RING_POSITIONS.forEach((p, i) => {
       this._later(scene, i * RING_STEP_MS, () => {
         playFx(scene, 'shockwave', ox + ux * BEAM_LENGTH * p, oy + uy * BEAM_LENGTH * p, {
-          scale: (thickness * 2.4) / 92, tint: SPARK_BLUE, alpha: 0.75, depth: 314,
+          scale: (thickness * 1.6) / 92, tint: SPARK_BLUE, alpha: 0.75, depth: 314,
         });
       });
     });
 
-    // 손끝 머즐 — 빔이 뻗기 시작하는 그 순간에 터진다
-    playFx(scene, 'bloom', ox, oy, { scale: 0.62 * widthMul, alpha: 0.95, depth: 317 });
-    // **히트스톱은 걸지 않는다.** 지속형 빔에는 어울리지도 않을뿐더러, 이 능력은 자기 점수로
-    // 다음 마일스톤을 넘겨 연쇄 발동한다 — 발사마다 화면을 얼리면 그게 그대로 렉이 된다.
+    // 머즐은 시트 안에 그려져 있다 — 프레임 비율(512:64)을 인게임 빔 비율(780:96)에
+    // 맞춰 뽑았으므로 늘어나지 않는다. 따로 얹던 머즐 스프라이트는 그래서 없앴다.
     impact(scene, { shake: { duration: 150, intensity: 0.0022 * widthMul } });
   }
 

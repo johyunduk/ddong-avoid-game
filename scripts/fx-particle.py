@@ -436,7 +436,12 @@ def sheet_slash(frames: int = 8, width: int = 256, height: int = 160,
 
 def slice_frames(src: Path, count: int = 8, out_w: int = 192, out_h: int = 192,
                  thresh: int = 10, pad: float = 0.10, rotate: int = 0,
-                 ramp: tuple[int, int, int] | None = None, hot: float = 0.84) -> "Image.Image":
+                 ramp: tuple[int, int, int] | None = None, hot: float = 0.84,
+                 start_fade: float = 0.0,
+                 edge: tuple[int, int, int] | None = None,
+                 keep_color: bool = False, end_fade: float = 0.0,
+                 crop: tuple[float, float] | None = None,
+                 axis: str = "x", color_alpha: float = 1.25) -> "Image.Image":
     """생성한 **한 장짜리 프레임 스트립** → 게임용 플립북 시트.
 
     ChatGPT(GPT Image) 에 "한 장에 N프레임 가로 일렬" 을 시키면 프레임 간 일관성 문제가
@@ -450,6 +455,11 @@ def slice_frames(src: Path, count: int = 8, out_w: int = 192, out_h: int = 192,
     색이 전부 같아서 '기운' 이 아니라 '단색 도형' 으로 보인다.
     """
     im = Image.open(src).convert("RGB")
+    if axis == "y":
+        # **가로로 아주 납작한 프레임**은 한 줄로 늘어놓을 수 없다 — 이미지 한 장에 6칸을
+        # 가로로 넣으면 칸이 좁아져서 원하는 비율이 안 나온다. 그래서 세로로 쌓아 받고
+        # 여기서 90도 돌려 기존(가로 배치) 경로로 흘려보낸다. 자르고 나서 되돌린다
+        im = im.transpose(Image.ROTATE_270)
     lum = np.asarray(im.convert("L"), dtype=np.float32)
     col = (lum > thresh).sum(axis=0).astype(np.float32)
 
@@ -483,8 +493,16 @@ def slice_frames(src: Path, count: int = 8, out_w: int = 192, out_h: int = 192,
 
     sheet = Image.new("RGBA", (out_w * count, out_h), (0, 0, 0, 0))
     for i, cx in enumerate(centers):
-        box = (int(round(cx - cell_w / 2)), top, int(round(cx + cell_w / 2)), bot + 1)
+        x0, x1 = cx - cell_w / 2, cx + cell_w / 2
+        if crop is not None:
+            # 셀 안에서 가로 구간만 떼어낸다. 발사점의 머즐과 빔 몸통은 인게임에서
+            # **늘어나는 배율이 전혀 다르다** — 몸통은 길이에 맞춰 늘리지만 머즐은
+            # 늘리면 동그란 폭발이 긴 줄무늬가 된다. 그래서 따로 잘라 따로 쓴다
+            x0, x1 = x0 + (x1 - x0) * crop[0], x0 + (x1 - x0) * crop[1]
+        box = (int(round(x0)), top, int(round(x1)), bot + 1)
         cell = im.crop(box)
+        if axis == "y":
+            cell = cell.transpose(Image.ROTATE_90)
         if rotate:
             # 시트의 기본 방향을 게임 진행 방향에 맞춰 둔다 — 호출부에서 매번 90도를
             # 더하는 것보다, 텍스처가 이미 맞는 방향인 편이 헷갈리지 않는다
@@ -493,17 +511,63 @@ def slice_frames(src: Path, count: int = 8, out_w: int = 192, out_h: int = 192,
         g = np.asarray(cell.convert("L"), dtype=np.float32) / 255.0
         a = np.clip((g - thresh / 255.0) / (1.0 - thresh / 255.0), 0.0, 1.0) ** 0.85
 
-        if ramp is None:
+        if start_fade > 0:
+            # 발사점(x=0)이 잘린 사각형으로 보이지 않게 **노즐 모양으로 좁힌다.**
+            # 알파만 낮추면 두께는 그대로라 '흐려지는 직사각형' 이고 여전히 각져 보인다 —
+            # 세로로 조여서 손끝에서 뿜어져 나오는 형태를 만들어야 한다
+            xr = np.arange(out_w, dtype=np.float32) / max(out_w - 1, 1)
+            f = np.clip(xr / max(start_fade, 1e-3), 0.0, 1.0) ** 0.7
+            dy = np.abs(np.arange(out_h, dtype=np.float32) - (out_h - 1) / 2) / (out_h / 2)
+            # x=0 에서도 심지는 남긴다 — 완전히 0 이면 빔이 허공에서 시작한다
+            allow = 0.14 + 0.86 * f
+            m = np.clip((allow[None, :] - dy[:, None]) / 0.16 + 1.0, 0.0, 1.0)
+            a *= m * (0.10 + 0.90 * f)[None, :]
+
+        if keep_color:
+            # **채도도 불투명도다.** 알파를 밝기에서만 뽑으면 검은 배경에서는 잘 보이던
+            # 진한 남색(밝기는 낮고 채도는 높다)이 거의 투명해져, 하늘색 배경에 얹었을 때
+            # 밝은 하이라이트만 남아 전체가 시안으로 보인다. 색이 있는 픽셀은 색이 있다는
+            # 사실만으로 불투명해야 한다
+            s0 = np.asarray(cell.convert("RGB"), dtype=np.float32)
+            chroma = (s0.max(axis=2) - s0.min(axis=2)) / 255.0
+            a = np.maximum(a, np.clip(chroma * color_alpha, 0.0, 1.0))
+
+        if end_fade > 0:
+            # 끝(x=W)도 셀 경계에서 칼로 자른 단면이다. 여기는 좁히지 않고 알파만 굴린다 —
+            # 빔의 끝은 뾰족한 게 아니라 뭉툭하게 흩어져야 '아직 뻗는 중' 으로 읽힌다
+            xr = np.arange(out_w, dtype=np.float32) / max(out_w - 1, 1)
+            e = np.clip((1.0 - xr) / max(end_fade, 1e-3), 0.0, 1.0) ** 0.8
+            a *= e[None, :]
+
+        if keep_color:
+            # 원본이 이미 색을 갖고 있을 때. 검은 배경 위에 그려진 그림이라 RGB 가
+            # 가장자리로 갈수록 검정에 눌려 있다 — 알파로 나눠 **스트레이트 알파로 되돌린다.**
+            # 그냥 쓰면 테두리가 시커멓게 죽어 색이 안 보인다
+            src = np.asarray(cell.convert("RGB"), dtype=np.float32)
+            # 나눗셈 바닥을 너무 낮게 잡으면 어두운 가장자리가 순색으로 폭발한다 —
+            # 남색이 시안으로, 금색이 레몬색으로 튄다. 0.35 면 형태는 살고 색조는 유지된다
+            straight = src / np.maximum(a, 0.35)[..., None]
+            # 하늘색 배경 위에 알파를 낮춰 얹으면 색이 배경 쪽으로 끌려가 바랜다.
+            # 미리 채도를 올려둬야 인게임에서 파랑·노랑이 남는다 (나이트 검기와 같은 처방)
+            grey = straight.mean(axis=2, keepdims=True)
+            rgb = np.clip(grey + (straight - grey) * (0.55 + 0.45 * color_alpha),
+                          0, 255).astype(np.uint8)
+        elif ramp is None:
             rgb = np.full((out_h, out_w, 3), 255, dtype=np.uint8)
         else:
             # 어두움 → 진한 색, 중간 → 지정색, 밝음 → 흰색.
             # 심지가 흰색으로 남아야 발광체로 읽힌다
-            deep = np.array([c * 0.45 for c in ramp], dtype=np.float32)
+            # 가장 어두운 단 = 바깥 테두리. 기본은 본색을 어둡게 깐 것이지만,
+            # `edge` 를 주면 테두리만 다른 색으로 뺀다 (파란 통 + 노란 겉불꽃 등)
+            deep = (np.array(edge, dtype=np.float32) if edge is not None
+                    else np.array([c * 0.45 for c in ramp], dtype=np.float32))
             mid = np.array(ramp, dtype=np.float32)
             white = np.array([255.0, 255.0, 255.0], dtype=np.float32)
             # 흰 심지는 **가장 밝은 구간에서만** 나와야 한다. 경계를 낮게 잡으면
             # 원본이 전반적으로 밝은 탓에 대부분이 흰색이 되고 색은 테두리만 남는다
-            t = np.clip(g / 0.30, 0.0, 1.0)[..., None]
+            # `edge` 를 쓸 때는 이 경계를 넓게 잡는다 — 0.30 이면 테두리 색이 알파
+            # 0.3 미만 구간에만 남아 배경에 묻혀 아예 안 보인다
+            t = np.clip(g / (0.62 if edge is not None else 0.30), 0.0, 1.0)[..., None]
             # `hot` 을 올리면 흰 심지가 좁아진다 — 어두운 색(검붉은 번개 등)은
             # 경계를 높이지 않으면 밝은 원본에 밀려 전부 흰색이 된다
             u = np.clip((g - hot) / max(1.0 - hot, 1e-3), 0.0, 1.0)[..., None] ** 1.4
@@ -737,6 +801,20 @@ def main() -> int:
     p.add_argument("--frame-size", default="192x192", help="프레임 크기 WxH")
     p.add_argument("--frames-rotate", type=int, default=0, help="셀을 회전(반시계, 도)")
     p.add_argument("--frames-ramp", help="밝기를 색 계단으로 구워 넣는다 (예: ff9a2e)")
+    p.add_argument("--frames-color-alpha", type=float, default=1.25,
+                   help="색이 불투명도에 얼마나 기여하는지. 낮추면 옅어진다 (기본 1.25)")
+    p.add_argument("--frames-axis", choices=("x", "y"), default="x",
+                   help="원본 스트립의 프레임 배치. y = 세로로 쌓인 줄 (납작한 프레임용)")
+    p.add_argument("--frames-crop", default=None,
+                   help="셀 안에서 떼어낼 가로 구간 (예: 0,0.28 / 0.26,1)")
+    p.add_argument("--frames-end-fade", type=float, default=0.0,
+                   help="프레임 오른쪽 끝(빔 끝)의 알파를 굴리는 폭 (0~1, 가로 비율)")
+    p.add_argument("--frames-keep-color", action="store_true",
+                   help="원본 색을 그대로 쓴다 (램프로 굽지 않음). 색이 그림에 이미 있을 때")
+    p.add_argument("--frames-ramp-edge", default=None,
+                   help="램프의 바깥 테두리 색 (기본: 본색을 어둡게 깐 것)")
+    p.add_argument("--frames-start-fade", type=float, default=0.0,
+                   help="프레임 왼쪽 끝(발사점)을 노즐 모양으로 좁히는 폭 (0~1, 가로 비율)")
     p.add_argument("--frames-pad", type=float, default=0.10,
                    help="셀 여백 비율. 프레임이 붙어 있으면 낮춘다(이웃이 물린다)")
     p.add_argument("--frames-ramp-hot", type=float, default=0.84,
@@ -767,12 +845,21 @@ def main() -> int:
             raise SystemExit("--out-file 이 필요합니다")
         fw, fh = (int(v) for v in a.frame_size.lower().split("x"))
         ramp = None
+        def _hex(v):
+            if not v:
+                return None
+            h = v.lstrip("#")
+            return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
         if a.frames_ramp:
             h = a.frames_ramp.lstrip("#")
             ramp = (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
         img = slice_frames(Path(a.frames_from), count=a.frames, out_w=fw, out_h=fh,
                            rotate=a.frames_rotate, ramp=ramp, hot=a.frames_ramp_hot,
-                           pad=a.frames_pad)
+                           pad=a.frames_pad, start_fade=a.frames_start_fade,
+                           edge=_hex(a.frames_ramp_edge), keep_color=a.frames_keep_color, end_fade=a.frames_end_fade,
+                           crop=(tuple(float(v) for v in a.frames_crop.split(","))
+                                 if a.frames_crop else None),
+                           axis=a.frames_axis, color_alpha=a.frames_color_alpha)
         out = Path(a.out_file)
         out.parent.mkdir(parents=True, exist_ok=True)
         img.save(out)

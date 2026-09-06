@@ -68,10 +68,6 @@ const FX_PARTICLE_ASSETS: Record<string, string> = {
   // 같은 형태의 흰 하드엣지 판. 단독으로 쓰지 않고 검기 위에 얇게 얹는 코어 층이다 —
   // 애니메 이펙트는 '납작한 형태 + 늘어난 흰 선'이 있어야 작은 크기에서 형태가 읽힌다
   fx_sword_beam_core: 'sword-beam-core.png',
-  // K 에너지파 — 발사점의 방사형 마디가 그대로 머즐이 되도록 잘라낸 직선 광선 (397×96)
-  fx_k_beam: 'k-beam.png',
-  // 흰 통은 절차 생성 (--beam-tube) — 생성물에서 뽑으면 '선'이지 '통'이 되지 않는다
-  fx_k_beam_core: 'k-beam-core.png',
   // 무기 여의주 — 어두운 본체 + 속에서 타는 빛 + 흰 반사. 절차 생성(--orb)
   fx_yeoiju: 'yeoiju.png',
   // 수학 생성 — 흰색이라 setTint 로 자유롭게 착색
@@ -133,6 +129,11 @@ const FX_SHEETS: FxSheetAsset[] = [
   // 구미호 꼬리 — 털이 살랑이는 루프. 9개가 각각 다른 색으로 착색된다
   { fxKey: 'foxTail', file: 'foxtail_256x96.png', frameCount: 8, frameRate: 10,
     defaultScale: 1, defaultDepth: 3, blend: 'add', maxConcurrent: 12, preload: true },
+  // K 에너지파 — 기본 / 초사이언. 초사이언 쪽은 전기 갈래가 프레임마다 다르다
+  { fxKey: 'kBeam', file: 'kbeam_512x64.png', frameCount: 6, frameRate: 18,
+    defaultScale: 1, defaultDepth: 315, blend: 'normal', maxConcurrent: 6, preload: true },
+  { fxKey: 'kBeamSs', file: 'kbeamss_512x64.png', frameCount: 6, frameRate: 22,
+    defaultScale: 1, defaultDepth: 315, blend: 'normal', maxConcurrent: 6, preload: true },
   { fxKey: 'itemPop', file: 'puffstars_120x109.png', frameCount: 42, frameRate: 48,
     defaultScale: 0.7, defaultDepth: 123, blend: 'normal', maxConcurrent: 4, preload: false },
   { fxKey: 'sparkleField', file: 'constellation_299x313.png', frameCount: 30, frameRate: 30,
@@ -198,7 +199,8 @@ export type FxKey =
   | 'boltGold' | 'boltRed'               // 시트 — 낙뢰 (번쩍임이 프레임에 들어 있다)
   | 'lotusBloom'                         // 시트 — 부활 연꽃 (봉오리 → 만개 → 흩어짐)
   | 'foxFire' | 'foxFireCore'            // 시트 — 여우불 (착색 외곽 + 흰 심지 두 겹)
-  | 'foxTail';                           // 시트 — 구미호 꼬리 (털이 살랑이는 루프)
+  | 'foxTail'                            // 시트 — 구미호 꼬리 (털이 살랑이는 루프)
+  | 'kBeam' | 'kBeamSs';                 // 시트 — K 에너지파 (기본 / 초사이언, 전기 포함)
 
 /** 프레임 하나를 캔버스에 그리는 함수. t 는 0(첫 프레임) ~ 1(마지막) 정규화 진행도 */
 type FrameDrawer = (ctx: CanvasRenderingContext2D, t: number, w: number, h: number) => void;
@@ -316,6 +318,16 @@ const FX_REGISTRY: Record<FxKey, FxDefinition> = {
     textureKey: 'fxsheet_foxTail',
     frameWidth: 256, frameHeight: 96, frameCount: 8, frameRate: 10,
     defaultScale: 1, defaultDepth: 3, blend: 'add', maxConcurrent: 12,
+  },
+  kBeam: {
+    textureKey: 'fxsheet_kBeam',
+    frameWidth: 512, frameHeight: 64, frameCount: 6, frameRate: 18,
+    defaultScale: 1, defaultDepth: 315, blend: 'normal', maxConcurrent: 6,
+  },
+  kBeamSs: {
+    textureKey: 'fxsheet_kBeamSs',
+    frameWidth: 512, frameHeight: 64, frameCount: 6, frameRate: 22,
+    defaultScale: 1, defaultDepth: 315, blend: 'normal', maxConcurrent: 6,
   },
 };
 
@@ -1078,6 +1090,14 @@ export interface BeamOptions {
   /** 광선 두께(px). 층 배율이 여기에 곱해진다 */
   thickness: number;
   texture?: string;
+  /**
+   * 정지 텍스처 대신 **프레임 시트**를 재생한다.
+   *
+   * 광선의 각도·길이·두께는 코드가 잡고, 시트는 **빔 자체의 요동**(플라즈마 난류,
+   * 주변 전기)만 맡는다. 길이는 `scaleX` 로 늘리므로 시트 프레임은 셀 폭을 꽉 채워야 한다.
+   * `layers` 는 시트를 쓸 때도 유효하다 — 같은 시트를 두께만 달리해 겹칠 수 있다.
+   */
+  sheet?: FxKey;
   /** 뻗는 시간 / 머무는 시간 / 사라지는 시간(ms) */
   extendMs?: number;
   holdMs?: number;
@@ -1126,7 +1146,10 @@ export function beam(
   if (!isLive(scene)) return null;
 
   const textureKey = opts.texture ?? SWEEP_DEFAULT_TEXTURE;
-  if (!scene.textures.exists(textureKey)) return null;
+  const sheetDef = opts.sheet ? FX_REGISTRY[opts.sheet] : null;
+  const sheetAnim = opts.sheet && sheetDef ? ensureFxAnim(scene, opts.sheet, sheetDef) : null;
+  if (opts.sheet && !sheetAnim) return null;                 // 시트가 아직 안 올라옴
+  if (!sheetDef && !scene.textures.exists(textureKey)) return null;
 
   const st = getState(scene);
   if (!acquireSlot(st, BEAM_SLOT, opts.maxConcurrent ?? BEAM_MAX_UNITS)) return null;
@@ -1150,6 +1173,8 @@ export function beam(
 
   /** 길이·두께를 px 로 지정받으므로 **층마다 자기 텍스처의 원본 크기**로 배율을 낸다 */
   const sizeOf = (key: string): { w: number; h: number } => {
+    // 시트는 프레임 크기가 곧 기준 크기다 (텍스처 전체가 아니라)
+    if (sheetDef) return { w: sheetDef.frameWidth, h: sheetDef.frameHeight };
     const src = scene.textures.get(key)?.getSourceImage() as { width?: number; height?: number } | undefined;
     return { w: src?.width || 1, h: src?.height || 1 };
   };
@@ -1162,7 +1187,10 @@ export function beam(
     const full = opts.length / texW;
     const sy = (thickness / texH) * (opts.flipY ? -1 : 1);
 
-    const img = scene.add.image(x, y, tex)
+    const img: Phaser.GameObjects.Image = sheetDef && sheetAnim
+      ? scene.add.sprite(x, y, sheetDef.textureKey, 0)
+      : scene.add.image(x, y, tex);
+    img
       .setOrigin(0, 0.5)
       .setDepth(depth + dz)
       .setRotation(opts.angle)
@@ -1170,6 +1198,12 @@ export function beam(
       .setScale(full * 0.05, sy);
     img.setBlendMode(toBlendMode(blend));
     if (tint !== undefined) img.setTint(tint);
+    if (sheetDef && sheetAnim) {
+      const sp = img as Phaser.GameObjects.Sprite;
+      sp.play({ key: sheetAnim, repeat: -1 });
+      // 겹 층끼리 같은 프레임이면 결이 겹쳐 한 장처럼 보인다 — 위상을 어긋나게 준다
+      sp.anims.setProgress(((dz + 2) * 0.27) % 1);
+    }
 
     pending++;
     const done = trackDisposable(scene, st, img, partDone);
