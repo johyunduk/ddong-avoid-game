@@ -67,6 +67,7 @@ class GameObj extends Emitter {
     this.displayList = null;
   }
   setDepth(d) { this.depth = d; return this; }
+  setPosition(x, y) { this.x = x; this.y = y; return this; }
   destroy() {
     if (!this.scene) return;
     this.scene = null;
@@ -264,15 +265,23 @@ export function createFakeScene() {
     image: (x, y, key) => spawn(x, y, key),
     particles: () => new ParticleEmitterObj(scene),
     layer: () => new Layer(scene),
+    // 보너스 점수 텍스트 — 장부에는 안 들어가지만 destroy 가 불려야 한다
+    text: () => {
+      const o = new GameObj(scene);
+      o.setOrigin = () => o;
+      o.alpha = 1;
+      return o;
+    },
   };
   // 로더는 즉시 성공한 것으로 취급 — 검증 대상은 회수 장부이지 네트워크가 아니다
   scene.load = {
     image: k => textureKeys.add(k),
     spritesheet: k => textureKeys.add(k),
   };
-  scene.cameras = { main: { shake: () => {} } };
+  scene.cameras = { main: { shake: () => {}, flash: () => {} } };
+  // 센티넬 궤도가 프레임 델타로 각도를 굴린다
+  scene.game = { renderer: { type: 2 }, loop: { delta: 16 } };
   scene.physics = { world: { timeScale: 1 } };
-  scene.game = { renderer: { type: 2 } }; // 2 = Phaser.WEBGL
 
   return scene;
 }

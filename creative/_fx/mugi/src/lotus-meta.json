@@ -1,0 +1,35 @@
+{
+  "workflow": "character",
+  "positive": "masterpiece, best quality, high resolution, game vfx asset, a single white lotus flower fully bloomed seen from the side, luminous translucent petals fanning upward, soft golden glow at the center, ethereal light, centered, isolated on pure black background, high contrast, no background details",
+  "negative": "oversized breasts, large breasts, seductive, sexy pose, exposed chest, revealing outfit, low neckline, cleavage, nsfw, character, person, hand, pond, water, leaf, stem, vase, pot, ground, text, watermark, signature, logo, frame, border, multiple flowers, cluttered, blurry, low quality, worst quality, gray background, white background",
+  "width": 1024,
+  "height": 1024,
+  "server": "http://127.0.0.1:8000",
+  "images": [
+    {
+      "file": "01.png",
+      "seed": 2055606709,
+      "model": "기본"
+    },
+    {
+      "file": "02.png",
+      "seed": 2055606710,
+      "model": "기본"
+    },
+    {
+      "file": "03.png",
+      "seed": 2055606711,
+      "model": "기본"
+    },
+    {
+      "file": "04.png",
+      "seed": 2055606712,
+      "model": "기본"
+    },
+    {
+      "file": "05.png",
+      "seed": 2055606713,
+      "model": "기본"
+    }
+  ]
+}

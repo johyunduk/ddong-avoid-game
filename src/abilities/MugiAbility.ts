@@ -4,29 +4,16 @@ import type { GameSceneAPI } from './types';
 import type PoolablePoopBase from '../objects/PoolablePoopBase';
 import { MUGI_PARAMS } from '../config/abilityParams';
 import { ensureGlowDot } from '../utils/glowDot';
-
-// 옆면 연꽃 꽃잎 정의: [rotDeg, width, height, color, depthOffset]
-// 꽃잎 바닥이 한 점에 모이고 각도 방향으로 뻗어나가는 형태
-const LOTUS_DEFS: [number, number, number, number, number][] = [
-  [ -68, 11, 30, 0xfff8e1, 0 ],
-  [  68, 11, 30, 0xfff8e1, 0 ],
-  [ -46, 10, 27, 0xfffde7, 1 ],
-  [  46, 10, 27, 0xfffde7, 1 ],
-  [ -26,  9, 24, 0xffffff, 2 ],
-  [  26,  9, 24, 0xffffff, 2 ],
-  [ -10,  8, 21, 0xffffff, 3 ],
-  [  10,  8, 21, 0xffffff, 3 ],
-  [   0,  7, 18, 0xffffff, 4 ],
-];
+import { beam, burst, fxSprite, impact, playFx } from '../utils/vfx';
 
 interface YeoijuOrb {
-  gfx: Phaser.GameObjects.Graphics;
+  gfx: Phaser.GameObjects.Image;
   x: number;
   y: number;
 }
 
 interface OrbitOrb {
-  gfx: Phaser.GameObjects.Graphics;
+  gfx: Phaser.GameObjects.Image;
   angle: number;
   speed: number;    // rad/ms (음수 = 반시계)
   radius: number;
@@ -34,6 +21,43 @@ interface OrbitOrb {
 }
 
 const HALO_Y_OFFSET = 28; // 후광 중심을 플레이어 중심보다 위로
+
+// ── 번개 ────────────────────────────────────────────────────────────────
+/**
+ * 낙뢰 — 절차 생성한 흰 줄기 세 변형. 착색만으로 금색/검붉은이 갈린다.
+ * **번쩍일 때마다 다른 변형을 뽑아야** 깜빡임으로 읽힌다 (같은 그림이 반복되면
+ * '한 줄기가 흐려지는 것'으로 보인다).
+ */
+const BOLT_TEXTURES   = ['fx_bolt_1', 'fx_bolt_2', 'fx_bolt_3'] as const;
+const BOLT_GOLD_GLOW  = 0xffbb00;
+const BOLT_GOLD_CORE  = 0xfff3a0;
+const BOLT_RED_GLOW   = 0x8a0f0f;
+const BOLT_RED_CORE   = 0xff3311;
+/**
+ * 본줄기 두께(px). 텍스처 세로 전체가 이 값에 매핑되므로 **이게 곧 번개가 좌우로
+ * 흔들리는 폭**이다 — 작게 잡으면 지그재그가 눌려 직선으로 보인다.
+ */
+const BOLT_GOLD_THICK = 120;
+const BOLT_RED_THICK  = 95;
+/** 번쩍임 타이밍 — 자라는 시간은 거의 0 이어야 낙뢰로 읽힌다 */
+/**
+ * 본체 알파. **비쳐 보이되 코어는 남겨야 한다** —
+ * 통째로 낮추면 하늘색에 섞여 그냥 바랜 그림이 되고, 얇은 코어를 진하게 남기면
+ * 몸통 너머로 배경이 비치면서도 줄기 형태는 또렷하다.
+ */
+const BOLT_BODY_ALPHA = 0.62;
+const BOLT_APPEAR_MS = 12;
+const BOLT_HOLD_MS   = 55;
+const BOLT_FADE_MS   = 90;
+
+/** 여의주 — 어두운 본체 + 불꽃 고리가 그려진 컷아웃 (192px) */
+const YEOIJU_TEXTURE = 'fx_yeoiju';
+const YEOIJU_SIZE    = 24;  // 원본 fillCircle 반지름 11 = 지름 22px 기준
+/** 연꽃 — 부활 연출 (256px) */
+const LOTUS_TEXTURE  = 'fx_lotus';
+const LOTUS_SIZE     = 100;
+/** 여의주·궤도 구슬은 오래 산다. vfx 보험 타이머는 그보다 길게 */
+const PERSIST_MS     = 20 * 60 * 1000;
 
 // 각 궤도 고유 파라미터 — 전자 궤도처럼 방향/기울기/속도 다양화
 const ORBIT_CONFIGS: { speed: number; radius: number; tiltCos: number; startAngle: number }[] = [
@@ -106,20 +130,20 @@ export class MugiAbility extends BaseAbility {
     const scene = api.scene;
     const x = Phaser.Math.Between(30, 370);
 
-    const gfx = scene.add.graphics().setDepth(150);
-    // 구체 본체 (짙은 검붉)
-    gfx.fillStyle(0x550000, 1);    gfx.fillCircle(0, 0, 11);
-    // 내부 광원 — 중앙 살짝 아래 오프셋 (속에서 빛나는 느낌)
-    gfx.fillStyle(0xaa1100, 0.95); gfx.fillCircle(1, 2, 8);
-    gfx.fillStyle(0xdd2200, 0.80); gfx.fillCircle(1, 2, 5);
-    gfx.fillStyle(0xff5500, 0.55); gfx.fillCircle(1, 3, 2.5);
-    // 반사 하이라이트 — 왼쪽 위 (구슬 3D 효과)
-    gfx.fillStyle(0xffffff, 0.90); gfx.fillCircle(-3.5, -3.5, 2.5);
-    gfx.fillStyle(0xffffff, 0.40); gfx.fillCircle(-2.5, -5, 1);
-    gfx.setPosition(x, -20);
+    // 원형 3D 구슬을 fillCircle 6번으로 그리던 것 → 그려진 텍스처 한 장
+    const gfx = fxSprite(scene, x, -20, YEOIJU_TEXTURE, {
+      scale: [YEOIJU_SIZE / 192, YEOIJU_SIZE / 192],
+      alpha: 0.72,
+      depth: 150,
+      blend: 'normal',
+      lifeMs: PERSIST_MS,
+      slot: 'mugi_yeoiju',
+      maxConcurrent: 12,
+    });
+    if (!gfx) return;
 
     scene.tweens.add({
-      targets: gfx, alpha: { from: 0.72, to: 1 },
+      targets: gfx, alpha: 1,
       yoyo: true, repeat: -1, duration: 720, ease: 'Sine.easeInOut',
     });
 
@@ -236,22 +260,25 @@ export class MugiAbility extends BaseAbility {
     const cfg = ORBIT_CONFIGS[this.orbitOrbs.length];
     if (!cfg) return;
 
-    const gfx = api.scene.add.graphics().setDepth(145).setScale(0);
-
-    // 여의주와 동일한 팔레트, 절반 크기
-    gfx.fillStyle(0x550000, 1);    gfx.fillCircle(0, 0, 4.5);
-    gfx.fillStyle(0xaa1100, 0.95); gfx.fillCircle(0.5, 0.8, 3.2);
-    gfx.fillStyle(0xdd2200, 0.80); gfx.fillCircle(0.5, 0.8, 2);
-    gfx.fillStyle(0xff5500, 0.50); gfx.fillCircle(0.5, 1.2, 1);
-    gfx.fillStyle(0xffffff, 0.90); gfx.fillCircle(-1.5, -1.5, 1);
+    // 여의주와 같은 텍스처를 절반 크기로 — 같은 물건이 딸려 도는 것으로 읽혀야 한다
+    const size = YEOIJU_SIZE * 0.42;
+    const gfx = fxSprite(api.scene, api.player.x, api.player.y, YEOIJU_TEXTURE, {
+      scale: [0.001, 0.001],
+      depth: 145,
+      blend: 'normal',
+      lifeMs: PERSIST_MS,
+      slot: 'mugi_orbit',
+      maxConcurrent: 6,
+    });
+    if (!gfx) return;
 
     const startX = api.player.x + Math.cos(cfg.startAngle) * cfg.radius;
     const startY = api.player.y + Math.sin(cfg.startAngle) * cfg.radius * cfg.tiltCos;
     gfx.setPosition(startX, startY);
 
-    // 등장 애니메이션
     api.scene.tweens.add({
-      targets: gfx, scale: 1, duration: 300, ease: 'Back.easeOut',
+      targets: gfx, scaleX: size / 192, scaleY: size / 192,
+      duration: 300, ease: 'Back.easeOut',
     });
 
     this.orbitOrbs.push({
@@ -276,22 +303,8 @@ export class MugiAbility extends BaseAbility {
   }
 
   private _spawnCollectEffect(x: number, y: number, scene: Phaser.Scene): void {
-    for (let i = 0; i < 6; i++) {
-      const angle = (i / 6) * Math.PI * 2;
-      const g = scene.add.graphics().setDepth(160);
-      g.fillStyle(0xff3333, 1);
-      g.fillCircle(0, 0, Phaser.Math.Between(2, 4));
-      g.setPosition(x, y);
-      scene.tweens.add({
-        targets: g,
-        x: x + Math.cos(angle) * Phaser.Math.Between(12, 28),
-        y: y + Math.sin(angle) * Phaser.Math.Between(12, 28),
-        alpha: 0, scale: 0,
-        duration: Phaser.Math.Between(200, 360),
-        ease: 'Quad.easeOut',
-        onComplete: () => g.destroy(),
-      });
-    }
+    // Graphics 6개를 낱개로 날리던 것 → 이미터 하나
+    burst(scene, x, y, 'ember', { count: 8, tint: [0xff3333, 0xff8844], speed: 0.8, depth: 160 });
   }
 
   // ── 황금 변신 ────────────────────────────────────────────────────────
@@ -309,7 +322,13 @@ export class MugiAbility extends BaseAbility {
     api.player.setTexturePrefix(this.normalPrefix);
   }
 
-  // ── 황금 번개 ────────────────────────────────────────────────────────
+  // ── 번개 ─────────────────────────────────────────────────────────────
+  //
+  // 이전엔 Graphics 하나를 4~5회 지우고 폴리라인 13줄씩(본줄기 4 + 가지 3×3) 다시 그렸다.
+  // 여의주는 50점마다 떨어지므로 이 경로가 가장 자주 도는 곳이었다.
+  // 지금은 갈래가 그려진 텍스처를 회전·신축해 쓴다 — 그리는 비용이 없다.
+  //
+  // 텍스처는 무채색이라 **착색만으로 금색/검붉은 성격이 갈린다.**
 
   private _strikeThunder(api: GameSceneAPI, applyGoldSprite: boolean): void {
     const { scene, player } = api;
@@ -318,62 +337,10 @@ export class MugiAbility extends BaseAbility {
 
     if (applyGoldSprite) scene.cameras.main.flash(600, 80, 70, 0, true);
 
-    const g = scene.add.graphics().setDepth(310);
-
-    const drawBolt = () => {
-      g.clear();
-      const pts = this._makeBoltPts(tx, ty, tx + Phaser.Math.Between(-25, 25));
-      g.lineStyle(44, 0xffaa00, 0.09); this._drawPolyline(g, pts);
-      g.lineStyle(22, 0xffcc00, 0.32); this._drawPolyline(g, pts);
-      g.lineStyle(9,  0xffee44, 0.80); this._drawPolyline(g, pts);
-      g.lineStyle(3,  0xffffff, 1.00); this._drawPolyline(g, pts);
-      [3, 7, 11].forEach(bi => {
-        if (bi >= pts.length - 1) return;
-        const bp = pts[bi]!;
-        const dir = Math.random() < 0.5 ? 1 : -1;
-        const len = Phaser.Math.Between(55, 105);
-        const bPts = [
-          { x: bp.x, y: bp.y },
-          { x: bp.x + dir * len * 0.35 + Phaser.Math.Between(-18, 18), y: bp.y + len * 0.33 },
-          { x: bp.x + dir * len * 0.68 + Phaser.Math.Between(-12, 12), y: bp.y + len * 0.65 },
-          { x: bp.x + dir * len + Phaser.Math.Between(-8, 8),          y: bp.y + len },
-        ];
-        g.lineStyle(9,   0xffcc00, 0.40); this._drawPolyline(g, bPts);
-        g.lineStyle(3,   0xffee44, 0.75); this._drawPolyline(g, bPts);
-        g.lineStyle(1.5, 0xffffff, 0.90); this._drawPolyline(g, bPts);
-      });
-    };
-
-    drawBolt();
-    [50, 100, 150, 200].forEach(delay => {
-      scene.time.delayedCall(delay, () => {
-        if (!scene.sys.isActive() || !g.active) return;
-        drawBolt();
-      });
-    });
-
-    scene.tweens.add({
-      targets: g, alpha: 0, delay: 240, duration: 380, ease: 'Quad.easeOut',
-      onComplete: () => g.destroy(),
-    });
-
-    const impact = scene.add.graphics().setDepth(308);
-    impact.fillStyle(0xffee00, 0.7);
-    impact.fillCircle(tx, ty, 55);
-    scene.tweens.add({
-      targets: impact, scaleX: 2.8, scaleY: 2.8, alpha: 0,
-      duration: 500, ease: 'Quad.easeOut',
-      onComplete: () => impact.destroy(),
-    });
-
-    const ring = scene.add.graphics().setDepth(309);
-    ring.lineStyle(4, 0xffffff, 1);
-    ring.strokeCircle(tx, ty, 40);
-    scene.tweens.add({
-      targets: ring, scaleX: 3.5, scaleY: 3.5, alpha: 0,
-      duration: 450, ease: 'Quad.easeOut',
-      onComplete: () => ring.destroy(),
-    });
+    this._bolt(scene, tx, ty, true);
+    playFx(scene, 'bloom', tx, ty, { scale: 1.4, tint: BOLT_GOLD_CORE, depth: 308 });
+    playFx(scene, 'shockwave', tx, ty, { scale: 1.6, tint: 0xffffff, depth: 309 });
+    impact(scene, { hitstop: 60, shake: { duration: 260, intensity: 0.006 } });
 
     scene.time.delayedCall(180, () => {
       if (!scene.sys.isActive()) return;
@@ -383,65 +350,73 @@ export class MugiAbility extends BaseAbility {
     });
   }
 
-  // ── 검붉은 번개 (변신 전) ────────────────────────────────────────────
-
   private _strikeRedLightning(api: GameSceneAPI): void {
     const { scene, player } = api;
     const tx = player.x;
     const ty = player.y;
 
-    const g = scene.add.graphics().setDepth(310);
-
-    const drawRed = () => {
-      g.clear();
-      const pts = this._makeBoltPts(tx, ty, tx + Phaser.Math.Between(-25, 25));
-      g.lineStyle(30, 0x440000, 0.09); this._drawPolyline(g, pts);
-      g.lineStyle(14, 0x880000, 0.32); this._drawPolyline(g, pts);
-      g.lineStyle(6,  0x080000, 0.92); this._drawPolyline(g, pts);
-      g.lineStyle(2,  0xff3311, 1.00); this._drawPolyline(g, pts);
-      [3, 7, 11].forEach(bi => {
-        if (bi >= pts.length - 1) return;
-        const bp = pts[bi]!;
-        const dir = Math.random() < 0.5 ? 1 : -1;
-        const len = Phaser.Math.Between(55, 105);
-        const bPts = [
-          { x: bp.x, y: bp.y },
-          { x: bp.x + dir * len * 0.35 + Phaser.Math.Between(-18, 18), y: bp.y + len * 0.33 },
-          { x: bp.x + dir * len * 0.68 + Phaser.Math.Between(-12, 12), y: bp.y + len * 0.65 },
-          { x: bp.x + dir * len + Phaser.Math.Between(-8, 8),          y: bp.y + len },
-        ];
-        g.lineStyle(6,   0x880000, 0.40); this._drawPolyline(g, bPts);
-        g.lineStyle(2,   0x080000, 0.88); this._drawPolyline(g, bPts);
-        g.lineStyle(1,   0xff3311, 0.90); this._drawPolyline(g, bPts);
-      });
-    };
-
-    drawRed();
-    [55, 110, 165].forEach(delay => {
-      scene.time.delayedCall(delay, () => {
-        if (!scene.sys.isActive() || !g.active) return;
-        drawRed();
-      });
-    });
-
-    scene.tweens.add({
-      targets: g, alpha: 0, delay: 210, duration: 300, ease: 'Quad.easeOut',
-      onComplete: () => g.destroy(),
-    });
-
-    const impact = scene.add.graphics().setDepth(308);
-    impact.fillStyle(0xaa0000, 0.55);
-    impact.fillCircle(tx, ty, 35);
-    scene.tweens.add({
-      targets: impact, scaleX: 2.2, scaleY: 2.2, alpha: 0,
-      duration: 380, ease: 'Quad.easeOut',
-      onComplete: () => impact.destroy(),
-    });
+    this._bolt(scene, tx, ty, false);
+    playFx(scene, 'bloom', tx, ty, { scale: 0.8, tint: BOLT_RED_CORE, depth: 308 });
+    impact(scene, { shake: { duration: 140, intensity: 0.0025 } });
 
     scene.time.delayedCall(180, () => {
       if (!scene.sys.isActive()) return;
       this._clearPoops(api, p => Math.abs(p.x - tx) <= 60, 10);
     });
+  }
+
+  /**
+   * 하늘에서 대상으로 내리꽂는 낙뢰.
+   *
+   * **번개는 자라지 않는다.** 뻗어나가게 그리면 레이저로 읽히므로 한 번에 나타났다가
+   * 짧게 깜빡이고 꺼진다. 깜빡임은 매번 **다른 줄기**여야 한다 —
+   * 같은 그림을 반복하면 '한 줄기가 흐려지는 것'으로 보인다.
+   * 그래서 번쩍일 때마다 시작점·두께를 흔들고 **다른 줄기 텍스처**를 뽑는다.
+   */
+  private _bolt(scene: Phaser.Scene, tx: number, ty: number, gold: boolean): void {
+    const glow = gold ? BOLT_GOLD_GLOW : BOLT_RED_GLOW;
+    const core = gold ? BOLT_GOLD_CORE : BOLT_RED_CORE;
+    const base = gold ? BOLT_GOLD_THICK : BOLT_RED_THICK;
+
+    const flash = (thickMul: number, alpha: number, delay: number) => {
+      const fire = () => {
+        const sx = tx + Phaser.Math.Between(-30, 30);
+        const sy = -10;
+        const dx = tx - sx;
+        const dy = (ty + 8) - sy;
+        const thickness = base * thickMul * Phaser.Math.FloatBetween(0.85, 1.15);
+
+        beam(scene, sx, sy, {
+          angle: Math.atan2(dy, dx),
+          length: Math.hypot(dx, dy),
+          thickness,
+          texture: BOLT_TEXTURES[Phaser.Math.Between(0, BOLT_TEXTURES.length - 1)],
+          tint: glow,
+          alpha: alpha * BOLT_BODY_ALPHA,
+          blend: 'normal',
+          depth: 310,
+          // 자라는 시간 없음 — 번쩍 나타나 잠깐 있다 꺼진다
+          extendMs: BOLT_APPEAR_MS,
+          holdMs: BOLT_HOLD_MS,
+          fadeMs: BOLT_FADE_MS,
+          layers: [
+            { thickness: 1.25, alpha: alpha * 0.24, dz: -1, tint: glow },
+            // 코어는 얇게·진하게 — 이 선이 있어야 반투명해져도 형태가 읽힌다
+            { thickness: 0.45, alpha: Math.min(1, alpha), dz: 1, tint: core },
+          ],
+          maxConcurrent: 6,
+        });
+      };
+
+      if (delay <= 0) fire();
+      else scene.time.delayedCall(delay, () => { if (scene.sys.isActive()) fire(); });
+    };
+
+    // 번쩍 — 쉼 — 번쩍. 간격이 일정하면 깜빡임이 아니라 점멸등이 된다
+    flash(1, 0.95, 0);
+    flash(0.8, 0.8, 55);
+    flash(1.05, 0.9, 135);
+    if (gold) flash(0.7, 0.7, 205);
   }
 
   // ── 공통 유틸 ────────────────────────────────────────────────────────
@@ -462,65 +437,14 @@ export class MugiAbility extends BaseAbility {
     const positions = targets.map(p => ({ x: p.x, y: p.y }));
     targets.forEach(p => (p as unknown as PoolablePoopBase).recycle());
 
-    // 잽 이펙트는 저장된 위치에서 독립적으로 재생
-    positions.forEach(({ x, y }) => this._spawnZapEffect(x, y, scene));
+    // 타격 이펙트는 recycle() 안에서 이미 나간다. 여기서 또 깔면 대상당 이펙트가
+    // 두 겹이 되는데, 황금 번개는 화면의 똥을 전부 지우므로 그 배가 그대로 부하가 된다.
 
     scene.time.delayedCall(450, () => {
       if (!scene.sys.isActive()) return;
       api.addAbilityBonus(positions.length * pointsPerPoop);
     });
   }
-
-  private _makeBoltPts(tx: number, ty: number, startX: number): { x: number; y: number }[] {
-    const pts: { x: number; y: number }[] = [{ x: startX, y: -10 }];
-    for (let i = 1; i < 17; i++) {
-      const t = i / 17;
-      const spread = 70 * (1 - t * 0.65);
-      pts.push({ x: tx + Phaser.Math.Between(-spread, spread), y: (ty + 20) * t - 10 });
-    }
-    pts.push({ x: tx, y: ty + 8 });
-    return pts;
-  }
-
-  private _drawPolyline(g: Phaser.GameObjects.Graphics, pts: { x: number; y: number }[]): void {
-    g.beginPath();
-    g.moveTo(pts[0]!.x, pts[0]!.y);
-    for (let i = 1; i < pts.length; i++) g.lineTo(pts[i]!.x, pts[i]!.y);
-    g.strokePath();
-  }
-
-  private _spawnZapEffect(x: number, y: number, scene: Phaser.Scene): void {
-    const g = scene.add.graphics().setDepth(206);
-
-    const draw = () => {
-      g.clear();
-      const sparks = Phaser.Math.Between(3, 5);
-      for (let i = 0; i < sparks; i++) {
-        const color = Math.random() < 0.55 ? 0xffee00 : 0xffffff;
-        g.lineStyle(Phaser.Math.FloatBetween(1.5, 2.5), color, 1);
-        g.beginPath();
-        let px = x + Phaser.Math.Between(-7, 7);
-        let py = y + Phaser.Math.Between(-7, 7);
-        g.moveTo(px, py);
-        for (let j = 0; j < 3; j++) {
-          px += Phaser.Math.Between(-10, 10);
-          py += Phaser.Math.Between(-10, 10);
-          g.lineTo(px, py);
-        }
-        g.strokePath();
-      }
-    };
-
-    draw();
-    const timer = scene.time.addEvent({ delay: 80, repeat: 5, callback: draw });
-    scene.time.delayedCall(550, () => {
-      timer.remove();
-      if (!scene.sys.isActive()) return;
-      if (g.active) g.destroy();
-    });
-  }
-
-  // ── 부활 시스템 ──────────────────────────────────────────────────────
 
   private _revive(api: GameSceneAPI): void {
     this.revivalCharges--;
@@ -548,89 +472,49 @@ export class MugiAbility extends BaseAbility {
     this._playRevivalLotus(centerX, api.player.y, scene);
   }
 
+  /**
+   * 부활 — 발밑에서 연꽃이 피어오른다.
+   *
+   * 이전엔 꽃잎 9장을 폴리곤으로 각각 그려 Graphics 12개를 만들었다.
+   * 지금은 그려진 연꽃 한 장이 피듯이 커지고, 금빛 기운이 함께 올라온다.
+   */
   private _playRevivalLotus(px: number, py: number, scene: Phaser.Scene): void {
-    const LS = 2.2;                // 연꽃 전체 스케일
     const cx = px;
-    const cy = py + 38;            // 플레이어 발 바닥 (displayH=80 → 중심 +40, base offset -2)
+    const cy = py + 38;   // 플레이어 발 바닥
+    const full = LOTUS_SIZE / 256;
 
-    // 꽃받침
-    const base = scene.add.graphics().setDepth(352).setScale(0);
-    base.fillStyle(0x66bb6a, 0.85); base.fillEllipse(0, 0, 28 * LS, 9 * LS);
-    base.fillStyle(0x81c784, 0.6);  base.fillEllipse(0, -2 * LS, 16 * LS, 5 * LS);
-    base.setPosition(cx, cy + 2);
-    scene.tweens.add({ targets: base, scale: 1, duration: 220, ease: 'Back.easeOut' });
-
-    // 금빛 중앙 글로우
-    const glow = scene.add.graphics().setDepth(353).setScale(0);
-    glow.fillStyle(0xffd700, 0.20); glow.fillCircle(0, 0, 30 * LS);
-    glow.fillStyle(0xffe082, 0.35); glow.fillCircle(0, 0, 18 * LS);
-    glow.fillStyle(0xffffff, 0.55); glow.fillCircle(0, 0,  8 * LS);
-    glow.setPosition(cx, cy - 14 * LS);
-    scene.tweens.add({ targets: glow, scale: 1, duration: 320, ease: 'Back.easeOut' });
-
-    // sin(t*π) 곡선으로 양 끝 뾰족한 꽃잎 폴리곤
-    const petalPts = (w: number, h: number): { x: number; y: number }[] => {
-      const N = 16;
-      const pts: { x: number; y: number }[] = [];
-      for (let i = 0; i <= N; i++) {
-        const t = i / N;
-        pts.push({ x:  (w / 2) * Math.sin(t * Math.PI), y: h / 2 - t * h });
-      }
-      for (let i = N - 1; i >= 0; i--) {
-        const t = i / N;
-        pts.push({ x: -(w / 2) * Math.sin(t * Math.PI), y: h / 2 - t * h });
-      }
-      return pts;
-    };
-
-    // 꽃잎: 바닥 한 점에서 각도 방향으로 뻗어나가는 옆면 형태
-    const petalGfxs: Phaser.GameObjects.Graphics[] = [];
-    LOTUS_DEFS.forEach(([rotDeg, w, h, color, depthOff], idx) => {
-      const sw = w * LS;
-      const sh = h * LS;
-      const rotRad = rotDeg * Math.PI / 180;
-      const ppx = cx + Math.sin(rotRad) * (sh / 2);
-      const ppy = (cy + 2) - Math.cos(rotRad) * (sh / 2);
-
-      const g = scene.add.graphics().setDepth(353 + depthOff);
-      g.fillStyle(color, 0.92);
-      g.fillPoints(petalPts(sw, sh), true);
-      g.fillStyle(0xffffff, 0.45);
-      g.fillPoints(petalPts(sw * 0.35, sh * 0.65), true);
-      g.fillStyle(0xffd700, 0.18);
-      g.fillEllipse(0, -(sh * 0.3), sw * 0.55, sh * 0.22);
-      g.setPosition(ppx, ppy).setRotation(rotRad).setScale(0);
-
-      scene.tweens.add({ targets: g, scale: 1, delay: idx * 40, duration: 280, ease: 'Back.easeOut' });
-      petalGfxs.push(g);
+    // 아래에서 위로 피어나야 하므로 원점을 꽃 바닥에 둔다
+    const lotus = fxSprite(scene, cx, cy + 6, LOTUS_TEXTURE, {
+      scale: [full * 0.15, full * 0.05],
+      origin: [0.5, 0.92],
+      alpha: 0,
+      depth: 353,
+      blend: 'normal',
+      lifeMs: 2600,
+      slot: 'mugi_lotus',
+      maxConcurrent: 2,
     });
-
-    // 수술
-    const stamen = scene.add.graphics().setDepth(359).setScale(0);
-    stamen.fillStyle(0xffd700, 1); stamen.fillCircle(0, 0, 5 * LS);
-    stamen.fillStyle(0xffff99, 0.9); stamen.fillCircle(0, 0, 3 * LS);
-    stamen.fillStyle(0xffffff, 0.7); stamen.fillCircle(-1 * LS, -1.5 * LS, 1.5 * LS);
-    stamen.setPosition(cx, cy - 20 * LS);
-    scene.tweens.add({
-      targets: stamen, scale: 1,
-      delay: LOTUS_DEFS.length * 40 - 20, duration: 220, ease: 'Back.easeOut',
-    });
-
-    // 900ms 후 조용히 페이드아웃
-    const allObjs: Phaser.GameObjects.Graphics[] = [...petalGfxs, glow, base, stamen];
-    scene.time.delayedCall(900, () => {
-      if (!scene.sys.isActive()) return;
-      allObjs.forEach(obj => {
+    if (lotus) {
+      scene.tweens.add({
+        targets: lotus, scaleX: full, scaleY: full, alpha: 1,
+        duration: 420, ease: 'Back.easeOut',
+      });
+      scene.time.delayedCall(900, () => {
+        if (!scene.sys.isActive() || !lotus.active) return;
         scene.tweens.add({
-          targets: obj, alpha: 0,
-          duration: 500, ease: 'Quad.easeIn',
-          onComplete: () => { if (obj.active) obj.destroy(); },
+          targets: lotus, alpha: 0, duration: 500, ease: 'Quad.easeIn',
+          onComplete: () => lotus.destroy(),
         });
       });
+    }
+
+    // 금빛 기운 — 꽃이 필 때 바닥에서 위로 흩어진다
+    playFx(scene, 'bloom', cx, cy - 34, { scale: 1.1, tint: 0xffe082, depth: 352 });
+    burst(scene, cx, cy, 'sparkle', {
+      count: 14, tint: [0xffd700, 0xfff3b0], speed: 0.6,
+      angle: { min: -125, max: -55 }, gravityY: -120, depth: 354,
     });
   }
-
-  // ── 부활 후광 ─────────────────────────────────────────────────────────
 
   private _createRevivalHalo(api: GameSceneAPI): void {
     const { scene, player } = api;
@@ -686,14 +570,7 @@ export class MugiAbility extends BaseAbility {
 
   private _playRechargeGlow(api: GameSceneAPI): void {
     const { scene, player } = api;
-    const g = scene.add.graphics().setDepth(320);
-    g.lineStyle(4, 0xff88cc, 1);
-    g.strokeCircle(player.x, player.y, 30);
-    scene.tweens.add({
-      targets: g, scaleX: 2.5, scaleY: 2.5, alpha: 0,
-      duration: 500, ease: 'Quad.easeOut',
-      onComplete: () => g.destroy(),
-    });
+    playFx(scene, 'shockwave', player.x, player.y, { scale: 0.85, tint: 0xff88cc, depth: 320 });
     if (!this.revivalHaloOuter) {
       this._createRevivalHalo(api);
     }

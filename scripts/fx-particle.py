@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import math
+import random
 import sys
 from pathlib import Path
 
@@ -292,6 +293,184 @@ def _translucent(img: "Image.Image", keep: float) -> Image.Image:
     return Image.fromarray(out, "RGBA")
 
 
+def bolt(width: int = 512, height: int = 256, seed: int = 0,
+         segs: int = 20, amp: float = 0.34, stroke: float = 0.045,
+         branches: int = 5) -> Image.Image:
+    """낙뢰 — **절차적으로 그린다.**
+
+    생성물에서 잘라낸 번개는 획이 굵고 뭉툭해서, 좌우로 크게 흔들리게 하려고 늘리면
+    같이 뚱뚱해진다. 얇은 획 + 큰 흔들림을 동시에 얻으려면 그리는 수밖에 없다.
+    시드를 바꿔 **여러 변형**을 만들어 두면 번쩍일 때마다 다른 줄기를 쓸 수 있다.
+
+    가로 방향이 진행 방향이다 (beam() 이 회전시킨다).
+    x=0 이 하늘 쪽이라 그쪽을 가늘게, x=W 쪽(착지점)을 굵게 뺀다.
+    """
+    rng = random.Random(seed)
+    img = Image.new("L", (width, height), 0)
+    d = ImageDraw.Draw(img)
+    cy = height / 2
+    w0 = height * stroke
+
+    # 본줄기 — 좌우로 꺾이며 나아간다.
+    # 매번 무작위로 흩뿌리면 흔들리기만 하고, 매번 정확히 교대시키면 스프링이 된다.
+    # **대체로 교대하되 가끔 같은 쪽으로 한 번 더** 가고, 마디 간격도 고르지 않게 둔다.
+    xs = []
+    acc = 0.0
+    raw = [rng.uniform(0.5, 1.6) for _ in range(segs)]
+    total = sum(raw)
+    for r in raw:
+        acc += r / total
+        xs.append(width * acc)
+
+    pts = [(0.0, cy)]
+    side = 1 if rng.random() < 0.5 else -1
+    for i, x in enumerate(xs):
+        t = (i + 1) / segs
+        swing = amp * height * (0.35 + 0.65 * math.sin(t * math.pi))
+        # 대부분은 작게 꺾이고 가끔 크게 튄다 — 매 마디를 크게 꺾으면 코일처럼 보인다
+        mag = rng.uniform(0.12, 0.45) if rng.random() < 0.7 else rng.uniform(0.6, 1.0)
+        pts.append((x, cy + side * swing * mag))
+        if rng.random() < 0.78:
+            side = -side
+    pts[-1] = (float(width - 1), cy + rng.uniform(-8, 8))
+
+    def stroke_path(path, w_start, w_end):
+        n = len(path) - 1
+        for i in range(n):
+            w = max(1.0, w_start + (w_end - w_start) * (i / max(1, n - 1)))
+            d.line([path[i], path[i + 1]], fill=255, width=int(round(w)))
+            d.ellipse([path[i + 1][0] - w / 2, path[i + 1][1] - w / 2,
+                       path[i + 1][0] + w / 2, path[i + 1][1] + w / 2], fill=255)
+
+    def zigzag(x, y, ang, length, steps, spread):
+        """한 방향으로 나아가되 매 마디 각도를 크게 꺾는다 — 가지도 지그재그여야 번개다."""
+        path = [(x, y)]
+        step = length / steps
+        for k in range(steps):
+            a = ang + rng.uniform(-spread, spread)
+            x += math.cos(a) * step
+            y += math.sin(a) * step
+            path.append((x, y))
+        return path
+
+    # 하늘 쪽은 가늘게, 착지점은 굵게
+    stroke_path(pts, w0 * 0.35, w0)
+
+    # 가지 — 본줄기 마디에서 갈라져 나가며 저도 지그재그로 꺾인다
+    used = set()
+    for _ in range(branches):
+        i = rng.randrange(3, segs - 2)
+        if i in used:
+            continue
+        used.add(i)
+        bx, by = pts[i]
+        ang = rng.uniform(-1.0, 1.0) + (0.0 if rng.random() < 0.5 else math.pi * 0.28)
+        blen = width * rng.uniform(0.12, 0.24)
+        bp = zigzag(bx, by, ang, blen, 5, 0.85)
+        stroke_path(bp, w0 * 0.55, w0 * 0.16)
+
+        # 잔가지 — 가지에서 한 번 더 갈라진다 (성기게)
+        if rng.random() < 0.6:
+            j = rng.randrange(1, len(bp) - 1)
+            sx, sy = bp[j]
+            sp = zigzag(sx, sy, ang + rng.uniform(-1.2, 1.2), blen * 0.45, 3, 0.9)
+            stroke_path(sp, w0 * 0.3, w0 * 0.12)
+
+    a = np.asarray(img, dtype=np.float32) / 255.0
+    # 가장자리를 아주 살짝만 풀어 준다 — 많이 흐리면 애니메 이펙트의 날카로움이 죽는다
+    a = np.asarray(Image.fromarray((a * 255).astype(np.uint8)).filter(
+        ImageFilter.GaussianBlur(height / 200)), dtype=np.float32) / 255.0
+    a = np.clip(a * 1.25, 0.0, 1.0)
+
+    rgb = np.full((height, width, 3), 255, dtype=np.uint8)
+    return Image.fromarray(np.dstack([rgb, (a * 255).astype(np.uint8)]), "RGBA")
+
+
+def orb(size: int = 192,
+        body: tuple[int, int, int] = (0x55, 0x00, 0x00),
+        inner: tuple[int, int, int] = (0xdd, 0x22, 0x00),
+        hot: tuple[int, int, int] = (0xff, 0x88, 0x22)) -> Image.Image:
+    """구슬(여의주) — **절차적으로 그린다.**
+
+    생성 모델로 뽑으면 불꽃·연기가 붙어 작은 크기(30px 안팎)에서 뭉개진다.
+    원본 구현이 fillCircle 여섯 번으로 만들던 읽기 — 어두운 본체 · 속에서 타는 빛 ·
+    왼쪽 위 흰 반사 — 를 그대로 한 장에 굽는다. 작아져도 형태가 무너지지 않는다.
+    """
+    c = (size - 1) / 2
+    yy, xx = np.mgrid[0:size, 0:size].astype(np.float32)
+    nx = (xx - c) / c
+    ny = (yy - c) / c
+    r = np.hypot(nx, ny)
+
+    # 구체 알파 — 가장자리만 살짝 부드럽게
+    a = np.clip((0.92 - r) / 0.07, 0.0, 1.0)
+
+    # 본체: 가장자리로 갈수록 어두워지는 구면 음영
+    shade = np.clip(1.0 - r * 0.75, 0.0, 1.0) ** 0.8
+    rgb = np.zeros((size, size, 3), dtype=np.float32)
+    for i in range(3):
+        rgb[..., i] = body[i] * (0.55 + 0.45 * shade)
+
+    # 속에서 타는 빛 — 중심보다 살짝 아래
+    gd = np.hypot(nx - 0.06, ny - 0.12)
+    glow = np.clip(1.0 - gd / 0.62, 0.0, 1.0) ** 1.7
+    core = np.clip(1.0 - gd / 0.24, 0.0, 1.0) ** 1.4
+    for i in range(3):
+        rgb[..., i] = rgb[..., i] * (1 - glow) + inner[i] * glow
+        rgb[..., i] = rgb[..., i] * (1 - core) + hot[i] * core
+
+    # 왼쪽 위 반사 — 이게 있어야 '구슬'로 읽힌다
+    sd = np.hypot((nx + 0.34) / 0.9, (ny + 0.38) / 0.62)
+    spec = np.clip(1.0 - sd / 0.30, 0.0, 1.0) ** 1.3
+    rgb = rgb * (1 - spec[..., None]) + 255.0 * spec[..., None]
+
+    # 아래쪽 반사광 (구면감)
+    rim = np.clip(1.0 - np.hypot(nx * 1.05, (ny - 0.62) / 0.5) / 0.55, 0.0, 1.0) ** 2
+    for i in range(3):
+        rgb[..., i] = np.minimum(255.0, rgb[..., i] + inner[i] * rim * 0.45)
+
+    out = np.dstack([np.clip(rgb, 0, 255).astype(np.uint8), (a * 255).astype(np.uint8)])
+    return Image.fromarray(out, "RGBA").filter(ImageFilter.GaussianBlur(size / 220))
+
+
+def cutout(src: Path, size: int = 256, disc: float = 0.0, thresh: int = 10) -> Image.Image:
+    """검은 배경 생성물 → 알파 컷아웃 (연꽃·여의주처럼 **형태가 있는** 대상용).
+
+    파티클(`to_alpha`)은 밝기를 그대로 알파로 쓰지만, 구슬처럼 **본체가 어두운** 대상은
+    그렇게 따면 속이 뚫린다. `disc` 를 주면 중심 원 안쪽을 불투명으로 유지하고
+    바깥은 밝기로 딴다 — 어두운 구체 + 주변 불꽃이 둘 다 남는다.
+
+    disc : 중심 원의 반지름 비율 (0 = 끄기)
+    """
+    im = Image.open(src).convert("RGB")
+    lum = im.convert("L")
+
+    box = lum.point(lambda v: 255 if v > thresh else 0).getbbox()
+    if box:
+        pad = max(im.width, im.height) // 48
+        box = (max(box[0] - pad, 0), max(box[1] - pad, 0),
+               min(box[2] + pad, im.width), min(box[3] + pad, im.height))
+        im, lum = im.crop(box), lum.crop(box)
+
+    side = max(im.size)
+    sq = Image.new("RGB", (side, side), (0, 0, 0))
+    sq.paste(im, ((side - im.width) // 2, (side - im.height) // 2))
+    sq = sq.resize((size, size), Image.LANCZOS)
+
+    a = np.asarray(sq.convert("L"), dtype=np.float32) / 255.0
+    a = np.clip((a - thresh / 255.0) / (1.0 - thresh / 255.0), 0.0, 1.0) ** 0.7
+
+    if disc > 0:
+        yy, xx = np.mgrid[0:size, 0:size].astype(np.float32)
+        c = (size - 1) / 2
+        r = np.hypot(xx - c, yy - c) / c
+        # 원 안쪽은 그대로, 경계에서 부드럽게 떨어진다
+        a = np.maximum(a, np.clip((disc + 0.06 - r) / 0.06, 0.0, 1.0))
+
+    out = np.dstack([np.asarray(sq), (a * 255).astype(np.uint8)])
+    return Image.fromarray(out, "RGBA")
+
+
 def beam_tube(width: int = 512, height: int = 128, sigma: float = 0.42,
               tip: float = 0.14, start: float = 0.1) -> Image.Image:
     """에너지파의 **흰 통** — 절차적으로 그린다.
@@ -362,6 +541,8 @@ def main() -> int:
     p.add_argument("--beam", help="검기 호 텍스처로 가공할 원본 png")
     p.add_argument("--beam-width", type=int, default=512)
     p.add_argument("--beam-arc", type=float, default=0.30)
+    p.add_argument("--beam-band", type=int, default=96,
+                   help="잘라낼 띠의 세로 두께. 번개처럼 좌우로 크게 흔들리는 것은 크게 잡는다")
     p.add_argument("--beam-hue", help="색상 그라데이션 \"시작,끝\" (도). 예: 150,310")
     p.add_argument("--beam-sat", type=float, default=1.0, help="채도 배율")
     p.add_argument("--beam-sat-floor", type=float, default=0.0, help="흰 코어를 뺀 영역의 채도 하한(0-255)")
@@ -370,6 +551,14 @@ def main() -> int:
     p.add_argument("--beam-tip", action="store_true",
                    help="한쪽만 뾰족하게 (손끝에서 뻗는 광선용). 기본은 양끝 테이퍼")
     p.add_argument("--beam-core", help="검기 코어(흰 하드엣지)로 가공할 png")
+    p.add_argument("--bolt", action="store_true", help="낙뢰 텍스처를 절차 생성")
+    p.add_argument("--bolt-seed", type=int, default=0)
+    p.add_argument("--orb", action="store_true", help="구슬 텍스처를 절차 생성")
+    p.add_argument("--orb-size", type=int, default=192)
+    p.add_argument("--cutout", help="검은 배경 생성물을 알파 컷아웃 (형태가 있는 대상)")
+    p.add_argument("--cutout-disc", type=float, default=0.0,
+                   help="중심 원 반지름 비율 — 본체가 어두운 구체용")
+    p.add_argument("--cutout-size", type=int, default=256)
     p.add_argument("--beam-tube", action="store_true",
                    help="에너지파용 흰 통을 절차적으로 생성 (원본 불필요)")
     p.add_argument("--tube-sigma", type=float, default=0.42)
@@ -378,6 +567,34 @@ def main() -> int:
     p.add_argument("--beam-start-fade", type=float, default=0.0,
                    help="시작 구간 알파 램프인 비율 (잘라낸 단면 감추기)")
     a = p.parse_args()
+
+    if a.bolt:
+        if not a.out_file:
+            raise SystemExit("--out-file 이 필요합니다")
+        out = Path(a.out_file)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        bolt(seed=a.bolt_seed).save(out)
+        print(f"낙뢰: {out} (seed={a.bolt_seed})")
+        return 0
+
+    if a.orb:
+        if not a.out_file:
+            raise SystemExit("--out-file 이 필요합니다")
+        out = Path(a.out_file)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        orb(size=a.orb_size).save(out)
+        print(f"구슬: {out}")
+        return 0
+
+    if a.cutout:
+        if not a.out_file:
+            raise SystemExit("--out-file 이 필요합니다")
+        out = Path(a.out_file)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        img = cutout(Path(a.cutout), size=a.cutout_size, disc=a.cutout_disc)
+        img.save(out)
+        print(f"컷아웃: {out} ({img.width}x{img.height})")
+        return 0
 
     if a.beam_tube:
         if not a.out_file:
@@ -404,7 +621,7 @@ def main() -> int:
         if a.beam_hue:
             h0, h1 = (float(v) for v in a.beam_hue.split(","))
             hue = (h0, h1)
-        img = beam(Path(a.beam), width=a.beam_width, arc=a.beam_arc, hue=hue,
+        img = beam(Path(a.beam), width=a.beam_width, band=a.beam_band, arc=a.beam_arc, hue=hue,
                    sat=a.beam_sat, sat_floor=a.beam_sat_floor,
                    translucent=a.beam_translucent, tip=a.beam_tip,
                    start_fade=a.beam_start_fade)

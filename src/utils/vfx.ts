@@ -72,6 +72,15 @@ const FX_PARTICLE_ASSETS: Record<string, string> = {
   fx_k_beam: 'k-beam.png',
   // 흰 통은 절차 생성 (--beam-tube) — 생성물에서 뽑으면 '선'이지 '통'이 되지 않는다
   fx_k_beam_core: 'k-beam-core.png',
+  // 낙뢰 — 절차 생성(scripts/fx-particle.py --bolt). 흰색이라 착색으로 성격이 갈리고,
+  // 시드가 다른 세 장을 번갈아 써야 번쩍일 때마다 '다른 줄기'로 읽힌다
+  fx_bolt_1: 'bolt-1.png',
+  fx_bolt_2: 'bolt-2.png',
+  fx_bolt_3: 'bolt-3.png',
+  // 무기 — 여의주(어두운 본체 + 불꽃 고리)와 부활 연꽃. 형태가 있는 컷아웃이라
+  // 파티클과 달리 밝기를 알파로 쓰지 않는다 (scripts/fx-particle.py --cutout)
+  fx_yeoiju: 'yeoiju.png',
+  fx_lotus: 'lotus.png',
   // 수학 생성 — 흰색이라 setTint 로 자유롭게 착색
   fx_proc_arc:    'proc-arc.png',
   fx_proc_petal:  'proc-petal.png',
@@ -437,13 +446,25 @@ function isLive(scene: Phaser.Scene): boolean {
  * 히트스톱은 `time.timeScale` 을 0 으로 만들기 때문에 delayedCall 로 잡으면
  * 회수가 그만큼 밀리고, 히트스톱이 겹치면 회수 자체가 뒤로 계속 쌓인다.
  */
-function trackedTimeout(scene: Phaser.Scene, ms: number, fn: () => void): void {
+function trackedTimeout(scene: Phaser.Scene, ms: number, fn: () => void): number {
   const st = getState(scene);
   const id = window.setTimeout(() => {
     st.timeouts.delete(id);
     fn();
   }, ms);
   st.timeouts.add(id);
+  return id;
+}
+
+/**
+ * 보험 타이머 취소. **오래 사는 이펙트에는 필수다** —
+ * 대상이 먼저 파기돼도 타이머를 놔두면 그 시간만큼 장부에 남는다
+ * (수 분짜리 보험이면 그대로 누수로 쌓인다).
+ */
+function cancelTrackedTimeout(scene: Phaser.Scene, id: number): void {
+  const st = SCENE_STATE.get(scene);
+  if (!st || !st.timeouts.delete(id)) return;
+  window.clearTimeout(id);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1015,6 +1036,11 @@ export interface BeamOptions {
   /** 살아 있는 동안의 미세한 흔들림 (두께 방향) */
   waver?: { thickness?: number; periodMs?: number };
   /**
+   * 텍스처를 세로로 뒤집는다. 같은 번개 텍스처로 **다른 모양처럼** 보이게 할 때 쓴다 —
+   * 낙뢰는 같은 그림이 반복되면 '깜빡임'이 아니라 '한 줄기가 흐려지는 것'으로 읽힌다.
+   */
+  flipY?: boolean;
+  /**
    * 사라지는 방식.
    * - `fade`    : 통째로 옅어진다 (기본)
    * - `retract` : **꼬리가 머리를 쫓아가며 짧아진다.** 발사점부터 훑듯이 사라지고
@@ -1076,7 +1102,7 @@ export function beam(
   ): Phaser.GameObjects.Image => {
     const { w: texW, h: texH } = sizeOf(tex);
     const full = opts.length / texW;
-    const sy = thickness / texH;
+    const sy = (thickness / texH) * (opts.flipY ? -1 : 1);
 
     const img = scene.add.image(x, y, tex)
       .setOrigin(0, 0.5)
@@ -1192,9 +1218,14 @@ export function fxSprite(
   img.setBlendMode(toBlendMode(blend));
   if (opts.tint !== undefined) img.setTint(opts.tint);
 
-  const done = trackDisposable(scene, st, img, () => releaseSlot(st, slot));
+  let insurance = -1;
+  const done = trackDisposable(scene, st, img, () => {
+    // 먼저 끝났으면 보험 타이머를 거둔다 (lifeMs 가 분 단위인 상시 이펙트가 있다)
+    if (insurance >= 0) cancelTrackedTimeout(scene, insurance);
+    releaseSlot(st, slot);
+  });
   if (glows(blend)) attachBloom(scene, img);
-  trackedTimeout(scene, opts.lifeMs, done);
+  insurance = trackedTimeout(scene, opts.lifeMs, done);
 
   return img;
 }
