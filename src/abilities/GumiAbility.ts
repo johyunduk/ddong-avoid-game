@@ -4,6 +4,7 @@ import type { GameSceneAPI, SpecialPoopType } from './types';
 import type PoolablePoopBase from '../objects/PoolablePoopBase';
 import { ensureGlowDot } from '../utils/glowDot';
 import { GUMI_PARAMS } from '../config/abilityParams';
+import { burst, fxSprite, playFx } from '../utils/vfx';
 
 const HIT_R = 32;
 
@@ -11,13 +12,17 @@ const HIT_R = 32;
 const TAIL_ORIGIN_Y = 10;
 const SWAY_AMP      = 0.50; // 흔들림 진폭 (radians)
 
-// 꼬리 체인: 세그먼트 수, 간격, 스케일 (지렁이 파동)
-const NUM_SEGS   = 14;   // 꼬리 세그먼트 수 (14 × 5px = 70px)
-const STEP_DIST  = 5;    // 세그먼트 간 거리 (px)
-const PHASE_STEP = 0.55; // 세그먼트마다 위상 어긋남 (클수록 파동이 뚜렷)
-const TRAIL_MAX  = 0.45; // 플레이어 이동 방향 트레일링 최대 각도 (radians)
-// 타원형: base·tip 가늘고 5~6번째 가장 두꺼움
-const SEG_SCALES = [0.07, 0.15, 0.22, 0.28, 0.31, 0.32, 0.31, 0.27, 0.22, 0.16, 0.11, 0.07, 0.04, 0.02];
+// ── 꼬리 ────────────────────────────────────────────────────────────────
+// 원본은 꼬리 하나를 발광 점 14개로 이었다 — 9개면 **가산 스프라이트 126장을
+// 매 프레임 재배치**하는 것이라 게임에서 가장 무거운 상시 비용이었다.
+// 실루엣("밑동 가늘고 중간이 가장 두껍고 끝이 뾰족")은 한 장에 구울 수 있다.
+const TAIL_TEXTURE = 'fx_tail';
+const TAIL_LEN     = 70;  // 표시 길이(px) — 원본 14 × 5px 과 같다
+const TAIL_WIDTH   = 26;  // 표시 폭(px)
+const TRAIL_MAX  = 0.45;  // 플레이어 이동 방향 트레일링 최대 각도 (radians)
+/** 꼬리는 게임이 끝날 때까지 산다. vfx 보험 타이머는 그보다 길게 */
+const PERSIST_MS = 20 * 60 * 1000;
+
 
 // 꼬리 depth (플레이어 depth 5보다 낮아야 몸통 뒤에 숨음)
 const TAIL_DEPTH = 3;
@@ -71,13 +76,8 @@ interface FoxFire {
   color: number;
 }
 
-interface TailSegImg {
-  img: Phaser.GameObjects.Image;
-  baseScale: number;
-}
-
 interface TailObj {
-  segs: TailSegImg[];
+  img: Phaser.GameObjects.Image;
   baseAngle: number;
   swayPhase: number;
   swayFreq: number;
@@ -118,9 +118,6 @@ export class GumiAbility extends BaseAbility {
   // ── 무적 오라 ─────────────────────────────────────────────────────
   private auraParticles: AuraParticle[] = [];
 
-  // ── 디버그 텍스트 (임시) ──────────────────────────────────────────
-  private debugText: Phaser.GameObjects.Text | null = null;
-
   // ── 플레이어 depth 설정 (꼬리가 몸통 뒤에 렌더링되도록) ──────────
   override onCreate(api: GameSceneAPI): void {
     // 씬 재시작 시 onDestroy가 호출되지 않으므로 stale 참조를 여기서 정리
@@ -129,25 +126,8 @@ export class GumiAbility extends BaseAbility {
     this.specialBonus = 0;
     this.speedBonus = 0;
     this.spawnReduction = 0;
-    this.debugText = null;
 
     api.player.setDepth(5);
-    this.debugText = api.scene.add.text(8, 60, '', {
-      fontSize: '11px',
-      color: '#ffffaa',
-      stroke: '#000000',
-      strokeThickness: 3,
-      lineSpacing: 2,
-    }).setDepth(500).setAlpha(0.85).setVisible(false);
-    this._updateDebugText();
-  }
-
-  private _updateDebugText(): void {
-    if (!this.debugText) return;
-    this.debugText.setText([
-      `🦊 꼬리 ${this.tailCount}/${GUMI_PARAMS.maxTails}`,
-      `특수+${this.specialBonus}pt  속도+${this.speedBonus}  소환-${this.spawnReduction}`,
-    ]);
   }
 
   // ── 꼬리 추가 ─────────────────────────────────────────────────────
@@ -158,50 +138,45 @@ export class GumiAbility extends BaseAbility {
     const i         = this.tailCount;
     const color     = TAIL_COLORS[i] ?? 0xffffff;
     const baseAngle = TAIL_ANGLE_ORDER[i] ?? (270 * Math.PI / 180);
-    const originX   = player.x;
-    const originY   = player.y + TAIL_ORIGIN_Y;
 
-    // 흰색(0xffffff)은 ADD 블렌드 시 RGB 3채널 전부 최대라 실제 scale보다 넓어 보임
+    // 흰색(0xffffff)은 ADD 블렌드 시 RGB 3채널 전부 최대라 실제 크기보다 넓어 보임
     // → alpha를 낮춰 다른 색상과 시각적 균형 맞춤
-    const segAlpha = color === 0xffffff ? 0.52 : 0.92;
+    const alpha = color === 0xffffff ? 0.52 : 0.92;
 
     // 먼저 생성된 꼬리(빨강 등)가 나중 꼬리(흰색 등) 위에 렌더링되도록
     // index가 낮을수록(앞쪽 꼬리) depth를 높게 설정
     const segDepth = TAIL_DEPTH + (GUMI_PARAMS.maxTails - i) * 0.1;
 
-    const segs: TailSegImg[] = [];
-    for (let s = 0; s < NUM_SEGS; s++) {
-      const img = scene.add.image(
-        originX + Math.cos(baseAngle) * (STEP_DIST * (s + 1)),
-        originY + Math.sin(baseAngle) * (STEP_DIST * (s + 1)),
-        'glow_dot',
-      )
-        .setDepth(segDepth)
-        .setBlendMode(Phaser.BlendModes.ADD)
-        .setTint(color)
-        .setScale(0)
-        .setAlpha(segAlpha);
-      segs.push({ img, baseScale: SEG_SCALES[s] ?? 0.08 });
-    }
+    const sx = TAIL_LEN / 512;
+    const sy = TAIL_WIDTH / 192;
 
-    // 등장 애니메이션 (base → tip 순차)
-    segs.forEach((si, idx) => {
-      scene.tweens.add({
-        targets: si.img,
-        scale: si.baseScale,
-        delay: idx * 40,
-        duration: 300,
-        ease: 'Back.easeOut',
+    // 원점을 밑동에 둔다 — 여기가 회전축이자 몸에 붙는 지점이다
+    const img = fxSprite(scene, player.x, player.y + TAIL_ORIGIN_Y, TAIL_TEXTURE, {
+      rotation: baseAngle,
+      scale: [sx * 0.05, sy],
+      origin: [0, 0.5],
+      tint: color,
+      alpha,
+      depth: segDepth,
+      blend: 'add',
+      // 블룸 레이어에 올리지 않는다 — depth 를 잃어 캐릭터 앞으로 튀어나오고,
+      // 9개가 상시 살아 있으면 전체 화면 블룸 패스가 영구히 켜진다
+      bloom: false,
+      lifeMs: PERSIST_MS,
+      slot: 'gumi_tail',
+      maxConcurrent: 12,
+    });
+    if (img) {
+      // 밑동에서 끝으로 뻗어 나온다
+      scene.tweens.add({ targets: img, scaleX: sx, duration: 300, ease: 'Back.easeOut' });
+      this.tails.push({
+        img,
+        baseAngle,
+        swayPhase: Phaser.Math.FloatBetween(0, Math.PI * 2),
+        swayFreq:  Phaser.Math.FloatBetween(2.2, 4.2),
+        color,
       });
-    });
-
-    this.tails.push({
-      segs,
-      baseAngle,
-      swayPhase: Phaser.Math.FloatBetween(0, Math.PI * 2),
-      swayFreq:  Phaser.Math.FloatBetween(2.2, 4.2),
-      color,
-    });
+    }
 
     if (i % 3 === 0) {
       this.specialBonus += GUMI_PARAMS.tailSpecialBonus;
@@ -213,7 +188,6 @@ export class GumiAbility extends BaseAbility {
     }
 
     this.tailCount++;
-    this._updateDebugText();
 
     if (this.tailCount >= GUMI_PARAMS.maxTails) {
       this._triggerInvincibility(api);
@@ -234,25 +208,13 @@ export class GumiAbility extends BaseAbility {
     const velRatio = body ? Phaser.Math.Clamp(body.velocity.x / maxSpeed, -1, 1) : 0;
     const trailOffset = velRatio * TRAIL_MAX;
 
+    // 좌표·각도만 갱신한다. 원본의 지렁이 파동은 **밑동을 축으로 한 흔들림**으로 대신한다 —
+    // 세그먼트가 없으니 마디마다 위상을 어긋나게 줄 대상도 없다.
     for (const tail of this.tails) {
-      let px = originX;
-      let py = originY;
-
-      for (let s = 0; s < tail.segs.length; s++) {
-        const si = tail.segs[s];
-        if (!si.img.active) continue;
-
-        // 뿌리는 진폭 0, 끝으로 갈수록 진폭 증가 (지렁이 파동)
-        const t     = s / (NUM_SEGS - 1);
-        const amp   = SWAY_AMP * t;
-        const sway  = Math.sin(time * tail.swayFreq + tail.swayPhase + s * PHASE_STEP) * amp;
-        // 트레일링: 끝 세그먼트일수록 이동 반대 방향으로 더 크게 쏠림
-        const angle = tail.baseAngle + sway + trailOffset * t;
-
-        px += Math.cos(angle) * STEP_DIST;
-        py += Math.sin(angle) * STEP_DIST;
-        si.img.setPosition(px, py);
-      }
+      if (!tail.img.active) continue;
+      const sway = Math.sin(time * tail.swayFreq + tail.swayPhase) * SWAY_AMP;
+      tail.img.setPosition(originX, originY);
+      tail.img.setRotation(tail.baseAngle + sway + trailOffset);
     }
   }
 
@@ -276,15 +238,14 @@ export class GumiAbility extends BaseAbility {
     this.invincibleActive  = true;
     this.invincibleElapsed = 0;
 
-    // 꼬리 확대
-    this.tails.forEach(t => {
-      t.segs.forEach(si => {
-        scene.tweens.add({
-          targets: si.img,
-          scale: si.baseScale * 1.5,
-          duration: 320,
-          ease: 'Back.easeOut',
-        });
+    // 꼬리 확대 — 밑동을 축으로 길고 두껍게 부푼다
+    this.tails.forEach(tl => {
+      if (!tl.img.active) return;
+      scene.tweens.add({
+        targets: tl.img,
+        scaleX: (TAIL_LEN * 1.45) / 512,
+        scaleY: (TAIL_WIDTH * 1.45) / 192,
+        duration: 320, ease: 'Back.easeOut',
       });
     });
 
@@ -327,13 +288,12 @@ export class GumiAbility extends BaseAbility {
     player.setAlpha(1);
 
     // 꼬리 사라짐
-    this.tails.forEach(t => {
-      t.segs.forEach(si => {
-        scene.tweens.add({
-          targets: si.img, alpha: 0, scale: 0,
-          duration: 380, ease: 'Quad.easeIn',
-          onComplete: () => si.img.destroy(),
-        });
+    this.tails.forEach(tl => {
+      if (!tl.img.active) return;
+      scene.tweens.add({
+        targets: tl.img, alpha: 0, scaleX: 0, scaleY: 0,
+        duration: 380, ease: 'Quad.easeIn',
+        onComplete: () => tl.img.destroy(),
       });
     });
     this.tails       = [];
@@ -346,7 +306,6 @@ export class GumiAbility extends BaseAbility {
     this.speedBonus     = 0;
     this.spawnReduction = 0;
     player.addPermanentSpeed(-speedToRemove);
-    this._updateDebugText();
 
     this._destroyAura();
     this._spawnBreakEffect(api);
@@ -441,49 +400,18 @@ export class GumiAbility extends BaseAbility {
 
     scene.cameras.main.flash(200, 255, 200, 50, true);
 
-    // 확산 링 2겹
-    [{ delay: 0, maxScale: 4.3 }, { delay: 80, maxScale: 3.4 }].forEach(({ delay, maxScale }) => {
-      const ring = scene.add.graphics().setDepth(150);
-      ring.lineStyle(2.5, 0xffcc44, 0.9);
-      ring.strokeEllipse(0, 0, 74, 98);
-      ring.setPosition(cx, cy);
-      scene.tweens.add({
-        targets: ring, scaleX: maxScale, scaleY: maxScale, alpha: 0,
-        duration: 500, delay, ease: 'Quad.easeOut',
-        onComplete: () => ring.destroy(),
-      });
+    // 확산 링 2겹 — Graphics 로 타원을 그리던 것 → 충격파 텍스처
+    playFx(scene, 'shockwave', cx, cy, { scale: 2.4, tint: 0xffcc44, depth: 150 });
+    scene.time.delayedCall(80, () => {
+      if (!scene.sys.isActive()) return;
+      playFx(scene, 'shockwave', cx, cy, { scale: 1.8, tint: 0xffcc44, depth: 150 });
     });
 
     // 내부 섬광
-    const fill = scene.add.graphics().setDepth(149);
-    fill.fillStyle(0xffcc44, 0.25);
-    fill.fillEllipse(0, 0, 74, 98);
-    fill.setPosition(cx, cy);
-    scene.tweens.add({
-      targets: fill, alpha: 0, duration: 180, ease: 'Quad.easeOut',
-      onComplete: () => fill.destroy(),
-    });
+    playFx(scene, 'bloom', cx, cy, { scale: 0.9, tint: 0xffcc44, alpha: 0.8, depth: 149 });
 
-    // 황금 파편 8개
-    for (let i = 0; i < 8; i++) {
-      const angle = (i / 8) * Math.PI * 2 + Phaser.Math.FloatBetween(-0.25, 0.25);
-      const speed = Phaser.Math.FloatBetween(40, 95);
-      const w     = Phaser.Math.Between(5, 12);
-      const h     = Phaser.Math.Between(2, 5);
-      const shard = scene.add.graphics().setDepth(152);
-      shard.fillStyle(0xffcc44, 1);
-      shard.fillRect(-w / 2, -h / 2, w, h);
-      shard.setPosition(cx, cy);
-      shard.setRotation(angle);
-      scene.tweens.add({
-        targets: shard,
-        x: cx + Math.cos(angle) * speed,
-        y: cy + Math.sin(angle) * speed,
-        alpha: 0, rotation: angle + Phaser.Math.FloatBetween(-1, 1),
-        duration: Phaser.Math.Between(270, 440), ease: 'Quad.easeOut',
-        onComplete: () => shard.destroy(),
-      });
-    }
+    // 황금 파편 — Graphics 8개를 낱개로 날리던 것 → 이미터 하나
+    burst(scene, cx, cy, 'shard', { count: 10, tint: [0xffcc44, 0xffee88], speed: 1.1, depth: 152 });
   }
 
   // ── 반경 내 똥 전부 제거 ──────────────────────────────────────────
@@ -498,18 +426,17 @@ export class GumiAbility extends BaseAbility {
 
     ensureGlowDot(scene);
 
-    // 황금 확산 링 2겹
-    for (let i = 0; i < 2; i++) {
-      const ring = scene.add.graphics().setDepth(212);
-      ring.lineStyle(3 - i, 0xffcc44, 0.9 - i * 0.3);
-      ring.strokeCircle(0, 0, 20);
-      ring.setPosition(player.x, player.y);
-      scene.tweens.add({
-        targets: ring, scaleX: r / 20, scaleY: r / 20, alpha: 0,
-        delay: i * 80, duration: 560, ease: 'Quad.easeOut',
-        onComplete: () => ring.destroy(),
+    // 황금 확산 링 2겹 — 반경(zapRadius)만큼 퍼진다. shockwave 는 128px 텍스처가
+    // 지름 92px 쯤으로 그려지므로 원하는 반경에 맞춰 배율을 잡는다
+    playFx(scene, 'shockwave', player.x, player.y, {
+      scale: (r * 2) / 92, tint: 0xffcc44, depth: 212,
+    });
+    scene.time.delayedCall(80, () => {
+      if (!scene.sys.isActive()) return;
+      playFx(scene, 'shockwave', player.x, player.y, {
+        scale: (r * 1.6) / 92, tint: 0xffee88, alpha: 0.7, depth: 212,
       });
-    }
+    });
 
     // 중앙 섬광
     const flash = scene.add.image(player.x, player.y, 'glow_dot')
@@ -664,10 +591,8 @@ export class GumiAbility extends BaseAbility {
     api.player.setDepth(0); // player depth 원복
     this.foxFires.forEach(f => { f.img.destroy(); f.core.destroy(); });
     this.foxFires = [];
-    this.tails.forEach(t => t.segs.forEach(si => si.img.destroy()));
+    this.tails.forEach(tl => tl.img.destroy());
     this.tails = [];
     this._destroyAura();
-    this.debugText?.destroy();
-    this.debugText = null;
   }
 }

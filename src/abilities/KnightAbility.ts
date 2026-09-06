@@ -3,7 +3,7 @@ import { BaseAbility } from './BaseAbility';
 import type { GameSceneAPI } from './types';
 import type PoolablePoopBase from '../objects/PoolablePoopBase';
 import { KNIGHT_PARAMS } from '../config/abilityParams';
-import { fxSprite, impact, playFx, projectile, sweep } from '../utils/vfx';
+import { fxSprite, impact, playFx, projectile } from '../utils/vfx';
 
 /**
  * 나이트 (SR) — 검기로 제거한 똥마다 보너스 / 점수마다 3방향 검기
@@ -17,23 +17,25 @@ import { fxSprite, impact, playFx, projectile, sweep } from '../utils/vfx';
  *   3) 검기  — 칼끝에서 초승달 3개가 **눌린 채로 나와 뻗으며** 날아간다
  * 경로에 닿은 똥은 recycle() 의 공통 타격 연출로 터진다 — 능력이 따로 이펙트를 얹지 않는다.
  *
- * ## 검기 구성 (실무 관행 — RealTimeVFX / 애니메 이펙트 작화)
- * 1. **한 겹은 납작해 보인다** → 넓고 옅은 외곽 / 본체 / 얇은 흰 코어 3겹으로 쌓는다.
- * 2. **알파로 사라지지 않는다** → 비행하면서 세로로 가늘어지며 흩어진다 (`thinTo`).
- * 3. **플래시는 그 순간에** → 검기가 칼끝을 떠나는 프레임에 짧은 섬광 하나.
- * 4. **반투명은 채도로 산다** → 알파만 낮추면 색이 배경에 섞여 바랜다.
- *    텍스처 채도를 올려 두고 알파를 낮춰야 '비쳐 보이는 기운'이 된다.
+ * ## 검기는 프레임 시트다
+ * 정지 텍스처를 변형만 하면 프레임마다 형태가 바뀌는 작화의 맛이 원리상 안 나온다.
+ * 지금은 8프레임 시트를 **비행 시간에 맞춰** 재생한다 — 날아가는 동안 뻗었다가
+ * 찢어지고 조각으로 흩어진다.
  *
- * 잔상(afterimage)은 쓰지 않는다 — 옅은 복사본이 뒤에 깔리면 검기 자체가 흐려 보인다.
- * 속도감은 발사 뻗음과 일렁임이 만든다.
+ * 그래서 정지 텍스처 시절의 장치들이 필요 없어졌다:
+ * 겹 쌓기(한 겹이 납작해 보이는 걸 메우던 것), 비행 중 가늘어짐, 발사 뻗음, 잔상.
+ * 그림이 프레임마다 다르므로 그걸 흉내 낼 이유가 없다.
+ *
+ * 남는 규칙은 하나 — **플래시는 그 순간에.** 검기가 칼끝을 떠나는 프레임에 섬광 하나.
  *
  * 이전 구현은 검기 하나당 Graphics 4겹을 매 프레임 250점씩 다시 그리고 45ms 마다
  * 파티클 이미지를 따로 뿌렸다. 지금은 전부 vfx 레이어의 스프라이트로 옮겨
  * 씬 shutdown 시 회수까지 vfx 가 책임진다.
  *
  * ## 비용 상한 (YOU MUST — 늘리기 전에 실기에서 프레임을 재라)
- * 발동 1회가 만드는 것은 **일반 블렌드 14장(블레이드 2 · 참격 3 · 검기 9)**
+ * 발동 1회가 만드는 것은 **일반 블렌드 6장(블레이드 2 · 참격 1 · 검기 3)**
  * + **가산 3장(발사 섬광, 각 125ms)** 이다. 가산이 짧게만 사는 덕에 블룸 패스도 그동안만 켜진다.
+ * 시트로 옮기며 겹 쌓기가 사라져 장수가 절반 이하로 줄었다.
  * 가산 오브젝트는 블룸 레이어로 들어가 살아 있는 내내 전체 화면 블룸 패스를 켜 두므로,
  * 자체 색을 가진 에셋은 가산으로 올리지 않는다 (vfx 설계 원칙 3).
  */
@@ -57,8 +59,6 @@ const SWING_MS = 95;
 const RELEASE_MS = WINDUP_MS + 60;
 /** 가운데 검기 뒤에 양옆이 따라 나가는 간격(ms) */
 const SPREAD_MS = 50;
-/** 검기가 뻗어 나오는 시간(ms). 눌린 상태에서 제 크기까지 */
-const LAUNCH_MS = 95;
 
 /**
  * 오러 블레이드. proc-streak(가로로 누운 얇은 렌즈)을 손을 축으로 세워 쓴다.
@@ -75,40 +75,30 @@ const BLADE_CORE: [number, number] = [0.32, 0.34];
 /** 검기와 같은 계열 — 외곽은 주황, 코어는 흰 크림 */
 const BLADE_OUTER_TINT = 0xff8a2b;
 const BLADE_CORE_TINT = 0xfff1d0;
-/** 검기 외곽 글로우 착색 */
-const BEAM_GLOW_TINT = 0xff8a2b;
-
 /**
- * 반투명 — 배경이 비쳐 보이게 알파를 낮춘다.
- * **텍스처 채도를 미리 올려 두었기 때문에** 이만큼 낮춰도 주황이 배경에 섞여 바래지 않는다
- * (채도가 낮은 원본을 그냥 투명하게 만들면 색이 죽고 '바랜 그림'이 된다).
+ * 검기 — **프레임 시트**다. 날아가는 동안 형태가 뻗었다가 찢어지고 조각으로 흩어진다.
+ *
+ * 정지 텍스처 3겹(외곽·본체·코어)으로 쓰던 것을 대체한다. 겹쳐 쌓는 건 한 겹이
+ * 납작해 보이는 걸 메우려던 것이었는데, 시트는 프레임마다 그림이 달라 그럴 필요가 없다.
+ * **색은 시트에 구워 넣는다.** 흰색 한 장을 통째로 착색하면 알파만 다르고 색이 전부
+ * 같아서 '기운' 이 아니라 '단색 도형' 으로 보인다. 어두운 가장자리는 진한 주황,
+ * 밝은 심지는 흰색이 되도록 밝기를 색 계단으로 바꿔 굽는다
+ * (scripts/fx-particle.py --frames-ramp).
  */
-const BEAM_ALPHA = 0.72;
-const BEAM_GLOW_ALPHA = 0.18;
-const BEAM_CORE_ALPHA = 0.8;
-
-/**
- * 검기 텍스처. 생성 이펙트의 플라즈마 질감을 얕은 호로 세운 전용 에셋으로,
- * **자체 색(흰 코어 + 주황 그라데이션)을 가지므로 착색하지 않고 일반 블렌드로 그린다.**
- * 가산으로 두면 밝은 하늘 배경(평균 192/255)에서 흰색에 수렴해 사라진다.
- */
-const BEAM_TEXTURE = 'fx_sword_beam';
-/** 흰 하드엣지 코어 판 — 같은 형태를 얇게 얹어 작은 크기에서도 형태가 읽히게 한다 */
-const BEAM_CORE_TEXTURE = 'fx_sword_beam_core';
-/**
- * 512×250 텍스처 → 약 102×51px 짜리 검기가 된다.
- * (전보다 키웠다 — '트레일이 작으면 아예 안 보인다' 는 게 반복해서 나오는 지적이다)
- */
-const BEAM_SCALE: [number, number] = [0.2, 0.3];
-/** 비행하면서 세로로 이만큼까지 가늘어진다 — 흩어지는 기운으로 읽히게 */
-const BEAM_THIN_TO = 0.65;
+const BEAM_SHEET = 'swordSlash' as const;
+/** 시트 프레임은 256×192 — 표시 폭을 프레임 폭으로 나눠 배율을 낸다 */
+const BEAM_FRAME_W = 256;
+/** 화면상 검기 폭(px). 프레임이 256px 이므로 배율은 이 값 / 256 */
+const BEAM_WIDTH = 120;
+/** 휘두름 참격 — 같은 시트를 제자리에서 크게 재생한다 */
+const SWING_WIDTH = 210;
 
 /**
  * 판정 반경(검기 로컬 좌표계). 가로는 보이는 폭에 맞추고,
  * 세로는 한 프레임 이동량(≈9px)과 똥 반지름을 감안해 넉넉히 잡는다 —
  * 좁히면 빠른 검기가 똥을 그냥 통과한다.
  */
-const HIT_HALF_W = 42;
+const HIT_HALF_W = 48;  // 표시 폭 120px 의 80% — 정지 텍스처(102px/42) 와 같은 비율
 const HIT_HALF_H = 26;
 
 export class KnightAbility extends BaseAbility {
@@ -205,17 +195,13 @@ export class KnightAbility extends BaseAbility {
   /** 2단 — 휘두름: 블레이드가 지나간 자리에 큰 참격이 남는다 + 손맛 */
   private swing(api: GameSceneAPI): void {
     const { x, y } = api.player;
-    // 검기와 같은 텍스처를 크게 눕혀 쓴다 — 두 연출이 다른 그림이면 따로 논다.
-    // 착색하지 않으므로 잔상도 원색 그대로 알파만 빠진다.
-    sweep(api.scene, x, y + MUZZLE_OFFSET_Y - 6, {
-      texture: BEAM_TEXTURE,
+    // 검기와 **같은 시트**를 제자리에서 크게 재생한다 — 두 연출이 다른 그림이면 따로 논다.
+    // playFx 의 scale 은 레지스트리 기본값(0.4)에 곱해지므로 표시 폭에서 역산한다
+    playFx(api.scene, BEAM_SHEET, x, y + MUZZLE_OFFSET_Y - 6, {
       rotation: -0.16,
-      length: 0.42,
-      thickness: 0.26,
-      duration: SWING_MS,
-      alpha: 0.8,
-      blend: 'normal',
-      trail: { alpha: 0.32, hold: 80, fade: 240 },
+      scale: (SWING_WIDTH / BEAM_FRAME_W) / 0.4,
+      alpha: 0.85,
+      depth: 121,
     });
 
     // 휘두르는 무게 — 매화의 '툭 끊기는' 히트스톱보다 조금 길고 흔들림도 크다
@@ -244,24 +230,17 @@ export class KnightAbility extends BaseAbility {
     // 검기가 칼끝을 떠나는 그 순간의 섬광 — 유일한 가산 이펙트이자 가장 짧게 산다
     playFx(api.scene, 'bloom', ox + dx * 14, oy + dy * 14, { scale: 0.55, alpha: 0.8 });
 
+    const scale = BEAM_WIDTH / BEAM_FRAME_W;
+
     projectile(api.scene, ox, oy, {
       to: { x: ox + dx * travel, y: oy + dy * travel },
       duration: (travel / BEAM_SPEED) * 1000,
       rotation: rot,
-      texture: BEAM_TEXTURE,
-      scale: BEAM_SCALE,
-      alpha: BEAM_ALPHA,
+      sheet: BEAM_SHEET,
+      scale: [scale, scale],
+      alpha: 0.95,
       blend: 'normal',
-      launch: { fromScale: 0.3, ms: LAUNCH_MS },
-      thinTo: BEAM_THIN_TO,
-      // 넓고 옅은 외곽(뒤) + 얇은 흰 코어(앞). 본체는 텍스처 원색 그대로다
-      layers: [
-        // 외곽은 착색한다 — 텍스처의 옅은 부분이 그대로 넓게 퍼지면 하늘색 위에서 잿빛으로 뜬다
-        { scale: [1.06, 1.75], alpha: BEAM_GLOW_ALPHA, dz: -1, tint: BEAM_GLOW_TINT },
-        { scale: [0.97, 0.7], alpha: BEAM_CORE_ALPHA, dz: 1, texture: BEAM_CORE_TEXTURE },
-      ],
-      // 층마다 위상이 어긋난 미세한 흔들림 — 정지 텍스처의 '판때기' 느낌을 지운다
-      waver: { rotation: 0.055, stretch: 0.05, periodMs: 300 },
+      // 뻗어 나오는 연출은 시트 1~2프레임이 이미 하고 있다 — 배율까지 눌러 두면 이중이다
       onStep: (bx, by) => this.cutAlong(api, bx, by, cos, sin, cut),
     });
   }

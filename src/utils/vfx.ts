@@ -81,6 +81,8 @@ const FX_PARTICLE_ASSETS: Record<string, string> = {
   // 파티클과 달리 밝기를 알파로 쓰지 않는다 (scripts/fx-particle.py --cutout)
   fx_yeoiju: 'yeoiju.png',
   fx_lotus: 'lotus.png',
+  // 구미 꼬리 — 절차 생성한 깃(--plume). 무채색이라 9색 착색이 탁해지지 않는다
+  fx_tail: 'tail.png',
   // 수학 생성 — 흰색이라 setTint 로 자유롭게 착색
   fx_proc_arc:    'proc-arc.png',
   fx_proc_petal:  'proc-petal.png',
@@ -118,6 +120,10 @@ const FX_SHEETS: FxSheetAsset[] = [
   // 아래는 아직 쓰지 않는다 — VRAM 절약을 위해 로딩하지 않는다 (2.1MB / 10.7MB / 20.5MB).
   // 쓰기 시작할 때 preload 플래그만 켜면 된다.
   // itemPop: 아이템 획득 팝. '폭발처럼 보인다'는 피드백으로 사용 중단 (2025-09 w7)
+  // 참격 — 형태가 프레임마다 바뀌는 유일한 이펙트. 정지 텍스처를 변형만 하는 것과
+  // 다른 점이 여기다 (뻗음 → 임팩트 → 찢어짐 → 조각 → 잔재)
+  { fxKey: 'swordSlash', file: 'slash_256x192.png', frameCount: 8, frameRate: 20,
+    defaultScale: 0.4, defaultDepth: 122, blend: 'normal', maxConcurrent: 6, preload: true },
   { fxKey: 'itemPop', file: 'puffstars_120x109.png', frameCount: 42, frameRate: 48,
     defaultScale: 0.7, defaultDepth: 123, blend: 'normal', maxConcurrent: 4, preload: false },
   { fxKey: 'sparkleField', file: 'constellation_299x313.png', frameCount: 30, frameRate: 30,
@@ -178,7 +184,8 @@ export function preloadFxAssets(scene: Phaser.Scene): void {
 export type FxKey =
   | 'slash' | 'shockwave' | 'bloom'      // 절차 생성 (폴백 겸용)
   | 'impactHit' | 'itemPop'              // 시트 — 똥 파괴 / 아이템 획득
-  | 'sparkleField' | 'auraRing';         // 시트 — 아직 미사용(로딩 안 함)
+  | 'sparkleField' | 'auraRing'          // 시트 — 아직 미사용(로딩 안 함)
+  | 'swordSlash';                        // 시트 — 참격 (프레임마다 형태가 바뀐다)
 
 /** 프레임 하나를 캔버스에 그리는 함수. t 는 0(첫 프레임) ~ 1(마지막) 정규화 진행도 */
 type FrameDrawer = (ctx: CanvasRenderingContext2D, t: number, w: number, h: number) => void;
@@ -261,6 +268,11 @@ const FX_REGISTRY: Record<FxKey, FxDefinition> = {
     textureKey: 'fxsheet_auraRing',
     frameWidth: 421, frameHeight: 425, frameCount: 30, frameRate: 30,
     defaultScale: 0.5, defaultDepth: 120, blend: 'add', maxConcurrent: 2,
+  },
+  swordSlash: {
+    textureKey: 'fxsheet_swordSlash',
+    frameWidth: 256, frameHeight: 192, frameCount: 8, frameRate: 20,
+    defaultScale: 0.4, defaultDepth: 122, blend: 'normal', maxConcurrent: 6,
   },
 };
 
@@ -1173,6 +1185,15 @@ export interface FxSpriteOptions {
   depth?: number;
   blend?: FxBlend;
   /**
+   * 블룸 레이어에 올릴지 (기본 **false**).
+   *
+   * 블룸 레이어는 depth 가 고정(122)이라, 여기 올라가면 **오브젝트가 지정한 depth 를 잃는다** —
+   * 캐릭터 뒤에 있어야 할 꼬리가 앞으로 튀어나오는 식이다. 게다가 하나라도 살아 있으면
+   * 전체 화면 블룸 패스가 계속 돌기 때문에 **오래 사는 이펙트는 절대 올리면 안 된다.**
+   * 짧게 번쩍이고 사라지는 것만 켠다.
+   */
+  bloom?: boolean;
+  /**
    * 보험 수명(ms). **필수** — 이 시간이 지나면 호출부 트윈이 어긋나도 무조건 회수된다.
    * 히트스톱으로 트윈이 밀려도 회수가 밀리지 않도록 실시간 타이머로 잰다.
    */
@@ -1224,7 +1245,7 @@ export function fxSprite(
     if (insurance >= 0) cancelTrackedTimeout(scene, insurance);
     releaseSlot(st, slot);
   });
-  if (glows(blend)) attachBloom(scene, img);
+  if (opts.bloom && glows(blend)) attachBloom(scene, img);
   insurance = trackedTimeout(scene, opts.lifeMs, done);
 
   return img;
@@ -1241,6 +1262,14 @@ export interface ProjectileOptions {
   duration: number;
   /** 본체 텍스처 키 (기본: proc-arc) */
   texture?: string;
+  /**
+   * 정지 텍스처 대신 **프레임 시트**를 재생한다.
+   *
+   * 재생 시간은 비행 시간에 맞춰진다 — 검기가 날아가는 동안 형태가 뻗었다가 찢어지고
+   * 조각으로 흩어진다. 정지 텍스처를 변형만 하는 것과 다른 점이 여기다.
+   * `scale` 은 시트의 **프레임 크기** 기준이 되고, `layers` 는 무시한다(그림이 이미 다 있다).
+   */
+  sheet?: FxKey;
   /** 텍스처 회전(라디안) */
   rotation?: number;
   /** 표시 배율 [가로, 세로] */
@@ -1337,6 +1366,10 @@ export function projectile(
   const textureKey = opts.texture ?? SWEEP_DEFAULT_TEXTURE;
   if (!scene.textures.exists(textureKey)) return bail();
 
+  const sheetDef = opts.sheet ? FX_REGISTRY[opts.sheet] : null;
+  const sheetAnim = opts.sheet && sheetDef ? ensureFxAnim(scene, opts.sheet, sheetDef) : null;
+  if (opts.sheet && !sheetAnim) return bail(); // 시트가 아직 안 올라옴
+
   const st = getState(scene);
   if (!acquireSlot(st, PROJECTILE_SLOT, opts.maxConcurrent ?? PROJECTILE_MAX_UNITS)) return bail();
 
@@ -1394,7 +1427,10 @@ export function projectile(
     trackedTimeout(scene, aiFade + 500, done);
   };
 
-  const body = scene.add.image(x, y, textureKey)
+  const body: Phaser.GameObjects.Image = sheetDef && sheetAnim
+    ? scene.add.sprite(x, y, sheetDef.textureKey, 0)
+    : scene.add.image(x, y, textureKey);
+  body
     .setDepth(depth)
     .setRotation(rotation)
     .setAlpha(opts.alpha ?? 1)
@@ -1402,6 +1438,14 @@ export function projectile(
   if (opts.origin) body.setOrigin(opts.origin[0], opts.origin[1]);
   body.setBlendMode(toBlendMode(blend));
   if (opts.tint !== undefined) body.setTint(opts.tint);
+
+  if (sheetDef && sheetAnim) {
+    // 프레임 수를 비행 시간에 나눠 재생한다 — 도착할 때 마지막 프레임(잔재)이 되도록
+    (body as Phaser.GameObjects.Sprite).play({
+      key: sheetAnim,
+      frameRate: Math.max(1, sheetDef.frameCount / (opts.duration / 1000)),
+    });
+  }
 
   const launchMs = opts.launch?.ms ?? 0;
   const fromScale = opts.launch?.fromScale ?? 1;
@@ -1446,8 +1490,9 @@ export function projectile(
   };
 
   // ── 겹 층 — 본체를 따라다니며 같은 형태 변화를 겪는다 ──
+  // 시트는 그림이 이미 다 들어 있으므로 층을 쌓지 않는다
   const extras: Phaser.GameObjects.Image[] = [];
-  for (const L of opts.layers ?? []) {
+  for (const L of (sheetDef ? [] : opts.layers ?? [])) {
     const lx = sx * L.scale[0];
     const ly = sy * L.scale[1];
     const img = scene.add.image(x, y, L.texture ?? textureKey)

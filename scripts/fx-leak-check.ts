@@ -204,6 +204,25 @@ async function main() {
   const knightSettled = snapshot(scene);
   console.log(fmt('[3b] 나이트 이펙트 종료 후', knightSettled));
 
+  // ── 상시 가산 이펙트가 블룸 레이어를 붙잡지 않는지 ────────────────────
+  // 블룸 레이어는 depth 가 고정이라 올라간 오브젝트는 자기 depth 를 잃고,
+  // 하나라도 살아 있으면 전체 화면 블룸 패스가 계속 돈다.
+  // 구미 꼬리(9개 상시, 가산)가 여기 올라가 렉과 렌더 순서 붕괴를 일으킨 적이 있다.
+  const persist = [];
+  for (let i = 0; i < 9; i++) {
+    persist.push(fxSprite(scene, 100 + i * 10, 400, 'fx_tail', {
+      rotation: 0, scale: [0.14, 0.14], origin: [0, 0.5],
+      tint: 0xff2200, alpha: 0.9, depth: 3, blend: 'add',
+      lifeMs: 60000, slot: 'gumi_tail', maxConcurrent: 12,
+    }));
+  }
+  const persistBloom = snapshot(scene).bloomRefs;
+  persist.forEach(o => o?.destroy());
+  await sleep(200);
+  const persistCleared = snapshot(scene);
+  console.log('상시 가산 9장: bloomRefs=%d (0 이어야 한다), 파기 후 sprites=%d timeouts=%d',
+    persistBloom, persistCleared.sprites, persistCleared.timeouts);
+
   // ── 잔상 누락 검사: 매화 1회 발동에서 sweep/잔상 요청 = 생성 이어야 한다 ──
   resetFxCounters();
   recycleLog.length = 0;
@@ -282,6 +301,8 @@ async function main() {
       stress.sweepCreated === stress.sweepRequested && stress.trailCreated === stress.trailRequested],
     ['[11] 이펙트가 똥의 현재 위치에 난다 (오차 ≤ 30px)', cutOffset <= 30],
     ['[12] 옅은 알파 + 가산 조합 0건 (밝은 배경에서 묻히는 조합)', faintAdditive.length === 0],
+    ['[13] 상시 가산 이펙트가 블룸 레이어를 붙잡지 않음', persistBloom === 0],
+    ['[14] 상시 이펙트 파기 시 보험 타이머까지 회수', persistCleared.timeouts === 0],
   ];
   console.log('');
   let ok = true;

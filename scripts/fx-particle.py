@@ -386,6 +386,178 @@ def bolt(width: int = 512, height: int = 256, seed: int = 0,
     return Image.fromarray(np.dstack([rgb, (a * 255).astype(np.uint8)]), "RGBA")
 
 
+def slash_frame(t: float, width: int = 256, height: int = 160,
+                rng: "random.Random | None" = None) -> Image.Image:
+    """애니메 참격 한 프레임. `t` 는 0(시작) ~ 1(소멸).
+
+    **프레임마다 형태가 바뀌는 것**이 정지 텍스처를 변형만 하는 것과의 차이다.
+      t≈0.0  가늘게 그어지기 시작
+      t≈0.25 가장 굵고 길다 (임팩트)
+      t≈0.5~ 안쪽부터 끊어지며 조각으로 흩어진다
+    """
+    rng = rng or random.Random(0)
+    y = (np.arange(height, dtype=np.float32) / (height - 1) * 2 - 1)[:, None]
+    x = (np.arange(width, dtype=np.float32) / (width - 1))[None, :]
+
+    grow = min(1.0, t / 0.25)                 # 뻗는 구간
+    decay = max(0.0, (t - 0.3) / 0.7)         # 흩어지는 구간
+
+    # 길이·두께가 프레임마다 변한다 — 뻗었다가 가늘어진다
+    span = 0.25 + 0.75 * grow
+    thick = (0.30 + 0.42 * grow) * (1.0 - 0.75 * decay)
+
+    tt = np.clip(x / max(span, 1e-3), 0.0, 1.0)
+    bow = np.clip(1.0 - (2 * tt - 1) ** 2, 0.0, 1.0)
+    arc = -0.34 * bow                          # 위로 휜 초승달
+    w = np.maximum(thick * bow ** 0.7, 1e-3)
+    a = np.exp(-(((y - arc) / w) ** 2) * 2.1) * np.where(x <= span, 1.0, 0.0)
+
+    # 소멸: 세로 줄무늬로 끊어 조각을 만든다 (알파를 통째로 빼면 그냥 흐려진다)
+    if decay > 0:
+        freq = 9.0 + 7.0 * decay
+        stripes = 0.5 + 0.5 * np.sin(x * math.pi * freq + rng.random() * 6.28)
+        a *= np.clip(stripes * 1.6 - decay * 1.15, 0.0, 1.0)
+
+    a = np.clip(a * (1.0 - 0.25 * decay) * 1.15, 0.0, 1.0)
+    rgb = np.full((height, width, 3), 255, dtype=np.uint8)
+    img = Image.fromarray(np.dstack([rgb, (a * 255).astype(np.uint8)]), "RGBA")
+    return img.filter(ImageFilter.GaussianBlur(1.0))
+
+
+def sheet_slash(frames: int = 8, width: int = 256, height: int = 160,
+                seed: int = 0) -> Image.Image:
+    """참격 플립북 — 프레임을 가로로 이어붙인 시트. vfx 의 registerFxSheet 규약."""
+    rng = random.Random(seed)
+    out = Image.new("RGBA", (width * frames, height), (0, 0, 0, 0))
+    for i in range(frames):
+        out.paste(slash_frame(i / (frames - 1), width, height, rng), (i * width, 0))
+    return out
+
+
+def slice_frames(src: Path, count: int = 8, out_w: int = 192, out_h: int = 192,
+                 thresh: int = 10, pad: float = 0.10, rotate: int = 0,
+                 ramp: tuple[int, int, int] | None = None) -> "Image.Image":
+    """생성한 **한 장짜리 프레임 스트립** → 게임용 플립북 시트.
+
+    ChatGPT(GPT Image) 에 "한 장에 N프레임 가로 일렬" 을 시키면 프레임 간 일관성 문제가
+    없다 — 모델이 애초에 같이 그린다. 다만 셀 경계가 정확히 등분되지는 않으므로,
+    **밝은 덩어리를 찾아 중심을 잡고 균등한 셀로 다시 자른다.**
+
+    알파는 밝기에서 딴다(검은 배경 전제).
+
+    `ramp` 를 주면 **밝기를 색 계단으로 바꿔 구워 넣는다** — 어두운 가장자리는 진한 색,
+    밝은 심지는 흰색. RGB 를 흰색으로 통일하고 게임에서 통째로 착색하면 알파만 다르고
+    색이 전부 같아서 '기운' 이 아니라 '단색 도형' 으로 보인다.
+    """
+    im = Image.open(src).convert("RGB")
+    lum = np.asarray(im.convert("L"), dtype=np.float32)
+    col = (lum > thresh).sum(axis=0).astype(np.float32)
+
+    # 밝은 덩어리 = 프레임. 빈 열로 끊어 그룹을 만든다
+    on = col > col.max() * 0.02
+    groups, start = [], None
+    for x, v in enumerate(on):
+        if v and start is None:
+            start = x
+        elif not v and start is not None:
+            if x - start > im.width // (count * 8):
+                groups.append((start, x))
+            start = None
+    if start is not None:
+        groups.append((start, im.width))
+
+    if len(groups) != count:
+        # 덩어리가 붙거나 끊긴 경우 — 균등 분할로 물러선다
+        step = im.width / count
+        centers = [step * (i + 0.5) for i in range(count)]
+    else:
+        centers = [(a + b) / 2 for a, b in groups]
+
+    spacing = np.median(np.diff(centers)) if len(centers) > 1 else im.width / count
+    cell_w = spacing * (1.0 + pad)
+
+    rows = np.where((lum > thresh).any(axis=1))[0]
+    top, bot = (int(rows.min()), int(rows.max())) if len(rows) else (0, im.height - 1)
+    m = int((bot - top) * pad)
+    top, bot = max(0, top - m), min(im.height - 1, bot + m)
+
+    sheet = Image.new("RGBA", (out_w * count, out_h), (0, 0, 0, 0))
+    for i, cx in enumerate(centers):
+        box = (int(round(cx - cell_w / 2)), top, int(round(cx + cell_w / 2)), bot + 1)
+        cell = im.crop(box)
+        if rotate:
+            # 시트의 기본 방향을 게임 진행 방향에 맞춰 둔다 — 호출부에서 매번 90도를
+            # 더하는 것보다, 텍스처가 이미 맞는 방향인 편이 헷갈리지 않는다
+            cell = cell.rotate(rotate, expand=True)
+        cell = cell.resize((out_w, out_h), Image.LANCZOS)
+        g = np.asarray(cell.convert("L"), dtype=np.float32) / 255.0
+        a = np.clip((g - thresh / 255.0) / (1.0 - thresh / 255.0), 0.0, 1.0) ** 0.85
+
+        if ramp is None:
+            rgb = np.full((out_h, out_w, 3), 255, dtype=np.uint8)
+        else:
+            # 어두움 → 진한 색, 중간 → 지정색, 밝음 → 흰색.
+            # 심지가 흰색으로 남아야 발광체로 읽힌다
+            deep = np.array([c * 0.45 for c in ramp], dtype=np.float32)
+            mid = np.array(ramp, dtype=np.float32)
+            hot = np.array([255.0, 255.0, 255.0], dtype=np.float32)
+            # 흰 심지는 **가장 밝은 구간에서만** 나와야 한다. 경계를 낮게 잡으면
+            # 원본이 전반적으로 밝은 탓에 대부분이 흰색이 되고 색은 테두리만 남는다
+            t = np.clip(g / 0.30, 0.0, 1.0)[..., None]
+            u = np.clip((g - 0.84) / 0.16, 0.0, 1.0)[..., None] ** 1.4
+            col = deep * (1 - t) + mid * t
+            col = col * (1 - u) + hot * u
+            rgb = np.clip(col, 0, 255).astype(np.uint8)
+        sheet.paste(Image.fromarray(np.dstack([rgb, (a * 255).astype(np.uint8)]), "RGBA"),
+                    (i * out_w, 0))
+    return sheet
+
+
+def plume(width: int = 512, height: int = 192, bend: float = 0.16,
+          fluff: float = 0.32, peak: float = 0.46) -> Image.Image:
+    """꼬리(깃털/불꽃 깃) — **절차적으로 그린다.**
+
+    원본은 발광 점 14개를 이어 꼬리 하나를 만들었다 (9개면 126장). 실루엣은
+    "밑동 가늘고 중간이 가장 두껍고 끝이 뾰족" 인데, 그건 한 장으로 구울 수 있다.
+
+    가로가 진행 방향이다 — x=0 이 밑동, x=W 가 끝.
+    bend  : 중심선이 위로 휘는 정도
+    fluff : 끝에서 흩어지는 털의 세기
+    peak  : 가장 두꺼워지는 지점 (0~1)
+    """
+    x = (np.arange(width, dtype=np.float32) / (width - 1))[None, :]
+    y = (np.arange(height, dtype=np.float32) / (height - 1) * 2 - 1)[:, None]
+
+    # 폭 프로파일 — peak 에서 최대, 양끝에서 0
+    t = np.clip(x, 0.0, 1.0)
+    left = np.clip(t / peak, 0.0, 1.0) ** 0.65
+    right = np.clip((1.0 - t) / (1.0 - peak), 0.0, 1.0) ** 1.25
+    w = np.maximum(np.minimum(left, right), 0.02) * 0.95
+
+    # 중심선이 완만하게 휜다 — 곧은 막대는 꼬리로 안 보인다
+    cyl = -bend * np.sin(t * math.pi)
+
+    d = (y - cyl) / np.maximum(w, 1e-3)
+    a = np.exp(-(d ** 2) * 2.0)
+
+    # 끝쪽 털 — 결을 몇 가닥 얹어 뭉툭한 타원이 되지 않게 한다
+    strands = np.zeros_like(a)
+    for k, off in enumerate((-0.62, -0.28, 0.12, 0.48, 0.78)):
+        phase = 2.0 + k * 1.7
+        line = cyl + off * w * (1.0 + 0.35 * np.sin(t * math.pi * phase))
+        sw = w * (0.16 + 0.05 * k)
+        strands = np.maximum(strands, np.exp(-(((y - line) / np.maximum(sw, 1e-3)) ** 2) * 2.2))
+    a = np.clip(a + strands * fluff * np.clip((t - 0.25) / 0.75, 0.0, 1.0), 0.0, 1.0)
+
+    # 밑동은 몸에 묻히도록 살짝 흐리게, 끝은 옅게
+    a *= np.clip(t / 0.06, 0.0, 1.0) ** 0.5
+    a = np.clip(a * 1.1, 0.0, 1.0)
+
+    rgb = np.full((height, width, 3), 255, dtype=np.uint8)
+    img = Image.fromarray(np.dstack([rgb, (a * 255).astype(np.uint8)]), "RGBA")
+    return img.filter(ImageFilter.GaussianBlur(height / 130))
+
+
 def orb(size: int = 192,
         body: tuple[int, int, int] = (0x55, 0x00, 0x00),
         inner: tuple[int, int, int] = (0xdd, 0x22, 0x00),
@@ -551,6 +723,15 @@ def main() -> int:
     p.add_argument("--beam-tip", action="store_true",
                    help="한쪽만 뾰족하게 (손끝에서 뻗는 광선용). 기본은 양끝 테이퍼")
     p.add_argument("--beam-core", help="검기 코어(흰 하드엣지)로 가공할 png")
+    p.add_argument("--frames-from", help="생성한 프레임 스트립 png 를 게임용 시트로 자른다")
+    p.add_argument("--frames", type=int, default=8)
+    p.add_argument("--frame-size", default="192x192", help="프레임 크기 WxH")
+    p.add_argument("--frames-rotate", type=int, default=0, help="셀을 회전(반시계, 도)")
+    p.add_argument("--frames-ramp", help="밝기를 색 계단으로 구워 넣는다 (예: ff9a2e)")
+    p.add_argument("--sheet-slash", action="store_true",
+                   help="참격 플립북 시트를 절차 생성 (프레임마다 형태가 바뀐다)")
+    p.add_argument("--sheet-frames", type=int, default=8)
+    p.add_argument("--plume", action="store_true", help="꼬리 텍스처를 절차 생성")
     p.add_argument("--bolt", action="store_true", help="낙뢰 텍스처를 절차 생성")
     p.add_argument("--bolt-seed", type=int, default=0)
     p.add_argument("--orb", action="store_true", help="구슬 텍스처를 절차 생성")
@@ -567,6 +748,41 @@ def main() -> int:
     p.add_argument("--beam-start-fade", type=float, default=0.0,
                    help="시작 구간 알파 램프인 비율 (잘라낸 단면 감추기)")
     a = p.parse_args()
+
+    if a.frames_from:
+        if not a.out_file:
+            raise SystemExit("--out-file 이 필요합니다")
+        fw, fh = (int(v) for v in a.frame_size.lower().split("x"))
+        ramp = None
+        if a.frames_ramp:
+            h = a.frames_ramp.lstrip("#")
+            ramp = (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
+        img = slice_frames(Path(a.frames_from), count=a.frames, out_w=fw, out_h=fh,
+                           rotate=a.frames_rotate, ramp=ramp)
+        out = Path(a.out_file)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        img.save(out)
+        print(f"플립북 시트: {out} ({img.width}x{img.height}, {a.frames}프레임 / {fw}x{fh})")
+        return 0
+
+    if a.sheet_slash:
+        if not a.out_file:
+            raise SystemExit("--out-file 이 필요합니다")
+        img = sheet_slash(frames=a.sheet_frames)
+        out = Path(a.out_file)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        img.save(out)
+        print(f"참격 시트: {out} ({img.width}x{img.height}, {a.sheet_frames}프레임)")
+        return 0
+
+    if a.plume:
+        if not a.out_file:
+            raise SystemExit("--out-file 이 필요합니다")
+        out = Path(a.out_file)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        plume().save(out)
+        print(f"꼬리: {out}")
+        return 0
 
     if a.bolt:
         if not a.out_file:
