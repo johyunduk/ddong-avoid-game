@@ -179,6 +179,8 @@ def main() -> int:
     p.add_argument("--pingpong", action="store_true",
                    help="1→N→1 로 왕복 재생 (숨쉬기처럼 되돌아와야 하는 동작)")
     p.add_argument("--scale", type=float, help="배율 (생략하면 캔버스에 맞춰 자동)")
+    p.add_argument("--target-height", type=float,
+                   help="첫 프레임의 캐릭터 높이(px)를 이 값에 맞춘다. --scale 보다 우선")
     p.add_argument("--sheets", default="public/assets/sheets")
     p.add_argument("--players", default="public/assets/players")
     p.add_argument("--mirror", action="store_true", help="좌우 반전본도 반대 방향으로 저장")
@@ -217,7 +219,13 @@ def main() -> int:
     ground = max(bots)                       # 가장 낮은 발 = 지면
     reach = ground - min(tops)               # 지면부터 최고 정수리까지
 
-    if a.scale:
+    if a.target_height:
+        # 방향끼리 크기를 맞출 때 쓴다. 머리 폭만 맞추면 생성물의 머리·몸 비율이
+        # 방향마다 달라 정면과 측면의 실루엣 크기가 어긋난다 (원본은 정면이 측면보다
+        # 6~18% 큰데 시트는 33%까지 벌어졌다). 높이를 직접 지정해 그 관계를 되돌린다.
+        top, bot, _ = anchors(arr, spans[0])
+        scale = a.target_height / (bot - top + 1)
+    elif a.scale:
         scale = a.scale
     else:
         # 기본은 머리 폭 맞추기 — 원본과 같은 크기로 보이게 하는 기준
@@ -235,11 +243,14 @@ def main() -> int:
     new_frames = [place(src, s, arr, scale, ground, canvas, ref_bot, ref_head)
                   for s in spans]
 
-    # 기존 시트가 있으면 그 프레임을 유지하고 대상 애니메이션만 갈아끼운다
-    out_png = sheets / f"{a.id}_{a.dir}.png"
+    # 기존 시트가 있으면 그 프레임을 유지하고 대상 애니메이션만 갈아끼운다.
+    # 이미지 경로는 JSON 의 image 를 따른다 (png 로 만들었다가 webp 로 바꾼 시트가 있다)
     out_json = sheets / f"{a.id}_{a.dir}.json"
+    ext = ".png"
     if out_json.exists():
         meta = json.loads(out_json.read_text(encoding="utf-8"))
+        out_png = sheets / meta.get("image", f"{a.id}_{a.dir}.png")
+        ext = out_png.suffix
         old = frames_of_sheet(out_png, meta)
         names = list(meta.get("frames", [f"f{i}" for i in range(len(old))]))
         anims = dict(meta.get("anims", {}))
@@ -255,19 +266,37 @@ def main() -> int:
         order = order + order[-2:0:-1]   # 끝과 처음은 한 번씩만
     anims[a.anim] = {"frames": order, "frameRate": a.frame_rate,
                      "repeat": -1 if a.anim != "hit" else 0}
-    # 남은 애니메이션의 프레임 번호를 새 순서에 맞춰 다시 매긴다
+    # 이후 hit 교체로 순서가 밀릴 수 있으므로 재생 순서를 이름으로 들고 있는다
+    target_names = [combined[i][0] for i in order]
+    if a.add_hit:
+        # 피격 프레임은 기준 스프라이트(원본 크기)로 만들기 때문에, 그대로 두면 배율이
+        # 적용된 다른 프레임보다 5~15% 크다 — 맞을 때 캐릭터가 순간 커져 보인다.
+        # 새 프레임과 머리 폭이 같아지도록 줄이고 같은 규칙으로 발·머리중심을 맞춘다.
+        hit_img = make_hit(ref)
+        hit_a = alpha_of(hit_img)
+        hys, hxs = np.where(hit_a > ALPHA)
+        hit_span = (int(hxs.min()), int(hxs.max()))
+        # 높이로 맞춘다. 머리 폭으로 맞추면 안 되는데, 생성 프레임은 원본보다 머리가
+        # 커서 머리를 맞추면 몸이 남아 hit 만 10% 넘게 커진다.
+        ref_ys, _ = np.where(alpha_of(new_frames[0]) > ALPHA)
+        k = (ref_ys.max() - ref_ys.min() + 1) / (hys.max() - hys.min() + 1)
+        placed = place(hit_img, hit_span, hit_a, k, int(hys.max()),
+                       canvas, ref_bot, ref_head)
+        combined = [(n, im) for n, im in combined if n != "hit"]
+        combined.append(("hit", placed))
+        anims["hit"] = {"frames": [len(combined) - 1], "frameRate": 1, "repeat": 0}
+
+    # 프레임 번호를 최종 순서에 맞춰 다시 매긴다 (대상 애니메이션과 hit 은 이미 확정)
     index_of = {n: i for i, (n, _) in enumerate(combined)}
     for name, d in list(anims.items()):
-        if name == a.anim:
+        if name in (a.anim, "hit"):
             continue
         old_names = [names[i] for i in d["frames"] if i < len(names)]
         d["frames"] = [index_of[n] for n in old_names if n in index_of]
         if not d["frames"]:
             anims.pop(name)
-
-    if a.add_hit and "hit" not in anims:
-        combined.append(("hit", make_hit(ref)))
-        anims["hit"] = {"frames": [len(combined) - 1], "frameRate": 1, "repeat": 0}
+    # 대상 애니메이션도 hit 제거로 밀렸을 수 있으므로 이름으로 다시 잡는다
+    anims[a.anim]["frames"] = [index_of[n] for n in target_names]
 
     def save(frames: list[tuple[str, Image.Image]], direction: str, flip: bool) -> None:
         fw, fh = canvas
@@ -275,14 +304,18 @@ def main() -> int:
         for i, (_, im) in enumerate(frames):
             sheet.paste(im.transpose(Image.FLIP_LEFT_RIGHT) if flip else im, (i * fw, 0))
         sheets.mkdir(parents=True, exist_ok=True)
-        sheet.save(sheets / f"{a.id}_{direction}.png")
+        name = f"{a.id}_{direction}{ext}"          # 기존 시트의 형식을 따라간다
+        if ext == ".webp":
+            sheet.save(sheets / name, "WEBP", lossless=True, quality=100, method=6)
+        else:
+            sheet.save(sheets / name)
         (sheets / f"{a.id}_{direction}.json").write_text(json.dumps({
-            "image": f"{a.id}_{direction}.png",
+            "image": name,
             "frameWidth": fw, "frameHeight": fh,
             "frames": [n for n, _ in frames],
             "anims": anims,
         }, ensure_ascii=False, indent=2), encoding="utf-8")
-        print(f"  {a.id}_{direction}.png  {fw}x{fh} × {len(frames)}프레임"
+        print(f"  {name}  {fw}x{fh} × {len(frames)}프레임"
               + ("  (좌우 반전)" if flip else ""))
 
     save(combined, a.dir, False)

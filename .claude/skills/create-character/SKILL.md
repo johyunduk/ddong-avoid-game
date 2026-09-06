@@ -100,7 +100,8 @@ python scripts/review-status.py --list     # 심사 중인 배치까지 (게임 
 
 ## 3. 후보 생성
 
-ComfyUI 가 켜져 있어야 한다 (`http://127.0.0.1:8188`).
+ComfyUI 가 켜져 있어야 한다. 주소는 `COMFYUI_SERVER` 환경변수 > 후보 포트(`8188`, `8000`) 자동 탐지 순으로 잡힌다
+(Comfy Desktop 은 보통 `8000`). 다른 포트면 `--server` 로 지정한다.
 
 ```bash
 python scripts/comfyui-generate.py --workflow character \

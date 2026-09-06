@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import random
 import sys
 import time
@@ -36,7 +37,11 @@ if hasattr(sys.stdout, "reconfigure"):
 
 ROOT = Path(__file__).resolve().parent.parent
 WORKFLOW_DIR = ROOT / "workflows" / "comfyui"
-DEFAULT_SERVER = "http://127.0.0.1:8188"
+# ComfyUI 주소. 환경변수 COMFYUI_SERVER 가 있으면 그것을 쓰고,
+# 없으면 아래 후보 포트를 순서대로 두드려 살아 있는 쪽을 잡는다.
+# (Comfy Desktop 은 8000 을, 수동 실행은 8188 을 쓰는 경우가 많다)
+SERVER_CANDIDATES = ["http://127.0.0.1:8188", "http://127.0.0.1:8000"]
+DEFAULT_SERVER = SERVER_CANDIDATES[0]
 
 # UI 위젯 값이 하나 더 붙는 입력들 (control_after_generate)
 CONTROL_SUFFIX_INPUTS = {"seed", "noise_seed"}
@@ -62,13 +67,34 @@ def _post_json(server: str, path: str, payload: dict) -> dict:
         raise SystemExit(f"ComfyUI 가 요청을 거부했습니다 (HTTP {e.code}):\n{body}")
 
 
-def check_server(server: str) -> None:
+def _alive(server: str) -> bool:
     try:
-        _get(server, "/system_stats")
+        with urllib.request.urlopen(f"{server}/system_stats", timeout=5):
+            return True
     except Exception:
+        return False
+
+
+def resolve_server(explicit):
+    """--server > COMFYUI_SERVER > 후보 포트 자동 탐지."""
+    if explicit:
+        return explicit.rstrip("/")
+    env = os.environ.get("COMFYUI_SERVER")
+    if env:
+        return env.rstrip("/")
+    for cand in SERVER_CANDIDATES:
+        if _alive(cand):
+            return cand
+    return DEFAULT_SERVER
+
+
+def check_server(server: str) -> None:
+    if not _alive(server):
+        cands = ', '.join(SERVER_CANDIDATES)
         raise SystemExit(
             f"ComfyUI 서버에 연결할 수 없습니다: {server}\n"
-            "ComfyUI 를 먼저 실행하거나 --server 로 주소를 지정하세요."
+            f"확인한 후보: {cands}\n"
+            "ComfyUI 를 먼저 실행하거나 --server / COMFYUI_SERVER 로 주소를 지정하세요."
         )
 
 
@@ -229,7 +255,7 @@ def main() -> int:
     p.add_argument("--width", type=int)
     p.add_argument("--height", type=int)
     p.add_argument("--out", required=True, help="결과 저장 디렉터리")
-    p.add_argument("--server", default=DEFAULT_SERVER)
+    p.add_argument("--server", default=None, help="미지정 시 COMFYUI_SERVER 또는 후보 포트 자동 탐지")
     p.add_argument("--timeout", type=float, default=900, help="장당 최대 대기 초")
     p.add_argument("--dry-run", action="store_true", help="큐에 넣지 않고 API JSON 만 출력")
     a = p.parse_args()
@@ -248,6 +274,7 @@ def main() -> int:
 
     graph = json.loads((WORKFLOW_DIR / binding["workflow"]).read_text(encoding="utf-8"))
 
+    a.server = resolve_server(a.server)
     check_server(a.server)
     if is_api_format(graph):
         api_base = graph

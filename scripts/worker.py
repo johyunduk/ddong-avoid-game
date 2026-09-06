@@ -33,7 +33,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 STATE_FILE = ROOT / "scripts" / ".worker-state.json"
-COMFY = "http://127.0.0.1:8188"
+# comfyui-generate.py 와 같은 규칙: COMFYUI_SERVER > 후보 포트 자동 탐지
+COMFY_CANDIDATES = ["http://127.0.0.1:8188", "http://127.0.0.1:8000"]
+COMFY = os.environ.get("COMFYUI_SERVER", COMFY_CANDIDATES[0]).rstrip("/")
 
 BUILDER = "builder"        # w3 제작·Claude — 컨셉·생성·심사 업로드·능력 제안
 INTEGRATOR = "integrator"  # w2 구현·Claude — 게임 반영·검증
@@ -81,11 +83,22 @@ def api(env: dict, query: str) -> dict:
 
 
 def comfy_alive() -> bool:
-    try:
-        urllib.request.urlopen(f"{COMFY}/system_stats", timeout=5).read()
-        return True
-    except Exception:
-        return False
+    """살아 있는 포트를 찾으면 COMFY 를 그쪽으로 갱신한다."""
+    global COMFY
+    if os.environ.get("COMFYUI_SERVER"):
+        candidates = [COMFY]
+    else:
+        candidates = [COMFY] + [c for c in COMFY_CANDIDATES if c != COMFY]
+    for cand in candidates:
+        try:
+            urllib.request.urlopen(f"{cand}/system_stats", timeout=5).read()
+            if cand != COMFY:
+                log(f"ComfyUI 주소 변경: {COMFY} -> {cand}")
+                COMFY = cand
+            return True
+        except Exception:
+            continue
+    return False
 
 
 def load_state() -> dict:

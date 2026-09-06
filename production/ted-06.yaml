@@ -1,0 +1,47 @@
+# ted-06 — Ted 배경 교체 (요청 20260906010545-rjqcmi)
+id: ted-06
+name: Ted (배경 교체)
+grade: null
+phase: illustration
+
+illustration:
+  status: WAITING_APPROVAL
+  candidates: creative/ted-06/candidates/
+  selected: null
+  attempts: 1
+  batch: ted-06-r1
+
+music:
+  status: PENDING
+  title: null
+  selected: null
+  attempts: 0
+
+game:
+  status: PENDING
+  character_id: ted-06
+  assets:
+    player: null
+    illust: null
+    bgm: null
+
+review:
+  status: PENDING
+  verdict: null
+  iterations: 0
+  max_iterations: 3
+
+social:
+  status: PENDING
+  outputs: release/social/ted-06/
+
+publish:
+  status: PENDING
+  youtube: pending
+  instagram: pending
+
+log:
+  - { at: "2026-09-06", step: illustration, note: "기존 Ted 리파인 요청이라 원본 워크플로 프롬프트를 기준선으로 삼았다. BREAK 앞 인물 줄은 한 글자도 바꾸지 않고 BREAK 뒤 배경만 '폭격 후 불타는 빌딩' 으로 교체. 원본 네거티브(hoodie/jacket/formal suit/tie)도 유지" }
+  - { at: "2026-09-06", step: illustration, note: "1차는 불이 약하고 일부가 전신으로 빠졌고, 2차에서는 화염이 셔츠 위로 번지는 아티팩트가 생겼다 → 화염을 배경으로 분리(far in the background)하고 fire on his clothes/hole in shirt 를 네거티브에 추가해 재생성" }
+  - { at: "2026-09-06", step: illustration, note: "gore/blood/corpse/weapon/soldier 는 네거티브로 차단 — 요청은 배경 분위기까지이고 폭력 묘사가 아니다" }
+  - { at: "2026-09-06", step: illustration, note: "후보 4장 업로드 → 심사 대기 (배치 ted-06-r1). 요청 20260906010545-rjqcmi 종료" }

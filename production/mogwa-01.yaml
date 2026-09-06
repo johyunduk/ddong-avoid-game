@@ -1,0 +1,49 @@
+# mogwa-01 — 모과 (요청 20260906010439-dj09jj)
+id: mogwa-01
+name: 모과
+grade: null                      # 등급외 | R | SR | UR
+phase: illustration            # 폐기됨 (illustration REJECTED) — 재개하려면 사람이 심사실에서 새로 요청
+
+illustration:
+  status: REJECTED     # PENDING/RUNNING/WAITING_APPROVAL/SUCCESS/REJECTED/FAILED
+  candidates: creative/mogwa-01/candidates/
+  selected: null
+  attempts: 1
+  batch: mogwa-01-r1
+  rejected_rounds:
+    - { round: mogwa-01-r1, at: "2026-09-06", status: REJECTED, reason: "심사 결정 reject · 피드백 note 없음. 늦가을 모과 과수원(황금노랑+밤빛 갈색) 컨셉 폐기" }
+
+music:
+  status: PENDING
+  title: null
+  selected: null
+  attempts: 0
+
+game:
+  status: PENDING
+  character_id: mogwa-01
+  assets:
+    player: null
+    illust: null
+    bgm: null
+
+review:
+  status: PENDING
+  verdict: null
+  iterations: 0
+  max_iterations: 3
+
+social:
+  status: PENDING
+  outputs: release/social/mogwa-01/
+
+publish:
+  status: PENDING
+  youtube: pending
+  instagram: pending
+
+log:
+  - { at: "2026-09-06", step: illustration, note: "컨셉 미지정 요청. 기존 23종 + 진행 중 배치 전부와 이름·색·모티프를 대조해 비어 있던 축(따뜻한 황금노랑 + 밤빛 갈색 · 늦가을 낮)을 잡았다. 식물 모티프 두 글자 한국어 이름 '모과'" }
+  - { at: "2026-09-06", step: illustration, note: "1차는 갈색 저고리가 흰색으로 렌더돼 화면이 단색 노랑이 됐다 → 저고리 색 가중치와 투톤 지시를 넣어 재생성. 03·04 는 머리색이 갈색으로 빠져 golden/blonde 앵커를 더해 한 번 더 돌렸다" }
+  - { at: "2026-09-06", step: illustration, note: "후보 4장 업로드 → 심사 대기 (배치 mogwa-01-r1). 요청 20260906010439-dj09jj 종료" }
+  - { at: "2026-09-06", step: illustration, note: "mogwa-01-r1 결정: reject (note 없음). 컨셉 폐기, illustration.status = REJECTED. 후보·프롬프트는 creative/mogwa-01/ 에 보존. 새 컨셉은 자동 생성하지 않음 — 사람이 심사실 버튼으로 요청" }

@@ -1,0 +1,31 @@
+# Creative Spec — 이미지/음악/게임/SNS 의 공통 기준 (Single Source of Truth)
+id: ted-06
+
+character:
+  name: Ted (배경 교체)
+  concept: 기존 Ted 일러스트 리파인 — 배경만 폭탄에 불타는 빌딩으로 (요청 20260906010545-rjqcmi)
+  source: C:\ComfyUI\user\default\workflows\[main]일러스트_ted.json
+  source_prompt: creative/ted-06/source-prompt.txt
+
+visual:
+  method: |
+    /create-character 의 '기존 캐릭터를 고쳐 달라는 요청' 규칙대로, 원본 워크플로 프롬프트를 기준선으로 삼았다.
+    BREAK 앞(인물: 검은 짧은머리·아이보리 셔츠·청바지·주머니에 손·상반신 3/4 앵글)은 한 글자도 바꾸지 않고,
+    BREAK 뒤 배경 줄만 '해질녘 도시 거리' -> '폭격 후 불타는 빌딩' 으로 교체했다.
+    원본 네거티브(hoodie/jacket/formal suit/tie 금지)도 그대로 유지.
+  variants:
+    - 01 밤 — 불타는 빌딩 역광
+    - 02 무너지는 스카이라인 — 폭발과 낙하 잔해
+    - 03 폭발 직후 — 갈라진 도로와 잔해 근경
+    - 04 잔불 남은 밤거리 — 연기 기둥과 불티
+  negative_extra: |
+    gore/blood/corpse/weapon/soldier — 폭력 묘사가 아니라 배경 분위기까지만.
+    fire on his clothes / hole in shirt — 화염이 인물 옷으로 번지는 아티팩트 차단.
+    full body / legs / feet — 원본과 같은 상반신 규격 유지.
+
+music:
+  status: PENDING
+
+game:
+  grade: null
+  character_type: illustration_only

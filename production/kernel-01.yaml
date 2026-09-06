@@ -1,0 +1,46 @@
+# kernel-01 — 커널 (요청 20260906041705-ca273x)
+id: kernel-01
+name: 커널
+grade: null
+phase: illustration
+
+illustration:
+  status: WAITING_APPROVAL
+  candidates: creative/kernel-01/candidates/
+  selected: null
+  attempts: 1
+  batch: kernel-01-r1
+
+music:
+  status: PENDING
+  title: null
+  selected: null
+  attempts: 0
+
+game:
+  status: PENDING
+  character_id: kernel-01
+  assets:
+    player: null
+    illust: null
+    bgm: null
+
+review:
+  status: PENDING
+  verdict: null
+  iterations: 0
+  max_iterations: 3
+
+social:
+  status: PENDING
+  outputs: release/social/kernel-01/
+
+publish:
+  status: PENDING
+  youtube: pending
+  instagram: pending
+
+log:
+  - { at: "2026-09-06", step: illustration, note: "요청이 사이버펑크를 명시했으므로 개발 용어 이름을 썼다(비IT 규칙은 컨셉 미지정 요청에만 적용). 기존 루트(파랑+시안, 후드티, 실내)·글리치(파랑+마젠타 네온)·노이즈(무채색 스태틱)의 팔레트를 확인하고, 비어 있던 '형광 초록 + 검정 + 앰버 · 비 내리는 옥외 뒷골목' 축을 잡았다" }
+  - { at: "2026-09-06", step: illustration, note: "1차에서 'lime' 을 과일로 읽어 코트에 라임 조각 패치가 붙고 머리색도 전부 라임으로 번졌다 → 표현을 neon green 으로 바꾸고 lime fruit/citrus 를 네거티브에 넣어 재생성" }
+  - { at: "2026-09-06", step: illustration, note: "후보 4장 업로드 → 심사 대기 (배치 kernel-01-r1). 요청 20260906041705-ca273x 종료" }

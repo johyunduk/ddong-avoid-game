@@ -1,0 +1,45 @@
+# Creative Spec — 이미지/음악/게임/SNS 의 공통 기준 (Single Source of Truth)
+id: kernel-01
+
+character:
+  name: 커널
+  concept: 시스템의 가장 안쪽. 소란한 네온 거리에서 혼자 조용한 아이 (요청 20260906041705-ca273x — "사이버펑크틱한 느낌")
+  motif: 커널(운영체제 핵심) · 비 내리는 네온 뒷골목 · 홀로그램
+  naming_note: |
+    이번 요청은 사이버펑크를 명시적으로 요구하므로 개발 용어 계열 이름을 썼다.
+    기존 IT 계열(루트·글리치·노이즈·아카이브·센티넬·레거시·로그·스왑·섬·포크·시드·세션·브랜치·훅·소켓·인덱스)
+    및 진행 중 배치(프록시·데드락·롤백·가비지·패치)와 겹치지 않는다.
+  distinct_from: |
+    루트: 파란 머리 + 시안/앰버, 후드티, 실내 작업실
+    글리치: 파란 머리 + 마젠타/시안 네온, 글리치 노이즈
+    노이즈: 무채색 스태틱, 채도 없는 회색 도시
+    → 비어 있던 축인 '형광 초록 + 검정 + 앰버 경고등 · 비 내리는 옥외 뒷골목' 을 잡았다.
+    파랑·시안·마젠타 네온은 네거티브로 차단해 세 캐릭터와 화면에서 바로 구분되게 했다.
+
+visual:
+  style: soft anime illustration
+  mood: quiet neon
+  palette: 형광 초록 · 검정 · 앰버 경고등 (비 내리는 밤 뒷골목)
+  hair: 은백색 단발 보브, 일자 앞머리, 형광 초록 하이라이트 몇 가닥
+  eyes: 형광 초록, 발광, 한쪽 눈 아래 얇은 초록 선 표식
+  clothes: 검정 테크웨어 코트, 하이 칼라, 비대칭 지퍼, 초록 EL 와이어 라인, 검정 장갑, 유틸리티 하네스, 어깨의 앰버 경고등
+  background: 비 내리는 사이버펑크 뒷골목 밤, 초록·앰버 간판, 젖은 아스팔트 반사, 배기구 김, 늘어진 케이블
+  pose_variants:
+    - 01 정면 — 네온 아래 담담한 응시
+    - 02 돌아보는 시선 — 골목 안쪽
+    - 03 올려다본 각도 — 코트 자락과 김
+    - 04 근접 — 손끝의 홀로그램 패널
+  negative_extra: |
+    blue/cyan/magenta neon, hoodie, headphones, keyboard, indoor — 루트·글리치와의 분리.
+    grey monochrome, static noise — 노이즈와의 분리.
+    lime fruit, citrus, fruit patch — 1차에서 'lime' 을 과일로 읽어 옷에 라임 패치가 붙었던 것 차단.
+
+music:
+  status: PENDING
+
+game:
+  grade: null                 # 설정 제안은 확정 후 별도 지시
+  character_type: illustration_only
+  ability_direction: |
+    아직 확정 아님. '커널 = 시스템의 핵심' 에서 출발해, 다른 능력을 잠깐 대신 실행하는 계열을 제안 가능.
+    기존 삭제(루트)·분신(글리치)·주기 단축(노이즈) 과는 다른 축.
