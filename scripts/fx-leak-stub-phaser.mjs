@@ -217,6 +217,8 @@ export function createFakeScene() {
   const textureKeys = new Set();
   scene.textures = {
     exists: k => textureKeys.has(k),
+    // beam() 이 텍스처 원본 크기로 길이·두께 배율을 계산한다
+    get: () => ({ getSourceImage: () => ({ width: 397, height: 96 }) }),
     createCanvas: k => { textureKeys.add(k); return new FakeCanvasTexture(k); },
     __addAsset: k => textureKeys.add(k),
   };

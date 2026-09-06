@@ -68,6 +68,10 @@ const FX_PARTICLE_ASSETS: Record<string, string> = {
   // 같은 형태의 흰 하드엣지 판. 단독으로 쓰지 않고 검기 위에 얇게 얹는 코어 층이다 —
   // 애니메 이펙트는 '납작한 형태 + 늘어난 흰 선'이 있어야 작은 크기에서 형태가 읽힌다
   fx_sword_beam_core: 'sword-beam-core.png',
+  // K 에너지파 — 발사점의 방사형 마디가 그대로 머즐이 되도록 잘라낸 직선 광선 (397×96)
+  fx_k_beam: 'k-beam.png',
+  // 흰 통은 절차 생성 (--beam-tube) — 생성물에서 뽑으면 '선'이지 '통'이 되지 않는다
+  fx_k_beam_core: 'k-beam-core.png',
   // 수학 생성 — 흰색이라 setTint 로 자유롭게 착색
   fx_proc_arc:    'proc-arc.png',
   fx_proc_petal:  'proc-petal.png',
@@ -981,6 +985,151 @@ export function sweep(
 
   fxCounters.sweepCreated++;
   return blade;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// beam — 한 점에서 뻗어나가 머무르다 사라지는 광선
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface BeamOptions {
+  /** 발사 방향 (라디안). 0 = 오른쪽 */
+  angle: number;
+  /** 다 뻗었을 때의 길이(px) */
+  length: number;
+  /** 광선 두께(px). 층 배율이 여기에 곱해진다 */
+  thickness: number;
+  texture?: string;
+  /** 뻗는 시간 / 머무는 시간 / 사라지는 시간(ms) */
+  extendMs?: number;
+  holdMs?: number;
+  fadeMs?: number;
+  tint?: number;
+  alpha?: number;
+  depth?: number;
+  blend?: FxBlend;
+  /**
+   * 겹 층. 검기와 같은 규칙 — 넓고 옅은 외곽 → 본체 → 얇은 흰 코어.
+   * `scale` 은 두께 배율이고, 길이는 모든 층이 같다.
+   */
+  layers?: { thickness: number; texture?: string; tint?: number; alpha: number; dz: number }[];
+  /** 살아 있는 동안의 미세한 흔들림 (두께 방향) */
+  waver?: { thickness?: number; periodMs?: number };
+  /**
+   * 사라지는 방식.
+   * - `fade`    : 통째로 옅어진다 (기본)
+   * - `retract` : **꼬리가 머리를 쫓아가며 짧아진다.** 발사점부터 훑듯이 사라지고
+   *               끝은 제자리에 남아 화면 밖으로 빠져나간 것처럼 읽힌다.
+   */
+  dissipate?: 'fade' | 'retract';
+  maxConcurrent?: number;
+}
+
+const BEAM_SLOT = 'beam';
+const BEAM_MAX_UNITS = 4;
+
+/**
+ * 손끝 같은 **한 점에서 뻗어나가는** 광선. projectile 과 달리 원점이 고정이고 길이가 자란다.
+ *
+ * 원점을 `[0, 0.5]` 로 두어 이미지의 왼쪽 끝이 발사점이 된다 — 가운데를 축으로 두면
+ * 광선이 손 뒤쪽으로도 자란다. 길이는 `scaleX`, 두께는 `scaleY` 로 만든다.
+ */
+export function beam(
+  scene: Phaser.Scene,
+  x: number,
+  y: number,
+  opts: BeamOptions,
+): Phaser.GameObjects.Image | null {
+  if (!isLive(scene)) return null;
+
+  const textureKey = opts.texture ?? SWEEP_DEFAULT_TEXTURE;
+  if (!scene.textures.exists(textureKey)) return null;
+
+  const st = getState(scene);
+  if (!acquireSlot(st, BEAM_SLOT, opts.maxConcurrent ?? BEAM_MAX_UNITS)) return null;
+
+  const extendMs = opts.extendMs ?? 150;
+  const holdMs = opts.holdMs ?? 120;
+  const fadeMs = opts.fadeMs ?? 220;
+  const depth = opts.depth ?? 122;
+  const blend = opts.blend ?? 'normal';
+  const total = extendMs + holdMs + fadeMs;
+
+  let pending = 0;
+  let released = false;
+  const partDone = () => {
+    pending--;
+    if (pending <= 0 && !released) {
+      released = true;
+      releaseSlot(st, BEAM_SLOT);
+    }
+  };
+
+  /** 길이·두께를 px 로 지정받으므로 **층마다 자기 텍스처의 원본 크기**로 배율을 낸다 */
+  const sizeOf = (key: string): { w: number; h: number } => {
+    const src = scene.textures.get(key)?.getSourceImage() as { width?: number; height?: number } | undefined;
+    return { w: src?.width || 1, h: src?.height || 1 };
+  };
+
+  const addLayer = (
+    thickness: number, tint: number | undefined, alpha: number, dz: number, tex: string,
+    phase: number,
+  ): Phaser.GameObjects.Image => {
+    const { w: texW, h: texH } = sizeOf(tex);
+    const full = opts.length / texW;
+    const sy = thickness / texH;
+
+    const img = scene.add.image(x, y, tex)
+      .setOrigin(0, 0.5)
+      .setDepth(depth + dz)
+      .setRotation(opts.angle)
+      .setAlpha(alpha)
+      .setScale(full * 0.05, sy);
+    img.setBlendMode(toBlendMode(blend));
+    if (tint !== undefined) img.setTint(tint);
+
+    pending++;
+    const done = trackDisposable(scene, st, img, partDone);
+    if (glows(blend)) attachBloom(scene, img);
+
+    // 뻗음 → (유지) → 사라짐
+    scene.tweens.add({
+      targets: img, scaleX: full, duration: extendMs, ease: 'Quart.easeOut',
+    });
+    if (opts.dissipate === 'retract') {
+      // 원점을 진행 방향으로 밀면서 같은 양만큼 길이를 줄인다 → **끝은 고정, 꼬리만 전진**.
+      // (원점이 [0, 0.5] 라 x·y 가 곧 꼬리 위치다)
+      scene.tweens.add({
+        targets: img,
+        x: x + Math.cos(opts.angle) * opts.length,
+        y: y + Math.sin(opts.angle) * opts.length,
+        scaleX: 0,
+        duration: fadeMs, delay: extendMs + holdMs, ease: 'Sine.easeIn',
+        onComplete: done,
+      });
+    } else {
+      scene.tweens.add({
+        targets: img, alpha: 0, duration: fadeMs, delay: extendMs + holdMs, ease: 'Quad.easeIn',
+        onComplete: done,
+      });
+    }
+
+    const wv = opts.waver;
+    if (wv?.thickness) {
+      scene.tweens.add({
+        targets: img, scaleY: sy * (1 + wv.thickness),
+        duration: (wv.periodMs ?? 220) / 2, delay: extendMs + phase,
+        yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+      });
+    }
+
+    trackedTimeout(scene, total + 500, done);
+    return img;
+  };
+
+  for (const [i, L] of (opts.layers ?? []).entries()) {
+    addLayer(opts.thickness * L.thickness, L.tint, L.alpha, L.dz, L.texture ?? textureKey, (i + 1) * 45);
+  }
+  return addLayer(opts.thickness, opts.tint, opts.alpha ?? 1, 0, textureKey, 0);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

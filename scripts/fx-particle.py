@@ -205,7 +205,8 @@ def _aurora_grade(img: "Image.Image", hue0: float, hue1: float, sat: float,
 def beam(src: Path, width: int = 512, band: int = 96, arc: float = 0.30,
          taper: float = 0.75, hue: tuple[float, float] | None = None,
          sat: float = 1.0, sat_floor: float = 0.0,
-         translucent: float = 0.0) -> Image.Image:
+         translucent: float = 0.0, tip: bool = False,
+         start_fade: float = 0.0) -> Image.Image:
     """생성물의 발광 띠 → 얕은 호 모양 검기 텍스처(RGBA, 밝기=알파).
 
     width : 결과 가로 크기
@@ -247,7 +248,13 @@ def beam(src: Path, width: int = 512, band: int = 96, arc: float = 0.30,
 
     # 4) 알파 = 밝기 × 끝 테이퍼 × 세로 감쇠. 끝을 깎아야 '칼날'로 읽힌다
     a = canvas.max(axis=2) / 255.0
-    a *= (bow ** taper)[None, :]
+    if tip:
+        # 손끝에서 나가는 광선 — **시작은 굵고 끝만 뾰족해야** 한다.
+        # 양끝 테이퍼(bow)를 쓰면 발사점이 가늘어져 손에서 떨어져 나온 것처럼 보인다.
+        t01 = (t + 1.0) * 0.5
+        a *= np.clip(1.0 - t01 ** 3, 0.0, 1.0)[None, :] ** taper
+    else:
+        a *= (bow ** taper)[None, :]
     yy = np.abs(np.arange(height)[:, None] - (lift - shift)[None, :] - band / 2) / (band / 2)
     a *= np.clip(1.0 - (yy ** 3) * 0.85, 0.0, 1.0)
     a = np.clip(a * 1.25, 0.0, 1.0)
@@ -257,6 +264,12 @@ def beam(src: Path, width: int = 512, band: int = 96, arc: float = 0.30,
     img = Image.fromarray(out, "RGBA")
     if hue is not None:
         img = _aurora_grade(img, hue[0], hue[1], sat, sat_floor)
+    if start_fade > 0:
+        # 잘라낸 왼쪽 단면이 직각으로 드러나지 않게 시작 구간의 알파를 끌어올린다
+        al = np.asarray(img.getchannel("A"), dtype=np.float32)
+        xr = np.linspace(0.0, 1.0, al.shape[1], dtype=np.float32)
+        al *= np.clip(xr / max(start_fade, 1e-3), 0.0, 1.0)[None, :] ** 0.7
+        img.putalpha(Image.fromarray(al.astype(np.uint8), "L"))
     if translucent > 0:
         img = _translucent(img, translucent)
     return img.filter(ImageFilter.GaussianBlur(0.6))
@@ -277,6 +290,39 @@ def _translucent(img: "Image.Image", keep: float) -> Image.Image:
         (a * (keep + (1.0 - keep) * lum) * 255).astype(np.uint8),
     ])
     return Image.fromarray(out, "RGBA")
+
+
+def beam_tube(width: int = 512, height: int = 128, sigma: float = 0.42,
+              tip: float = 0.14, start: float = 0.1) -> Image.Image:
+    """에너지파의 **흰 통** — 절차적으로 그린다.
+
+    생성물에서 뽑은 코어는 원본이 가느다란 필라멘트라 아무리 굵게 늘려도 '선'이지 '통'이 아니다.
+    드래곤볼식 에너지파는 균일한 흰 기둥에 얇은 색 테두리가 둘린 모양이라, 기둥은 여기서 만들고
+    색·결은 생성 텍스처를 겹쳐서 얹는다.
+
+    폭은 **양끝에서 좁아진다** — 시작은 손에서 뻗어 나오도록, 끝은 뾰족하도록.
+    시작이 직각으로 잘려 있으면 손에 붙어 있지 않고 잘린 파이프처럼 보인다.
+
+    sigma : 가운데 구간의 세로 감쇠 폭 (클수록 통이 두껍다)
+    tip   : 끝에서 뾰족해지는 구간 비율
+    start : 시작에서 넓어지는 구간 비율
+    """
+    y = (np.arange(height, dtype=np.float32) / (height - 1) * 2 - 1)[:, None]
+    x = (np.arange(width, dtype=np.float32) / (width - 1))[None, :]
+
+    # 폭 프로파일 — 시작에서 벌어지고 끝에서 좁아진다
+    head_w = np.clip(x / max(start, 1e-3), 0.0, 1.0) ** 0.55
+    tail_w = np.clip((1.0 - x) / max(tip, 1e-3), 0.0, 1.0) ** 0.6
+    w = sigma * np.maximum(np.minimum(head_w, tail_w), 0.06)
+
+    a = np.exp(-(y / w) ** 2 * 2.2)
+    # 시작·끝은 밝기도 함께 떨어뜨려 단면이 드러나지 않게
+    a *= (head_w ** 0.35) * (tail_w ** 0.35)
+    a = np.clip(a * 1.15, 0.0, 1.0)
+
+    rgb = np.full((height, width, 3), 255, dtype=np.uint8)
+    img = Image.fromarray(np.dstack([rgb, (a * 255).astype(np.uint8)]), "RGBA")
+    return img.filter(ImageFilter.GaussianBlur(1.0))
 
 
 def beam_core(src: Path, sharpen: float = 2.4) -> Image.Image:
@@ -321,8 +367,26 @@ def main() -> int:
     p.add_argument("--beam-sat-floor", type=float, default=0.0, help="흰 코어를 뺀 영역의 채도 하한(0-255)")
     p.add_argument("--beam-translucent", type=float, default=0.0,
                    help="내부를 비워 반투명하게 (0=끄기, 0.3~0.5 권장). 코어 판을 먼저 뽑고 나서 쓴다")
+    p.add_argument("--beam-tip", action="store_true",
+                   help="한쪽만 뾰족하게 (손끝에서 뻗는 광선용). 기본은 양끝 테이퍼")
     p.add_argument("--beam-core", help="검기 코어(흰 하드엣지)로 가공할 png")
+    p.add_argument("--beam-tube", action="store_true",
+                   help="에너지파용 흰 통을 절차적으로 생성 (원본 불필요)")
+    p.add_argument("--tube-sigma", type=float, default=0.42)
+    p.add_argument("--tube-start", type=float, default=0.1,
+                   help="시작에서 넓어지는 구간 비율 (직각 단면 방지)")
+    p.add_argument("--beam-start-fade", type=float, default=0.0,
+                   help="시작 구간 알파 램프인 비율 (잘라낸 단면 감추기)")
     a = p.parse_args()
+
+    if a.beam_tube:
+        if not a.out_file:
+            raise SystemExit("--out-file 이 필요합니다")
+        out = Path(a.out_file)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        beam_tube(sigma=a.tube_sigma, start=a.tube_start).save(out)
+        print(f"에너지파 통: {out}")
+        return 0
 
     if a.beam_core:
         if not a.out_file:
@@ -342,7 +406,8 @@ def main() -> int:
             hue = (h0, h1)
         img = beam(Path(a.beam), width=a.beam_width, arc=a.beam_arc, hue=hue,
                    sat=a.beam_sat, sat_floor=a.beam_sat_floor,
-                   translucent=a.beam_translucent)
+                   translucent=a.beam_translucent, tip=a.beam_tip,
+                   start_fade=a.beam_start_fade)
         out = Path(a.out_file)
         out.parent.mkdir(parents=True, exist_ok=True)
         img.save(out)

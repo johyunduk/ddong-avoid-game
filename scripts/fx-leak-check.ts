@@ -11,7 +11,7 @@
 import Phaser, { live, created, createFakeScene, arcSpawns } from 'phaser';
 import { MaehwaAbility } from '../src/abilities/MaehwaAbility';
 import { KnightAbility } from '../src/abilities/KnightAbility';
-import { getFxStats, preloadFxAssets, playFx, getFxCounters, resetFxCounters } from '../src/utils/vfx';
+import { beam, fxSprite, getFxStats, preloadFxAssets, playFx, getFxCounters, resetFxCounters } from '../src/utils/vfx';
 
 const VOLLEYS = 20;
 const KNIGHT_VOLLEYS = 10;
@@ -47,6 +47,51 @@ function commonFx(scene, n) {
   for (let i = 0; i < n; i++) {
     capStat.requested++;
     if (playFx(scene, 'impactHit', 60 + i * 30, 300)) capStat.played++;
+  }
+}
+
+/**
+ * K 에너지파 — 층 + 무한 반복 일렁임 트윈이 붙는다.
+ * 반복 트윈은 오브젝트가 죽어도 안 끊기면 그대로 누수라 여기서 함께 검증한다.
+ */
+function fireBeams(scene, n) {
+  for (let i = 0; i < n; i++) {
+    beam(scene, 60, 500, {
+      angle: -Math.PI / 4, length: 780, thickness: 26,
+      texture: 'fx_k_beam', blend: 'normal', alpha: 0.85,
+      layers: [
+        { thickness: 2.2, alpha: 0.26, dz: -1 },
+        { thickness: 0.4, alpha: 0.9, dz: 1, texture: 'fx_k_beam_core' },
+      ],
+      waver: { thickness: 0.14, periodMs: 200 },
+    });
+  }
+}
+
+/**
+ * K 초사이언 오라 파지직 — 짧게 살다 죽는 스프라이트를 계속 뿌린다.
+ * 승계 후 게임이 끝날 때까지 도는 패턴이라, 장부가 조금이라도 새면 여기서 드러난다.
+ */
+const sparkStat = { made: 0 };
+function sparkChurn(scene, n) {
+  for (let i = 0; i < n; i++) {
+    const img = fxSprite(scene, 180 + i * 8, 500, 'fx_proc_streak', {
+      rotation: Math.random() * 6.28,
+      scale: [0.1, 0.13],
+      tint: 0x59b8ff,
+      alpha: 0.85,
+      depth: 318,
+      blend: 'normal',
+      lifeMs: 350,
+      slot: 'k_spark',
+      maxConcurrent: 12,
+    });
+    if (!img) continue;
+    sparkStat.made++;
+    scene.tweens.add({
+      targets: img, alpha: 0, duration: 150,
+      onComplete: () => img.destroy(),
+    });
   }
 }
 
@@ -148,10 +193,13 @@ async function main() {
   for (let i = 1; i <= KNIGHT_VOLLEYS; i++) {
     refillPoops();
     knight.onScoreMilestone(i * 100, api);
-    await sleep(300);
+    fireBeams(scene, 3); // 상한(4)을 넘겨 호출 — 초과분이 조용히 무시되는지도 본다
+    // 오라 파지직 3초치 (110ms × 2장)
+    for (let k = 0; k < 3; k++) { sparkChurn(scene, 2); await sleep(100); }
   }
   clearInterval(knightSampler);
-  console.log(fmt('[3a] 나이트 최대 동시 사용량', knightPeak));
+  console.log(fmt('[3a] 나이트 + K 빔/파지직 최대 동시', knightPeak));
+  console.log('파지직 생성 %d장 (상한에 걸린 초과분 제외)', sparkStat.made);
   await sleep(SETTLE_MS);
   const knightSettled = snapshot(scene);
   console.log(fmt('[3b] 나이트 이펙트 종료 후', knightSettled));
@@ -222,7 +270,7 @@ async function main() {
   const checks = [
     ['[3] 이펙트 종료 후 기준선 복귀', isZero(settled)],
     ['[3a] 나이트 검기가 실제로 떠 있었음', knightPeak.liveSprites > settled.liveSprites],
-    ['[3b] 나이트 이펙트 종료 후 기준선 복귀', isZero(knightSettled)],
+    ['[3b] 나이트 + K 빔 종료 후 기준선 복귀 (반복 트윈 포함)', isZero(knightSettled)],
     ['[5] 시계 정지 중에도 회수 완료', isZero(frozen)],
     ['[7] shutdown 시 전량 회수', isZero(afterRestart)],
     ['[4] 발동 중에는 실제로 살아 있었음', midFlight.liveSprites + midFlight.liveEmitters > 0],

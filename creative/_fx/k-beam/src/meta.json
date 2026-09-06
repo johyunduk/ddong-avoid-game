@@ -1,0 +1,40 @@
+{
+  "workflow": "character",
+  "positive": "masterpiece, best quality, high resolution, game vfx asset, anime special effect, single straight energy beam shooting diagonally across the image, concentrated plasma bolt, blazing white hot core along the center line, cyan blue plasma edge, electric filaments crackling along the beam, motion energy, isolated effect on pure black background, high contrast, no background details",
+  "negative": "oversized breasts, large breasts, seductive, sexy pose, exposed chest, revealing outfit, low neckline, cleavage, nsfw, character, person, human, girl, boy, face, hand, arm, silhouette, sword, blade, hilt, weapon, armor, landscape, mountain, tree, ground, horizon, stars, starfield, moon, background, scenery, sky, text, watermark, signature, logo, frame, border, grid, curved, arc, crescent, ring, circle, explosion, cluttered, blurry, low quality, worst quality, jpeg artifacts, gray background, white background",
+  "width": 1216,
+  "height": 832,
+  "server": "http://127.0.0.1:8000",
+  "images": [
+    {
+      "file": "01.png",
+      "seed": 379603463,
+      "model": "기본"
+    },
+    {
+      "file": "02.png",
+      "seed": 379603464,
+      "model": "기본"
+    },
+    {
+      "file": "03.png",
+      "seed": 379603465,
+      "model": "기본"
+    },
+    {
+      "file": "04.png",
+      "seed": 379603466,
+      "model": "기본"
+    },
+    {
+      "file": "05.png",
+      "seed": 379603467,
+      "model": "기본"
+    },
+    {
+      "file": "06.png",
+      "seed": 379603468,
+      "model": "기본"
+    }
+  ]
+}
