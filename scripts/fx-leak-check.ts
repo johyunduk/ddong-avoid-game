@@ -11,6 +11,8 @@
 import Phaser, { live, created, createFakeScene, arcSpawns } from 'phaser';
 import { MaehwaAbility } from '../src/abilities/MaehwaAbility';
 import { KnightAbility } from '../src/abilities/KnightAbility';
+import { LegacyAbility } from '../src/abilities/LegacyAbility';
+import { LEGACY_PARAMS } from '../src/config/abilityParams';
 import { beam, fxSprite, getFxStats, preloadFxAssets, playFx, getFxCounters, resetFxCounters } from '../src/utils/vfx';
 
 const VOLLEYS = 20;
@@ -113,6 +115,7 @@ function makeApi(scene) {
       player,
       poops: { getChildren: () => poops },
       addAbilityBonus() {}, // 나이트 검기 처치 보너스 — 점수는 계측 대상이 아니다
+      spawnGoldPoop() {},   // 레거시 시작 피버가 금똥으로 갈아끼운다
     },
     refillPoops() {
       poops = [0, 1, 2].map(i => ({
@@ -203,6 +206,37 @@ async function main() {
   await sleep(SETTLE_MS);
   const knightSettled = snapshot(scene);
   console.log(fmt('[3b] 나이트 이펙트 종료 후', knightSettled));
+
+  // ── 레거시: 상시 오라 + 빗줄기 타이머 + 불태우기 폭발 ────────────────
+  // 이 캐릭터가 렉의 주범이었다. 세 가지가 동시에 돈다 —
+  // 매 프레임 오라 불꽃, repeat:-1 로 도는 빗줄기 타이머, 똥 4개 동시 소각.
+  // 특히 legacyRainTimer 는 remove() 를 놓치면 씬이 끝나도 계속 스프라이트를 뱉는다.
+  const legacy = new LegacyAbility(0);
+  legacy.onCreate(api);
+  let legacyPeak = snapshot(scene);
+  const legacySampler = setInterval(() => {
+    const s = snapshot(scene);
+    if (s.liveSprites + s.liveEmitters > legacyPeak.liveSprites + legacyPeak.liveEmitters) legacyPeak = s;
+  }, 40);
+  legacy.onScoreMilestone(LEGACY_PARAMS.legacyInterval, api); // 레거시 모드 진입
+  for (let i = 0; i < 40; i++) {
+    legacy.onUpdate(api);          // 오라 불꽃 (레거시 모드 = 80ms 간격 3장)
+    if (i % 8 === 0) { refillPoops(); legacy.onAfterSpawnPoop(api); }
+    await sleep(40);
+  }
+  clearInterval(legacySampler);
+  console.log(fmt('[15a] 레거시 모드 최대 동시', legacyPeak));
+
+  legacy.onDestroy(api);
+  await sleep(SETTLE_MS + 1500);   // 빗줄기 수명(최대 3.6s)까지 기다린다
+  const legacySettled = snapshot(scene);
+  console.log(fmt('[15b] 레거시 종료 후', legacySettled));
+
+  // onDestroy 이후에 타이머가 더 뱉지 않는지 — 정착 시점의 생성 수를 다시 재 본다
+  const afterLegacyCreated = created.sprites;
+  await sleep(600);
+  const legacyQuiet = created.sprites === afterLegacyCreated;
+  console.log('레거시 정리 후 600ms 동안 추가 생성: %d장', created.sprites - afterLegacyCreated);
 
   // ── 상시 가산 이펙트가 블룸 레이어를 붙잡지 않는지 ────────────────────
   // 블룸 레이어는 depth 가 고정이라 올라간 오브젝트는 자기 depth 를 잃고,
@@ -302,6 +336,13 @@ async function main() {
     ['[11] 이펙트가 똥의 현재 위치에 난다 (오차 ≤ 30px)', cutOffset <= 30],
     ['[12] 옅은 알파 + 가산 조합 0건 (밝은 배경에서 묻히는 조합)', faintAdditive.length === 0],
     ['[13] 상시 가산 이펙트가 블룸 레이어를 붙잡지 않음', persistBloom === 0],
+    ['[15a] 레거시 오라·빗줄기·소각이 실제로 떠 있었음',
+      legacyPeak.liveSprites + legacyPeak.liveEmitters > 0],
+    ['[15b] 레거시 종료 후 기준선 복귀', isZero(legacySettled)],
+    ['[15c] 레거시 정리 후 빗줄기 타이머가 더 뱉지 않음', legacyQuiet],
+    // 이미터는 각자 렌더 패스를 갖는 무거운 오브젝트다. 상한이 없던 시절
+    // 레거시가 똥 4마리를 동시에 태우며 42개까지 띄웠고 그게 렉의 원인이었다
+    ['[16] 파티클 이미터 동시 상한(14) 준수', legacyPeak.liveEmitters <= 14],
     ['[14] 상시 이펙트 파기 시 보험 타이머까지 회수', persistCleared.timeouts === 0],
   ];
   console.log('');

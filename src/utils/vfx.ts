@@ -134,6 +134,11 @@ const FX_SHEETS: FxSheetAsset[] = [
     defaultScale: 1, defaultDepth: 315, blend: 'normal', maxConcurrent: 6, preload: true },
   { fxKey: 'kBeamSs', file: 'kbeamss_512x64.png', frameCount: 6, frameRate: 22,
     defaultScale: 1, defaultDepth: 315, blend: 'normal', maxConcurrent: 6, preload: true },
+  // 레거시(UR) 전용 불 — 색이 그림에 구워져 있어 착색하지 않는다
+  { fxKey: 'legacyFlame', file: 'legacyflame_128x192.png', frameCount: 8, frameRate: 14,
+    defaultScale: 1, defaultDepth: 88, blend: 'normal', maxConcurrent: 16, preload: true },
+  { fxKey: 'legacyBurn', file: 'legacyburn_192x192.png', frameCount: 8, frameRate: 22,
+    defaultScale: 1, defaultDepth: 200, blend: 'normal', maxConcurrent: 6, preload: true },
   { fxKey: 'itemPop', file: 'puffstars_120x109.png', frameCount: 42, frameRate: 48,
     defaultScale: 0.7, defaultDepth: 123, blend: 'normal', maxConcurrent: 4, preload: false },
   { fxKey: 'sparkleField', file: 'constellation_299x313.png', frameCount: 30, frameRate: 30,
@@ -200,7 +205,8 @@ export type FxKey =
   | 'lotusBloom'                         // 시트 — 부활 연꽃 (봉오리 → 만개 → 흩어짐)
   | 'foxFire' | 'foxFireCore'            // 시트 — 여우불 (착색 외곽 + 흰 심지 두 겹)
   | 'foxTail'                            // 시트 — 구미호 꼬리 (털이 살랑이는 루프)
-  | 'kBeam' | 'kBeamSs';                 // 시트 — K 에너지파 (기본 / 초사이언, 전기 포함)
+  | 'kBeam' | 'kBeamSs'                  // 시트 — K 에너지파 (기본 / 초사이언, 전기 포함)
+  | 'legacyFlame' | 'legacyBurn';        // 시트 — 레거시 불꽃 / 소각 폭발
 
 /** 프레임 하나를 캔버스에 그리는 함수. t 는 0(첫 프레임) ~ 1(마지막) 정규화 진행도 */
 type FrameDrawer = (ctx: CanvasRenderingContext2D, t: number, w: number, h: number) => void;
@@ -328,6 +334,16 @@ const FX_REGISTRY: Record<FxKey, FxDefinition> = {
     textureKey: 'fxsheet_kBeamSs',
     frameWidth: 512, frameHeight: 64, frameCount: 6, frameRate: 22,
     defaultScale: 1, defaultDepth: 315, blend: 'normal', maxConcurrent: 6,
+  },
+  legacyFlame: {
+    textureKey: 'fxsheet_legacyFlame',
+    frameWidth: 128, frameHeight: 192, frameCount: 8, frameRate: 14,
+    defaultScale: 1, defaultDepth: 88, blend: 'normal', maxConcurrent: 16,
+  },
+  legacyBurn: {
+    textureKey: 'fxsheet_legacyBurn',
+    frameWidth: 192, frameHeight: 192, frameCount: 8, frameRate: 22,
+    defaultScale: 1, defaultDepth: 200, blend: 'normal', maxConcurrent: 6,
   },
 };
 
@@ -1886,6 +1902,17 @@ function resolveLayerTexture(
  * (x, y) 에서 파티클을 1회 폭발시킨다. 마지막 파티클이 죽으면 이미터는 자동 파기된다.
  * 여러 텍스처를 섞는 프리셋은 레이어마다 이미터가 하나씩 생기고, 전부 배열로 반환된다.
  */
+/**
+ * 화면에 동시에 살아 있을 수 있는 파티클 이미터 총량.
+ *
+ * 스프라이트는 슬롯으로 묶여 있었지만 **이미터에는 상한이 없었다.** burst 는 프리셋
+ * 레이어마다 이미터를 하나씩 만들기 때문에, 한 프레임에 여러 대상을 처리하는 능력이
+ * 순식간에 수십 개를 띄운다 — 레거시가 똥 4마리를 동시에 태우면 불티(2층)+연기(2층)로
+ * 한 번에 16개가 생기고, 연기 수명이 1.3초라 다음 소각이 겹치며 40개를 넘겼다.
+ * 이미터는 각자 렌더 패스와 파티클 풀을 갖는 무거운 오브젝트다.
+ */
+const EMITTER_MAX = 14;
+
 export function burst(
   scene: Phaser.Scene,
   x: number,
@@ -1905,6 +1932,8 @@ export function burst(
   const created: Phaser.GameObjects.Particles.ParticleEmitter[] = [];
 
   for (const layerDef of def.layers) {
+    // 상한을 넘으면 조용히 건너뛴다. 몇 겹 빠지는 것보다 프레임이 무너지는 편이 나쁘다
+    if (st.emitters.size >= EMITTER_MAX) break;
     const resolved = resolveLayerTexture(scene, layerDef);
     if (!resolved) continue;
 

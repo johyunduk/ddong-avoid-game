@@ -91,6 +91,8 @@ class Sprite extends GameObj {
   setAlpha(a) { this.alpha = a; return this; }
   setBlendMode(m) { this.blendMode = m; return this; }
   setTint() { return this; }
+  /** 시트 재생 위상 — sheetStart 로 루프를 어긋나게 하는 경로가 여기를 탄다 */
+  anims = { setProgress() {} };
   /** 씬 클럭(anims.globalTimeScale 반영)으로 애니메이션 완료를 흉내 낸다 */
   play(_key) {
     this.scene?.__clock.add(200, () => this.emit(ANIM_COMPLETE), 'anims');
@@ -207,6 +209,17 @@ export function createFakeScene() {
   scene.time = {
     timeScale: 1,
     delayedCall: (ms, fn) => scene.__clock.add(ms, fn, 'time'),
+    // repeat: -1 로 도는 타이머 — remove() 로 멈추지 않으면 영원히 스프라이트를 뱉는다
+    addEvent: ({ delay, repeat = 0, callback }) => {
+      const ev = { removed: false, left: repeat, remove() { this.removed = true; } };
+      const tick = () => {
+        if (ev.removed) return;
+        callback();
+        if (ev.left !== 0) { if (ev.left > 0) ev.left--; scene.__clock.add(delay, tick, 'time'); }
+      };
+      scene.__clock.add(delay, tick, 'time');
+      return ev;
+    },
     get pending() { return scene.__clock.pending; },
   };
   scene.anims = {
@@ -226,7 +239,11 @@ export function createFakeScene() {
   scene.tweens = {
     timeScale: 1,
     add: cfg => {
-      const tween = { progress: 0, remove() { this.removed = true; }, removed: false };
+      const tween = {
+        progress: 0, removed: false,
+        remove() { this.removed = true; },
+        stop() { this.removed = true; },   // 반복 트윈은 stop() 으로 멈춘다
+      };
       const targets = Array.isArray(cfg.targets) ? cfg.targets : [cfg.targets];
       const from = targets.map(t => ({ x: t?.x ?? 0, y: t?.y ?? 0 }));
       const duration = cfg.duration ?? 0;
@@ -279,6 +296,8 @@ export function createFakeScene() {
     spritesheet: k => textureKeys.add(k),
   };
   scene.cameras = { main: { shake: () => {}, flash: () => {} } };
+  // 레거시는 화면 전체에 불꽃을 뿌리고 빗줄기를 화면 폭에 걸쳐 떨군다
+  scene.scale = { width: 360, height: 640 };
   // 센티넬 궤도가 프레임 델타로 각도를 굴린다
   scene.game = { renderer: { type: 2 }, loop: { delta: 16 } };
   scene.physics = { world: { timeScale: 1 } };
@@ -293,7 +312,9 @@ const Phaser = {
   Scenes: { Events: { SHUTDOWN: 'shutdown', DESTROY: 'destroy' } },
   GameObjects: { Events: { DESTROY } },
   Animations: { Events: { ANIMATION_COMPLETE: ANIM_COMPLETE } },
+  Utils: { Array: { GetRandom: a => a[Math.floor(Math.random() * a.length)] } },
   Math: {
+    DegToRad: d => (d * Math.PI) / 180,
     Angle: { Between: (x1, y1, x2, y2) => Math.atan2(y2 - y1, x2 - x1) },
     Clamp: (v, lo, hi) => Math.max(lo, Math.min(hi, v)),
     Distance: { Between: (x1, y1, x2, y2) => Math.hypot(x2 - x1, y2 - y1) },
