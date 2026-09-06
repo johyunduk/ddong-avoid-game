@@ -10,9 +10,11 @@
 // @ts-nocheck
 import Phaser, { live, created, createFakeScene, arcSpawns } from 'phaser';
 import { MaehwaAbility } from '../src/abilities/MaehwaAbility';
+import { KnightAbility } from '../src/abilities/KnightAbility';
 import { getFxStats, preloadFxAssets, playFx, getFxCounters, resetFxCounters } from '../src/utils/vfx';
 
 const VOLLEYS = 20;
+const KNIGHT_VOLLEYS = 10;
 const VOLLEY_GAP_MS = 250;
 const SETTLE_MS = 5000;
 // 꽃잎 낙하는 최대 1.8s + 보험 0.7s 라 정지 구간은 그보다 넉넉해야 '회수됐다'를 판정할 수 있다
@@ -65,6 +67,7 @@ function makeApi(scene) {
       scene,
       player,
       poops: { getChildren: () => poops },
+      addAbilityBonus() {}, // 나이트 검기 처치 보너스 — 점수는 계측 대상이 아니다
     },
     refillPoops() {
       poops = [0, 1, 2].map(i => ({
@@ -134,6 +137,25 @@ async function main() {
   const settled = snapshot(scene);
   console.log(fmt('[3] 이펙트 종료 후', settled));
 
+  // ── 나이트: 날아가는 검기(projectile) 세트가 전량 회수되는지 ─────────
+  // 매화와 달리 본체가 이동하고 잔상이 비행 중 계속 늘어난다 — 세트 회수가 핵심.
+  const knight = new KnightAbility(0);
+  let knightPeak = settled;
+  const knightSampler = setInterval(() => {
+    const s = snapshot(scene);
+    if (s.liveSprites + s.liveEmitters > knightPeak.liveSprites + knightPeak.liveEmitters) knightPeak = s;
+  }, 40);
+  for (let i = 1; i <= KNIGHT_VOLLEYS; i++) {
+    refillPoops();
+    knight.onScoreMilestone(i * 100, api);
+    await sleep(300);
+  }
+  clearInterval(knightSampler);
+  console.log(fmt('[3a] 나이트 최대 동시 사용량', knightPeak));
+  await sleep(SETTLE_MS);
+  const knightSettled = snapshot(scene);
+  console.log(fmt('[3b] 나이트 이펙트 종료 후', knightSettled));
+
   // ── 잔상 누락 검사: 매화 1회 발동에서 sweep/잔상 요청 = 생성 이어야 한다 ──
   resetFxCounters();
   recycleLog.length = 0;
@@ -184,6 +206,7 @@ async function main() {
   console.log(fmt('[6] 재시작 직전(비행 중)', beforeRestart));
 
   ability.onDestroy(api);              // GameScene 이 하는 것과 동일
+  knight.onDestroy(api);
   scene.events.emit(Phaser.Scenes.Events.SHUTDOWN);
   const afterRestart = snapshot(scene);
   console.log(fmt('[7] shutdown 직후', afterRestart));
@@ -198,6 +221,8 @@ async function main() {
 
   const checks = [
     ['[3] 이펙트 종료 후 기준선 복귀', isZero(settled)],
+    ['[3a] 나이트 검기가 실제로 떠 있었음', knightPeak.liveSprites > settled.liveSprites],
+    ['[3b] 나이트 이펙트 종료 후 기준선 복귀', isZero(knightSettled)],
     ['[5] 시계 정지 중에도 회수 완료', isZero(frozen)],
     ['[7] shutdown 시 전량 회수', isZero(afterRestart)],
     ['[4] 발동 중에는 실제로 살아 있었음', midFlight.liveSprites + midFlight.liveEmitters > 0],

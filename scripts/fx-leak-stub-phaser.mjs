@@ -86,6 +86,7 @@ class Sprite extends GameObj {
   set scale(v) { this.scaleX = v; this.scaleY = v; }
   setScale(x, y) { this.scaleX = x; this.scaleY = y === undefined ? x : y; return this; }
   setRotation(r) { this.rotation = r; return this; }
+  setOrigin(x, y) { this.originX = x; this.originY = y === undefined ? x : y; return this; }
   setAlpha(a) { this.alpha = a; return this; }
   setBlendMode(m) { this.blendMode = m; return this; }
   setTint() { return this; }
@@ -222,11 +223,30 @@ export function createFakeScene() {
   scene.tweens = {
     timeScale: 1,
     add: cfg => {
-      const tween = { remove() { this.removed = true; }, removed: false };
-      // 트윈은 즉시 끝난 것으로 처리 (연출 타이밍이 아니라 회수 장부가 검증 대상)
-      scene.__clock.add(cfg.duration ?? 0, () => {
-        if (!tween.removed) cfg.onComplete?.();
-      }, 'tweens');
+      const tween = { progress: 0, remove() { this.removed = true; }, removed: false };
+      const targets = Array.isArray(cfg.targets) ? cfg.targets : [cfg.targets];
+      const from = targets.map(t => ({ x: t?.x ?? 0, y: t?.y ?? 0 }));
+      const duration = cfg.duration ?? 0;
+      const TICK = 16;
+
+      // 검증 대상은 회수 장부이지 그림이 아니므로 보간하는 값은 **좌표뿐**이다.
+      // (projectile 의 onStep 경로 판정과 잔상 간격이 진행도에 묶여 있어 필요하다.
+      //  alpha/scale 까지 건드리면 '생성 시점의 알파' 를 보는 검사가 깨진다)
+      const tick = () => {
+        if (tween.removed) return;
+        tween.progress = duration > 0 ? Math.min(1, tween.progress + TICK / duration) : 1;
+        const p = tween.progress;
+        targets.forEach((t, i) => {
+          if (!t) return;
+          if (typeof cfg.x === 'number') t.x = from[i].x + (cfg.x - from[i].x) * p;
+          if (typeof cfg.y === 'number') t.y = from[i].y + (cfg.y - from[i].y) * p;
+        });
+        cfg.onUpdate?.(tween);
+        if (p >= 1) { cfg.onComplete?.(); return; }
+        scene.__clock.add(TICK, tick, 'tweens');
+      };
+
+      scene.__clock.add(cfg.delay ?? 0, () => { if (!tween.removed) tick(); }, 'tweens');
       return tween;
     },
     killTweensOf: () => {},

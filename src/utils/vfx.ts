@@ -62,6 +62,12 @@ const FX_PARTICLE_ASSETS: Record<string, string> = {
   fx_ember_1: 'ember-spark-1.png',
   fx_star_1:  'star-sparkle-1.png',
   fx_star_2:  'star-sparkle-2.png',
+  // 검기 — 생성물의 오로라 질감을 얕은 호로 세운 것 (512×250, scripts/fx-particle.py --beam).
+  // 자체 색(흰 코어 + 주황 그라데이션)을 가지므로 착색하지 않고 일반 블렌드로 쓴다
+  fx_sword_beam: 'sword-beam.png',
+  // 같은 형태의 흰 하드엣지 판. 단독으로 쓰지 않고 검기 위에 얇게 얹는 코어 층이다 —
+  // 애니메 이펙트는 '납작한 형태 + 늘어난 흰 선'이 있어야 작은 크기에서 형태가 읽힌다
+  fx_sword_beam_core: 'sword-beam-core.png',
   // 수학 생성 — 흰색이라 setTint 로 자유롭게 착색
   fx_proc_arc:    'proc-arc.png',
   fx_proc_petal:  'proc-petal.png',
@@ -841,6 +847,8 @@ function trackDisposable(
     if (finished) return;
     finished = true;
     st.sprites.delete(obj);
+    // 무한 반복 트윈(일렁임)이 파괴된 오브젝트 위에 남지 않도록 여기서도 끊는다
+    scene.tweens.killTweensOf(obj);
     onFinish();
   });
   return finish;
@@ -973,6 +981,350 @@ export function sweep(
 
   fxCounters.sweepCreated++;
   return blade;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// fxSprite — 호출부가 직접 연출하는 추적 스프라이트
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface FxSpriteOptions {
+  rotation?: number;
+  /** 표시 배율 [가로, 세로] */
+  scale?: [number, number];
+  /** 표시 원점 [x, y]. 한쪽 끝을 축으로 자라거나 회전시킬 때 쓴다 */
+  origin?: [number, number];
+  tint?: number;
+  alpha?: number;
+  depth?: number;
+  blend?: FxBlend;
+  /**
+   * 보험 수명(ms). **필수** — 이 시간이 지나면 호출부 트윈이 어긋나도 무조건 회수된다.
+   * 히트스톱으로 트윈이 밀려도 회수가 밀리지 않도록 실시간 타이머로 잰다.
+   */
+  lifeMs: number;
+  slot?: string;
+  maxConcurrent?: number;
+}
+
+const FX_SPRITE_SLOT = 'fxsprite';
+const FX_SPRITE_MAX_UNITS = 12;
+
+/**
+ * 트윈을 **호출부가 직접 거는** 이펙트 스프라이트.
+ *
+ * playFx·sweep·projectile 로 표현되지 않는 일회성 연출(칼에 맺히는 오러 등)을 위해 열어 둔다.
+ * 씬 트래커에 등록되므로 shutdown 시 스프라이트와 **거기 걸린 트윈까지** 함께 회수되고,
+ * `lifeMs` 보험 타이머가 어떤 경우에도 마지막에 정리한다.
+ * 호출부는 연출이 끝나면 `destroy()` 를 불러 먼저 반납해도 된다.
+ */
+export function fxSprite(
+  scene: Phaser.Scene,
+  x: number,
+  y: number,
+  texture: string,
+  opts: FxSpriteOptions,
+): Phaser.GameObjects.Image | null {
+  if (!isLive(scene)) return null;
+  if (!scene.textures.exists(texture)) return null;
+
+  const st = getState(scene);
+  const slot = opts.slot ?? FX_SPRITE_SLOT;
+  if (!acquireSlot(st, slot, opts.maxConcurrent ?? FX_SPRITE_MAX_UNITS)) return null;
+
+  const [sx, sy] = opts.scale ?? [1, 1];
+  const blend = opts.blend ?? 'normal';
+
+  const img = scene.add.image(x, y, texture)
+    .setDepth(opts.depth ?? 122)
+    .setRotation(opts.rotation ?? 0)
+    .setAlpha(opts.alpha ?? 1)
+    .setScale(sx, sy);
+  if (opts.origin) img.setOrigin(opts.origin[0], opts.origin[1]);
+  img.setBlendMode(toBlendMode(blend));
+  if (opts.tint !== undefined) img.setTint(opts.tint);
+
+  const done = trackDisposable(scene, st, img, () => releaseSlot(st, slot));
+  if (glows(blend)) attachBloom(scene, img);
+  trackedTimeout(scene, opts.lifeMs, done);
+
+  return img;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// projectile — 날아가는 이펙트 (검기 · 에너지파 · 여우불)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface ProjectileOptions {
+  /** 도착점 (월드 좌표) */
+  to: { x: number; y: number };
+  /** 비행 시간(ms) */
+  duration: number;
+  /** 본체 텍스처 키 (기본: proc-arc) */
+  texture?: string;
+  /** 텍스처 회전(라디안) */
+  rotation?: number;
+  /** 표시 배율 [가로, 세로] */
+  scale?: [number, number];
+  /**
+   * 표시 원점 [x, y].
+   * 텍스처의 그려진 영역이 이미지 한가운데에 있지 않으면 **보이는 위치와 판정 좌표가 어긋난다**.
+   * (proc-arc 는 위쪽에 치우쳐 있어 y 원점을 0.13 쯤으로 당겨야 아크 중심이 좌표에 온다)
+   */
+  origin?: [number, number];
+  tint?: number;
+  alpha?: number;
+  depth?: number;
+  /** 본체 블렌드 (기본 add — 검기·에너지는 빛나야 맞다) */
+  blend?: FxBlend;
+  /**
+   * 지나간 자리에 남는 잔상. **속도감은 전적으로 이게 만든다.**
+   * 비행이 길어져도 스프라이트가 불어나지 않도록 `max` 로 총 장수를 묶는다.
+   */
+  afterimage?: {
+    /** 남기는 간격(ms, 기본 70) */
+    interval?: number;
+    /** 사라지는 시간(ms, 기본 260) */
+    fade?: number;
+    alpha?: number;
+    tint?: number;
+    /** 한 발이 남길 수 있는 총 장수 (기본 12) */
+    max?: number;
+    /** 잔상 블렌드 (기본: 본체와 동일) */
+    blend?: FxBlend;
+  };
+  /**
+   * 겹쳐 그릴 층. 실무 관행대로 **넓고 옅은 외곽 → 본체 → 얇은 흰 코어** 순으로 쌓는다.
+   * 한 겹짜리 이펙트는 크기가 작아지면 납작하게 보여 형태가 읽히지 않는다.
+   * 층은 본체 좌표를 매 프레임 따라간다.
+   */
+  layers?: {
+    /** 본체 배율에 곱해지는 [가로, 세로] */
+    scale: [number, number];
+    texture?: string;
+    tint?: number;
+    alpha: number;
+    /** 본체 depth 기준 오프셋 (음수 = 뒤) */
+    dz: number;
+  }[];
+  /**
+   * 비행하면서 가늘어지는 정도 (1 = 유지, 0.5 = 세로 절반까지).
+   * 알파만 빼면 '흐려지는 그림'이고, 가늘어져야 '흩어지는 기운'으로 읽힌다.
+   */
+  thinTo?: number;
+  /**
+   * 일렁임 — 비행 중 미세하게 흔들린다. 정지 텍스처가 '판때기'로 보이지 않게 하는 장치다.
+   * **세로 배율은 `thinTo` 가 쓰고 있으므로 회전과 가로 늘어남에만 건다** —
+   * 같은 속성에 트윈을 둘 걸면 서로 덮어쓴다.
+   */
+  waver?: { rotation?: number; stretch?: number; periodMs?: number };
+  /**
+   * 발사 순간의 뻗음. 처음엔 눌려 있다가 제 크기로 늘어난다 —
+   * **처음부터 제 크기로 나타나면 '날아가는 물체'로 읽히고, 뻗어야 '뿜어져 나온 것'으로 읽힌다.**
+   */
+  launch?: { fromScale: number; ms: number };
+  /** 비행 중 매 프레임 호출 — 경로 판정용. 현재 좌표가 들어온다 */
+  onStep?: (x: number, y: number) => void;
+  /** 도착(또는 강제 회수) 시 정확히 1회 호출 */
+  onComplete?: () => void;
+  maxConcurrent?: number;
+}
+
+const PROJECTILE_SLOT = 'projectile';
+/** 동시에 날 수 있는 발 수. 나이트 1회 발동 = 3발이고 볼리가 겹칠 수 있어 여유를 둔다 */
+const PROJECTILE_MAX_UNITS = 9;
+
+/**
+ * 이펙트 하나를 (x, y) → `to` 로 **날려 보낸다**.
+ *
+ *  - 본체: 등속으로 이동하며 매 프레임 `onStep` 으로 현재 좌표를 알려준다 (경로 판정)
+ *  - 잔상: 일정 간격으로 지나간 자리에 낱장을 떨어뜨리고 알파를 빼며 지운다
+ *
+ * **본체와 잔상은 한 세트**로 슬롯 하나만 잡는다 — 상한에 걸리면 아무것도 만들지 않고
+ * `onComplete` 를 즉시 호출한다. 호출부의 정리 로직이 건너뛰어지지 않게 하기 위함이다.
+ */
+export function projectile(
+  scene: Phaser.Scene,
+  x: number,
+  y: number,
+  opts: ProjectileOptions,
+): Phaser.GameObjects.Image | null {
+  const bail = () => {
+    opts.onComplete?.();
+    return null;
+  };
+  if (!isLive(scene)) return bail();
+
+  const textureKey = opts.texture ?? SWEEP_DEFAULT_TEXTURE;
+  if (!scene.textures.exists(textureKey)) return bail();
+
+  const st = getState(scene);
+  if (!acquireSlot(st, PROJECTILE_SLOT, opts.maxConcurrent ?? PROJECTILE_MAX_UNITS)) return bail();
+
+  const [sx, sy] = opts.scale ?? [1, 1];
+  const depth = opts.depth ?? 122;
+  const rotation = opts.rotation ?? 0;
+  const blend = opts.blend ?? 'add';
+
+  // 세트 안의 본체·잔상이 모두 끝나야 슬롯을 돌려준다
+  let pending = 0;
+  let released = false;
+  const partDone = () => {
+    pending--;
+    if (pending <= 0 && !released) {
+      released = true;
+      releaseSlot(st, PROJECTILE_SLOT);
+    }
+  };
+
+  const ai = opts.afterimage;
+  const aiInterval = ai?.interval ?? 70;
+  const aiFade = ai?.fade ?? 260;
+  const aiMax = ai?.max ?? 12;
+  const aiBlend = ai?.blend ?? blend;
+  let aiLeft = ai ? aiMax : 0;
+
+  const dropAfterimage = (ax: number, ay: number): void => {
+    // 본체의 **현재** 배율을 물려받는다 — 뻗음·가늘어짐을 겪은 모양이 그대로 꼬리가 된다
+    const cx = body.scaleX;
+    const cy = body.scaleY;
+    const img = scene.add.image(ax, ay, textureKey)
+      .setDepth(depth - 2)
+      .setRotation(rotation)
+      .setAlpha(ai?.alpha ?? 0.4)
+      .setScale(cx, cy);
+    if (opts.origin) img.setOrigin(opts.origin[0], opts.origin[1]);
+    img.setBlendMode(toBlendMode(aiBlend));
+    img.setTint(ai?.tint ?? opts.tint ?? 0xffffff);
+
+    pending++;
+    const done = trackDisposable(scene, st, img, partDone);
+    if (glows(aiBlend)) attachBloom(scene, img);
+
+    // 뒤로 갈수록 잦아들며 얇아진다 — **옅어지는 복사본이 아니라 가늘어지는 꼬리**여야
+    // '지나간 길'로 읽힌다 (알파만 빼면 그냥 흐린 그림이 겹쳐 보인다)
+    scene.tweens.add({
+      targets: img,
+      alpha: 0,
+      scaleX: cx * 0.82,
+      scaleY: cy * 0.3,
+      duration: aiFade,
+      ease: 'Quad.easeIn',
+      onComplete: done,
+    });
+    trackedTimeout(scene, aiFade + 500, done);
+  };
+
+  const body = scene.add.image(x, y, textureKey)
+    .setDepth(depth)
+    .setRotation(rotation)
+    .setAlpha(opts.alpha ?? 1)
+    .setScale(sx, sy);
+  if (opts.origin) body.setOrigin(opts.origin[0], opts.origin[1]);
+  body.setBlendMode(toBlendMode(blend));
+  if (opts.tint !== undefined) body.setTint(opts.tint);
+
+  const launchMs = opts.launch?.ms ?? 0;
+  const fromScale = opts.launch?.fromScale ?? 1;
+
+  /**
+   * 발사 뻗음 → 비행 중 가늘어짐. **두 트윈이 같은 scaleY 를 두고 겹치지 않도록**
+   * 얇아지는 쪽은 뻗음이 끝난 뒤부터 시작한다.
+   */
+  const shapeOverLife = (img: Phaser.GameObjects.Image, bx: number, by: number, phase = 0): void => {
+    if (opts.launch) {
+      img.setScale(bx * fromScale, by * fromScale);
+      scene.tweens.add({
+        targets: img, scaleX: bx, scaleY: by,
+        duration: launchMs, ease: 'Quad.easeOut',
+      });
+    }
+    if (opts.thinTo !== undefined) {
+      scene.tweens.add({
+        targets: img, scaleY: by * opts.thinTo,
+        duration: Math.max(1, opts.duration - launchMs),
+        delay: launchMs,
+        ease: 'Quad.easeIn',
+      });
+    }
+
+    const wv = opts.waver;
+    if (!wv) return;
+    const half = (wv.periodMs ?? 300) / 2;
+    // 층마다 위상을 어긋나게 준다 — 같은 박자로 흔들리면 통째로 움직여 일렁임이 안 보인다
+    if (wv.rotation) {
+      scene.tweens.add({
+        targets: img, rotation: rotation + wv.rotation,
+        duration: half, delay: launchMs + phase, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+      });
+    }
+    if (wv.stretch) {
+      scene.tweens.add({
+        targets: img, scaleX: bx * (1 + wv.stretch),
+        duration: half * 0.78, delay: launchMs + phase * 1.4, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+      });
+    }
+  };
+
+  // ── 겹 층 — 본체를 따라다니며 같은 형태 변화를 겪는다 ──
+  const extras: Phaser.GameObjects.Image[] = [];
+  for (const L of opts.layers ?? []) {
+    const lx = sx * L.scale[0];
+    const ly = sy * L.scale[1];
+    const img = scene.add.image(x, y, L.texture ?? textureKey)
+      .setDepth(depth + L.dz)
+      .setRotation(rotation)
+      .setAlpha(L.alpha)
+      .setScale(lx, ly);
+    if (opts.origin) img.setOrigin(opts.origin[0], opts.origin[1]);
+    img.setBlendMode(toBlendMode(blend));
+    if (L.tint !== undefined) img.setTint(L.tint);
+
+    pending++;
+    const doneLayer = trackDisposable(scene, st, img, partDone);
+    if (glows(blend)) attachBloom(scene, img);
+    shapeOverLife(img, lx, ly, (extras.length + 1) * 70);
+    trackedTimeout(scene, opts.duration + 500, doneLayer);
+    extras.push(img);
+  }
+
+  shapeOverLife(body, sx, sy);
+
+  pending++;
+  let notified = false;
+  const finishBody = trackDisposable(scene, st, body, () => {
+    partDone();
+    if (notified) return;
+    notified = true;
+    opts.onComplete?.();
+  });
+  if (glows(blend)) attachBloom(scene, body);
+
+  let lastDrop = 0;
+  scene.tweens.add({
+    targets: body,
+    x: opts.to.x,
+    y: opts.to.y,
+    duration: opts.duration,
+    ease: 'Linear',
+    onUpdate: (tw: Phaser.Tweens.Tween) => {
+      if (!body.active) return;
+      for (const e of extras) { e.x = body.x; e.y = body.y; }
+      opts.onStep?.(body.x, body.y);
+      if (aiLeft <= 0) return;
+      // 잔상 간격은 씬 시간 기준 — 히트스톱으로 본체가 멈추면 잔상도 함께 멈춘다
+      const elapsed = (tw?.progress ?? 0) * opts.duration;
+      if (elapsed - lastDrop < aiInterval) return;
+      lastDrop = elapsed;
+      aiLeft--;
+      dropAfterimage(body.x, body.y);
+    },
+    onComplete: finishBody,
+  });
+
+  // 보험: 히트스톱으로 트윈이 늦어져도 실시간 기준으로 반드시 회수
+  trackedTimeout(scene, opts.duration + 500, finishBody);
+
+  return body;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
