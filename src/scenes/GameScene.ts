@@ -912,24 +912,38 @@ export default class GameScene extends BaseScene {
     // 캐릭터별 스폰 간격 (노이즈는 단축)
     const intervals = this.ability.getSpawnIntervals();
 
+    /**
+     * 한 번의 점수 증가로 만들 수 있는 특수 똥 총량.
+     *
+     * 이 루프는 점수를 1점씩 훑으며 놓친 생성 지점을 메운다 — 1점씩 오르는 동안에는
+     * 아무 문제가 없다. 문제는 **능력 보너스가 점수를 한 번에 수백 점 올릴 때**다.
+     * 예를 들어 K 의 에너지파는 지운 똥 1개당 50점을 한 번에 준다. +1100 이면 이 루프가
+     * 금똥 27 · 다이아 11 · 토파즈 6 을 **한 프레임에** 쏟아내고, 그 순간 물리 바디가
+     * 40개 넘게 늘어나며 눈에 보이는 끊김이 생긴다.
+     * 예산을 넘긴 몫은 생성하지 않고 마커(lastGoldPoopScore 등)만 앞으로 넘긴다 —
+     * 다음 프레임에 밀려 터지지 않게(밀리면 같은 문제가 이월될 뿐이다).
+     */
+    let budget = 3;
+
     for (let score = oldScore + 1; score <= newScore; score++) {
       // 피버 타임 체크
       this.checkFeverTime(score);
 
-      // 피버 타임 중이 아닐 때만 일반 금똥/다이아똥/토파즈똥 생성
+      // 피버 타임 중이 아닐 때만 일반 금똥/다이아똥/토파즈똥 생성.
+      // **예산을 넘긴 몫은 생성하지 않고 마커만 넘긴다** — 아래 주석 참조.
       if (!this.isFeverTime) {
         if (score % intervals.gold === 0 && score > this.lastGoldPoopScore) {
-          this.spawnGoldPoop();
+          if (budget > 0) { this.spawnGoldPoop(); budget--; }
           this.lastGoldPoopScore = score;
         }
 
         if (score % intervals.diamond === 0 && score > this.lastDiamondPoopScore) {
-          this.spawnDiamondPoop();
+          if (budget > 0) { this.spawnDiamondPoop(); budget--; }
           this.lastDiamondPoopScore = score;
         }
 
         if (score % intervals.topaz === 0 && score > this.lastTopazPoopScore) {
-          this.spawnTopazPoop();
+          if (budget > 0) { this.spawnTopazPoop(); budget--; }
           this.lastTopazPoopScore = score;
         }
       }

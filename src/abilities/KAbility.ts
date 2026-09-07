@@ -25,6 +25,18 @@ const HAND_Y_RATIO    = 0.34;  // 플레이어 높이 대비 손끝 y 오프셋 
 const BEAM_SWEEP_COUNT    = 5;   // 총 판정 횟수
 const BEAM_SWEEP_INTERVAL = 90;  // 판정 간격 (ms) → 5회 × 90ms ≈ 빔 지속시간 커버
 
+/**
+ * 실제 발사 사이의 최소 간격 (ms).
+ *
+ * **이 능력은 자기가 만든 점수로 자기를 다시 부른다.** 빔이 지운 똥 1개가 50점인데
+ * 초사이언 발동 간격이 150점이라 3개만 지워도 그 자리에서 다음 마일스톤이 걸리고,
+ * GameScene 은 점수를 1점씩 순회하며 마일스톤을 호출하므로 한 번의 발사가 그대로
+ * 다음 발사를 낳는다. 계측(fx-leak-check [17a])에서 발사 1회 입력이 2초 만에
+ * **24회 발사**로 번졌다 — 화면에 46개가 떠 있고 블룸 패스가 계속 도는 상태.
+ * 아래 `lastGmhmScore` 선반영이 1차 차단이고, 이 간격은 그래도 새는 경로를 막는 보험이다.
+ */
+const MIN_FIRE_GAP_MS = 520;
+
 // 초사이언(ktei_ss) 강화 에너지파 — 더 굵은 빔 + 주변 번개 폭발로 광역 제거 (정지 없음)
 const SS_BEAM_WIDTH_MUL = 2.7;  // 빔 두께 배율 (더 굵게)
 const SS_BEAM_HALF_WIDTH = 72;  // 굵어진 빔의 똥 제거 반경
@@ -399,6 +411,9 @@ export class KAbility extends BaseAbility {
     const { scene, player } = api;
     const isSs = this.transformed; // 초사이언 승계 후 여부
 
+    // 보험 — 어떤 경로로 마일스톤이 몰려 들어와도 실제 발사는 이 간격보다 촘촘해지지 않는다
+    if (scene.time.now - this.lastFireAt < MIN_FIRE_GAP_MS) return;
+
     // 발사 주체: 초사이언 전 = 태이(ktei), 후 = 본체(player = ktei_ss)
     const shooter = isSs ? player : this.son;
     if (!shooter || !shooter.active) return;
@@ -544,8 +559,9 @@ export class KAbility extends BaseAbility {
       this._clearPoopsAlongBeam(api, ox, oy, ux, uy, halfWidth);
     };
     sweep(); // 발사 즉시 1회
+    // onDestroy 에서 회수되도록 추적 타이머로 잡는다 (씬 재시작 후 stale 실행 방지)
     for (let i = 1; i < BEAM_SWEEP_COUNT; i++) {
-      api.scene.time.delayedCall(i * BEAM_SWEEP_INTERVAL, sweep);
+      this._later(api.scene, i * BEAM_SWEEP_INTERVAL, sweep);
     }
   }
 
@@ -599,7 +615,15 @@ export class KAbility extends BaseAbility {
     api: GameSceneAPI, scene: Phaser.Scene, targets: Phaser.Physics.Arcade.Sprite[],
   ): void {
     const n = this._recycleWithBurst(scene, targets);
-    if (n > 0) api.addAbilityBonus(n * K_PARAMS.beamPointsPerPoop);
+    if (n === 0) return;
+
+    const bonus = n * K_PARAMS.beamPointsPerPoop;
+    // **점수는 그대로 주되, 그 점수로는 다시 발동하지 않는다.**
+    // addAbilityBonus 는 GameScene 안에서 점수를 1점씩 순회하며 마일스톤을 호출하므로
+    // 여기서 먼저 올려 두지 않으면 이 줄이 곧바로 다음 발사를 부른다 (재진입 폭주).
+    // 결과적으로 발동 간격은 '스스로 번 점수'가 아니라 '플레이로 번 점수' 기준이 된다.
+    this.lastGmhmScore += bonus;
+    api.addAbilityBonus(bonus);
   }
 
   /**

@@ -8,11 +8,12 @@
  * 실행:  node scripts/run-fx-leak-check.mjs
  */
 // @ts-nocheck
-import Phaser, { live, created, createFakeScene, arcSpawns } from 'phaser';
+import Phaser, { live, created, createFakeScene, arcSpawns, beamSpawns } from 'phaser';
 import { MaehwaAbility } from '../src/abilities/MaehwaAbility';
 import { KnightAbility } from '../src/abilities/KnightAbility';
+import { KAbility } from '../src/abilities/KAbility';
 import { LegacyAbility } from '../src/abilities/LegacyAbility';
-import { LEGACY_PARAMS } from '../src/config/abilityParams';
+import { LEGACY_PARAMS, K_PARAMS } from '../src/config/abilityParams';
 import { beam, fxSprite, getFxStats, preloadFxAssets, playFx, getFxCounters, resetFxCounters } from '../src/utils/vfx';
 
 const VOLLEYS = 20;
@@ -58,14 +59,11 @@ function commonFx(scene, n) {
  */
 function fireBeams(scene, n) {
   for (let i = 0; i < n; i++) {
+    // 실기와 같은 형태로 — 색·요동은 시트가 맡고 코드는 각도·길이·두께만 준다
     beam(scene, 60, 500, {
-      angle: -Math.PI / 4, length: 780, thickness: 26,
-      texture: 'fx_k_beam', blend: 'normal', alpha: 0.85,
-      layers: [
-        { thickness: 2.2, alpha: 0.26, dz: -1 },
-        { thickness: 0.4, alpha: 0.9, dz: 1, texture: 'fx_k_beam_core' },
-      ],
-      waver: { thickness: 0.14, periodMs: 200 },
+      angle: -Math.PI / 4, length: 780, thickness: 96,
+      sheet: 'kBeam', blend: 'normal', alpha: 0.92,
+      dissipate: 'retract', maxConcurrent: 4,
     });
   }
 }
@@ -238,6 +236,74 @@ async function main() {
   const legacyQuiet = created.sprites === afterLegacyCreated;
   console.log('레거시 정리 후 600ms 동안 추가 생성: %d장', created.sprites - afterLegacyCreated);
 
+  // ── K 초사이언: 제거 보너스가 스스로 다음 마일스톤을 넘기는 재진입 ─────
+  // 실기 GameScene 은 점수를 1점씩 순회하며 마일스톤을 호출한다. K 는 빔으로 지운
+  // 똥 1개당 50점을 주는데 초사이언 발동 간격이 150점이라, **3개만 지워도 그 자리에서
+  // 다음 발동이 걸린다.** 여기서는 그 되먹임을 그대로 재현해 한 번의 발동이 몇 번의
+  // 발동으로 번지는지, 그동안 화면에 몇 장이 떠 있는지를 잰다.
+  // '마일스톤 통과 횟수'가 아니라 **실제로 빔이 나간 횟수**를 센다 (빔 시트 스프라이트 수)
+  const kFire = { milestones: 0 };
+  const countBeams = () => beamSpawns.filter(k => k === 'fxsheet_kBeamSs').length;
+  const kScene = scene;
+  const kPlayer = {
+    x: 120, y: 520, scaleX: 1, scaleY: 1, active: true, displayWidth: 48, displayHeight: 64,
+    setTexturePrefix() {}, resize(w, h) { this.displayWidth = w; this.displayHeight = h; },
+    setY(v) { this.y = v; }, setInvincibleBriefly() {},
+  };
+  let kPoops = [];
+  const kRefill = () => {
+    // 빔 경로(왼쪽 아래 → 오른쪽 위 45°)에 확실히 걸리도록 대각선으로 깐다
+    kPoops = Array.from({ length: 8 }, (_, i) => ({
+      x: 130 + i * 20, y: 500 - i * 20, active: true,
+      recycle() { this.active = false; },
+    }));
+  };
+  kRefill();
+  let kScore = 0;
+  const kApi = {
+    scene: kScene,
+    player: kPlayer,
+    poops: { getChildren: () => kPoops },
+    goldPoops: {}, diamondPoops: {}, topazPoops: {}, rainbowPoops: {},
+    collectGoldPoop() {}, collectDiamondPoop() {}, collectTopazPoop() {}, collectRainbowPoop() {},
+    spawnGoldPoop() {},
+    // GameScene.checkMissedSpawnPoints 와 같은 순회 (점수 1점마다 마일스톤 호출)
+    addAbilityBonus(n) {
+      const to = kScore + n;
+      for (let sc = kScore + 1; sc <= to; sc++) {
+        kScore = sc;
+        if (sc % K_PARAMS.gmhmIntervalSs === 0) kFire.milestones++;
+        k.onScoreMilestone(sc, kApi);
+      }
+      kScore = to;
+    },
+  };
+  const k = new KAbility(0);
+  k.onCreate(kApi);
+  k.onHitPoop(kApi);                 // 초사이언 승계
+  await sleep(400);
+
+  let kPeak = snapshot(kScene);
+  const kSampler = setInterval(() => {
+    const sn = snapshot(kScene);
+    if (sn.liveSprites + sn.liveEmitters > kPeak.liveSprites + kPeak.liveEmitters) kPeak = sn;
+  }, 40);
+  // 첫 발동 한 번만 사람 손으로 넣는다 — 이후는 전부 자기 보너스가 굴린 것이다
+  kScore = K_PARAMS.gmhmIntervalSs - 1;
+  const beamsBefore = countBeams();
+  kApi.addAbilityBonus(1);
+  for (let i = 0; i < 40; i++) { k.onUpdate(kApi); if (i % 4 === 0) kRefill(); await sleep(50); }
+  clearInterval(kSampler);
+  console.log(fmt('[17a] K 초사이언 최대 동시', kPeak));
+  const kCascade = countBeams() - beamsBefore;
+  console.log('발동 1회 입력 → 실제 발사 %d회 (마일스톤 통과 %d회) · 최종 점수 %d',
+    kCascade, kFire.milestones, kScore);
+
+  k.onDestroy(kApi);
+  await sleep(SETTLE_MS);
+  const kSettled = snapshot(kScene);
+  console.log(fmt('[17b] K 정리 후', kSettled));
+
   // ── 상시 가산 이펙트가 블룸 레이어를 붙잡지 않는지 ────────────────────
   // 블룸 레이어는 depth 가 고정이라 올라간 오브젝트는 자기 depth 를 잃고,
   // 하나라도 살아 있으면 전체 화면 블룸 패스가 계속 돈다.
@@ -344,6 +410,8 @@ async function main() {
     // 레거시가 똥 4마리를 동시에 태우며 42개까지 띄웠고 그게 렉의 원인이었다
     ['[16] 파티클 이미터 동시 상한(14) 준수', legacyPeak.liveEmitters <= 14],
     ['[14] 상시 이펙트 파기 시 보험 타이머까지 회수', persistCleared.timeouts === 0],
+    ['[17a] K 초사이언 자기 보너스 재진입 폭주 없음 (2초에 발사 ≤ 5회)', kCascade <= 5],
+    ['[17b] K 정리 후 기준선 복귀', isZero(kSettled)],
   ];
   console.log('');
   let ok = true;

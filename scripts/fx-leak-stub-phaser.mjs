@@ -24,11 +24,13 @@ if (typeof globalThis.window === 'undefined') {
 }
 
 /** 살아 있는 오브젝트 수 (destroy 되면 감소) */
-export const live = { sprites: 0, emitters: 0, layers: 0 };
+export const live = { sprites: 0, emitters: 0, layers: 0, graphics: 0 };
 /** 누적 생성 수 */
-export const created = { sprites: 0, emitters: 0, layers: 0 };
+export const created = { sprites: 0, emitters: 0, layers: 0, graphics: 0 };
 /** 칼날 궤적(proc-arc)이 그려진 좌표·시각 — '이펙트가 똥 위치에 나는지' 검증용 */
 export const arcSpawns = [];
+/** 시트 이펙트 생성 로그 — 어떤 시트가 몇 번 나갔는지 (발사 횟수 계측) */
+export const beamSpawns = [];
 
 class Emitter {
   #handlers = new Map();
@@ -119,6 +121,58 @@ class ParticleEmitterObj extends GameObj {
   }
 }
 
+/**
+ * Graphics — vfx 로 넘어가지 않고 남아 있는 손그림 경로를 세기 위한 스텁.
+ * Phaser 에서 Graphics 한 장은 자기 지오메트리를 들고 배치를 끊으므로,
+ * '발동 한 번에 몇 장을 만드는가'가 그대로 비용이다.
+ */
+class GraphicsObj extends GameObj {
+  constructor(scene) {
+    super(scene);
+    created.graphics++; live.graphics++;
+    this.alpha = 1;
+  }
+  clear() { return this; }
+  fillStyle() { return this; }
+  lineStyle() { return this; }
+  fillRect() { return this; }
+  strokeRect() { return this; }
+  fillCircle() { return this; }
+  strokeCircle() { return this; }
+  fillEllipse() { return this; }
+  strokeEllipse() { return this; }
+  fillTriangle() { return this; }
+  strokeTriangle() { return this; }
+  fillRoundedRect() { return this; }
+  strokeRoundedRect() { return this; }
+  lineBetween() { return this; }
+  setPosition(x, y) { this.x = x; this.y = y; return this; }
+  setDepth(d) { this.depth = d; return this; }
+  setVisible() { return this; }
+  save() { return this; }
+  restore() { return this; }
+  translateCanvas() { return this; }
+  rotateCanvas() { return this; }
+  scaleCanvas() { return this; }
+  generateTexture() { return this; }
+  beginPath() { return this; }
+  moveTo() { return this; }
+  lineTo() { return this; }
+  closePath() { return this; }
+  strokePath() { return this; }
+  fillPath() { return this; }
+  fillPoints() { return this; }
+  setAlpha(a) { this.alpha = a; return this; }
+  setScale() { return this; }
+  setRotation() { return this; }
+  setBlendMode() { return this; }
+  destroy() {
+    const wasAlive = !!this.scene;
+    super.destroy();
+    if (wasAlive) live.graphics--;
+  }
+}
+
 class Layer extends GameObj {
   constructor(scene) {
     super(scene);
@@ -202,7 +256,7 @@ function makeCtx() {
 export function createFakeScene() {
   const scene = new Emitter();
   scene.events = new Emitter();
-  scene.sys = { displayList: { remove() {} } };
+  scene.sys = { displayList: { remove() {} }, isActive: () => scene.__alive !== false };
 
   scene.__clock = new FakeClock(scene);
 
@@ -234,6 +288,7 @@ export function createFakeScene() {
     // beam() 이 텍스처 원본 크기로 길이·두께 배율을 계산한다
     get: () => ({ getSourceImage: () => ({ width: 397, height: 96 }) }),
     createCanvas: k => { textureKeys.add(k); return new FakeCanvasTexture(k); },
+    addCanvas: k => { textureKeys.add(k); return new FakeCanvasTexture(k); },
     __addAsset: k => textureKeys.add(k),
   };
   scene.tweens = {
@@ -275,13 +330,17 @@ export function createFakeScene() {
     const o = new Sprite(scene);
     o.x = x; o.y = y; o.textureKey = key;
     if (key === 'fx_proc_arc') arcSpawns.push({ x, y, t: Date.now(), obj: o });
+    if (typeof key === 'string' && key.startsWith('fxsheet_')) beamSpawns.push(key);
     return o;
   };
   scene.add = {
     sprite: (x, y, key) => spawn(x, y, key),
     image: (x, y, key) => spawn(x, y, key),
     particles: () => new ParticleEmitterObj(scene),
+    // 전체 화면 섬광 사각형 (K 승계 연출) — 장부 밖이지만 destroy 는 불려야 한다
+    rectangle: (x, y) => spawn(x, y, '__rect'),
     layer: () => new Layer(scene),
+    graphics: () => new GraphicsObj(scene),
     // 보너스 점수 텍스트 — 장부에는 안 들어가지만 destroy 가 불려야 한다
     text: () => {
       const o = new GameObj(scene);
@@ -300,7 +359,25 @@ export function createFakeScene() {
   scene.scale = { width: 360, height: 640 };
   // 센티넬 궤도가 프레임 델타로 각도를 굴린다
   scene.game = { renderer: { type: 2 }, loop: { delta: 16 } };
-  scene.physics = { world: { timeScale: 1 } };
+  // K 는 동반자(태이)를 물리 스프라이트로 만들고 특수똥 overlap 을 건다.
+  // 계측 대상은 vfx 장부이므로 몸체는 필요한 표면만 흉내 낸다.
+  scene.physics = {
+    world: { timeScale: 1 },
+    add: {
+      sprite: (x, y, key) => {
+        const o = spawn(x, y, key);
+        o.displayWidth = 48; o.displayHeight = 64;
+        o.body = { setAllowGravity: () => {} };
+        o.setDisplaySize = (w, h) => { o.displayWidth = w; o.displayHeight = h; return o; };
+        o.setVelocityX = () => o;
+        o.setY = v => { o.y = v; return o; };
+        o.setTexture = k => { o.textureKey = k; return o; };
+        return o;
+      },
+      overlap: () => ({ destroy() {} }),
+    },
+  };
+  scene.children = { moveBelow: () => {} };
 
   return scene;
 }

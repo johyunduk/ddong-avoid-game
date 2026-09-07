@@ -434,6 +434,53 @@ def sheet_slash(frames: int = 8, width: int = 256, height: int = 160,
     return out
 
 
+def _fill_enclosed(rgba: "np.ndarray", color: tuple[int, int, int],
+                   fill_alpha: float, thresh: int = 40) -> "np.ndarray":
+    """윤곽이 **감싼 안쪽**을 지정색으로 메운다 (스트레이트 알파 RGBA 배열 in/out).
+
+    검은 배경에서 알파를 뽑는 파이프라인은 **검정을 '없음'과 구별하지 못한다.**
+    루트의 터미널 창은 안쪽이 검게 칠해져 있어야 '지워진 자리'로 읽히는데,
+    밝기로도 채도로도 그 검정을 되살릴 수 없다.
+
+    그래서 밝기가 아니라 **형태**에서 뽑는다 — 프레임 테두리에서 투명 영역을 타고
+    흘려보내(flood fill), 거기에 닿지 않는 투명 픽셀이 곧 '윤곽 안쪽'이다.
+    윤곽이 끊긴 프레임(글리치·붕괴)은 바깥과 통해 있어 아무것도 안 채워진다 —
+    채워야 할 프레임에서만 저절로 채워지므로 프레임별 예외를 둘 필요가 없다.
+    """
+    h, w = rgba.shape[:2]
+    solid = rgba[..., 3] > thresh
+    # 테두리에서 시작해 투명 영역만 타고 번진다
+    outside = np.zeros((h, w), dtype=bool)
+    stack = []
+    for x in range(w):
+        for y in (0, h - 1):
+            if not solid[y, x]:
+                stack.append((y, x))
+    for y in range(h):
+        for x in (0, w - 1):
+            if not solid[y, x]:
+                stack.append((y, x))
+    while stack:
+        y, x = stack.pop()
+        if outside[y, x] or solid[y, x]:
+            continue
+        outside[y, x] = True
+        if y > 0:     stack.append((y - 1, x))
+        if y < h - 1: stack.append((y + 1, x))
+        if x > 0:     stack.append((y, x - 1))
+        if x < w - 1: stack.append((y, x + 1))
+
+    inside = (~solid) & (~outside)
+    if not inside.any():
+        return rgba
+    out = rgba.copy()
+    out[inside, 0] = color[0]
+    out[inside, 1] = color[1]
+    out[inside, 2] = color[2]
+    out[inside, 3] = int(max(0.0, min(1.0, fill_alpha)) * 255)
+    return out
+
+
 def slice_frames(src: Path, count: int = 8, out_w: int = 192, out_h: int = 192,
                  thresh: int = 10, pad: float = 0.10, rotate: int = 0,
                  ramp: tuple[int, int, int] | None = None, hot: float = 0.84,
@@ -441,7 +488,10 @@ def slice_frames(src: Path, count: int = 8, out_w: int = 192, out_h: int = 192,
                  edge: tuple[int, int, int] | None = None,
                  keep_color: bool = False, end_fade: float = 0.0,
                  crop: tuple[float, float] | None = None,
-                 axis: str = "x", color_alpha: float = 1.25) -> "Image.Image":
+                 axis: str = "x", color_alpha: float = 1.25,
+                 grid: tuple[int, int] | None = None,
+                 fill_holes: tuple[int, int, int] | None = None,
+                 fill_alpha: float = 0.88) -> "Image.Image":
     """생성한 **한 장짜리 프레임 스트립** → 게임용 플립북 시트.
 
     ChatGPT(GPT Image) 에 "한 장에 N프레임 가로 일렬" 을 시키면 프레임 간 일관성 문제가
@@ -455,6 +505,16 @@ def slice_frames(src: Path, count: int = 8, out_w: int = 192, out_h: int = 192,
     색이 전부 같아서 '기운' 이 아니라 '단색 도형' 으로 보인다.
     """
     im = Image.open(src).convert("RGB")
+    if grid:
+        # **정사각 프레임은 한 줄로 못 받는다** — 8칸을 가로로 늘어놓으면 8:1 이라
+        # GPT Image 가 낼 수 있는 비율(최대 3:2)을 벗어난다. 그래서 격자로 받고
+        # 여기서 줄을 잘라 옆으로 이어 붙여 기존(가로 일렬) 경로로 흘려보낸다.
+        _, rows = grid
+        band_h = im.height // rows
+        strip = Image.new("RGB", (im.width * rows, band_h), (0, 0, 0))
+        for r in range(rows):
+            strip.paste(im.crop((0, r * band_h, im.width, (r + 1) * band_h)), (r * im.width, 0))
+        im = strip
     if axis == "y":
         # **가로로 아주 납작한 프레임**은 한 줄로 늘어놓을 수 없다 — 이미지 한 장에 6칸을
         # 가로로 넣으면 칸이 좁아져서 원하는 비율이 안 나온다. 그래서 세로로 쌓아 받고
@@ -486,10 +546,17 @@ def slice_frames(src: Path, count: int = 8, out_w: int = 192, out_h: int = 192,
     spacing = np.median(np.diff(centers)) if len(centers) > 1 else im.width / count
     cell_w = spacing * (1.0 + pad)
 
-    rows = np.where((lum > thresh).any(axis=1))[0]
-    top, bot = (int(rows.min()), int(rows.max())) if len(rows) else (0, im.height - 1)
-    m = int((bot - top) * pad)
-    top, bot = max(0, top - m), min(im.height - 1, bot + m)
+    if grid is not None:
+        # **격자로 받은 셀은 이미 정사각이다.** 여기서 세로만 내용에 맞춰 좁히면
+        # 가로는 셀 전체·세로는 내용 높이가 되어 비율이 깨진다 — 창이 세로로 길쭉해진다.
+        # 프레임마다 내용 높이가 다른 시퀀스(창 → 가로줄 → 점)에서는 더 심하다.
+        # 소스 셀의 세로 전체를 그대로 쓴다.
+        top, bot = 0, im.height - 1
+    else:
+        rows = np.where((lum > thresh).any(axis=1))[0]
+        top, bot = (int(rows.min()), int(rows.max())) if len(rows) else (0, im.height - 1)
+        m = int((bot - top) * pad)
+        top, bot = max(0, top - m), min(im.height - 1, bot + m)
 
     sheet = Image.new("RGBA", (out_w * count, out_h), (0, 0, 0, 0))
     for i, cx in enumerate(centers):
@@ -574,8 +641,10 @@ def slice_frames(src: Path, count: int = 8, out_w: int = 192, out_h: int = 192,
             col = deep * (1 - t) + mid * t
             col = col * (1 - u) + white * u
             rgb = np.clip(col, 0, 255).astype(np.uint8)
-        sheet.paste(Image.fromarray(np.dstack([rgb, (a * 255).astype(np.uint8)]), "RGBA"),
-                    (i * out_w, 0))
+        frame = np.dstack([rgb, (a * 255).astype(np.uint8)])
+        if fill_holes is not None:
+            frame = _fill_enclosed(frame, fill_holes, fill_alpha)
+        sheet.paste(Image.fromarray(frame, "RGBA"), (i * out_w, 0))
     return sheet
 
 
@@ -803,6 +872,13 @@ def main() -> int:
     p.add_argument("--frames-ramp", help="밝기를 색 계단으로 구워 넣는다 (예: ff9a2e)")
     p.add_argument("--frames-color-alpha", type=float, default=1.25,
                    help="색이 불투명도에 얼마나 기여하는지. 낮추면 옅어진다 (기본 1.25)")
+    p.add_argument("--frames-fill-holes", default=None,
+                   help="윤곽이 감싼 안쪽을 이 색으로 메운다 (예: 041206). "
+                        "검은 배경에서 못 살리는 '창 바닥' 용")
+    p.add_argument("--frames-fill-alpha", type=float, default=0.88,
+                   help="--frames-fill-holes 로 메운 영역의 불투명도")
+    p.add_argument("--frames-grid", default=None,
+                   help="격자로 받은 스트립을 자른다 \"열x행\" (예: 3x2). 정사각 프레임용")
     p.add_argument("--frames-axis", choices=("x", "y"), default="x",
                    help="원본 스트립의 프레임 배치. y = 세로로 쌓인 줄 (납작한 프레임용)")
     p.add_argument("--frames-crop", default=None,
@@ -859,7 +935,11 @@ def main() -> int:
                            edge=_hex(a.frames_ramp_edge), keep_color=a.frames_keep_color, end_fade=a.frames_end_fade,
                            crop=(tuple(float(v) for v in a.frames_crop.split(","))
                                  if a.frames_crop else None),
-                           axis=a.frames_axis, color_alpha=a.frames_color_alpha)
+                           axis=a.frames_axis, color_alpha=a.frames_color_alpha,
+                           grid=(tuple(int(v) for v in a.frames_grid.lower().split("x"))
+                                 if a.frames_grid else None),
+                           fill_holes=_hex(a.frames_fill_holes),
+                           fill_alpha=a.frames_fill_alpha)
         out = Path(a.out_file)
         out.parent.mkdir(parents=True, exist_ok=True)
         img.save(out)
