@@ -1,0 +1,157 @@
+{
+  "_comment": [
+    "키프레임 → 게임 프레임 배치표. scripts/cube/artwork.py build 가 읽는다.",
+    "원화: creative/_fx/ted-cube/pixel-chatgpt/keyframes/ (composer w8, 배경 제거 완료)",
+    "",
+    "segment 항목",
+    "  range   [시작, 끝) 게임 프레임 인덱스",
+    "  key     원화 파일명 조각",
+    "  scale   **정수** 축소 배율. 두 가지를 동시에 정한다:",
+    "          (1) 화면에서의 큐브 크기  (2) 원화를 얼마나 넓게 보는가 (창 = 프레임px × scale)",
+    "          원화마다 큐브가 그려진 크기가 달라서(03_charge 가 02 의 1.3배) 임의 배율 대신",
+    "          **정수 배율을 골라** 크기를 맞춘다. 동시에 창이 원화 내용 bbox 보다 커야",
+    "          프레임 경계에서 잘리지 않는다 — 두 조건을 같이 만족하는 값을 고른 결과가 아래다.",
+    "  dx0/dy0 → dx1/dy1   정수 px 평행이동 (게임 프레임 px 기준)",
+    "  speed   **잔해** 성분을 방사 방향으로 미는 속도 (게임 px/프레임).",
+    "          전체 면적의 20% 를 넘는 주요 덩어리는 움직이지 않는다 — 원화의 광선이",
+    "          조각들을 하나로 이어 놓아서, 그걸 움직이면 그림이 통째로 흔들린다",
+    "  hold_r  중심에서 이 반경(원화 px) 안의 성분은 안 움직인다",
+    "  drop_edge  창을 가로지르는 **잔해**를 통째로 뺀다 (반쪽 잘림 방지). 주요 덩어리는 제외",
+    "",
+    "회전·임의 배율은 없다. 각도가 필요하면 그 각도의 키프레임을 composer 에게 요청한다.",
+    "",
+    "큐브 실측(알파 열림 k=45) 과 선택한 배율:",
+    "  02_assemble    464px ÷4 = 116   창 768 ≥ 내용 694 ✓",
+    "  02b_firstlight 464px ÷4 = 116   창 768 ≥ 539 ✓",
+    "  03_charge      603px ÷6 = 100   창 1152 ≥ 1092 ✓  (광선이 넓어 ÷6 이 필요하다)",
+    "  03b_maxpress   480px ÷5 =  96   창 960 ≥ 565 ✓   → 116→116→100→96 압축 아크",
+    "  04/05          창 1280 ≥ 1254 ✓ (전면 확산이라 가장 넓게 본다)",
+    "",
+    "verify: 원화와 직접 대조할 핵심 시점. scripts/cube/verify-artwork.py 가 읽는다"
+  ],
+  "forge": {
+    "frames": 36,
+    "px": 192,
+    "timeline": [
+      {
+        "range": [
+          0,
+          7
+        ],
+        "key": "01_gather_cut",
+        "scale": 7,
+        "speed": -1.5,
+        "hold_r": 60,
+        "drop_edge": true
+      },
+      {
+        "range": [
+          7,
+          13
+        ],
+        "key": "01b_gather_clump_cut",
+        "scale": 5,
+        "speed": -1.0,
+        "hold_r": 40,
+        "drop_edge": true
+      },
+      {
+        "range": [
+          13,
+          18
+        ],
+        "key": "02_assemble_cut",
+        "scale": 4,
+        "drop_edge": true
+      },
+      {
+        "range": [
+          18,
+          21
+        ],
+        "key": "02b_firstlight_cut",
+        "scale": 4,
+        "drop_edge": true
+      },
+      {
+        "range": [
+          21,
+          33
+        ],
+        "key": "03_charge_cut",
+        "scale": 6,
+        "drop_edge": true
+      },
+      {
+        "range": [
+          33,
+          36
+        ],
+        "key": "03b_maxcompress_cut",
+        "scale": 5,
+        "drop_edge": true
+      }
+    ],
+    "verify": [
+      {
+        "name": "gather",
+        "frame": 0,
+        "ref": "01_gather"
+      },
+      {
+        "name": "assemble",
+        "frame": 15,
+        "ref": "02_assemble"
+      },
+      {
+        "name": "charge",
+        "frame": 21,
+        "ref": "03_charge"
+      }
+    ]
+  },
+  "blast": {
+    "frames": 24,
+    "px": 256,
+    "timeline": [
+      {
+        "range": [
+          0,
+          1
+        ],
+        "key": "03b_maxcompress_cut",
+        "scale": 5,
+        "drop_edge": true
+      },
+      {
+        "range": [
+          1,
+          12
+        ],
+        "key": "04_burst_cut",
+        "scale": 5,
+        "speed": 2.5,
+        "hold_r": 40,
+        "drop_edge": true
+      },
+      {
+        "range": [
+          12,
+          24
+        ],
+        "key": "05_afterglow_cut",
+        "scale": 5,
+        "speed": 1.5,
+        "hold_r": 30,
+        "drop_edge": true
+      }
+    ],
+    "verify": [
+      {
+        "name": "burst",
+        "frame": 1,
+        "ref": "04_burst"
+      }
+    ]
+  }
+}

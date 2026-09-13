@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """심사실 큐를 확인해 Herdr 에이전트에게 배분하는 상주 워커.
 
-    python scripts/worker.py                 # 상주 (큐가 밀리면 90초, 비면 6분)
-    python scripts/worker.py --once          # 한 번만 확인하고 종료
-    python scripts/worker.py --no-clean      # 로컬 원본 정리 끄기
+    python scripts/worker.py --queues character   # 캐릭터 라인 (w5:p1)
+    python scripts/worker.py --queues music       # 음악 라인   (w5:p2)
+    python scripts/worker.py                      # 둘 다 (기본, 혼자 돌릴 때)
+    python scripts/worker.py --once               # 한 번만 확인하고 종료
 
 원칙
   · 판단이 필요한 일만 에이전트에게 보낸다. 삭제·정리는 이 스크립트가 직접 한다.
@@ -11,8 +12,20 @@
   · 한 에이전트에게는 한 번에 한 건만 보낸다.
 
     [폰] 요청/결정/설정 → Storage 큐
-            ↓ (이 워커)
-    builder(w3) 컨셉·생성·제안   |   integrator(w2) 게임 반영
+            ↓
+    --queues character  builder(w3) 컨셉·생성·제안 | integrator(w2) 게임 반영
+    --queues music      composer(w8) 가사·Suno 곡 생성
+
+**왜 라인을 나눠 돌리는가**
+
+tick() 은 이번 주기에 보낸 작업이 **전부 끝날 때까지 기다린다.** 그래서 한 프로세스가
+두 라인을 다 맡으면, 캐릭터 생성 한 건(10분 안팎) 이 도는 동안 곡 주문이 큐에 그대로
+앉아 있게 된다 — 컨셉 배치가 밀려 있으면 곡은 몇 시간씩 늦는다. 라인을 나누면
+builder 가 그림을 뽑는 동안 composer 가 곡을 뽑는다.
+
+나눠 돌릴 때는 **처리 표시 파일도 갈라진다** (STATE_FILES). save_state 가 파일 전체를
+다시 쓰기 때문에, 같은 파일을 두 프로세스가 쓰면 서로의 표시를 지운다.
+**같은 라인을 두 프로세스가 맡는 일은 없어야 한다** — 같은 건을 두 번 보낸다.
 
 Herdr 세션 안에서 실행한다 (w5 `실행·워커`). 표준 라이브러리만 사용.
 """
@@ -32,13 +45,21 @@ from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-STATE_FILE = ROOT / "scripts" / ".worker-state.json"
+# 처리 표시. **큐를 나눠 돌리면 파일도 나눠야 한다** — save_state 는 파일 전체를
+# 다시 쓰므로, 두 프로세스가 같은 파일을 쓰면 서로의 표시를 지운다.
+STATE_FILES = {
+    "all": ROOT / "scripts" / ".worker-state.json",
+    "character": ROOT / "scripts" / ".worker-state.json",
+    "music": ROOT / "scripts" / ".worker-state-music.json",
+}
+STATE_FILE = STATE_FILES["all"]  # main() 이 --queues 에 맞춰 바꾼다
 # comfyui-generate.py 와 같은 규칙: COMFYUI_SERVER > 후보 포트 자동 탐지
 COMFY_CANDIDATES = ["http://127.0.0.1:8188", "http://127.0.0.1:8000"]
 COMFY = os.environ.get("COMFYUI_SERVER", COMFY_CANDIDATES[0]).rstrip("/")
 
 BUILDER = "builder"        # w3 제작·Claude — 컨셉·생성·심사 업로드·능력 제안
 INTEGRATOR = "integrator"  # w2 구현·Claude — 게임 반영·검증
+COMPOSER = "composer"      # w8 음악·Claude — 가사·Suno·곡 후보 업로드
 AGENT_TIMEOUT_MS = 1_800_000  # 30분
 
 # 작업을 하나 처리하면 곧바로 다음 것을 본다 (아래 GUARD 만큼만 숨 고른다).
@@ -178,9 +199,18 @@ def mark_request(req_id: str, flag: str, batch: str | None = None) -> None:
                    encoding="utf-8", errors="replace")
 
 
+def mark_order(order_id: str, status: str, note: str | None = None) -> None:
+    args = [sys.executable, str(ROOT / "scripts" / "music-order.py"), "--id", order_id,
+            "--status", status]
+    if note:
+        args += ["--note", note]
+    subprocess.run(args, cwd=ROOT, capture_output=True, text=True,
+                   encoding="utf-8", errors="replace")
+
+
 # ── 할 일 수집 ────────────────────────────────────────────────────────────
-def collect_jobs(env: dict, state: dict) -> list[dict]:
-    """큐를 훑어 (대상 에이전트, 작업) 목록을 만든다. 실행은 하지 않는다."""
+def _character_jobs(env: dict, state: dict) -> list[dict]:
+    """컨셉 요청 · 심사 결정 · 게임 반영 · 능력 제안 → builder / integrator."""
     jobs: list[dict] = []
 
     # 1) 컨셉 요청
@@ -319,6 +349,80 @@ def collect_jobs(env: dict, state: dict) -> list[dict]:
     return jobs
 
 
+def _music_jobs(env: dict, state: dict) -> list[dict]:
+    """곡 주문 · 채택 → composer."""
+    jobs: list[dict] = []
+
+    # 5) 곡 주문 — 게임에 이미 있는 캐릭터에 테마곡을 붙인다
+    #    Suno 는 공개 API 가 없어 브라우저로 몰기 때문에, 여기서 세션 상태를 미리
+    #    확인할 방법이 없다. 로그인이 풀렸는지는 composer 가 현장에서 판단하고
+    #    주문을 pending 으로 되돌린다 (아래 지시문 참고).
+    #    채택 뒤에 할 일은 없다 — 음원을 안 받으므로 사람이 Suno 에서 가져간다.
+    try:
+        orders = api(env, "music=1").get("orders", [])
+    except Exception as e:
+        log(f"곡 주문 조회 실패: {e}")
+        orders = []
+
+    for o in reversed(orders):  # 오래된 것부터
+        if o.get("status") != "pending":
+            continue
+        want = (o.get("note") or "").strip()
+        mood = f"요청: {want}" if want else (
+            "분위기 지정 없음 — **일러스트를 직접 보고** 잡아라.")
+        again = ""
+        d = o.get("decision") or {}
+        if d.get("type") == "revise":
+            again = f"이건 재작업이다. 지난 판정 피드백: {d.get('note') or '(없음)'}"
+
+        jobs.append({
+            "agent": COMPOSER,
+            "kind": "music",
+            "id": o["id"],
+            "needs_comfy": False,
+            "pre": lambda oid=o["id"]: mark_order(oid, "picked"),
+            "text": "\n".join(x for x in [
+                "심사실에 곡 주문이 들어왔다. /create-music 스킬을 따라 처리해라.",
+                f"주문 id: {o['id']}",
+                f"캐릭터: {o.get('name')} (`{o.get('character')}`) — 이미 게임에 등록된 캐릭터다.",
+                mood,
+                again,
+                "",
+                "1. `src/utils/character.ts` 에서 이 캐릭터의 `illustPath` 를 찾아 "
+                "**그 이미지를 직접 열어 보고**, `src/config/abilityParams.ts` 의 설명과 "
+                "등급까지 읽어 곡의 분위기를 잡아라.",
+                "2. 가사와 Suno 스타일을 `creative/_music/<캐릭터id>/` 에 쓴다.",
+                "3. `python scripts/suno-submit.py` 로 곡을 뽑는다. "
+                "**Suno 로그인이 풀려 있으면 거기서 멈춰라** — "
+                f"`python scripts/music-order.py --id {o['id']} --status pending` 으로 되돌리고 "
+                "PushNotification 으로 알린 뒤 끝낸다.",
+                "4. **음원은 내려받지 않는다.** 곡마다 공유 링크를 복사해 올린다: "
+                f"`python scripts/music-order.py --id {o['id']} --title \"<제목>\" "
+                "--links <링크1> <링크2> --labels \"<한 줄>\" \"<한 줄>\"`",
+                "5. PushNotification 으로 심사 대기를 알린다. "
+                "**사람이 Suno 에서 직접 듣고 고른다. 여기서 끝이다.**",
+            ] if x is not None),
+        })
+
+    return jobs
+
+
+def collect_jobs(env: dict, state: dict, queues: str = "all") -> list[dict]:
+    """큐를 훑어 (대상 에이전트, 작업) 목록을 만든다. 실행은 하지 않는다.
+
+    `queues` 로 담당 라인을 나눌 수 있다. tick() 은 보낸 작업이 **전부 끝날 때까지**
+    기다리므로, 한 프로세스가 두 라인을 다 맡으면 캐릭터 생성 10분 동안 곡 주문이
+    큐에 그대로 앉아 있게 된다. 라인을 나눠 각자 돌리면 서로를 기다리지 않는다.
+    (상태 파일도 같이 갈라진다 — main() 참고. 안 그러면 서로의 표시를 덮어쓴다.)
+    """
+    jobs: list[dict] = []
+    if queues in ("all", "music"):
+        jobs += _music_jobs(env, state)
+    if queues in ("all", "character"):
+        jobs += _character_jobs(env, state)
+    return jobs
+
+
 # ── 로컬 정리 (판단 없음 → 에이전트를 거치지 않는다) ────────────────────────
 def cleanup_local(env: dict, state: dict) -> None:
     """심사실에서 삭제된 배치의 로컬 원본을 치운다.
@@ -353,13 +457,13 @@ def cleanup_local(env: dict, state: dict) -> None:
 
 
 # ── 한 주기 ───────────────────────────────────────────────────────────────
-def tick(env: dict, clean: bool = True) -> tuple[int, int]:
+def tick(env: dict, clean: bool = True, queues: str = "all") -> tuple[int, int]:
     """(보낸 작업 수, 못 보내고 남은 작업 수) 를 반환한다."""
     state = load_state()
-    if clean:
+    if clean and queues != "music":
         cleanup_local(env, state)
 
-    jobs = collect_jobs(env, state)
+    jobs = collect_jobs(env, state, queues)
     if not jobs:
         log("새 작업 없음")
         return 0, 0
@@ -409,10 +513,20 @@ def main() -> int:
                    help="고정 주기(초). 생략하면 자동 (처리 직후 즉시 · 유휴 120)")
     p.add_argument("--once", action="store_true", help="한 번만 확인하고 종료")
     p.add_argument("--no-clean", action="store_true", help="로컬 원본 정리 끄기")
+    p.add_argument("--queues", choices=["all", "character", "music"], default="all",
+                   help="맡을 라인. character=컨셉·심사·반영 / music=곡 주문 "
+                        "(둘로 나눠 돌리면 서로를 기다리지 않는다)")
     a = p.parse_args()
 
+    # 큐를 나눠 돌 때는 처리 표시도 나눠 쓴다
+    global STATE_FILE
+    STATE_FILE = STATE_FILES[a.queues]
+
     env = load_env()
-    log(f"워커 시작 · 생성={BUILDER} 구현={INTEGRATOR} · "
+    who = {"all": f"생성={BUILDER} 구현={INTEGRATOR} 음악={COMPOSER}",
+           "character": f"생성={BUILDER} 구현={INTEGRATOR}",
+           "music": f"음악={COMPOSER}"}[a.queues]
+    log(f"워커 시작 [{a.queues}] · {who} · "
         f"주기 {a.interval or f'즉시/{INTERVAL_STUCK}/{INTERVAL_IDLE}'}초")
     if os.environ.get("HERDR_ENV") != "1":
         log("경고: Herdr 세션 밖입니다. 에이전트 전달이 실패할 수 있습니다")
@@ -420,7 +534,7 @@ def main() -> int:
     while True:
         sent = left = 0
         try:
-            sent, left = tick(env, clean=not a.no_clean)
+            sent, left = tick(env, clean=not a.no_clean, queues=a.queues)
         except KeyboardInterrupt:
             log("종료")
             return 0
