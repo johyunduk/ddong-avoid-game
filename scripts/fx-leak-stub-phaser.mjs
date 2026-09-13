@@ -133,7 +133,17 @@ class Sprite extends GameObj {
     }
     // 지금 프레임 — Phaser 와 같이 **1부터** 센다
     this.anims.currentFrame = { index: 1 + ((cfg.startFrame ?? 0) % (anim || 1)) };
-    this.scene?.__clock.add(200, () => this.emit(ANIM_COMPLETE), 'anims');
+
+    // **완료는 등록된 길이대로 온다.** 예전에는 fps·repeat 과 무관하게 200ms 뒤
+    // 무조건 ANIMATION_COMPLETE 를 쐈다 — 무한 반복(repeat -1)도 '끝났다'고 알려서,
+    // 완료에 회수를 걸어 둔 코드가 스텁에서만 정상으로 보였다
+    const def = this.scene?.anims?.__defs?.get(cfg.key);
+    const repeat = cfg.repeat ?? def?.repeat ?? 0;
+    if (repeat < 0) return this;                     // 무한 반복은 완료가 없다
+    const ms = def && def.fps > 0
+      ? (def.frames / def.fps) * 1000 * (repeat + 1)
+      : 200;
+    this.scene?.__clock.add(ms, () => this.emit(ANIM_COMPLETE), 'anims');
     return this;
   }
   destroy() {
@@ -325,10 +335,16 @@ export function createFakeScene() {
     __keys: new Set(),
     // 애니메이션별 프레임 수 — play({startFrame}) 범위 검사에 쓴다
     __frames: new Map(),
+    // 등록 정보(프레임 수·fps·repeat) — play() 가 **실제 길이**로 완료를 흉내 낸다
+    __defs: new Map(),
     exists: k => scene.anims.__keys.has(k),
     create: cfg => {
       scene.anims.__keys.add(cfg.key);
-      scene.anims.__frames.set(cfg.key, (cfg.frames ?? []).length);
+      const n = (cfg.frames ?? []).length;
+      scene.anims.__frames.set(cfg.key, n);
+      scene.anims.__defs.set(cfg.key, {
+        frames: n, fps: cfg.frameRate ?? 24, repeat: cfg.repeat ?? 0,
+      });
     },
     // 레드는 시트 한 장에서 구간(걷기/포효 …)을 잘라 애니메이션을 직접 등록한다
     generateFrameNumbers: (key, { start = 0, end = 0 } = {}) =>
@@ -348,13 +364,14 @@ export function createFakeScene() {
     addCanvas: k => { textureKeys.add(k); return new FakeCanvasTexture(k); },
     __addAsset: k => textureKeys.add(k),
   };
+  const liveTweens = new Set();
   scene.tweens = {
     timeScale: 1,
     add: cfg => {
       const tween = {
         progress: 0, removed: false,
-        remove() { this.removed = true; },
-        stop() { this.removed = true; },   // 반복 트윈은 stop() 으로 멈춘다
+        remove() { this.removed = true; liveTweens.delete(this); },
+        stop() { this.removed = true; liveTweens.delete(this); },  // 반복 트윈은 stop() 으로 멈춘다
       };
       const targets = Array.isArray(cfg.targets) ? cfg.targets : [cfg.targets];
       const from = targets.map(t => ({ x: t?.x ?? 0, y: t?.y ?? 0 }));
@@ -374,14 +391,33 @@ export function createFakeScene() {
           if (typeof cfg.y === 'number') t.y = from[i].y + (cfg.y - from[i].y) * p;
         });
         cfg.onUpdate?.(tween);
-        if (p >= 1) { cfg.onComplete?.(); return; }
+        if (p >= 1) { liveTweens.delete(tween); cfg.onComplete?.(); return; }
         scene.__clock.add(TICK, tick, 'tweens');
       };
 
+      tween.__targets = targets;
+      liveTweens.add(tween);
       scene.__clock.add(cfg.delay ?? 0, () => { if (!tween.removed) tick(); }, 'tweens');
       return tween;
     },
-    killTweensOf: () => {},
+    /**
+     * **실제 Phaser 는 취소하면서 `onComplete` 를 부르지 않는다.**
+     *
+     * 예전 스텁은 no-op 이라 죽인 트윈이 계속 돌며 완료 콜백까지 실행했다.
+     * 그래서 "보험 타이머가 트윈보다 먼저 오브젝트를 파괴 → 트윈 취소 →
+     * `onComplete` 의 회수가 영영 안 불림" 이라는 누수가 **하네스에서 안 잡혔다**
+     * (레드 포효 링, Codex 가 실기로 잡아냈다).
+     */
+    killTweensOf: targets => {
+      const list = Array.isArray(targets) ? targets : [targets];
+      for (const tw of liveTweens) {
+        if (tw.removed) { liveTweens.delete(tw); continue; }
+        if (tw.__targets?.some(t => list.includes(t))) {
+          tw.removed = true;                          // tick 도 onComplete 도 더는 없다
+          liveTweens.delete(tw);
+        }
+      }
+    },
   };
   const spawn = (x, y, key, frame) => {
     const o = new Sprite(scene);

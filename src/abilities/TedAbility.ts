@@ -290,10 +290,17 @@ export class TedAbility extends BaseAbility {
     const now = api.scene.time.now;
     const t = now - this.cubeT0;
 
+    // **흡수가 큐보다 먼저다.** 큐를 먼저 돌리면, 프레임이 한 번 건너뛰어
+    // 490ms → 600ms 로 점프했을 때 590ms 예약(발산)이 **아직 비어 있는 spreadReady**
+    // 를 발사한다. 그 뒤에야 흡수가 끝나 말이 채워지고, 다시 발사되지 않는다 —
+    // 말 10개가 중앙에 박힌 채 마무리가 영구히 막힌다 (Codex 재현:
+    // `stage="blast", ready=10, spreading=0` 이 3초 뒤에도 동일).
+    // 흡수를 먼저 돌리면 같은 프레임에서 말이 먼저 도착해 있다
+    if (this.sucking.length > 0) this.stepSuck(api, t);
+
     while (this.cues.length > 0 && t >= this.cues[0].at) {
       this.cues.shift()!.fn(api);
     }
-    if (this.sucking.length > 0) this.stepSuck(api, t);
     if (this.shards.length > 0) this.stepShards(api, t);
     if (this.spreading.length > 0) this.stepSpread(api, now);
 
@@ -304,7 +311,11 @@ export class TedAbility extends BaseAbility {
 
   override onScoreMilestone(score: number, api: GameSceneAPI): void {
     if (score % TED_PARAMS.chessInterval !== 0) return;
-    if (score <= this.lastChessScore) return;   // 큰 보너스로 점수가 한 번에 뛰어도 1회만
+    // **자기 보너스로 들어온 마일스톤은 삼킨다.** 기준선(lastChessScore)만으로는
+    // 보너스가 다음 배수를 넘길 때 못 막는다 (Codex 재현: `last=60`·점수 100·+20 →
+    // 120 에서 추가 낙하)
+    if (this.awarding) return;
+    if (score <= this.lastChessScore) return;
     this.lastChessScore = score;
     this.dropPiece(api);
   }
@@ -530,12 +541,9 @@ export class TedAbility extends BaseAbility {
     // 타격 이펙트는 recycle() 안에서 이미 나간다 — 여기서 또 깔면 상한만 잡아먹는다
     for (const p of targets) (p as unknown as PoolablePoopBase).recycle();
 
-    const bonus = targets.length * TED_PARAMS.chessPoopPoints;
-    // **점수는 그대로 주되, 그 점수로는 다시 발동하지 않는다.**
-    // addAbilityBonus 는 GameScene 안에서 점수를 1점씩 순회하며 마일스톤을 호출하므로
-    // 먼저 올려 두지 않으면 이 줄이 곧바로 다음 낙하를 부른다 (재진입 폭주).
-    this.lastChessScore += bonus;
-    api.addAbilityBonus(bonus);
+    // **점수는 그대로 주되, 그 점수로는 다시 발동하지 않는다** —
+    // awardBonus 가 주는 동안 빗장을 걸어 마일스톤을 삼킨다
+    this.awardBonus(api, targets.length * TED_PARAMS.chessPoopPoints);
   }
 
   /** 지나간 자리에 남는 말 낱장 — 알파를 빼며 지운다 */
@@ -920,13 +928,10 @@ export class TedAbility extends BaseAbility {
     // **화면의 일반 똥을 전부 걷어낸다.** 파동이 지나간 자리가 비는 것이 연출이다
     this.clearNormalPoops(api);
 
-    // 파열 정액 보너스. **가드가 먼저다** — `addAbilityBonus` 는 GameScene 안에서
+    // 파열 정액 보너스. **빗장이 먼저다** — `addAbilityBonus` 는 GameScene 안에서
     // 점수를 1씩 올리며 마일스톤을 호출하므로, 그냥 주면 낙하 간격(40점) 때문에
-    // 그 자리에서 말이 2~3개 즉시 떨어지고 그 말이 또 똥을 깨는 연쇄가 생긴다.
-    // `lastChessScore` 를 먼저 올려 두면 그 구간의 마일스톤이 전부 무시된다
-    // (smashPoops 와 같은 구조).
-    this.lastChessScore += TED_PARAMS.cubeBurstPoints;
-    api.addAbilityBonus(TED_PARAMS.cubeBurstPoints);
+    // 그 자리에서 말이 2~3개 즉시 떨어지고 그 말이 또 똥을 깨는 연쇄가 생긴다
+    this.awardBonus(api, TED_PARAMS.cubeBurstPoints);
 
     // 부드러운 레이어는 판본이 정한다. 픽셀 판본에서는 방사 광선·별빛이 시트 안에
     // 각진 형태로 이미 그려져 있어서, 여기에 그라데이션 파티클을 더하면 화풍만 깨진다
@@ -1007,6 +1012,18 @@ export class TedAbility extends BaseAbility {
     const { scene } = api;
     if (!scene.scene || !scene.scene.isActive()) { this.cubeStage = null; return; }
 
+    const t = scene.time.now - this.cubeT0;
+    // **빈 채로 발사하지 않는다.** 순서를 고쳐도 프레임이 크게 건너뛰면 흡수가
+    // 아직 남아 있을 수 있다. 그때는 발사를 다음 프레임으로 미룬다 —
+    // 한 번 비워서 쏘면 말이 중앙에 영원히 남는다
+    if (this.spreadReady.length === 0 && this.sucking.length > 0) {
+      // **반드시 미래 시각으로** 다시 건다. `at: t` 로 넣으면 지금 돌고 있는
+      // 큐 배수 루프(`t >= cues[0].at`)가 곧바로 다시 집어 무한 루프가 된다
+      this.cues.push({ at: t + 16, fn: (a: GameSceneAPI) => this.startSpread(a) });
+      this.cues.sort((x, y) => x.at - y.at);
+      return;
+    }
+
     this.cubeStage = 'blast';
     this.spreadT0 = scene.time.now;
     const c = cubeCenter(scene);
@@ -1023,17 +1040,18 @@ export class TedAbility extends BaseAbility {
     // 앞서므로 앞지르는 장면 자체가 화면에 없다. 파동을 화면 밖까지 키우면 보이지도
     // 않는 곳을 덧그리는 오버드로만 늘어난다
     if (CUBE_SHEETS.wave) {
-      const at = TED_PARAMS.chessSuckMs + TED_PARAMS.spreadHoldMs;
+      // **실제로 터진 시각 기준**이다. 예약 시각으로 잡으면 발사가 밀렸을 때
+      // 파동이 이미 지난 시각에 걸려 한 프레임에 다 쏟아진다
+      const at = t;
       for (const v of WAVE_VOLLEY) {
         this.cues.push({ at: at + v.delay, fn: (a: GameSceneAPI) => this.waveLayer(a, v) });
       }
       this.cues.sort((x, y) => x.at - y.at);
     }
 
-    // 발동 정액 보너스. **가드가 먼저다** — addAbilityBonus 는 점수를 1씩 올리며
+    // 발동 정액 보너스. **빗장이 먼저다** — addAbilityBonus 는 점수를 1씩 올리며
     // 마일스톤을 호출하므로 그냥 주면 그 자리에서 다음 낙하가 연쇄로 걸린다
-    this.lastChessScore += TED_PARAMS.cubeBurstPoints;
-    api.addAbilityBonus(TED_PARAMS.cubeBurstPoints);
+    this.awardBonus(api, TED_PARAMS.cubeBurstPoints);
 
     const n = Math.max(1, this.spreadReady.length);
     // 화면 모서리까지 + 말 하나. 어느 방향으로 가도 화면 밖으로 나간다

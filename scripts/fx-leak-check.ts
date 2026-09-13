@@ -14,7 +14,7 @@ import { KnightAbility } from '../src/abilities/KnightAbility';
 import { KAbility } from '../src/abilities/KAbility';
 import { LegacyAbility } from '../src/abilities/LegacyAbility';
 import { TedAbility, HEAD_ORIGIN_Y } from '../src/abilities/TedAbility';
-import { RedAbility } from '../src/abilities/RedAbility';
+import { RedAbility, ROAR_RING_LIFE_MS } from '../src/abilities/RedAbility';
 import { HeidiAbility } from '../src/abilities/HeidiAbility';
 import { LEGACY_PARAMS, K_PARAMS, TED_PARAMS, RED_PARAMS, RED_SHEETS, HEIDI_PARAMS, HEIDI_SHEETS } from '../src/config/abilityParams';
 import { beam, fxSprite, getFxStats, preloadFxAssets, preloadFxSheet, playFx, getFxCounters, resetFxCounters, fxPickSheetKey, CUBE_VARIANT, FX_PARTICLE_ASSETS, FX_ASSET_DIR } from '../src/utils/vfx';
@@ -41,10 +41,26 @@ function fmt(label, s) {
     + `| liveObjects=${s.liveSprites + s.liveEmitters}`;
 }
 
+/**
+ * 기준선 복귀 — **스냅샷의 모든 항목**이 0 이어야 한다.
+ *
+ * 항목을 하나하나 나열하면 새 항목이 늘 때 조용히 빠진다 (`liveLayers` 가 실제로
+ * 빠져 있었다). 스냅샷을 통째로 훑는다.
+ */
+/**
+ * 기준선 복귀 — **스냅샷의 모든 수치**가 0 이어야 한다. 단 하나만 뺀다.
+ *
+ * 항목을 손으로 나열하면 새 항목이 늘 때 조용히 빠진다 (`liveLayers` 가 실제로
+ * 빠져 있었다). 그래서 통째로 훑되, 예외는 **이유를 적어 둔다.**
+ *
+ * `liveLayers` — 블룸 레이어는 씬당 하나를 만들어 재사용하고 shutdown 에서 내린다.
+ * 이펙트가 끝나도 살아 있는 것이 정상이고, 새는지는 `bloomChildren` 이 말한다.
+ */
+const NOT_A_LEAK = new Set(['liveLayers']);
+
 function isZero(s) {
-  return s.sprites === 0 && s.emitters === 0 && s.timeouts === 0 && s.activeSlots === 0
-    && s.bloomRefs === 0 && s.bloomChildren === 0
-    && s.liveSprites === 0 && s.liveEmitters === 0;
+  return Object.entries(s)
+    .every(([k, v]) => typeof v !== 'number' || NOT_A_LEAK.has(k) || v === 0);
 }
 
 /** 매초 일어나는 공통 연출 — 똥 파괴 n발 (아이템 획득 팝은 제거됨) */
@@ -1413,6 +1429,332 @@ async function main() {
   console.log(fmt('[H1] 하이디 정리 후', hSettled));
   hScene.__clock.stop();
 
+  // ── Codex 재현 조건 회귀 ────────────────────────────────────────────────
+  //
+  // w4 가 **메모리에서 실제로 실행해** 잡아낸 결함들이다. 하네스가 못 잡았던 것이라
+  // 그 조건을 그대로 못박는다. "고쳤다"가 아니라 **"그 조건에서 안 터진다"** 를 본다.
+  console.log('');
+  console.log('Codex 재현 조건');
+
+  // (C1) 레드 — 보너스가 다음 배수를 넘길 때 추가 발사.
+  //      last=50 · 점수 90 · +25 → 100 도달. 기준선만 올려서는 100 > 75 라 통과했다
+  const cScene = createFakeScene();
+  preloadFxAssets(cScene);
+  for (const f of RED_SHEETS) cScene.textures.__addAsset(fxPickSheetKey(f));
+  const cPlayer = { x: 180, y: 560, active: true, displayWidth: 47, displayHeight: 80 };
+  let cScore = 90;
+  let cLaunches = 0;
+  const cRed = new RedAbility(0);
+  const cRedApi: any = {
+    scene: cScene, player: cPlayer,
+    poops: { getChildren: () => [] },
+    goldPoops: { getChildren: () => [] }, diamondPoops: { getChildren: () => [] },
+    topazPoops: { getChildren: () => [] }, rainbowPoops: { getChildren: () => [] },
+    collectGoldPoop() {}, collectDiamondPoop() {}, collectTopazPoop() {}, collectRainbowPoop() {},
+    spawnGoldPoop() {},
+    addAbilityBonus(n: number) {
+      const to = cScore + n;
+      for (let sc = cScore + 1; sc <= to; sc++) {
+        cScore = sc;
+        const before = (cRed as any).shots.length;
+        cRed.onScoreMilestone(sc, cRedApi);
+        if ((cRed as any).shots.length > before) cLaunches++;
+      }
+      cScore = to;
+    },
+  };
+  cRed.onCreate(cRedApi);
+  await sleep(60);
+  (cRed as any).lastLaunchScore = 50;
+  (cRed as any).award(cRedApi, RED_PARAMS.sparrowPoints);   // 실제 보너스 경로
+  const redReentry = cLaunches;
+  console.log(`  [C1] 레드 last=50 · 점수 90 · +${RED_PARAMS.sparrowPoints} → 점수 ${cScore} · `
+    + `보너스 중 발사 ${redReentry}회 (0 이어야 한다)`);
+
+  // (C2) 레드 포효 링 — 보험 타이머(lifeMs)가 트윈보다 먼저 오면 onComplete 가 안 불려
+  //      파괴된 참조가 tracked 에 남는다. 스텁의 killTweensOf 가 no-op 이라 안 잡혔다
+  (cRed as any).roar(cRedApi, cPlayer.x, cPlayer.y);
+  await sleep(750);
+  const ringZombies = [...(cRed as any).tracked].filter((o: any) => !o.scene).length;
+  console.log(`  [C2] 포효 750ms 뒤 tracked 안의 파괴된 참조 ${ringZombies}개 (0 이어야 한다) · `
+    + `링 보험 ${RED_PARAMS.trexRingDelayMs + RED_PARAMS.trexRingMs + 120}ms vs `
+    + `트윈 ${RED_PARAMS.trexRingDelayMs + RED_PARAMS.trexRingMs}ms`);
+  cRed.onDestroy(cRedApi);
+  cScene.__clock.stop();
+
+  // (C3) 테드 — 보너스가 다음 배수를 넘길 때 추가 낙하. last=60 · 점수 100 · +20 → 120
+  const cTedScene = createFakeScene();
+  preloadFxAssets(cTedScene);
+  cTedScene.textures.__addAsset('fxpick_chess');
+  const cTed = new TedAbility(0);
+  let tScore = 100;
+  let tDrops = 0;
+  const cTedApi: any = {
+    scene: cTedScene, player: { x: 180, y: 520, scaleX: 1, scaleY: 1 },
+    poops: { getChildren: () => [] },
+    addAbilityBonus(n: number) {
+      const to = tScore + n;
+      for (let sc = tScore + 1; sc <= to; sc++) {
+        tScore = sc;
+        const before = (cTed as any).flying;
+        cTed.onScoreMilestone(sc, cTedApi);
+        if ((cTed as any).flying > before) tDrops++;
+      }
+      tScore = to;
+    },
+  };
+  (cTed as any).lastChessScore = 60;
+  (cTed as any).awardBonus(cTedApi, TED_PARAMS.chessPoopPoints);  // 실제 보너스 경로
+  const tedReentry = tDrops;
+  console.log(`  [C3] 테드 last=60 · 점수 100 · +${TED_PARAMS.chessPoopPoints} → 점수 ${tScore} · `
+    + `보너스 중 낙하 ${tedReentry}개 (0 이어야 한다)`);
+
+  // (C4) 테드 마무리 — 흡수 중 **프레임이 한 번 건너뛰면** 발산 예약이 빈 spreadReady 를
+  //      쏘고 영구 정지했다 (stage="blast", ready=10, spreading=0 이 3초 뒤에도 동일).
+  //      cubeT0 를 옮겨 490ms → 600ms 점프를 그대로 만든다
+  (cTed as any).landed = Array.from({ length: TED_PARAMS.chessStackMax }, (_, i) => {
+    const q = cTedScene.add.image(40 + i * 30, 560, 'fxpick_chess', 0);
+    q.displayWidth = 54; q.displayHeight = 72;
+    return q;
+  });
+  (cTed as any).clearBoard(cTedApi);
+  // **흡수가 끝나기 직전**이어야 한다. 정확히 chessSuckMs 로 잡으면 그 프레임에서
+  // 이미 u=1 이라 말이 다 채워지고, 건너뛰기가 재현되지 않는다 (Codex 는 490ms 를 썼다)
+  const skipFrom = TED_PARAMS.chessSuckMs - 10;
+  const skipTo = TED_PARAMS.chessSuckMs + TED_PARAMS.spreadHoldMs + 10;
+  (cTed as any).cubeT0 = Date.now() - skipFrom;
+  cTed.onUpdate(cTedApi);
+  (cTed as any).cubeT0 = Date.now() - skipTo;                    // **예약 시각을 건너뛴다**
+  cTed.onUpdate(cTedApi);
+  // 퍼짐은 금방 끝나 배열이 다시 빈다 — **최대치**를 봐야 "쏘기는 했다"를 알 수 있다
+  let spreadOut = 0;
+  for (let i = 0; i < 40; i++) {
+    cTed.onUpdate(cTedApi);
+    spreadOut = Math.max(spreadOut, (cTed as any).spreading.length);
+    await sleep(16);
+  }
+  const stuckReady = (cTed as any).spreadReady.length;
+  console.log(`  [C4] 흡수 중 ${skipFrom}ms → ${skipTo}ms 프레임 건너뜀 · `
+    + `중앙에 남은 말 ${stuckReady}개 (0 이어야 한다) · 퍼진 말 최대 ${spreadOut}개`);
+  cTed.onDestroy(cTedApi);
+  cTedScene.__clock.stop();
+
+  // (C5) 레드 참새 — **프레임이 밀리면 똥을 뚫고 지나가지 않는가.**
+  //      Codex 가 "충돌을 직접 거리로 재는 것 자체는 문제가 아니다" 로 철회하면서
+  //      이동 중 누락만 별도 검증 대상으로 남겼다. 620px/s 에 판정 지름이 44px 이라
+  //      한 프레임이 71ms 를 넘으면 지금 좌표만 보는 판정으로는 통과해 버린다
+  const tScene2 = createFakeScene();
+  preloadFxAssets(tScene2);
+  for (const f of RED_SHEETS) tScene2.textures.__addAsset(fxPickSheetKey(f));
+  const SLOW_MS = 100;                                   // 10fps 로 밀린 프레임
+  tScene2.game.loop.delta = SLOW_MS;
+  const tPlayer2 = { x: 180, y: 560, active: true, displayWidth: 47, displayHeight: 80 };
+  const step = RED_PARAMS.sparrowSpeed * (SLOW_MS / 1000);
+  // 참새가 **두 프레임 사이 한가운데**를 지나게 똥을 놓는다 — 뚫린다면 여기서 뚫린다
+  const tunnelPoops = [{
+    x: tPlayer2.x, y: tPlayer2.y - step * 1.5, active: true,
+    recycle() { this.active = false; },
+  }];
+  const tRed2 = new RedAbility(0);
+  let t2Score = 0;
+  const tApi2: any = {
+    scene: tScene2, player: tPlayer2,
+    poops: { getChildren: () => tunnelPoops },
+    goldPoops: { getChildren: () => [] }, diamondPoops: { getChildren: () => [] },
+    topazPoops: { getChildren: () => [] }, rainbowPoops: { getChildren: () => [] },
+    collectGoldPoop() {}, collectDiamondPoop() {}, collectTopazPoop() {}, collectRainbowPoop() {},
+    spawnGoldPoop() {},
+    addAbilityBonus(n: number) { t2Score += n; },
+  };
+  tRed2.onCreate(tApi2);
+  await sleep(60);
+  tRed2.onScoreMilestone(RED_PARAMS.sparrowInterval, tApi2);
+  for (let i = 0; i < 12; i++) { tRed2.onUpdate(tApi2); await sleep(4); }
+  const tunnelled = tunnelPoops[0].active;
+  console.log(`  [C5] 프레임 ${SLOW_MS}ms(한 프레임 ${step.toFixed(0)}px, 판정 지름 `
+    + `${RED_PARAMS.sparrowHitR * 2}px) · 경로 위 똥 ${tunnelled ? '뚫고 지나감' : '맞음'}`);
+  tRed2.onDestroy(tApi2);
+  tScene2.__clock.stop();
+
+  // ── 레드 밸런스: 참새가 경로의 똥을 전부 부순다 ───────────────────────────
+  //
+  // 사람 판정 "레드가 점수내기 어렵다". 원인은 **한 번 발사의 성과가 0 아니면 1개**
+  // 였다는 것이다 (첫 히트에서 참새가 소모됐다). 지금은 경로 전체를 쓴다.
+  //
+  // 같은 똥 배치 위에서 **옛 규칙과 새 규칙을 나란히** 잰다 —
+  // 옛 규칙: 반경 22 · 첫 하나만 · 25점 / 새 규칙: 반경 30 · 전부 · 30점
+  const OLD_R = 22;
+  const OLD_POINTS = 25;
+  const bScene = createFakeScene();
+  preloadFxAssets(bScene);
+  for (const f of RED_SHEETS) bScene.textures.__addAsset(fxPickSheetKey(f));
+  bScene.game.loop.delta = 100;              // 한 프레임 62px — 선분 판정이라 결과는 같다
+  const BW = bScene.scale.width;
+  const BH = bScene.scale.height;
+  const bPlayer = { x: BW / 2, y: 560, active: true, displayWidth: 47, displayHeight: 80 };
+  const TRIALS = 400;               // 60 으로는 판마다 ±20% 씩 흔들려 전후 비교가 안 됐다
+
+  /** 똥 N개를 화면에 무작위로 흩는다. 참새는 플레이어 x 에서 위로 곧장 난다 */
+  const scatter = (n: number) => Array.from({ length: n }, () => ({
+    x: 20 + Math.random() * (BW - 40),
+    y: 40 + Math.random() * (bPlayer.y - 80),
+    active: true,
+    recycle() { this.active = false; },
+  }));
+
+  const densities = [6, 10, 14];
+  const balance: { n: number; now: number; old: number; maxOne: number;
+                   killsNow: number[]; killsOld: number[] }[] = [];
+  let guardLaunches = 0;                     // 커진 보너스가 추가 발사를 부르는가
+  let massRecycleMax = 0;                    // 한 프레임에 회수된 똥 최대 개수
+  let massFrameMax = 0;                      // 그 프레임의 비용(ms)
+
+  for (const n of densities) {
+    let sumNow = 0;
+    let sumOld = 0;
+    let maxOne = 0;
+    const killsNow: number[] = [];
+    const killsOld: number[] = [];
+    for (let trial = 0; trial < TRIALS; trial++) {
+      const field = scatter(n);
+      // 옛 규칙의 성과 — **같은 배치**에서 세로선 위 반경 22 안에 하나라도 있으면 1개
+      const oldKill = field.some(q => Math.abs(q.x - bPlayer.x) <= OLD_R) ? 1 : 0;
+      sumOld += oldKill;
+      killsOld.push(oldKill);
+
+      const ab = new RedAbility(0);
+      let bScore = 0;
+      let framePeak = 0;
+      const bApi: any = {
+        scene: bScene, player: bPlayer,
+        poops: { getChildren: () => field },
+        goldPoops: { getChildren: () => [] }, diamondPoops: { getChildren: () => [] },
+        topazPoops: { getChildren: () => [] }, rainbowPoops: { getChildren: () => [] },
+        collectGoldPoop() {}, collectDiamondPoop() {}, collectTopazPoop() {},
+        collectRainbowPoop() {}, spawnGoldPoop() {},
+        addAbilityBonus(m: number) {
+          const to = bScore + m;
+          for (let sc = bScore + 1; sc <= to; sc++) {
+            bScore = sc;
+            const before = (ab as any).shots.length;
+            ab.onScoreMilestone(sc, bApi);
+            if ((ab as any).shots.length > before) guardLaunches++;
+          }
+          bScore = to;
+        },
+      };
+      ab.onCreate(bApi);
+      (ab as any).lastLaunchScore = RED_PARAMS.sparrowInterval - 1;
+      bScore = RED_PARAMS.sparrowInterval;
+      ab.onScoreMilestone(RED_PARAMS.sparrowInterval, bApi);   // 한 마리 발사
+      // 참새가 화면 위로 빠져나갈 때까지. 한 프레임에 몇 개를 회수하는지도 같이 잰다
+      for (let i = 0; i < 20 && (ab as any).shots.length > 0; i++) {
+        const aliveBefore = field.filter(q => q.active).length;
+        const t0 = nowMs();
+        ab.onUpdate(bApi);
+        const cost = nowMs() - t0;
+        const killed = aliveBefore - field.filter(q => q.active).length;
+        if (killed > massRecycleMax) { massRecycleMax = killed; massFrameMax = cost; }
+        else if (killed === massRecycleMax) massFrameMax = Math.max(massFrameMax, cost);
+        framePeak = Math.max(framePeak, cost);
+      }
+      const killedTotal = field.filter(q => !q.active).length;
+      sumNow += killedTotal;
+      killsNow.push(killedTotal);
+      maxOne = Math.max(maxOne, killedTotal);
+      ab.onDestroy(bApi);
+      void framePeak;
+    }
+    balance.push({ n, now: sumNow / TRIALS, old: sumOld / TRIALS, maxOne, killsNow, killsOld });
+  }
+  bScene.__clock.stop();
+
+  console.log('');
+  console.log(`레드 밸런스 — 발사 한 번의 성과 (똥 배치 무작위, 판마다 ${TRIALS}회)`);
+  console.log('  화면 똥 | 옛 규칙(r22·첫하나·25점)  | 지금(r30·전부·30점)      | 한 마리 최대');
+  for (const b of balance) {
+    const oldPt = b.old * OLD_POINTS;
+    const nowPt = b.now * RED_PARAMS.sparrowPoints;
+    console.log(`  ${String(b.n).padStart(6)}개 | ${b.old.toFixed(2)}개 ${oldPt.toFixed(1)}점`
+      + `        | ${b.now.toFixed(2)}개 ${nowPt.toFixed(1)}점`
+      + `      | ${b.maxOne}개 (${b.maxOne * RED_PARAMS.sparrowPoints}점)`);
+  }
+  const mid = balance[1];
+  const gain = mid.old > 0
+    ? (mid.now * RED_PARAMS.sparrowPoints) / (mid.old * OLD_POINTS) : Infinity;
+  const bonusMid = mid.now * RED_PARAMS.sparrowPoints;
+  const oldBonusMid = mid.old * OLD_POINTS;
+  console.log(`  똥 ${mid.n}개 기준 발사당 기대 점수 ${oldBonusMid.toFixed(1)} → `
+    + `${bonusMid.toFixed(1)}점 (${gain.toFixed(2)}배)`);
+
+  /**
+   * 마무리가 얼마나 빨리 오는가 — **자연 점수**로 잰다.
+   *
+   * 보너스로 들어온 마일스톤은 빗장이 삼키므로 발사를 직접 부르지는 않는다.
+   * 대신 **점수를 배수 너머로 밀어 올려** 다음 배수까지 남은 거리를 줄인다.
+   * 평균 보너스에 `% 50` 을 씌우면 안 된다 (평균의 나머지는 나머지의 평균이 아니다) —
+   * 실제로 잰 **분포**에서 뽑아 5발을 돌린다
+   */
+  const simFinish = (kills: number[], points: number) => {
+    const I = RED_PARAMS.sparrowInterval;
+    let total = 0;
+    const RUNS = 20000;
+    for (let r = 0; r < RUNS; r++) {
+      let score = 0;
+      let natural = 0;
+      for (let i = 0; i < RED_PARAMS.sparrowCount; i++) {
+        const next = Math.floor(score / I) * I + I;   // 다음 발사 배수
+        natural += next - score;                      // 여기까지는 손으로 벌어야 한다
+        score = next + kills[(Math.random() * kills.length) | 0] * points;
+      }
+      total += natural;
+    }
+    return total / RUNS;
+  };
+  const finishOld = simFinish(mid.killsOld, OLD_POINTS);
+  const finishNow = simFinish(mid.killsNow, RED_PARAMS.sparrowPoints);
+  console.log(`  마무리(참새 ${RED_PARAMS.sparrowCount}마리 소진)까지 필요한 **자연** 점수 `
+    + `${finishOld.toFixed(0)}점 → ${finishNow.toFixed(0)}점 `
+    + `(${(finishOld / finishNow).toFixed(2)}배 빨라짐)`);
+  console.log(`  커진 보너스 중 추가 발사 ${guardLaunches}회 (0 이어야 한다) · `
+    + `한 프레임 최대 회수 ${massRecycleMax}개 / 그 프레임 ${massFrameMax.toFixed(3)}ms`);
+
+  /**
+   * **대량 회수의 진짜 비용.** 위 숫자(0.00x ms)는 참새 쪽 계산만 잰 것이다 —
+   * 하네스의 가짜 똥은 `recycle()` 에서 타격 이펙트를 안 만든다.
+   * 실기에서는 `PoolablePoopBase.recycle()` 이 똥 하나마다
+   * `playFx('impactHit')` 을 깐다. 그래서 그 비용을 여기서 따로 잰다
+   * (Codex 가 ⑤번으로 지적한 항목 — 참새가 한 마리로 여러 개를 부수게 되면서 개수가 늘었다).
+   */
+  const fxScene = createFakeScene();
+  preloadFxAssets(fxScene);
+  preloadFxSheet(fxScene, 'impactHit');
+  const HITS = balance[2].maxOne;                  // 실측한 **최악의 한 마리**
+  const IMPACT_CAP = 6;                            // vfx.ts 의 impactHit.maxConcurrent
+  const fxBase = snapshot(fxScene);
+  const fxT0 = nowMs();
+  let fxPlayed = 0;
+  for (let i = 0; i < HITS; i++) {
+    if (playFx(fxScene, 'impactHit', 40 + i * 40, 300)) fxPlayed++;
+  }
+  const fxCost = nowMs() - fxT0;
+  const fxPeak = snapshot(fxScene);
+  await sleep(SETTLE_MS);
+  const fxSettled = snapshot(fxScene);
+  fxScene.__clock.stop();
+  console.log(`  타격 이펙트 ${HITS}장 한 프레임 — ${fxCost.toFixed(3)}ms · `
+    + `실제 재생 ${fxPlayed}장 (동시 상한 ${IMPACT_CAP} 에 잘린 것 ${HITS - fxPlayed}장) · `
+    + `동시 스프라이트 ${fxPeak.liveSprites} · 정리 후 ${fxSettled.liveSprites}`);
+  if (HITS > IMPACT_CAP) {
+    console.log(`    ** 참새 한 마리가 상한(${IMPACT_CAP})보다 많이 부술 수 있다 — `
+      + `가장 늦게 부순 것 ${HITS - IMPACT_CAP}개는 타격 이펙트 없이 사라진다. `
+      + `상한은 화면이 하얘지는 것을 막는 장치라 동작 자체는 의도대로다`);
+  }
+  void fxBase;
+
+
+
+
 
   console.log('\n누적 생성: sprites=%d emitters=%d layers=%d', created.sprites, created.emitters, created.layers);
 
@@ -1428,6 +1770,36 @@ async function main() {
   if (missingAssets.length) console.log('** 없는 파티클 파일: ' + missingAssets.join(', '));
 
   const checks = [
+    [`[C1] 레드 — 자기 보너스가 추가 발사를 안 부른다 (발사 ${redReentry}회)`,
+      redReentry === 0],
+    [`[C2] 레드 — 포효 링이 tracked 에 시체를 안 남긴다 (${ringZombies}개)`,
+      ringZombies === 0],
+    [`[C2b] 포효 링 보험이 트윈보다 길다 (${ROAR_RING_LIFE_MS}ms > `
+      + `${RED_PARAMS.trexRingDelayMs + RED_PARAMS.trexRingMs}ms)`,
+      ROAR_RING_LIFE_MS > RED_PARAMS.trexRingDelayMs + RED_PARAMS.trexRingMs],
+    [`[C3] 테드 — 자기 보너스가 추가 낙하를 안 부른다 (낙하 ${tedReentry}개)`,
+      tedReentry === 0],
+    [`[C4] 테드 — 프레임을 건너뛰어도 마무리가 안 막힌다 (중앙 잔류 ${stuckReady}개, `
+      + `퍼짐 ${spreadOut}개)`,
+      stuckReady === 0 && spreadOut > 0],
+    [`[C5] 프레임이 ${SLOW_MS}ms 로 밀려도 참새가 똥을 안 뚫는다`, !tunnelled],
+    [`[B1] 한 마리가 여러 개를 부순다 (한 마리 최대 ${balance[2].maxOne}개)`,
+      balance[2].maxOne >= 2],
+    [`[B2] 발사당 기대 성과가 옛 규칙보다 높다 `
+      + `(${mid.old.toFixed(2)}개 → ${mid.now.toFixed(2)}개)`,
+      mid.now > mid.old],
+    [`[B3] 커진 보너스가 추가 발사를 안 부른다 (${guardLaunches}회)`, guardLaunches === 0],
+    [`[B4] 대량 회수 한 프레임이 예산 안 (${massRecycleMax}개 / `
+      + `${massFrameMax.toFixed(3)}ms < 2ms)`,
+      massFrameMax < 2],
+    [`[B5] 타격 이펙트 ${HITS}장을 한 프레임에 깔아도 예산 안 `
+      + `(${fxCost.toFixed(3)}ms < 4ms)`, fxCost < 4],
+    // **상한이 물리는 것이 정상이다** — 화면이 하얘지지 않게 하는 장치다.
+    // 여기서 보는 것은 "상한이 지켜지는가"이지 "안 잘리는가"가 아니다
+    [`[B6] 타격 이펙트 동시 상한이 지켜진다 (요청 ${HITS} → 재생 ${fxPlayed} `
+      + `≤ ${IMPACT_CAP})`,
+      fxPlayed === Math.min(HITS, IMPACT_CAP)],
+    ['[B7] 타격 이펙트가 전부 회수됨', isZero(fxSettled)],
     [`[18] 파티클 텍스처 표의 파일이 전부 존재 (없는 것 ${missingAssets.length}개)`,
       missingAssets.length === 0],
     ['[3] 이펙트 종료 후 기준선 복귀', isZero(settled)],

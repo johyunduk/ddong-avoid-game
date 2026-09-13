@@ -42,6 +42,16 @@ const DEPTH_FLASH   = 320;     // 테드 결합 섬광과 같은 대역
 const RING_ART_RADIUS = 87.4;
 
 /**
+ * 포효 링의 **보험 타이머**. 반드시 링 트윈(둘째 겹 = 지연 + 지속)보다 길어야 한다.
+ *
+ * 짧으면 보험이 먼저 링을 파괴하면서 트윈까지 취소해 `onComplete` 의 회수가
+ * 영영 안 불린다 (`lifeMs 420` vs `90 + 380 = 470` 이었다).
+ * 하네스 `[C2b]` 가 이 부등식을 지킨다 — 값을 만질 때 같이 본다.
+ */
+export const ROAR_RING_LIFE_MS =
+  RED_PARAMS.trexRingDelayMs + RED_PARAMS.trexRingMs + 120;
+
+/**
  * 호 길이 등분용 누적표. `orbitRx`/`orbitRy` 가 상수라 모듈 로드 때 한 번만 만든다
  * (256칸 = 2KB, 참새 5마리라 조회 비용은 무시할 수준).
  */
@@ -197,6 +207,9 @@ export class RedAbility extends BaseAbility {
 
   override onScoreMilestone(score: number, api: GameSceneAPI): void {
     if (score % RED_PARAMS.sparrowInterval !== 0) return;
+    // **자기 보너스로 들어온 마일스톤은 삼킨다.** 이게 재진입 가드의 본체다 —
+    // 기준선(lastLaunchScore)만으로는 보너스가 다음 배수를 넘길 때 못 막는다
+    if (this.awarding) return;
     if (score <= this.lastLaunchScore) return;
     this.lastLaunchScore = score;
     if (this.finishing || this.orbit.length === 0) return;
@@ -271,7 +284,7 @@ export class RedAbility extends BaseAbility {
       // 다섯이 한 박자로 퍼덕이면 부채처럼 보인다 — 위상을 어긋뜨린다 (구미호 꼬리와 같은 이유)
       ob.play({ key: this.animKey(sheet, 'flap'), startFrame: i % 4 });
       this.orbit.push({ ob, s: s0, kind, flip: Math.sin(theta) < 0 });
-      this.tracked.add(ob);
+      this.track(ob);
     }
   }
 
@@ -339,7 +352,7 @@ export class RedAbility extends BaseAbility {
     const last = SPARROW_FLAP.end - SPARROW_FLAP.start;
     const cur = o.ob.anims.currentFrame?.index ?? 1;
     ob.play({ key: anim, startFrame: Phaser.Math.Clamp(cur - 1, 0, last) });
-    this.tracked.add(ob);
+    this.track(ob);
     return ob;
   }
 
@@ -367,30 +380,45 @@ export class RedAbility extends BaseAbility {
     });
   }
 
-  /** 올라가는 참새를 옮기고, 일반 똥과 닿으면 하나를 부수고 소모된다 */
+  /**
+   * 올라가는 참새를 옮기고 **지나간 길의 일반 똥을 전부** 부순다.
+   *
+   * 예전에는 첫 똥 하나를 부수고 그 자리에서 소모됐다. 그래서 한 번 발사의 성과가
+   * **0 아니면 한 개**였고, 빗나간 마리도 소모되니 5마리(=250점)를 성과 없이
+   * 흘려보내는 판이 나왔다. 테드의 체스 말·하이디의 점프는 이미 경로 전체를 쓴다.
+   *
+   * **똥을 부숴도 멈추지 않는다.** 화면 위로 나갈 때까지 올라간다 — '격추' 라는
+   * 컨셉에도 그쪽이 맞다.
+   */
   private flyShots(api: GameSceneAPI): void {
     if (this.shots.length === 0) return;
     const { scene } = api;
     const dt = scene.game.loop.delta / 1000;
     const dy = RED_PARAMS.sparrowSpeed * dt;
 
+    let smashed = 0;
     for (const s of this.shots) {
       if (s.done) continue;
+      const y0 = s.ob.y;                 // 옮기기 전 자리 — 지나간 **선분**을 판정한다
       s.ob.y -= dy;
-      const hit = this.hitOnePoop(api, s.ob.x, s.ob.y);
-      if (hit || s.ob.y < -RED_PARAMS.sparrowFrame) {
+      const n = this.smashPoops(api, s.ob.x, s.ob.y, y0);
+      smashed += n;
+      if (n > 0) {
+        burst(scene, s.ob.x, s.ob.y, 'shard', {
+          count: 5, tint: [RED, 0xffffff], speed: 0.9, scale: 0.5,
+          depth: DEPTH_SPARROW - 1, blend: 'normal',
+        });
+      }
+      if (s.ob.y < -RED_PARAMS.sparrowFrame) {     // 소모는 **화면 밖에서만**
         s.done = true;
-        if (hit) {
-          burst(scene, s.ob.x, s.ob.y, 'shard', {
-            count: 5, tint: [RED, 0xffffff], speed: 0.9, scale: 0.5,
-            depth: DEPTH_SPARROW - 1, blend: 'normal',
-          });
-        }
         this.discard(s.ob);
       }
     }
 
     this.shots = this.shots.filter(s => !s.done);
+    // 점수는 **순회가 끝난 뒤 한 번에** 준다. 루프 안에서 주면 addAbilityBonus 가
+    // 도는 동안 this.shots 가 바뀔 수 있다 (빗장이 막아 주지만 구조로도 안 걸어 둔다)
+    if (smashed > 0) this.award(api, smashed * RED_PARAMS.sparrowPoints);
     // 마지막 한 마리까지 다 쓰였으면 마무리로 넘어간다
     if (!this.finishing && this.orbit.length === 0 && this.shots.length === 0) {
       this.startFinisher(api);
@@ -398,23 +426,32 @@ export class RedAbility extends BaseAbility {
   }
 
   /**
+   * 참새가 지나간 **선분 위의 일반 똥을 전부** 부수고 개수를 돌려준다.
+   *
    * **일반 똥만** 친다. 금·다이아·토파즈·무지개는 플레이어가 먹어야 하는 보너스라
    * 없애면 도와주는 게 아니라 뺏는 것이 된다 (테드·K 도 같은 이유로 일반 똥만 친다).
    */
-  private hitOnePoop(api: GameSceneAPI, x: number, y: number): boolean {
+  private smashPoops(api: GameSceneAPI, x: number, y: number, yPrev = y): number {
     const r = RED_PARAMS.sparrowHitR;
     const r2 = r * r;
-    const list = api.poops.getChildren() as Phaser.Physics.Arcade.Sprite[];
+    // **지나간 자리까지 본다.** 지금 좌표만 보면 한 프레임에 판정 지름보다 많이
+    // 움직였을 때 똥을 뚫고 지나간다 — 620px/s 라 프레임이 71ms 넘게 밀리면 그렇다.
+    // 테드 낙하·하이디 점프가 쓰는 것과 같은 **점-선분 거리 판정**이다.
+    // 참새는 수직으로만 날므로 세로를 구간에 물리는 것으로 족하다
+    const lo = Math.min(y, yPrev);
+    const hi = Math.max(y, yPrev);
+    // 회수가 목록을 건드릴 수 있으니 사본으로 돈다 (clearPoops 와 같은 이유)
+    const list = (api.poops.getChildren() as Phaser.Physics.Arcade.Sprite[]).slice();
+    let n = 0;
     for (const p of list) {
       if (!p.active) continue;
       const dx = p.x - x;
-      const dy = p.y - y;
+      const dy = p.y - Phaser.Math.Clamp(p.y, lo, hi);
       if (dx * dx + dy * dy > r2) continue;
       (p as unknown as PoolablePoopBase).recycle();   // 타격 이펙트는 recycle 안에서 나온다
-      this.award(api, RED_PARAMS.sparrowPoints);
-      return true;
+      n++;
     }
-    return false;
+    return n;
   }
 
   // ── 마무리 ──────────────────────────────────────────────────────────
@@ -477,7 +514,7 @@ export class RedAbility extends BaseAbility {
       .setScale(scale)
       .setFlipX(fromLeft);        // 시트는 왼쪽을 본다 → 오른쪽으로 걸으면 뒤집는다
     trex.play(this.animKey(RED_TREX_SHEET, 'walk'));
-    this.tracked.add(trex);
+    this.track(trex);
 
     scene.tweens.add({
       targets: trex,
@@ -516,12 +553,15 @@ export class RedAbility extends BaseAbility {
         tint: i === 0 ? 0xffe0a0 : RED,
         alpha: 0.55,
         scale: [0.3, 0.3],
-        lifeMs: 420,
+        // **보험 타이머는 트윈보다 길어야 한다.** 짧으면 트윈이 끝나기 전에 링을
+        // 파괴하면서 트윈을 취소해 `onComplete` 가 영영 안 불린다.
+        // 둘째 겹은 `delay 90 + duration 380 = 470ms` 라 420 으로는 모자랐다
+        lifeMs: ROAR_RING_LIFE_MS,
         slot: 'redRoar',
         maxConcurrent: 2,
       });
       if (!ring) continue;
-      this.tracked.add(ring);
+      this.track(ring);
       // **눈에 보이는 링 = 지워지는 범위.** 배율은 원화의 밝은 선 반지름으로 나눈다
       // (프레임 반지름이 아니다 — 선은 프레임 안쪽 0.91 지점에 있다)
       const to = (R / RING_ART_RADIUS) * (i === 0 ? 1 : RED_PARAMS.trexRingInner);
@@ -571,7 +611,7 @@ export class RedAbility extends BaseAbility {
       .setDepth(DEPTH_ROBOT)
       .setScale(scale);
     robot.play(this.animKey(RED_ROBOT_SHEET, 'fall'));
-    this.tracked.add(robot);
+    this.track(robot);
 
     scene.tweens.add({
       targets: robot,
@@ -618,7 +658,7 @@ export class RedAbility extends BaseAbility {
       0xffffff, FLASH_ALPHA)
       .setDepth(DEPTH_FLASH)
       .setScrollFactor(0);
-    this.tracked.add(rect);
+    this.track(rect);
     scene.tweens.add({
       targets: rect, alpha: 0, duration: FLASH_FADE_MS,
       onComplete: () => this.discard(rect),
@@ -659,14 +699,30 @@ export class RedAbility extends BaseAbility {
   }
 
   /**
-   * 보너스 점수. **먼저 발사 기준선을 올린 뒤** 준다 —
-   * `addAbilityBonus` 는 GameScene 안에서 점수를 1점씩 순회하며 마일스톤을 부르므로,
-   * 올려 두지 않으면 이 줄이 곧바로 다음 발사를 불러 재진입 폭주가 된다 (테드와 같은 가드).
+   * 보너스 점수. {@link BaseAbility.awardBonus} 가 **주는 동안 빗장을 걸어**
+   * 자기 보너스로 다시 발사되지 않게 한다.
+   *
+   * 예전에는 `lastLaunchScore += amount` 로 기준선을 올렸다. 두 가지가 틀렸다 —
+   * 보너스가 다음 배수를 넘기면 그대로 통과했고 (Codex 재현: `last=50`·점수 90·+25 →
+   * 100 에서 추가 발사), 기준선이 올라간 만큼 **정상 마일스톤까지 삼켰다**.
    */
   private award(api: GameSceneAPI, amount: number): void {
-    if (amount <= 0) return;
-    this.lastLaunchScore += amount;
-    api.addAbilityBonus(amount);
+    this.awardBonus(api, amount);
+  }
+
+  /**
+   * 추적 목록에 넣고, **누가 파괴하든** 목록에서 빠지게 한다.
+   *
+   * `discard()` 로만 빼면 **vfx 보험 타이머가 먼저 파괴한 오브젝트가 남는다.**
+   * 보험 타이머는 스프라이트를 destroy 하면서 트윈까지 취소하므로
+   * `onComplete: () => this.discard(...)` 가 영영 안 불린다 (Codex 재현: 포효 750ms 뒤
+   * 파괴된 링 참조 2개 잔류 — GPU 는 회수돼도 JS 참조가 게임오버까지 쌓인다).
+   * 파괴 이벤트에 걸어 두면 경로가 무엇이든 목록이 샐 수 없다.
+   */
+  private track<T extends Phaser.GameObjects.GameObject>(ob: T): T {
+    this.tracked.add(ob);
+    ob.once(Phaser.GameObjects.Events.DESTROY, () => this.tracked.delete(ob));
+    return ob;
   }
 
   private discard(ob: Phaser.GameObjects.GameObject): void {

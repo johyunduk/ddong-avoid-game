@@ -359,18 +359,15 @@ export const RED_PARAMS = {
   sparrowSpeed:    620,  // 위로 날아가는 속도 (px/s)
   sparrowTurnMs:   90,   // 발사 순간 옆모습 → 위 보는 모습 교차 페이드 시간(ms).
                          // 0 이면 즉시 교체 (그러면 실루엣이 툭 바뀌는 게 보인다)
-  sparrowHitR:     22,   // 똥 판정 반경(px). **그림에서 나온 값이 아니다** —
-                         // 서로 닿기만 해도 맞는 값은 참새 반폭 14.1 + 똥 반폭 20.0
-                         // = 34.1px 이다. 22 는 그보다 **좁게** 잡은 조율값이라
-                         // 참새가 똥에 제대로 겹쳐야 맞는다 (빗나가도 소모되는 규칙과
-                         // 맞물린 난도). 위 보는 시트를 적용한 뒤 다시 쟀다 —
-                         // **몸통**끼리 닿는 값이 옆 27.1 / 위 27.4px 로 거의 같다.
-                         // 날개 끝까지 세면 위가 40.4px 로 넓지만 20px 떨어진 날개 끝으로
-                         // 똥을 부수는 건 그림과 안 맞는다. 22 를 그대로 둔다
-  sparrowPoints:   25,   // 참새가 부순 똥 하나당 점수.
-                         // **재진입 가드와 맞물린다** — award() 가 lastLaunchScore 를
-                         // 먼저 올리므로 이 값이 클수록 그 뒤의 발사 마일스톤을 더 많이
-                         // 삼킨다 (sparrowInterval 50 기준 한 번 맞힐 때마다 절반)
+  sparrowHitR:     30,   // 똥 판정 반경(px). **그림에서 나온 값이 아니다** — 조율값이다.
+                         // 실측: 서로 닿기만 해도 맞는 값이 참새 반폭 14.1 + 똥 반폭 20.0
+                         // = 34.1px, **몸통**끼리 닿는 값이 옆 27.1 / 위 27.4px.
+                         // 22 → 30 (사람 지시: "레드가 점수내기 어렵다").
+                         // 30 은 몸통 접촉(27.4)보다 살짝 넓고 날개 끝(40.4)보다는 훨씬
+                         // 좁다 — 20px 떨어진 날개 끝으로 똥을 부수는 건 그림과 안 맞는다
+  sparrowPoints:   30,   // 참새가 부순 똥 하나당 점수. 25 → 30 (사람 지시).
+                         // 한 마리가 **경로의 똥을 전부** 부수므로 한 번 발사의 성과가
+                         // 0/1개에서 0~여러 개가 됐다 — 점수 총량은 개수 쪽이 더 키운다
   // ── 마무리: 티라노 ──
   robotChance:     0.36, // 마무리가 로봇으로 대체될 확률. 나머지는 티라노.
                          // 0.18 → 0.36 (두 배). 세 번에 한 번꼴로 로봇이 나오므로
@@ -480,6 +477,6 @@ export const HEIDI_DESC = {
 } as const;
 
 export const RED_DESC = {
-  basicEffect:    `참새 ${RED_PARAMS.sparrowCount}마리가 머리 위를 돈다 — ${RED_PARAMS.sparrowInterval}점마다 한 마리가 날아가 일반 똥 격추 (+${RED_PARAMS.sparrowPoints}점/개)`,
+  basicEffect:    `참새 ${RED_PARAMS.sparrowCount}마리가 머리 위를 돈다 — ${RED_PARAMS.sparrowInterval}점마다 한 마리가 날아올라 **지나가는 길의 일반 똥을 전부** 격추 (+${RED_PARAMS.sparrowPoints}점/개)`,
   specialAbility: `참새를 다 쓰면 티라노가 나와 포효 — 반경 화면 폭의 ${Math.round(RED_PARAMS.trexRadiusW * 100)}% 안의 일반 똥 제거 (+${RED_PARAMS.trexPoints}점/개). ${Math.round(RED_PARAMS.robotChance * 100)}% 확률로 로봇이 대신 강하해 **화면 전체** 제거 (+${RED_PARAMS.robotPoints}점/개)`,
 } as const;
