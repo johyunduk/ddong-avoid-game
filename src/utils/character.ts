@@ -2,8 +2,9 @@ import {
   HACKER_DESC, MINER_DESC, MAEHWA_DESC,
   ARCHIEVE_DESC, GLITCH_DESC, NOISE_DESC,
   SENTINEL_DESC, LEGACY_DESC, KNIGHT_DESC,
-  GUMI_DESC, MUGI_DESC, K_DESC,
+  GUMI_DESC, MUGI_DESC, K_DESC, TED_DESC, RED_DESC, RED_SHEETS, HEIDI_DESC, HEIDI_SHEETS,
 } from '../config/abilityParams';
+import { type FxKey } from './vfx';
 
 export interface CharacterDef {
   id: string;
@@ -26,6 +27,89 @@ export interface CharacterDef {
   extraSprites?: string[];
   /** 동반자 등 플레이어가 아닌 스프라이트가 쓸 애니메이션 시트 id. GameScene이 preload + 등록 */
   extraSheets?: string[];
+  /**
+   * 능력이 프레임을 골라 쓰는 시트 파일명 (assets/fx/sheets/). 재생되는 이펙트가 아니라
+   * 테드의 체스 말처럼 **한 프레임만 뽑아 쓰는** 모음이다. GameScene preload가 순회 로드
+   */
+  extraFxSheets?: string[];
+  /**
+   * 이 캐릭터만 쓰는 **재생용** FX 시트 키 (`vfx.ts` 의 FxKey).
+   * 큰 시트를 전원에게 preload 하면 안 쓰는 사람의 VRAM 까지 먹기 때문에,
+   * `preload: false` 로 두고 여기 적힌 것만 그 캐릭터의 씬에서 올린다
+   */
+  extraFxAnims?: FxKey[];
+  /**
+   * **아직 공개하지 않은 캐릭터.** 사람에게 보이는 목록(캐릭터 선택 격자·도감)에서 감춘다.
+   *
+   * `CHARACTERS` 에서 지우지 **않는** 이유: 우리가 계속 테스트해야 하고, 지우면
+   * `getCharacterDef` 가 chibi 로 떨어져 실기 확인 자체가 막힌다. 배열에는 남기고
+   * **그리는 쪽에서만** 거른다 ({@link getVisibleCharacters}).
+   *
+   * 테스트로 보려면 {@link showUnreleased} 참고.
+   */
+  unreleased?: boolean;
+}
+
+const UNRELEASED_KEY = 'showUnreleased';
+
+/**
+ * **미공개 캐릭터를 목록에 드러내는 테스트 스위치.**
+ *
+ * 켜기 — 주소 뒤에 `?unreleased=1` 을 붙여 한 번 연다 (그 기기에 남는다)
+ * 끄기 — `?unreleased=0`
+ * 콘솔 — `localStorage.setItem('showUnreleased', '1')`
+ *
+ * 값을 기억하는 이유: 폰 실기 확인에서 매번 주소를 고쳐 넣기 어렵다.
+ */
+export function showUnreleased(): boolean {
+  try {
+    const q = new URLSearchParams(window.location.search).get('unreleased');
+    if (q === '1') localStorage.setItem(UNRELEASED_KEY, '1');
+    else if (q === '0') localStorage.removeItem(UNRELEASED_KEY);
+    return localStorage.getItem(UNRELEASED_KEY) === '1';
+  } catch {
+    return false;   // 사생활 모드 등에서 localStorage 가 던진다 — 숨김이 안전한 기본값
+  }
+}
+
+/**
+ * **사람에게 보여줄 캐릭터 목록.** 격자·도감을 그리는 곳은 `CHARACTERS` 가 아니라
+ * 이걸 쓴다 — 개수·행수 계산도 같은 목록에서 나와야 빈 칸이 안 생긴다.
+ *
+ * 에셋을 미리 받는 `preload()` 는 걸러도 눈에 보이는 게 없고, 걸렀다가 선택된 캐릭터가
+ * 미공개면 그 캐릭터 그림이 안 올라온다. **로딩은 전량 그대로 둔다.**
+ */
+export function getVisibleCharacters(): CharacterDef[] {
+  if (showUnreleased()) return CHARACTERS;
+  return CHARACTERS.filter(c => !c.unreleased);
+}
+
+/**
+ * 테스트 스위치가 켜져 있으면 미공개 캐릭터를 **이 기기에서만** 보유 처리한다.
+ *
+ * 숨기는 것만으로는 우리가 못 고른다 — 카드의 '선택' 버튼이 보유 여부로 갈리고,
+ * 보유 목록은 서명이 붙어 있어 손으로 localStorage 를 고치면 변조로 판정돼
+ * chibi 로 초기화된다. 그래서 서명을 제대로 갱신하는 {@link addOwnedCharacter} 를 탄다.
+ *
+ * 서버로는 올라가지 않는다 — `syncOwnedCharacters` 는 서버+로컬을 **합쳐 로컬에 쓰기만** 하고
+ * 로컬을 올리지 않는다. 스위치를 끄고 `localStorage.removeItem('ownedCharacters')` 하면 없던 일이 된다.
+ */
+export function grantUnreleasedForTest(): void {
+  if (!showUnreleased()) return;
+  for (const c of CHARACTERS) {
+    if (c.unreleased) addOwnedCharacter(c.id);
+  }
+}
+
+/**
+ * 캐릭터의 등급 색을 Phaser 가 쓰는 **정수**로 준다.
+ *
+ * 씬마다 `Record<등급, 색>` 표를 따로 들고 있다가 **세 표가 서로 다른 값**이 된 적이 있다 —
+ * 리더보드 도감은 R 을 `0x4488ff`(= 여기의 SR 파랑)로, 가챠는 `0x44bb44`(여기와 다른 초록)로
+ * 칠하고 있었다. 색의 출처는 `CharacterDef.gradeColor` **하나**이고, 이 함수가 그 유일한 창구다.
+ */
+export function getGradeColorInt(def: CharacterDef): number {
+  return parseInt(def.gradeColor.replace('#', ''), 16);
 }
 
 /** 등급 이미지 텍스처 키 반환. 등급외 → null */
@@ -111,6 +195,26 @@ export const CHARACTERS: CharacterDef[] = [
     specialAbility: LEGACY_DESC.specialAbility,
   },
   // ── SR등급 ─────────────────────────────────────────────────────────────
+  {
+    id: 'red',
+    name: '레드',
+    grade: 'SR',
+    gradeColor: '#4488ff',
+    imageKey: 'red_front',
+    imagePath: 'assets/players/red_front.webp',
+    illustKey: 'illust_red',
+    illustPath: 'assets/illustrations/red.webp',
+    videoKey: 'vid_red',
+    videoPath: 'assets/vids/red.mp4',
+    basicEffect: RED_DESC.basicEffect,
+    specialAbility: RED_DESC.specialAbility,
+    // 참새 5종 + 티라노 + 로봇. 재생용이 아니라 텍스처만 올리고 애니메이션은
+    // RedAbility 가 직접 등록한다 (테드 체스 말과 같은 길, 합 3.2MB · 레드 전용)
+    extraFxSheets: RED_SHEETS,
+    // 달리기 자세가 옆으로 길어 캔버스가 250x312 다 — 표시 비율을 캔버스에 맞춘다
+    playerDisplaySize: [47, 80],
+    cardDisplaySize: [47, 80],
+  },
   {
     id: 'k',
     name: 'K',
@@ -352,6 +456,47 @@ export const CHARACTERS: CharacterDef[] = [
     illustPath: 'assets/illustrations/index.webp',
     basicEffect: '특수 똥 수집 시 +1점 추가',
     specialAbility: '없음',
+  },
+  {
+    id: 'ted',
+    name: '테드',
+    grade: 'SR',
+    gradeColor: '#4488ff',
+    imageKey: 'ted_front',
+    imagePath: 'assets/players/ted_front.webp',
+    illustKey: 'illust_ted',
+    illustPath: 'assets/illustrations/ted.webp',
+    basicEffect: TED_DESC.basicEffect,
+    specialAbility: TED_DESC.specialAbility,
+    extraFxSheets: ['chess_96x128.png'],
+    extraFxAnims: ['cubeBurst'],
+    // 달리기 자세의 코트가 뒤로 길게 날려 캔버스가 332x312 다. 표시 크기를 캔버스와
+    // 같은 비율로 잡아야 setDisplaySize 가 가로로 찌그러뜨리지 않는다 (히트박스는 불변).
+    playerDisplaySize: [54, 80],
+    cardDisplaySize: [54, 80],
+    // **미공개** — 실기 확인이 끝나면 이 줄을 지우고 항목을 SR 구간(red 뒤) 로 옮긴다
+    unreleased: true,
+  },
+  {
+    id: 'heidi',
+    name: '하이디',
+    grade: 'SR',
+    gradeColor: '#4488ff',
+    imageKey: 'heidi_front',
+    imagePath: 'assets/players/heidi_front.webp',
+    illustKey: 'illust_heidi',
+    illustPath: 'assets/illustrations/heidi.webp',
+    basicEffect: HEIDI_DESC.basicEffect,
+    specialAbility: HEIDI_DESC.specialAbility,
+    // 동반자 강아지 뿌요 5동작 24프레임. 재생용이 아니라 텍스처만 올리고 애니메이션은
+    // HeidiAbility 가 직접 등록한다 (레드 참새와 같은 길, 합 1.50MB · 하이디 전용)
+    extraFxSheets: HEIDI_SHEETS,
+    // 긴 머리가 뒤로 날려 캔버스가 236x312 다 — 표시 비율을 캔버스에 맞춘다.
+    // 좌우가 반전이 아니라 각각 그린 그림이다 (모자 리본·해골 장식이 비대칭).
+    playerDisplaySize: [45, 80],
+    cardDisplaySize: [45, 80],
+    // **미공개** — 실기 확인이 끝나면 이 줄을 지우고 항목을 SR 구간(red 뒤) 로 옮긴다
+    unreleased: true,
   },
 ];
 

@@ -26,7 +26,7 @@ import type { CharacterAbility, GameSceneAPI } from '../abilities/types';
 import { getCharacterAbility } from '../abilities/index';
 import { BaseAbility } from '../abilities/BaseAbility';
 import { realNow } from '../utils/realTime';
-import { preloadFxAssets } from '../utils/vfx';
+import { preloadFxAssets, loadFxPickSheet, preloadFxSheet } from '../utils/vfx';
 import { preloadCharSheets, ensureCharAnims } from '../utils/charAnim';
 import BaseScene from './BaseScene';
 
@@ -93,7 +93,7 @@ export default class GameScene extends BaseScene {
     return Math.max(400, this.difficultyConfig.spawnDelay - (this.difficultyLevel * 80));
   }
 
-  private static readonly CHARS_WITH_SPRITES = ['miner', 'maehwa', 'hacker', 'archieve', 'glitch', 'noise', 'sentinel', 'legacy', 'log', 'swap', 'sum', 'fork', 'seed', 'session', 'branch', 'hook', 'socket', 'index', 'knight', 'gumi', 'mugi', 'k'];
+  private static readonly CHARS_WITH_SPRITES = ['miner', 'maehwa', 'hacker', 'archieve', 'glitch', 'noise', 'sentinel', 'legacy', 'log', 'swap', 'sum', 'fork', 'seed', 'session', 'branch', 'hook', 'socket', 'index', 'knight', 'gumi', 'mugi', 'k', 'ted', 'red', 'heidi'];
   private static readonly RAINBOW_COLORS = [
     '#ff0000', '#ff7f00', '#ffff00', '#00ff00', '#0000ff', '#4b0082', '#9400d3',
   ];
@@ -193,6 +193,14 @@ export default class GameScene extends BaseScene {
     // 동반자 시트 (k의 태이 등) — 플레이어가 아니라 능력이 만드는 스프라이트가 쓴다
     for (const id of getCharacterDef(this.selectedCharId).extraSheets ?? []) {
       preloadCharSheets(this, id);
+    }
+    // 능력이 프레임을 골라 쓰는 시트 (테드의 체스 말) — 재생용이 아니라 텍스처만 올린다
+    for (const file of getCharacterDef(this.selectedCharId).extraFxSheets ?? []) {
+      loadFxPickSheet(this, file);
+    }
+    // 이 캐릭터 전용 재생 시트 (테드의 체스 큐브) — 크기 때문에 전원에게 올리지 않는다
+    for (const key of getCharacterDef(this.selectedCharId).extraFxAnims ?? []) {
+      preloadFxSheet(this, key);
     }
 
     // 선택된 배경화면 조건부 로딩 (DifficultySelectScene에서 미리 로드 안 된 경우 fallback)

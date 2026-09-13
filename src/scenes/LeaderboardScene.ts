@@ -9,7 +9,7 @@ import {
   type LeaderboardEntry,
   type PrevSeasonReward,
 } from '../utils/leaderboard';
-import { CHARACTERS } from '../utils/character';
+import { CHARACTERS, getVisibleCharacters, getGradeColorInt } from '../utils/character';
 import BaseScene from './BaseScene';
 
 export default class LeaderboardScene extends BaseScene {
@@ -598,7 +598,9 @@ export default class LeaderboardScene extends BaseScene {
     const CARD_H = 106;
     const gridLeft = (W - COLS * CELL_W) / 2; // = 20px
 
-    const ROWS = Math.ceil(CHARACTERS.length / COLS);
+    // 도감도 사람에게 보이는 화면이다 — 미공개 캐릭터는 빼고 행수를 잡는다
+    const charList = getVisibleCharacters();
+    const ROWS = Math.ceil(charList.length / COLS);
     const totalGridH = ROWS * CELL_H;
     const maxScroll = Math.max(0, totalGridH - scrollAreaH);
 
@@ -614,11 +616,7 @@ export default class LeaderboardScene extends BaseScene {
     cardContainer.setMask(mask);
     this.charOverlayObjects.push(cardContainer);
 
-    const gradeColor: Record<string, number> = {
-      '등급외': 0x888888, R: 0x4488ff, SR: 0xcc55ff, UR: 0xffcc00,
-    };
-
-    CHARACTERS.forEach((char, i) => {
+    charList.forEach((char, i) => {
       const col = i % COLS;
       const row = Math.floor(i / COLS);
       const lx = gridLeft + col * CELL_W + CELL_W / 2;
@@ -648,7 +646,7 @@ export default class LeaderboardScene extends BaseScene {
       // 등급 뱃지 (우상단 원)
       const dot = this.add.circle(
         lx + CARD_W / 2 - 8, ly - CARD_H / 2 + 8,
-        5, gradeColor[char.grade] ?? 0x888888, 1
+        5, getGradeColorInt(char), 1
       );
 
       // 선택 시 하이라이트 오버레이

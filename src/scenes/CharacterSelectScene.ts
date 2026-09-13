@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
 import {
   CHARACTERS,
+  getVisibleCharacters,
+  grantUnreleasedForTest,
   getOwnedCharacters,
   getSelectedCharacter,
   setSelectedCharacter,
@@ -142,6 +144,9 @@ export default class CharacterSelectScene extends BaseScene {
     super.create();
 
     this.selectedId = getSelectedCharacter();
+    // 미공개 캐릭터를 실기에서 확인하려면 보유 상태여야 한다 (카드의 '선택'이 보유로 갈린다).
+    // 테스트 스위치가 꺼져 있으면 아무 일도 안 한다
+    grantUnreleasedForTest();
     this.ownedIds = getOwnedCharacters();
     this.ownedWpIds = getOwnedWallpapers();
     this.selectedWpId = getSelectedWallpaper();
@@ -264,7 +269,8 @@ export default class CharacterSelectScene extends BaseScene {
     const scrollBottomActual = H - (600 - SCROLL_BOTTOM);  // 하단: 하단 버튼 위 (화면 하단 고정)
 
     // 스크롤 최대 범위 계산 (buildCharacterGrid 내부에서도 설정되지만 여기서도 초기화)
-    const totalRows = Math.ceil(CHARACTERS.length / COLS);
+    // 미공개 캐릭터는 격자에 안 그려지므로 **보이는 수**로 재야 빈 줄이 안 생긴다
+    const totalRows = Math.ceil(getVisibleCharacters().length / COLS);
     const contentBottom = GRID_TOP + (totalRows - 1) * (CARD_H + GAP_Y) + CARD_H + 10;
     this.maxScrollOffset = Math.max(0, yOff + contentBottom - scrollBottomActual);
     this.maskGfx = this.make.graphics({ x: 0, y: 0 });
@@ -332,7 +338,8 @@ export default class CharacterSelectScene extends BaseScene {
   private buildCharacterGrid() {
     this.cardHighlights.clear();
     this.coresGfx = this.add.graphics();
-    CHARACTERS.forEach((char, index) => {
+    const visible = getVisibleCharacters();
+    visible.forEach((char, index) => {
       const col = index % COLS;
       const row = Math.floor(index / COLS);
       const x = this.gridLeft + col * (CARD_W + GAP_X) + CARD_W / 2;
@@ -341,7 +348,7 @@ export default class CharacterSelectScene extends BaseScene {
     });
     this.cardsContainer.add(this.coresGfx);
 
-    const totalRows = Math.ceil(CHARACTERS.length / COLS);
+    const totalRows = Math.ceil(visible.length / COLS);
     const contentBottom = GRID_TOP + (totalRows - 1) * (CARD_H + GAP_Y) + CARD_H + 10;
     const scrollBottomActual = this.scale.height - (600 - SCROLL_BOTTOM);
     this.maxScrollOffset = Math.max(0, this.yOff + contentBottom - scrollBottomActual);

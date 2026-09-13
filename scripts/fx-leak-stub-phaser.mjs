@@ -27,8 +27,19 @@ if (typeof globalThis.window === 'undefined') {
 export const live = { sprites: 0, emitters: 0, layers: 0, graphics: 0 };
 /** 누적 생성 수 */
 export const created = { sprites: 0, emitters: 0, layers: 0, graphics: 0 };
+
+/**
+ * 절차 생성 텍스처가 **언제** 구워졌는지. 실제 Phaser 에서는 여기서 캔버스 할당 +
+ * 프레임 수만큼의 그리기 + GPU 업로드(`refresh()`)가 한꺼번에 일어난다 — 그게
+ * 연출 발동 프레임에 걸리면 그 한 프레임이 통째로 밀린다.
+ */
+export const textureBuilds = [];
 /** 칼날 궤적(proc-arc)이 그려진 좌표·시각 — '이펙트가 똥 위치에 나는지' 검증용 */
 export const arcSpawns = [];
+/** 테드 큐브의 '말 → 칸' 전환 조각이 생긴 좌표·시각 */
+export const shardSpawns = [];
+/** 파열 파동 겹이 뜬 시각 — 동시 상한에 걸려 조용히 잘리는지 확인용 */
+export const waveSpawns = [];
 /** 시트 이펙트 생성 로그 — 어떤 시트가 몇 번 나갔는지 (발사 횟수 계측) */
 export const beamSpawns = [];
 
@@ -88,15 +99,40 @@ class Sprite extends GameObj {
   get scale() { return this.scaleX; }
   set scale(v) { this.scaleX = v; this.scaleY = v; }
   setScale(x, y) { this.scaleX = x; this.scaleY = y === undefined ? x : y; return this; }
+  setDisplaySize(w, h) { this.displayWidth = w; this.displayHeight = h; return this; }
+  setScrollFactor() { return this; }
   setRotation(r) { this.rotation = r; return this; }
+  /** 레드 참새가 궤도를 돌며 매 프레임 좌표를 갱신한다 */
+  setPosition(x, y) { this.x = x; this.y = y; return this; }
+  /** 시트가 전부 왼쪽을 봐서, 오른쪽 반원에서는 뒤집어 쓴다 */
+  setFlipX(v) { this.flipX = !!v; return this; }
   setOrigin(x, y) { this.originX = x; this.originY = y === undefined ? x : y; return this; }
+  setVisible(v) { this.visible = v; return this; }
   setAlpha(a) { this.alpha = a; return this; }
   setBlendMode(m) { this.blendMode = m; return this; }
   setTint() { return this; }
   /** 시트 재생 위상 — sheetStart 로 루프를 어긋나게 하는 경로가 여기를 탄다 */
-  anims = { setProgress() {} };
-  /** 씬 클럭(anims.globalTimeScale 반영)으로 애니메이션 완료를 흉내 낸다 */
-  play(_key) {
+  anims = { setProgress() {}, currentFrame: null };
+  /**
+   * 씬 클럭(anims.globalTimeScale 반영)으로 애니메이션 완료를 흉내 낸다.
+   *
+   * **`startFrame` 범위를 검사한다.** 실기 Phaser 는 `startFrame > totalFrames` 로만
+   * 막아서 4프레임짜리에 4를 주면 그대로 통과하고 `anim.frames[4]` 가 undefined 가 돼
+   * `getFirstTick` 에서 게임이 죽는다 (`currentFrame.index` 가 1부터 세는 걸 잊으면
+   * 바로 이 꼴이 난다 — 실제로 레드 참새에서 터졌다). 하네스는 더 빡빡하게 잡는다.
+   */
+  play(key) {
+    const cfg = typeof key === 'object' && key !== null ? key : { key };
+    const anim = this.scene?.anims?.__frames?.get(cfg.key);
+    if (anim !== undefined && cfg.startFrame !== undefined) {
+      if (!Number.isInteger(cfg.startFrame) || cfg.startFrame < 0 || cfg.startFrame >= anim) {
+        throw new RangeError(
+          `play('${cfg.key}'): startFrame ${cfg.startFrame} 이 프레임 수 ${anim} 밖이다`,
+        );
+      }
+    }
+    // 지금 프레임 — Phaser 와 같이 **1부터** 센다
+    this.anims.currentFrame = { index: 1 + ((cfg.startFrame ?? 0) % (anim || 1)) };
     this.scene?.__clock.add(200, () => this.emit(ANIM_COMPLETE), 'anims');
     return this;
   }
@@ -237,6 +273,7 @@ class FakeClock {
 class FakeCanvasTexture {
   constructor(key) { this.key = key; }
   getContext() { return makeCtx(); }
+  setFilter() {}
   add() {}
   refresh() {}
 }
@@ -257,11 +294,18 @@ export function createFakeScene() {
   const scene = new Emitter();
   scene.events = new Emitter();
   scene.sys = { displayList: { remove() {} }, isActive: () => scene.__alive !== false };
+  // ScenePlugin — 실제 Phaser 씬의 `scene.scene.isActive()`. 이게 없으면 씬 생존을
+  // 확인하는 호출부(TedAbility.startBlast 등)가 조용히 빠져나가 검사가 헛돈다
+  scene.scene = { isActive: () => scene.__alive !== false };
 
   scene.__clock = new FakeClock(scene);
 
   scene.time = {
     timeScale: 1,
+    // Phaser 의 Time.Clock.now 는 **timeScale 의 영향을 받지 않는 실시간**이다.
+    // 이게 없으면 호출부의 경과 시간 계산이 전부 NaN 이 되고, 비교문이 조용히 false 가 되어
+    // 연출 큐가 한 번도 안 돌면서도 검사는 통과한다 (실제로 그랬다)
+    get now() { return Date.now(); },
     delayedCall: (ms, fn) => scene.__clock.add(ms, fn, 'time'),
     // repeat: -1 로 도는 타이머 — remove() 로 멈추지 않으면 영원히 스프라이트를 뱉는다
     addEvent: ({ delay, repeat = 0, callback }) => {
@@ -279,15 +323,28 @@ export function createFakeScene() {
   scene.anims = {
     globalTimeScale: 1,
     __keys: new Set(),
+    // 애니메이션별 프레임 수 — play({startFrame}) 범위 검사에 쓴다
+    __frames: new Map(),
     exists: k => scene.anims.__keys.has(k),
-    create: cfg => { scene.anims.__keys.add(cfg.key); },
+    create: cfg => {
+      scene.anims.__keys.add(cfg.key);
+      scene.anims.__frames.set(cfg.key, (cfg.frames ?? []).length);
+    },
+    // 레드는 시트 한 장에서 구간(걷기/포효 …)을 잘라 애니메이션을 직접 등록한다
+    generateFrameNumbers: (key, { start = 0, end = 0 } = {}) =>
+      Array.from({ length: end - start + 1 }, (_, i) => ({ key, frame: start + i })),
   };
   const textureKeys = new Set();
   scene.textures = {
     exists: k => textureKeys.has(k),
     // beam() 이 텍스처 원본 크기로 길이·두께 배율을 계산한다
-    get: () => ({ getSourceImage: () => ({ width: 397, height: 96 }) }),
-    createCanvas: k => { textureKeys.add(k); return new FakeCanvasTexture(k); },
+    // setFilter — 픽셀 시트가 NEAREST 를 건다. 없으면 호출부가 던진다
+    get: () => ({ getSourceImage: () => ({ width: 397, height: 96 }), setFilter() {} }),
+    createCanvas: k => {
+      textureKeys.add(k);
+      textureBuilds.push({ key: k, t: Date.now() });
+      return new FakeCanvasTexture(k);
+    },
     addCanvas: k => { textureKeys.add(k); return new FakeCanvasTexture(k); },
     __addAsset: k => textureKeys.add(k),
   };
@@ -326,16 +383,24 @@ export function createFakeScene() {
     },
     killTweensOf: () => {},
   };
-  const spawn = (x, y, key) => {
+  const spawn = (x, y, key, frame) => {
     const o = new Sprite(scene);
     o.x = x; o.y = y; o.textureKey = key;
+    // 실제 Phaser 의 GameObject 는 texture/frame 을 들고 있다 — 호출부가 여기서 키를 읽는다
+    o.texture = { key };
+    o.frame = { name: frame ?? 0 };
     if (key === 'fx_proc_arc') arcSpawns.push({ x, y, t: Date.now(), obj: o });
+    if (key === 'fx_cubewave') waveSpawns.push({ t: Date.now() });
+    // 전환 조각은 판본에 따라 텍스처가 다르다 (proc-shard / 픽셀 칸) — 둘 다 센다
+    if (key === 'fx_proc_shard' || String(key).startsWith('fx_px_cubie')) {
+      shardSpawns.push({ x, y, t: Date.now() });
+    }
     if (typeof key === 'string' && key.startsWith('fxsheet_')) beamSpawns.push(key);
     return o;
   };
   scene.add = {
-    sprite: (x, y, key) => spawn(x, y, key),
-    image: (x, y, key) => spawn(x, y, key),
+    sprite: (x, y, key, frame) => spawn(x, y, key, frame),
+    image: (x, y, key, frame) => spawn(x, y, key, frame),
     particles: () => new ParticleEmitterObj(scene),
     // 전체 화면 섬광 사각형 (K 승계 연출) — 장부 밖이지만 destroy 는 불려야 한다
     rectangle: (x, y) => spawn(x, y, '__rect'),
@@ -390,13 +455,22 @@ const Phaser = {
   GameObjects: { Events: { DESTROY } },
   Animations: { Events: { ANIMATION_COMPLETE: ANIM_COMPLETE } },
   Utils: { Array: { GetRandom: a => a[Math.floor(Math.random() * a.length)] } },
+  Textures: { FilterMode: { LINEAR: 0, NEAREST: 1 } },
   Math: {
     DegToRad: d => (d * Math.PI) / 180,
-    Angle: { Between: (x1, y1, x2, y2) => Math.atan2(y2 - y1, x2 - x1) },
+    Angle: {
+      Between: (x1, y1, x2, y2) => Math.atan2(y2 - y1, x2 - x1),
+      // (-PI, PI] 로 접는다. 퍼지는 말의 '머리가 앞' 각도가 이걸 쓴다
+      Wrap: a => {
+        const r = (a + Math.PI) % (Math.PI * 2);
+        return (r < 0 ? r + Math.PI * 2 : r) - Math.PI;
+      },
+    },
     Clamp: (v, lo, hi) => Math.max(lo, Math.min(hi, v)),
     Distance: { Between: (x1, y1, x2, y2) => Math.hypot(x2 - x1, y2 - y1) },
     Between: (lo, hi) => lo + Math.floor(Math.random() * (hi - lo + 1)),
     FloatBetween: (lo, hi) => lo + Math.random() * (hi - lo),
+    Linear: (a, b, u) => a + (b - a) * u,
   },
 };
 

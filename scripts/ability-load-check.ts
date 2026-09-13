@@ -18,7 +18,8 @@
  */
 // @ts-nocheck
 import Phaser, { live, created, createFakeScene } from 'phaser';
-import { getFxStats, preloadFxAssets } from '../src/utils/vfx';
+import { getFxStats, preloadFxAssets, fxPickSheetKey } from '../src/utils/vfx';
+import { RED_SHEETS } from '../src/config/abilityParams';
 
 import { ArchieveAbility } from '../src/abilities/ArchieveAbility';
 import { GlitchAbility } from '../src/abilities/GlitchAbility';
@@ -28,6 +29,7 @@ import { KAbility } from '../src/abilities/KAbility';
 import { KnightAbility } from '../src/abilities/KnightAbility';
 import { LegacyAbility } from '../src/abilities/LegacyAbility';
 import { MaehwaAbility } from '../src/abilities/MaehwaAbility';
+import { RedAbility } from '../src/abilities/RedAbility';
 import { MinerAbility } from '../src/abilities/MinerAbility';
 import { MugiAbility } from '../src/abilities/MugiAbility';
 import { NoiseAbility } from '../src/abilities/NoiseAbility';
@@ -67,11 +69,15 @@ const CASES = [
   ['무기 (UR)',   () => new MugiAbility(0),     'mugi'],
   ['K (UR)',      () => new KAbility(0),        'k'],
   ['K 초사이언',   () => new KAbility(0),        'k_ss'],
+  ['레드 (SR)',   () => new RedAbility(0),      'red'],
 ];
 
 function makeScene() {
   const scene = createFakeScene();
   preloadFxAssets(scene);
+  // 레드의 동반자 시트는 FX_SHEETS 가 아니라 extraFxSheets 로 올라간다 —
+  // 여기서 올려 두지 않으면 참새가 한 마리도 안 뜨고 계측이 조용히 0 이 된다
+  for (const f of RED_SHEETS) scene.textures.__addAsset(fxPickSheetKey(f));
   return scene;
 }
 

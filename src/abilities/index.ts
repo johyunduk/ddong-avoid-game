@@ -13,6 +13,9 @@ import { KnightAbility } from './KnightAbility';
 import { GumiAbility } from './GumiAbility';
 import { MugiAbility } from './MugiAbility';
 import { KAbility } from './KAbility';
+import { TedAbility } from './TedAbility';
+import { RedAbility } from './RedAbility';
+import { HeidiAbility } from './HeidiAbility';
 
 const R_IDS = ['log', 'swap', 'sum', 'fork', 'seed', 'session', 'branch', 'hook', 'socket', 'index'];
 
@@ -32,6 +35,9 @@ export function getCharacterAbility(id: string, awakeningLevel = 0): CharacterAb
     case 'gumi':     return new GumiAbility(awakeningLevel);
     case 'mugi':     return new MugiAbility(awakeningLevel);
     case 'k':        return new KAbility(awakeningLevel);
+    case 'ted':      return new TedAbility(awakeningLevel);
+    case 'red':      return new RedAbility(awakeningLevel);
+    case 'heidi':    return new HeidiAbility(awakeningLevel);
     default:         return new BaseAbility(); // chibi 및 미등록 캐릭터
   }
 }

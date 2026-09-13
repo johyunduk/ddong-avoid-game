@@ -19,9 +19,9 @@ export type CharAnimName = 'idle' | 'walk' | 'hit';
 /** 애니메이션 시트를 가진 캐릭터 (없는 캐릭터는 정적 텍스처로 동작) — 현재 전 캐릭터 */
 export const CHARS_WITH_ANIM_SHEETS: readonly string[] = [
   'archieve', 'astronaut', 'branch', 'chibi', 'fork', 'glitch', 'gold_mugi',
-  'gumi', 'hacker', 'hook', 'index', 'k', 'knight', 'ktei', 'ktei_ss',
+  'gumi', 'hacker', 'heidi', 'hook', 'index', 'k', 'knight', 'ktei', 'ktei_ss',
   'legacy', 'log', 'maehwa', 'miner', 'mugi', 'noise', 'seed', 'sentinel',
-  'session', 'socket', 'sum', 'swap',
+  'red', 'session', 'socket', 'sum', 'swap', 'ted',
 ];
 
 interface SheetAnimDef {

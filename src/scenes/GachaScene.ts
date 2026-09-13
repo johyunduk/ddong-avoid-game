@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { gachaPull, syncOwnedCharacters, syncOwnedWallpapers, type PulledCharacter, type PulledWallpaper } from '../utils/gacha';
-import { CHARACTERS, getCharacterDef, addOwnedCharacter, getDuplicateCount, setDuplicateCount, getGradeImgKey, type CharacterDef } from '../utils/character';
+import { CHARACTERS, getCharacterDef, addOwnedCharacter, getDuplicateCount, setDuplicateCount, getGradeImgKey, getGradeColorInt, type CharacterDef } from '../utils/character';
 import { WALLPAPERS, getWallpaperDef, addOwnedWallpaper, WP_ACCENT_INT, WP_ACCENT_HEX, type BackgroundDef } from '../utils/wallpaper';
 import { getSkorBalance, getCachedSkorBalance, cacheSkorBalance } from '../utils/skor';
 import { destroyVideo } from '../utils/video';
@@ -9,15 +9,8 @@ import BaseScene from './BaseScene';
 // vids/ 디렉토리에 개인 영상이 존재하는 캐릭터 목록
 const CHARS_WITH_VIDS = new Set([
   'chibi', 'hacker', 'miner', 'maehwa', 'archieve', 'glitch', 'noise', 'sentinel', 'legacy', 'knight', 'mugi', 'gumi', 'k',
+  'red',
 ]);
-
-const GRADE_COLORS: Record<string, number> = {
-  UR: 0xffaa00,
-  SR: 0x4488ff,
-  R:  0x44bb44,
-  N:  0xaaaaaa,
-  '등급외': 0xcccccc,
-};
 
 // 현재 픽업 배너 설정 — 출시 캐릭터 변경 시 characterId만 수정
 const CURRENT_BANNER = {
@@ -26,7 +19,11 @@ const CURRENT_BANNER = {
 };
 
 // 로비 슬라이드쇼 순서: 신규 UR 우선(mugi → gumi → sentinel → legacy), 이후 SR 순
-const SLIDESHOW_IDS = ['mugi', 'gumi', 'sentinel', 'legacy', 'knight', 'hacker', 'miner', 'maehwa', 'archieve', 'glitch', 'noise'];
+// 뽑기 화면 배너에 도는 일러스트. UR 먼저, 그 뒤로 SR — **새로 나온 것이 앞**이다.
+// 여기 넣으면 preload 가 그 캐릭터 일러스트(768x1344)를 미리 받으므로, 늘릴 때마다
+// 가챠 씬의 텍스처 메모리가 장당 약 4MB 늘어난다. 전 캐릭터를 넣지 않는 이유가 그것이다.
+// 미공개 캐릭터(`unreleased`)는 넣지 않는다.
+const SLIDESHOW_IDS = ['mugi', 'gumi', 'sentinel', 'legacy', 'red', 'k', 'knight', 'hacker', 'miner', 'maehwa', 'archieve', 'glitch', 'noise'];
 
 export default class GachaScene extends BaseScene {
   private skorBalance = 0;
@@ -692,7 +689,7 @@ export default class GachaScene extends BaseScene {
     // 영상 페이즈의 스킵 버튼 등 잔여 오브젝트 제거
     this.clearUI();
 
-    const gColor = GRADE_COLORS[pulled.grade] ?? 0xffffff;
+    const gColor = getGradeColorInt(def);
 
     const { width: W, height: H } = this.cameras.main;
     const cx = W / 2;
