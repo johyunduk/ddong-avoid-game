@@ -2189,6 +2189,18 @@ export default class GameScene extends BaseScene {
    * 재시작 버튼 표시 (다시 하기 + 메인 메뉴) - 버튼 스타일
    * @param isNewRecord 새 기록 달성 여부 (SKOR 텍스트 위치에 따라 버튼 y 조정)
    */
+  /** 게임 오버 뒤 스페이스가 재시작으로 받아지기까지의 유예 (ms) — 버튼이 나타난 시점부터 */
+  private static readonly RESTART_KEY_ARM_MS = 400;
+
+  /** 다시 하기 — 버튼·스페이스가 같이 쓴다 */
+  private restartGame(): void {
+    const existingInput = document.querySelector('input');
+    if (existingInput) document.body.removeChild(existingInput);
+    this.sound.stopAll();
+    if (this.player) this.player.cleanupEffects();
+    this.scene.restart({ gameMode: this.gameMode, difficulty: this.difficulty, purePhysical: this.purePhysical });
+  }
+
   private showRestartButton(isNewRecord = false) {
     const W = this.scale.width;
     const H = this.scale.height;
@@ -2254,13 +2266,30 @@ export default class GameScene extends BaseScene {
       menuButtonText.setScale(1);
     });
 
-    retryButtonBg.on('pointerdown', () => {
-      const existingInput = document.querySelector('input');
-      if (existingInput) document.body.removeChild(existingInput);
-      this.sound.stopAll();
-      if (this.player) this.player.cleanupEffects();
-      this.scene.restart({ gameMode: this.gameMode, difficulty: this.difficulty, purePhysical: this.purePhysical });
-    });
+    retryButtonBg.on('pointerdown', () => this.restartGame());
+
+    // PC — 스페이스로도 다시 하기. 액티브 스페이스와 같은 방식(창 레벨 · 캡처 단계)으로 받는다.
+    // **이 버튼이 나타난 뒤에만** 리스너가 생기고, 그래도 RESTART_KEY_ARM_MS 동안은 무시한다 —
+    // 죽기 직전 액티브를 쓰려고 연타하던 스페이스가 그대로 재시작이 되지 않게
+    const armedAt = realNow() + GameScene.RESTART_KEY_ARM_MS;
+    const onRestartKey = (e: KeyboardEvent) => {
+      if (e.code !== 'Space' || e.repeat) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return;   // 이니셜 입력 중
+      if (!this.gameOver || realNow() < armedAt) return;
+      e.preventDefault();                                     // 페이지 스크롤 방지
+      window.removeEventListener('keydown', onRestartKey, { capture: true });   // 한 번만
+      this.restartGame();
+    };
+    window.addEventListener('keydown', onRestartKey, { capture: true });
+    // 재시작·메인 메뉴로 나갈 때 떼야 한다 — 남으면 다음 판 진행 중 스페이스가 재시작이 된다
+    this.events.once('shutdown', () => window.removeEventListener('keydown', onRestartKey, { capture: true }));
+    // 키보드가 있는 환경(PC)에서만 작은 안내
+    if (this.sys.game.device.os.desktop) {
+      this.add.text(cx + 92, retryY, 'Space', {
+        fontSize: '12px', color: '#d8ffd8', fontStyle: 'bold',
+      }).setOrigin(0.5).setDepth(200).setAlpha(0.85);
+    }
 
     menuButtonBg.on('pointerdown', () => {
       const existingInput = document.querySelector('input');
