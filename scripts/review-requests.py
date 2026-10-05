@@ -133,6 +133,8 @@ def main() -> int:
     else:
         for r in requests:
             head = f"  [{STATE.get(r.get('status'), r.get('status'))}] {r['id']}"
+            if r.get("model"):
+                head += f"  ({r['model']})"
             if r.get("batch"):
                 head += f"  → {r['batch']}"
             print(head)

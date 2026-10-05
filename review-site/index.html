@@ -29,36 +29,12 @@
   h1 { font-family:var(--display); font-weight:700; font-size:26px; margin:0 0 10px;
     text-wrap:balance; letter-spacing:-.01em; }
   .back { display:inline-block; font-size:13px; color:var(--muted); margin-bottom:10px; }
-  .title-row { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
-  .title-row h1 { flex:1; min-width:0; }
-  #act-reject-open { flex:none; font-family:var(--body); font-size:13px; font-weight:600;
-    color:var(--reject); background:transparent; border-radius:999px; cursor:pointer;
-    border:1px solid color-mix(in srgb,var(--reject) 45%,var(--line)); padding:8px 16px; }
-  #act-reject-open:focus-visible { outline:2px solid var(--reject); outline-offset:2px; }
   header { border-bottom:1px solid var(--line); padding-bottom:16px; }
   .meta { display:flex; flex-wrap:wrap; gap:4px 14px; color:var(--muted); font-size:13px; }
   .meta b { color:var(--ink); font-weight:500; }
   details summary { cursor:pointer; color:var(--muted); font-size:13px; width:max-content; margin-top:12px; }
   details summary:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
-  details pre { font-family:var(--mono); font-size:12px; line-height:1.7; color:var(--muted);
-    background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:12px 14px;
-    margin:10px 0 0; white-space:pre-wrap; word-break:break-word; max-height:220px; overflow:auto; }
 
-  .badge { display:inline-flex; align-items:center; gap:6px; margin-top:12px;
-    font-size:13px; font-weight:600; padding:6px 12px; border-radius:999px; }
-  .badge.accept { background:color-mix(in srgb,var(--accept) 25%,var(--surface)); color:var(--accept); }
-  .badge.revise { background:color-mix(in srgb,var(--revise) 25%,var(--surface)); color:var(--revise); }
-  .badge.reject { background:color-mix(in srgb,var(--reject) 22%,var(--surface)); color:var(--reject); }
-
-  /* 필터 */
-  .filters { display:flex; gap:8px; flex-wrap:wrap; margin:18px 0 4px; }
-  .filters button { font-family:var(--body); font-size:13px; font-weight:500; color:var(--muted);
-    background:var(--surface); border:1px solid var(--line); border-radius:999px;
-    padding:8px 15px; cursor:pointer; }
-  .filters button[aria-pressed="true"] { background:var(--accent); border-color:var(--accent);
-    color:#1b1424; font-weight:600; }
-  .filters button:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
-  .filters .n { opacity:.7; margin-left:5px; font-variant-numeric:tabular-nums; }
   .empty { color:var(--muted); font-size:14px; padding:18px 2px; }
 
   /* 목록 */
@@ -72,91 +48,15 @@
   .row-title { font-weight:600; font-size:16px; margin:0 0 2px; overflow:hidden;
     text-overflow:ellipsis; white-space:nowrap; }
   .row-sub { font-family:var(--mono); font-size:11px; color:var(--faint); }
-  .row-note { font-size:13px; color:var(--muted); margin:5px 0 0; overflow:hidden;
-    text-overflow:ellipsis; white-space:nowrap; }
   .state { font-size:12px; font-weight:600; padding:4px 10px; border-radius:999px; flex:none;
     background:var(--raised); color:var(--muted); }
   .state.wait { background:color-mix(in srgb,var(--accent) 22%,var(--surface)); color:var(--accent); }
   .state.accept { background:color-mix(in srgb,var(--accept) 25%,var(--surface)); color:var(--accept); }
-  .state.revise { background:color-mix(in srgb,var(--revise) 25%,var(--surface)); color:var(--revise); }
-  .state.reject { background:color-mix(in srgb,var(--reject) 22%,var(--surface)); color:var(--reject); }
 
-  /* 후보 */
-  .grid { display:grid; gap:10px; margin:18px 0 26px; grid-template-columns:repeat(2,1fr); }
-  @media (min-width:680px) { .grid { gap:18px; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); } }
-  .card { background:var(--surface); border:1px solid var(--line); border-radius:14px;
-    overflow:hidden; display:flex; flex-direction:column; transition:border-color .18s ease; }
-  .card[data-picked="true"] { border-color:var(--accept); }
-  .shot { position:relative; display:block; width:100%; padding:0; border:0; background:#0e0d12; cursor:zoom-in; }
-  .shot img { display:block; width:100%; aspect-ratio:2/3; object-fit:cover; }
-  .shot:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }
-  .tag { position:absolute; top:8px; left:8px; font-family:var(--mono); font-size:10px; color:var(--ink);
-    background:rgba(10,9,13,.78); padding:3px 7px; border-radius:999px;
-    max-width:calc(100% - 16px); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  @media (min-width:680px) { .tag { font-size:11px; top:10px; left:10px; } }
-  .flag { position:absolute; top:8px; right:8px; font-size:11px; font-weight:700;
-    padding:3px 9px; border-radius:999px; display:none; background:var(--accept); color:#0d2a1d; }
-  .card[data-picked="true"] .flag { display:block; }
-  .pick { width:100%; font-family:var(--body); font-size:14px; font-weight:600; color:var(--muted);
-    background:var(--raised); border:0; border-top:1px solid var(--line); padding:12px 4px; cursor:pointer; }
-  .pick:focus-visible { outline:2px solid var(--accent); outline-offset:-3px; }
-  .card[data-picked="true"] .pick { background:var(--accept); color:#0d2a1d; }
-
-  /* 최하단 액션 */
-  .bottom { display:flex; align-items:center; gap:10px; flex-wrap:wrap;
-    border-top:1px solid var(--line); padding-top:18px; margin-top:8px; }
-  #act-delete { background:transparent; color:var(--faint); border:1px solid var(--line);
-    font-size:13px; font-weight:500; padding:11px 16px; }
-  #act-delete[data-confirm="true"] { color:var(--reject); border-color:var(--reject); font-weight:600; }
   .sync { display:block; font-family:var(--mono); font-size:11px; color:var(--faint); margin-top:8px; }
-
-  /* 모달 */
-  .modal { position:fixed; inset:0; z-index:60; display:none; }
-  .modal[open] { display:block; }
-  .modal .scrim { position:absolute; inset:0; background:rgba(8,7,11,.72); }
-  .sheet { position:absolute; left:0; right:0; bottom:0; background:var(--surface);
-    border-top:1px solid var(--line); border-radius:18px 18px 0 0;
-    padding:20px 16px calc(20px + env(safe-area-inset-bottom));
-    display:flex; flex-direction:column; gap:12px; }
-  @media (min-width:680px) {
-    .sheet { left:50%; right:auto; bottom:auto; top:50%; transform:translate(-50%,-50%);
-      width:min(460px,92vw); border-radius:16px; border:1px solid var(--line); }
-  }
-  .sheet h3 { font-family:var(--display); font-size:20px; margin:0; }
-  .sheet p { margin:0; color:var(--muted); font-size:13px; }
-  .sheet textarea { width:100%; min-height:88px; resize:vertical; font-family:var(--body);
-    font-size:16px; line-height:1.5; color:var(--ink); background:var(--ground);
-    border:1px solid var(--line); border-radius:10px; padding:11px 12px; }
-  .sheet textarea:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
-  .modal-actions { display:flex; flex-direction:column; gap:8px; }
-  .modal-actions button { font-family:var(--body); font-size:16px; font-weight:600;
-    border:0; border-radius:11px; padding:14px; cursor:pointer; }
-  .modal-actions .primary { background:var(--accept); color:#0d2a1d; }
-  .modal-actions .warn { background:transparent; color:var(--revise);
-    border:1px solid color-mix(in srgb,var(--revise) 50%,var(--line)); }
-  .modal-actions .danger { background:var(--reject); color:#3a1414; }
-  .modal-actions .quiet { background:transparent; color:var(--muted); border:1px solid var(--line);
-    font-weight:500; font-size:14px; padding:12px; }
-  .sheet .close { background:none; border:0; color:var(--faint); font-family:var(--body);
-    font-size:14px; padding:6px; cursor:pointer; }
-
-  /* 라이트박스 */
-  .lightbox { position:fixed; inset:0; z-index:50; background:rgba(8,7,11,.94); display:none;
-    align-items:center; justify-content:center; padding:16px; }
-  .lightbox[open] { display:flex; }
-  .lightbox img { max-width:100%; max-height:100%; object-fit:contain; border-radius:6px; cursor:zoom-out; }
-  .lb-nav { position:absolute; top:50%; transform:translateY(-50%); z-index:2;
-    width:44px; height:64px; font-size:30px; line-height:1; color:var(--ink);
-    background:rgba(20,18,26,.72); border:0; border-radius:10px; cursor:pointer; }
-  #lb-prev { left:8px; } #lb-next { right:8px; }
-  .lb-bar { position:absolute; left:0; right:0; bottom:0; z-index:2;
-    display:flex; align-items:center; justify-content:space-between; gap:12px;
-    padding:14px 16px calc(14px + env(safe-area-inset-bottom));
-    background:linear-gradient(to top, rgba(10,9,13,.92), transparent); }
-  .lb-bar span { font-family:var(--mono); font-size:12px; color:var(--muted); }
-  #lb-pick { font-family:var(--body); font-size:15px; font-weight:600; color:#0d2a1d;
-    background:var(--accept); border:0; border-radius:10px; padding:11px 20px; cursor:pointer; }
-  #lb-pick[data-picked="true"] { background:var(--raised); color:var(--muted); }
+  /* 확정된 일러스트 (설정 화면에서 참고용 한 장) */
+  .picked { display:block; width:min(220px,60vw); aspect-ratio:2/3; object-fit:cover;
+    border-radius:12px; background:#0e0d12; border:1px solid var(--line); margin:18px 0 22px; }
 
   footer { color:var(--faint); font-size:12px; padding:18px 0 0; }
 
@@ -190,6 +90,11 @@
   .setup-actions .sync { text-align:left; }
 
   /* 컨셉 요청 */
+  .ckpt { display:flex; align-items:center; gap:8px; margin:0 0 10px; }
+  .ckpt span { font-family:var(--mono); font-size:11px; letter-spacing:.08em; color:var(--faint); }
+  .ckpt select { flex:1; font-family:var(--body); font-size:13px; padding:7px 9px;
+    background:var(--surface); color:var(--ink); border:1px solid var(--line); border-radius:8px; }
+  .ckpt select:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
   .request { border-top:1px solid var(--line); padding-top:22px; margin-bottom:30px; }
   .request h2 { font-family:var(--display); font-size:20px; margin:0 0 4px; }
   .request .lead { color:var(--muted); font-size:13px; margin:0 0 12px; }
@@ -235,6 +140,62 @@
   .keyform button { font-family:var(--body); font-size:15px; font-weight:600; color:#1b1424;
     background:var(--accent); border:0; border-radius:9px; padding:11px 18px; cursor:pointer; }
   @media (prefers-reduced-motion:reduce) { * { transition:none !important; } }
+  /* 테마곡 */
+  .music { border-top:1px solid var(--line); margin-top:28px; padding-top:20px; }
+  .music h2 { font-family:var(--display); font-size:19px; margin:0 0 4px; }
+  .music .lead { color:var(--muted); font-size:13px; margin:0 0 14px; }
+  .roster { display:grid; grid-template-columns:repeat(auto-fill,minmax(76px,1fr)); gap:8px; }
+  .roster button { font-family:var(--body); background:var(--surface); border:1px solid var(--line);
+    border-radius:12px; padding:6px 5px 8px; cursor:pointer; color:var(--muted);
+    display:flex; flex-direction:column; align-items:center; gap:5px; }
+  .roster button[aria-pressed="true"] { border-color:var(--accent); color:var(--ink);
+    background:color-mix(in srgb,var(--accent) 16%,var(--surface)); }
+  .roster button:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  .roster img { width:100%; aspect-ratio:1; object-fit:cover; border-radius:8px;
+    background:var(--raised); }
+  .roster .nm { font-size:12px; font-weight:500; line-height:1.2; text-align:center; }
+  .roster .gr { font-family:var(--mono); font-size:9px; letter-spacing:.08em; color:var(--faint); }
+  .music-form { margin-top:14px; display:none; }
+  .music-form.on { display:block; }
+  .music-form textarea { width:100%; min-height:64px; font-family:var(--body); font-size:14px;
+    color:var(--ink); background:var(--surface); border:1px solid var(--line);
+    border-radius:10px; padding:10px 12px; resize:vertical; }
+  .music-form button { margin-top:8px; font-family:var(--body); font-size:14px; font-weight:600;
+    background:var(--accent); color:#1b1424; border:0; border-radius:999px;
+    padding:10px 18px; cursor:pointer; }
+  .music-form button:disabled { opacity:.5; cursor:default; }
+  /* 곡 판정 — 후보가 올라온 주문 (status review) */
+  .verdicts { display:flex; flex-direction:column; gap:10px; margin-bottom:16px; }
+  .verdict { background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:12px 14px; }
+  .verdict h3 { font-size:15px; margin:0 0 2px; }
+  .verdict .ask { color:var(--muted); font-size:12px; margin:0 0 8px; }
+  .verdict .trk { display:flex; align-items:center; gap:8px; padding:6px 0; border-top:1px solid var(--line); }
+  .verdict .trk a { flex:1; min-width:0; color:var(--ink); font-size:14px; overflow-wrap:anywhere; }
+  .verdict button { font-family:var(--body); font-size:13px; font-weight:600; border-radius:999px;
+    padding:7px 13px; cursor:pointer; border:1px solid var(--line); background:var(--raised); color:var(--ink); }
+  .verdict button.pick { background:var(--accent); color:#1b1424; border:0; }
+  .verdict button:disabled { opacity:.5; cursor:default; }
+  .verdict textarea { width:100%; min-height:48px; margin-top:8px; font-family:var(--body); font-size:13px;
+    color:var(--ink); background:var(--raised); border:1px solid var(--line); border-radius:8px; padding:8px 10px; }
+  .verdict .row { display:flex; gap:8px; margin-top:8px; flex-wrap:wrap; align-items:center; }
+  .verdict .sync { color:var(--muted); font-size:12px; }
+  /* 상태 점 — 진행 중이면 빨강, 다 끝났으면 초록 */
+  .dot { display:inline-block; width:9px; height:9px; border-radius:50%;
+    margin-left:8px; vertical-align:middle; }
+  .dot.busy { background:var(--reject); }
+  .dot.done { background:var(--accept); }
+
+  /* 만드는 중인 캐릭터의 일러스트 위에 도는 고리 */
+  .roster .ph { position:relative; display:block; width:100%; aspect-ratio:1; }
+  .roster .spin { position:absolute; left:50%; top:50%;
+    width:26px; height:26px; margin:-13px 0 0 -13px; border-radius:50%;
+    border:2px solid color-mix(in srgb,var(--ink) 25%,transparent);
+    border-top-color:var(--ink); animation:spin .8s linear infinite; }
+  .roster button.busy img { opacity:.35; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  @media (prefers-reduced-motion:reduce) {
+    .roster .spin { animation-duration:2.4s; }
+  }
 </style>
 </head>
 <body>
@@ -243,15 +204,16 @@
 <template id="tpl-list">
   <div class="wrap">
     <header>
-      <p class="eyebrow">일러스트 후보 심사</p>
+      <p class="eyebrow">컨셉 · 테마곡 · 캐릭터 설정</p>
       <h1>심사실</h1>
-      <div class="meta" id="list-meta"></div>
     </header>
-    <div class="filters" id="filters"></div>
-    <div class="rows" id="rows"></div>
 
     <section class="request">
       <h2>새 컨셉 만들기</h2>
+      <label class="ckpt" id="ckpt-wrap" hidden>
+        <span>체크포인트</span>
+        <select id="req-model"></select>
+      </label>
       <div class="auto-grid">
         <button type="button" id="req-auto-it">
           <b>IT 용어 계열</b><span>루트 · 글리치 · 세션</span>
@@ -273,6 +235,24 @@
       <div class="reqs" id="reqs"></div>
     </section>
 
+    <section class="music">
+      <h2>테마곡 만들기<span class="dot" id="music-dot" hidden></span></h2>
+      <p class="lead">게임에 들어가 있는 캐릭터를 고르면, PC 가 일러스트를 보고 분위기를 맞춰 곡을 만듭니다.</p>
+      <div class="verdicts" id="music-review" hidden></div>
+      <div class="roster" id="roster"></div>
+      <div class="music-form" id="music-form">
+        <textarea id="music-note" placeholder="분위기 요청 (비워 두면 일러스트만 보고 잡습니다)"></textarea>
+        <button type="button" id="music-send">이 캐릭터로 곡 요청</button>
+        <span class="req-sent" id="music-sync"></span>
+      </div>
+    </section>
+
+    <section class="setup" id="setups" hidden>
+      <h2>캐릭터 설정</h2>
+      <p class="lead">확정된 캐릭터의 이름·등급·능력을 정합니다.</p>
+      <div class="rows" id="rows"></div>
+    </section>
+
     <footer>결정을 제출하면 PC 의 파이프라인이 이어서 진행합니다.</footer>
   </div>
 </template>
@@ -281,20 +261,14 @@
   <div class="wrap">
     <header>
       <a class="back" href="./" id="back">← 목록</a>
-      <p class="eyebrow">일러스트 후보 심사</p>
-      <div class="title-row">
-        <h1 id="title"></h1>
-        <button type="button" id="act-reject-open">기각</button>
-      </div>
+      <p class="eyebrow">캐릭터 설정</p>
+      <h1 id="title"></h1>
       <div class="meta" id="meta"></div>
-      <div id="badge-slot"></div>
-      <span class="sync" id="sync"></span>
-      <details><summary>생성 프롬프트 보기</summary><pre id="prompt"></pre></details>
     </header>
 
-    <div class="grid" id="grid"></div>
+    <img class="picked" id="picked-img" alt="확정된 일러스트" hidden>
 
-    <section class="setup" id="setup" hidden>
+    <section class="setup" id="setup">
       <h2>캐릭터 설정</h2>
       <p class="lead" id="setup-lead">제안을 누르면 아래 칸이 채워집니다. 그대로 고쳐 쓰셔도 됩니다.</p>
       <label class="field"><span>이름</span>
@@ -314,32 +288,7 @@
       </div>
     </section>
 
-    <div class="bottom" id="bottom" hidden>
-      <button type="button" id="act-delete">이 배치 삭제</button>
-    </div>
-
     <footer id="foot"></footer>
-  </div>
-
-  <div class="modal" id="modal">
-    <div class="scrim" id="scrim"></div>
-    <div class="sheet">
-      <h3 id="modal-title"></h3>
-      <p id="modal-sub"></p>
-      <textarea id="note" placeholder="피드백 (수정 요청은 필수, 나머지는 선택)"></textarea>
-      <div class="modal-actions" id="modal-actions"></div>
-      <button type="button" class="close" id="modal-close">닫기</button>
-    </div>
-  </div>
-
-  <div class="lightbox" id="lightbox">
-    <button type="button" class="lb-nav" id="lb-prev" aria-label="이전">‹</button>
-    <img id="lightbox-img" alt="">
-    <button type="button" class="lb-nav" id="lb-next" aria-label="다음">›</button>
-    <div class="lb-bar">
-      <span id="lb-label"></span>
-      <button type="button" id="lb-pick">이 장 선택</button>
-    </div>
   </div>
 </template>
 
@@ -347,7 +296,6 @@
 (function () {
   var API = 'https://ebkffyzjjfzegrwvrzqw.supabase.co/functions/v1/review';
   var KEY_STORE = 'review_key';
-  var DEC = { accept: '확정', revise: '수정 요청', reject: '기각' };
   var REQ_STATE = { pending: '대기', picked: '처리 중', done: '완료', dropped: '보류' };
   var GRADES = ['등급외', 'R', 'SR', 'UR'];
 
@@ -414,13 +362,9 @@
   }
 
   // ── 목록 ────────────────────────────────────────────────────────────────
-  var FILTERS = [
-    { id: 'wait', label: '미응답', test: function (b) { return !b.submitted; } },
-    { id: 'accept', label: '확정', test: function (b) { return b.decision && b.decision.type === 'accept'; } },
-    { id: 'revise', label: '수정', test: function (b) { return b.decision && b.decision.type === 'revise'; } },
-    { id: 'reject', label: '기각', test: function (b) { return b.decision && b.decision.type === 'reject'; } },
-    { id: 'all', label: '전체', test: function () { return true; } }
-  ];
+  // 일러스트 후보 심사는 없어졌다 (2026-09-17 — 후보는 ComfyUI 출력 폴더에서 직접 본다).
+  // 배치 목록은 '캐릭터 설정' 이 남은 확정 배치를 찾는 데만 쓴다.
+  function isAccepted(b) { return !!(b.decision && b.decision.type === 'accept'); }
 
   function showList() {
     if (!key) {
@@ -429,49 +373,18 @@
     }
     get('list=1&k=' + encodeURIComponent(key)).then(function (data) {
       view('tpl-list');
-      var batches = data.batches;
-      var pending = batches.filter(function (b) { return !b.submitted; }).length;
-      document.getElementById('list-meta').textContent =
-        '배치 ' + batches.length + '개 · 미응답 ' + pending + '개';
-
-      var active = pending > 0 ? 'wait' : 'all';
-      var bar = document.getElementById('filters');
-      FILTERS.forEach(function (f) {
-        var n = batches.filter(f.test).length;
-        var b = document.createElement('button');
-        b.type = 'button'; b.dataset.id = f.id;
-        b.appendChild(document.createTextNode(f.label));
-        var s = document.createElement('span');
-        s.className = 'n'; s.textContent = n;
-        b.appendChild(s);
-        b.setAttribute('aria-pressed', String(f.id === active));
-        b.addEventListener('click', function () {
-          active = f.id;
-          bar.querySelectorAll('button').forEach(function (x) {
-            x.setAttribute('aria-pressed', String(x.dataset.id === active));
-          });
-          paintRows(batches, active);
-        });
-        bar.appendChild(b);
-      });
-
-      paintRows(batches, active);
+      paintRows(data.batches || []);
       bindRequestForm();
       loadRequests();
+      bindMusic();
+      loadMusic();
 
       // 앱을 나갔다 돌아오면 목록을 조용히 다시 받는다 (화면은 유지)
       onBackToView(function () {
         get('list=1&k=' + encodeURIComponent(key)).then(function (fresh) {
-          batches = fresh.batches;
-          var p = batches.filter(function (b) { return !b.submitted; }).length;
-          document.getElementById('list-meta').textContent =
-            '배치 ' + batches.length + '개 · 미응답 ' + p + '개';
-          bar.querySelectorAll('button').forEach(function (b) {
-            var f = FILTERS.filter(function (x) { return x.id === b.dataset.id; })[0];
-            b.querySelector('.n').textContent = batches.filter(f.test).length;
-          });
-          paintRows(batches, active);
+          paintRows(fresh.batches || []);
           loadRequests();
+          loadMusic();
         }).catch(function () {});
       });
     }).catch(function (e) {
@@ -487,127 +400,81 @@
     });
   }
 
-  function paintRows(batches, activeId) {
-    var f = FILTERS.filter(function (x) { return x.id === activeId; })[0] || FILTERS[4];
-    var list = batches.filter(f.test);
+  // 확정된 배치만 — 캐릭터 설정을 고를 대상이다. 없으면 섹션째 숨긴다.
+  function paintRows(batches) {
+    var list = batches.filter(isAccepted);
+    var section = document.getElementById('setups');
     var rows = document.getElementById('rows');
+    if (!section || !rows) return;
     rows.innerHTML = '';
-
-    if (!list.length) {
-      var empty = document.createElement('p');
-      empty.className = 'empty';
-      empty.textContent = batches.length ? '이 조건에 해당하는 배치가 없습니다.' : '아직 올라온 후보가 없습니다.';
-      rows.appendChild(empty);
-      return;
-    }
+    section.hidden = !list.length;
 
     list.forEach(function (b) {
       var a = document.createElement('a');
       a.className = 'row';
       a.href = './?b=' + encodeURIComponent(b.batch) + '&t=' + encodeURIComponent(b.token);
 
-      var img = document.createElement('img');
-      img.src = b.thumb; img.alt = ''; img.loading = 'lazy';
+      if (b.thumb) {
+        var img = document.createElement('img');
+        img.src = b.thumb; img.alt = ''; img.loading = 'lazy';
+        a.appendChild(img);
+      }
 
       var main = document.createElement('div');
       main.className = 'row-main';
       var t = document.createElement('p');
-      t.className = 'row-title'; t.textContent = trimRound(b.label);
+      t.className = 'row-title';
+      t.textContent = (b.character && b.character.name) || trimRound(b.label);
       var s = document.createElement('div');
       s.className = 'row-sub';
-      s.textContent = b.created + ' · ' + b.total + '장' +
-        (b.character && b.character.confirmed ? ' · 설정 완료' : '');
+      s.textContent = b.created + ' · ' + b.batch;
       main.appendChild(t); main.appendChild(s);
-      if (b.decision && b.decision.note) {
-        var note = document.createElement('p');
-        note.className = 'row-note'; note.textContent = '“' + b.decision.note + '”';
-        main.appendChild(note);
-      }
+      a.appendChild(main);
 
+      var ch = b.character || {};
       var state = document.createElement('span');
-      if (!b.submitted) {
-        state.className = 'state wait'; state.textContent = '미응답';
+      if (ch.confirmed) {
+        state.className = 'state accept'; state.textContent = '설정 완료';
+      } else if (ch.hasProposals) {
+        state.className = 'state wait'; state.textContent = '선택 대기';
       } else {
-        var d = b.decision ? b.decision.type : null;
-        state.className = 'state ' + (d || '');
-        state.textContent = d ? DEC[d] : '제출됨';
+        state.className = 'state'; state.textContent = '제안 준비 중';
       }
-
-      a.appendChild(img); a.appendChild(main); a.appendChild(state);
+      a.appendChild(state);
       rows.appendChild(a);
     });
   }
 
-  // ── 상세 ────────────────────────────────────────────────────────────────
+  // ── 캐릭터 설정 (확정된 배치 하나) ──────────────────────────────────────
   function showDetail() {
     var auth = token ? 't=' + encodeURIComponent(token) : 'k=' + encodeURIComponent(key);
     var endpoint = API + '?b=' + encodeURIComponent(batch) + '&' + auth;
-    var picked = null, current = null, D = null, lbIndex = 0;
+    var D = null;
 
     get('b=' + encodeURIComponent(batch) + '&' + auth).then(function (data) {
       D = data;
       view('tpl-detail');
-      document.title = trimRound(D.label) + ' · 후보 심사';
+      document.title = trimRound(D.label) + ' · 캐릭터 설정';
       document.getElementById('title').textContent = trimRound(D.label);
-      document.getElementById('prompt').textContent = D.prompt + '\n\n[negative]\n' + D.negative;
       if (!key) document.getElementById('back').style.display = 'none';
 
       var meta = document.getElementById('meta');
-      [['후보', D.candidates.length + '장'], ['생성', D.created], ['배치', D.batch]]
+      [['생성', D.created], ['배치', D.batch]]
         .forEach(function (pair) {
           var s = document.createElement('span');
           s.appendChild(document.createTextNode(pair[0] + ' '));
           var b = document.createElement('b'); b.textContent = pair[1];
           s.appendChild(b); meta.appendChild(s);
         });
-      document.getElementById('foot').textContent = '원본은 PC 의 ' + D.dir + ' 에 있습니다.';
+      document.getElementById('foot').textContent = '저장하면 PC 의 워커가 게임에 반영합니다.';
 
-      var grid = document.getElementById('grid');
-      D.candidates.forEach(function (c) {
-        if (c.selected) picked = c.file;
-
-        var card = document.createElement('article');
-        card.className = 'card';
-        card.dataset.file = c.file;
-
-        var shot = document.createElement('button');
-        shot.className = 'shot'; shot.type = 'button';
-        shot.setAttribute('aria-label', c.file + ' 크게 보기');
-        var img = document.createElement('img');
-        img.src = c.src; img.alt = '후보 ' + c.file; img.loading = 'lazy';
-        var tag = document.createElement('span');
-        tag.className = 'tag';
-        tag.textContent = c.file.replace('.webp', '') + ' · ' + c.seed + (c.model ? ' · ' + c.model : '');
-        var flag = document.createElement('span');
-        flag.className = 'flag'; flag.textContent = '선택';
-        shot.appendChild(img); shot.appendChild(tag); shot.appendChild(flag);
-        shot.addEventListener('click', function () { openBox(c); });
-        card.appendChild(shot);
-
-        var pick = document.createElement('button');
-        pick.className = 'pick'; pick.type = 'button'; pick.textContent = '선택';
-        pick.addEventListener('click', function () { choose(c.file); });
-        card.appendChild(pick);
-        grid.appendChild(card);
-      });
-
-      if (D.decision && D.submitted) current = D.decision.type;
-      document.getElementById('act-reject-open').addEventListener('click', function () {
-        openModal('batch');
-      });
-      bindModal();
-      bindDelete();
-      bindLightbox();
       paint();
 
       // 복귀 시 갱신 — 다만 캐릭터 설정을 입력 중이면 덮어쓰지 않는다
       onBackToView(function () {
-        if (isSetupDirty()) { sync('새 내용이 있을 수 있습니다 · 저장 후 새로고침하세요'); return; }
+        if (isSetupDirty()) { chSync('새 내용이 있을 수 있습니다 · 저장 후 새로고침하세요'); return; }
         get('b=' + encodeURIComponent(batch) + '&' + auth).then(function (fresh) {
           D = fresh;
-          current = (D.decision && D.submitted) ? D.decision.type : null;
-          picked = null;
-          D.candidates.forEach(function (c) { if (c.selected) picked = c.file; });
           paint();
         }).catch(function () {});
       });
@@ -615,195 +482,23 @@
       message('열 수 없습니다', e.message, !key);
     });
 
-    // 후보 선택 → 바로 결정 모달
-    function choose(file) {
-      if (picked === file) { picked = null; paint(); return; }
-      picked = file;
-      paint();
-      openModal('picked');
-    }
-
     function paint() {
-      document.querySelectorAll('.card').forEach(function (card) {
-        var on = card.dataset.file === picked;
-        card.dataset.picked = String(on);
-        card.querySelector('.pick').textContent = on ? '✓ 선택됨' : '선택';
-      });
-      document.getElementById('bottom').hidden = current !== 'reject';
-
-      var slot = document.getElementById('badge-slot');
-      slot.innerHTML = '';
-      if (current) {
-        var b = document.createElement('span');
-        b.className = 'badge ' + current;
-        var sel = D.decision && D.decision.selected ? ' · ' + D.decision.selected.replace('.webp', '') : '';
-        b.textContent = '✓ ' + DEC[current] + sel;
-        slot.appendChild(b);
-      }
+      // 참고용으로 확정된 한 장만 보여 준다 (예전 배치에만 남아 있다)
+      var img = document.getElementById('picked-img');
+      var sel = (D.candidates || []).filter(function (c) { return c.selected && c.src; })[0];
+      if (sel) { img.src = sel.src; img.hidden = false; } else { img.hidden = true; }
       setupSection();
-    }
-
-    function sync(t) { document.getElementById('sync').textContent = t; }
-
-    // ── 결정 모달 ─────────────────────────────────────────────────────────
-    function openModal(mode) {
-      var m = document.getElementById('modal');
-      var actions = document.getElementById('modal-actions');
-      var note = document.getElementById('note');
-      note.value = (D.decision && D.decision.note) || '';
-      actions.innerHTML = '';
-
-      if (mode === 'picked') {
-        document.getElementById('modal-title').textContent = picked.replace('.webp', '') + ' 번 후보';
-        document.getElementById('modal-sub').textContent = '이 장으로 어떻게 할까요? 피드백은 수정 요청일 때만 필수입니다.';
-        addAction(actions, '이걸로 확정', 'primary', function () { submit('accept'); });
-        addAction(actions, '이 장 기준으로 수정 요청', 'warn', function () { submit('revise'); });
-      } else {
-        document.getElementById('modal-title').textContent = '이 배치 기각';
-        document.getElementById('modal-sub').textContent = '컨셉을 버립니다. 사유는 적어두면 다음 컨셉에 반영됩니다 (선택).';
-        addAction(actions, '기각', 'danger', function () { submit('reject'); });
-        addAction(actions, '컨셉은 두고 수정 요청', 'quiet', function () { submit('revise'); });
-      }
-      m.setAttribute('open', '');
-    }
-
-    function addAction(box, label, cls, fn) {
-      var b = document.createElement('button');
-      b.type = 'button'; b.className = cls; b.textContent = label;
-      b.addEventListener('click', fn);
-      box.appendChild(b);
-    }
-
-    function closeModal() { document.getElementById('modal').removeAttribute('open'); }
-
-    function bindModal() {
-      document.getElementById('scrim').addEventListener('click', closeModal);
-      document.getElementById('modal-close').addEventListener('click', closeModal);
-      document.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape') closeModal();
-      });
-    }
-
-    function submit(type) {
-      var note = document.getElementById('note').value.trim();
-      if (type === 'revise' && !note) {
-        document.getElementById('modal-sub').textContent = '무엇을 고칠지 한 줄 적어주세요 — 다음 라운드의 입력이 됩니다.';
-        document.getElementById('note').focus();
-        return;
-      }
-      var btns = document.querySelectorAll('#modal-actions button');
-      btns.forEach(function (b) { b.disabled = true; });
-      sync('제출 중');
-
-      fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          submitted: true,
-          decision: { type: type, selected: type === 'reject' ? null : picked, note: note }
-        })
-      }).then(function (r) {
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        return r.json();
-      }).then(function (res) {
-        current = type;
-        D.decision = res.decision;
-        if (type === 'reject') picked = null;
-        closeModal();
-        sync('제출됨 — ' + DEC[type] + ' · 워커가 최대 6분 안에 이어서 진행합니다');
-        paint();
-      }).catch(function (e) {
-        sync('제출 실패 — ' + e.message);
-        btns.forEach(function (b) { b.disabled = false; });
-      });
-    }
-
-    // ── 삭제 (기각된 배치만) ──────────────────────────────────────────────
-    function bindDelete() {
-      var del = document.getElementById('act-delete');
-      var armed = false;
-      del.addEventListener('click', function () {
-        if (!armed) {
-          armed = true;
-          del.dataset.confirm = 'true';
-          del.textContent = '정말 삭제 (다시 누르기)';
-          setTimeout(function () {
-            armed = false; del.dataset.confirm = 'false'; del.textContent = '이 배치 삭제';
-          }, 4000);
-          return;
-        }
-        del.disabled = true;
-        sync('삭제 중');
-        fetch(endpoint, { method: 'DELETE' }).then(function (r) {
-          if (r.status === 409) throw new Error('기각된 배치만 삭제할 수 있습니다');
-          if (!r.ok) throw new Error('HTTP ' + r.status);
-          return r.json();
-        }).then(function () { location.href = './'; })
-          .catch(function (e) {
-            sync('삭제 실패 — ' + e.message);
-            del.disabled = false; del.dataset.confirm = 'false'; del.textContent = '이 배치 삭제';
-          });
-      });
-    }
-
-    // ── 라이트박스 ────────────────────────────────────────────────────────
-    function openBox(c) {
-      lbIndex = D.candidates.indexOf(c);
-      paintBox();
-      document.getElementById('lightbox').setAttribute('open', '');
-    }
-
-    function paintBox() {
-      var c = D.candidates[lbIndex];
-      var img = document.getElementById('lightbox-img');
-      img.src = c.src; img.alt = c.file;
-      document.getElementById('lb-label').textContent =
-        (lbIndex + 1) + ' / ' + D.candidates.length + '  ·  seed ' + c.seed + (c.model ? '  ·  ' + c.model : '');
-      var pickBtn = document.getElementById('lb-pick');
-      var on = picked === c.file;
-      pickBtn.dataset.picked = String(on);
-      pickBtn.textContent = on ? '선택 해제' : '이 장 선택';
-    }
-
-    function moveBox(step) {
-      lbIndex = (lbIndex + step + D.candidates.length) % D.candidates.length;
-      paintBox();
-    }
-
-    function closeBox() { document.getElementById('lightbox').removeAttribute('open'); }
-
-    function bindLightbox() {
-      var box = document.getElementById('lightbox');
-      box.addEventListener('click', function (e) {
-        if (e.target === box || e.target.id === 'lightbox-img') closeBox();
-      });
-      document.getElementById('lb-prev').addEventListener('click', function (e) { e.stopPropagation(); moveBox(-1); });
-      document.getElementById('lb-next').addEventListener('click', function (e) { e.stopPropagation(); moveBox(1); });
-      document.getElementById('lb-pick').addEventListener('click', function (e) {
-        e.stopPropagation();
-        var c = D.candidates[lbIndex];
-        closeBox();
-        choose(c.file);
-      });
-      var x0 = null;
-      box.addEventListener('touchstart', function (e) { x0 = e.touches[0].clientX; }, { passive: true });
-      box.addEventListener('touchend', function (e) {
-        if (x0 === null) return;
-        var dx = e.changedTouches[0].clientX - x0;
-        x0 = null;
-        if (Math.abs(dx) > 45) moveBox(dx < 0 ? 1 : -1);
-      }, { passive: true });
-      document.addEventListener('keydown', function (e) {
-        if (!box.hasAttribute('open')) return;
-        if (e.key === 'ArrowLeft') moveBox(-1);
-        if (e.key === 'ArrowRight') moveBox(1);
-      });
     }
 
     // ── 캐릭터 설정 ───────────────────────────────────────────────────────
     function setupSection() {
       var box = document.getElementById('setup');
-      if (current !== 'accept') { box.hidden = true; return; }
+      if (!D.decision || D.decision.type !== 'accept') {
+        box.hidden = true;
+        chSync('');
+        document.getElementById('foot').textContent = '확정된 배치가 아니라 캐릭터 설정을 할 수 없습니다.';
+        return;
+      }
       box.hidden = false;
 
       var ch = D.character || {};
@@ -910,7 +605,12 @@
     var autos = [document.getElementById('req-auto-it'), document.getElementById('req-auto-free')];
     var manual = document.getElementById('manual');
 
+    var modelSel = document.getElementById('req-model');
+
     function send(payload, label) {
+      // 체크포인트는 세 경로가 같은 select 를 쓴다. 비어 있으면 실어 보내지 않고,
+      // 그 경우 생성 쪽이 bindings.json 의 기본값을 쓴다.
+      if (modelSel && modelSel.value) payload.model = modelSel.value;
       btn.disabled = true; autos.forEach(function (a) { a.disabled = true; });
       sync.textContent = '보내는 중';
       return fetch(API + '?request=1&k=' + encodeURIComponent(key), {
@@ -948,8 +648,29 @@
     });
   }
 
+  var ckptFilled = false;
+  function fillCheckpoints(cp) {
+    // 목록은 서버가 준 것만 쓴다. 여기에 체크포인트 이름을 적어 두면 낡는다 —
+    // 단일 진실은 저장소의 bindings.json 이고 scripts/publish-models.py 가 밀어 넣는다.
+    if (ckptFilled || !cp || !cp.models || !cp.models.length) return;
+    var sel = document.getElementById('req-model');
+    var wrap = document.getElementById('ckpt-wrap');
+    if (!sel || !wrap) return;
+    cp.models.forEach(function (m) {
+      var o = document.createElement('option');
+      o.value = m.alias;
+      o.textContent = m.alias + (m.alias === cp.default ? ' (기본)' : '');
+      o.title = m.file;
+      if (m.alias === cp.default) o.selected = true;
+      sel.appendChild(o);
+    });
+    wrap.hidden = false;
+    ckptFilled = true;
+  }
+
   function loadRequests() {
     get('requests=1&k=' + encodeURIComponent(key)).then(function (data) {
+      fillCheckpoints(data.checkpoints);
       var box = document.getElementById('reqs');
       box.innerHTML = '';
       // 끝난 요청은 목록에서 뺀다 — 쌓인 게 있는지만 보이면 된다
@@ -975,6 +696,11 @@
           kd.className = 'kind'; kd.textContent = r.theme === 'free' ? '자동 · 자유' : '자동 · IT';
           p.appendChild(kd);
         }
+        if (r.model) {
+          var md = document.createElement('span');
+          md.className = 'kind'; md.textContent = r.model;
+          p.appendChild(md);
+        }
         var time = document.createElement('time');
         time.dateTime = r.created;
         time.textContent = r.created.replace('T', ' ').slice(0, 16);
@@ -987,6 +713,201 @@
         box.appendChild(row);
       });
     }).catch(function () {});
+  }
+
+
+  // ── 테마곡 ──────────────────────────────────────────────────────────────
+  // 이미지 심사와 달리 배치가 없다. 주문 하나 = `_music/<id>.json` 이고,
+  // composer 가 후보 Suno 링크를 올리면 status 가 review 로 바뀌어 위쪽 판정 칸에 뜬다
+  // (음원은 저장하지 않는다 — 링크를 눌러 Suno 에서 듣는다).
+  var musicPick = null;
+
+  function bindMusic() {
+    var form = document.getElementById('music-form');
+    var note = document.getElementById('music-note');
+    var btn = document.getElementById('music-send');
+    var sync = document.getElementById('music-sync');
+
+    btn.addEventListener('click', function () {
+      if (!musicPick) return;
+      btn.disabled = true;
+      sync.textContent = '보내는 중';
+      fetch(API + '?music=1&k=' + encodeURIComponent(key), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ character: musicPick.id, name: musicPick.name,
+                               note: note.value.trim() })
+      }).then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      }).then(function () {
+        sync.textContent = '주문 등록됨 — PC 워커가 가져갑니다';
+        note.value = '';
+        musicPick = null;
+        form.classList.remove('on');
+        loadMusic();
+      }).catch(function (err) {
+        sync.textContent = '실패 — ' + err.message;
+      }).then(function () { btn.disabled = false; });
+    });
+  }
+
+  // 주문 목록 전체는 그리지 않는다. 지금 만드는 중인 캐릭터에 스피너를 얹고,
+  // 제목 옆 점 하나로 전체 상태만 알린다 (빨강 = 만드는 중, 초록 = 다 나옴).
+  // 후보가 올라온 주문(review)만 판정 칸으로 그린다 — renderVerdicts
+  var musicTimer = null;
+
+  function loadMusic() {
+    return get('music=1&k=' + encodeURIComponent(key)).then(function (data) {
+      var busy = {}, anyBusy = false, anyDone = false;
+      (data.orders || []).forEach(function (o) {
+        if (o.status === 'pending' || o.status === 'picked') {
+          busy[o.character] = true; anyBusy = true;
+        } else if (o.status === 'review' || o.status === 'done') {
+          anyDone = true;
+        }
+      });
+
+      renderRoster(data.roster || [], busy);
+      renderVerdicts((data.orders || []).filter(function (o) { return o.status === 'review'; }));
+
+      var dot = document.getElementById('music-dot');
+      if (dot) {
+        dot.className = 'dot' + (anyBusy ? ' busy' : anyDone ? ' done' : '');
+        dot.hidden = !anyBusy && !anyDone;
+        dot.title = anyBusy ? '만드는 중' : anyDone ? '곡 나옴' : '';
+      }
+
+      // 만드는 중일 때만 다시 본다 — 스피너가 멈춰 있으면 의미가 없다
+      if (musicTimer) { clearTimeout(musicTimer); musicTimer = null; }
+      if (anyBusy && document.getElementById('roster')) {
+        musicTimer = setTimeout(loadMusic, 20000);
+      }
+    }).catch(function () {});
+  }
+
+  // 판정 — ?music=<id> 에 {type: pick|revise|drop, selected, note}. revise 면 워커가 다시 만든다
+  function renderVerdicts(orders) {
+    var box = document.getElementById('music-review');
+    if (!box) return;
+    box.innerHTML = '';
+    box.hidden = !orders.length;
+    orders.forEach(function (o) {
+      var card = document.createElement('div');
+      card.className = 'verdict';
+      var h = document.createElement('h3');
+      h.textContent = (o.name || o.character) + (o.title ? ' — ' + o.title : '');
+      card.appendChild(h);
+      if (o.note) {
+        var ask = document.createElement('p');
+        ask.className = 'ask'; ask.textContent = '요청: ' + o.note;
+        card.appendChild(ask);
+      }
+      var sync = document.createElement('span');
+      sync.className = 'sync';
+      var note = document.createElement('textarea');
+      note.placeholder = '다시 만들 때 고칠 점 (선택)';
+      var buttons = [];
+      function send(body) {
+        buttons.forEach(function (b) { b.disabled = true; });
+        sync.textContent = '보내는 중';
+        fetch(API + '?music=' + encodeURIComponent(o.id) + '&k=' + encodeURIComponent(key), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        }).then(function (r) {
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          return r.json();
+        }).then(function () {
+          loadMusic();
+        }).catch(function (err) {
+          sync.textContent = '실패 — ' + err.message;
+          buttons.forEach(function (b) { b.disabled = false; });
+        });
+      }
+      (o.tracks || []).forEach(function (t, i) {
+        var row = document.createElement('div');
+        row.className = 'trk';
+        var a = document.createElement('a');
+        a.href = t.url; a.target = '_blank'; a.rel = 'noopener';
+        a.textContent = t.label || ('후보 ' + (i + 1));
+        var pick = document.createElement('button');
+        pick.type = 'button'; pick.className = 'pick'; pick.textContent = '이 곡으로';
+        pick.addEventListener('click', function () {
+          send({ type: 'pick', selected: t.url, note: note.value.trim() });
+        });
+        buttons.push(pick);
+        row.appendChild(a); row.appendChild(pick);
+        card.appendChild(row);
+      });
+      card.appendChild(note);
+      var actions = document.createElement('div');
+      actions.className = 'row';
+      [['revise', '다시 만들기'], ['drop', '폐기']].forEach(function (d) {
+        var b = document.createElement('button');
+        b.type = 'button'; b.textContent = d[1];
+        b.addEventListener('click', function () { send({ type: d[0], note: note.value.trim() }); });
+        buttons.push(b);
+        actions.appendChild(b);
+      });
+      actions.appendChild(sync);
+      card.appendChild(actions);
+      box.appendChild(card);
+    });
+  }
+
+  function renderRoster(roster, busy) {
+    busy = busy || {};
+    var box = document.getElementById('roster');
+    if (!box) return;
+    box.innerHTML = '';
+    if (!roster.length) {
+      var p = document.createElement('p');
+      p.className = 'lead';
+      p.textContent = '캐릭터 명단이 아직 없습니다 — PC 에서 scripts/publish-roster.py 를 한 번 돌리세요.';
+      box.appendChild(p);
+      return;
+    }
+    var form = document.getElementById('music-form');
+    roster.forEach(function (c) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.setAttribute('aria-pressed', musicPick && musicPick.id === c.id ? 'true' : 'false');
+      var ph = document.createElement('span');
+      ph.className = 'ph';
+      if (c.thumb) {
+        var img = document.createElement('img');
+        img.src = c.thumb; img.alt = ''; img.loading = 'lazy';
+        ph.appendChild(img);
+      }
+      if (busy[c.id]) {
+        b.classList.add('busy');
+        b.title = '곡을 만드는 중';
+        var sp = document.createElement('span');
+        sp.className = 'spin';
+        ph.appendChild(sp);
+      }
+      b.appendChild(ph);
+      var nm = document.createElement('span');
+      nm.className = 'nm'; nm.textContent = c.name;
+      b.appendChild(nm);
+      if (c.grade) {
+        var gr = document.createElement('span');
+        gr.className = 'gr'; gr.textContent = c.grade;
+        b.appendChild(gr);
+      }
+      b.addEventListener('click', function () {
+        var same = musicPick && musicPick.id === c.id;
+        musicPick = same ? null : c;
+        box.querySelectorAll('button').forEach(function (x) {
+          x.setAttribute('aria-pressed', 'false');
+        });
+        if (!same) b.setAttribute('aria-pressed', 'true');
+        form.classList.toggle('on', !!musicPick);
+        document.getElementById('music-sync').textContent = '';
+      });
+      box.appendChild(b);
+    });
   }
 
   if (batch) showDetail(); else showList();

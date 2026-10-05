@@ -1,18 +1,18 @@
-// 캐릭터 일러스트 후보 심사 API.
+// 심사실 API — 컨셉 요청 · 테마곡 주문 · 캐릭터 설정 선택.
 //
-//   GET  /functions/v1/review?list=1&k=<키>        → 배치 목록 (썸네일 + 결정 상태)
-//   GET  /functions/v1/review?b=<batch>&t=<token>  → 배치 데이터 + 이미지 서명 URL
-//   POST /functions/v1/review?b=<batch>&t=<token>  → 결정 저장 {decision, submitted}
-//   DELETE /functions/v1/review?b=<batch>&t=<token> → 배치 삭제 (기각된 것만)
+//   GET  /functions/v1/review?list=1&k=<키>        → 배치 목록 (워커·review-status.py·설정 목록)
+//   GET  /functions/v1/review?b=<batch>&t=<token>  → 배치 데이터 (캐릭터 설정 화면)
 //   POST /functions/v1/review?b=<batch>&t=<token>  → 캐릭터 설정 저장 {character}
 //        (확정된 배치에만. proposals 는 PC 의 builder 가 채워 넣는다)
+//   GET  /functions/v1/review?music=1&k=<키>       → 곡 주문 목록 + 캐릭터 명단
+//   POST /functions/v1/review?music=1&k=<키>       → 곡 주문 등록 {character, note}
+//   POST /functions/v1/review?music=<id>&k=<키>    → 곡 판정 {type, selected, note}
 //   GET  /functions/v1/review?requests=1&k=<키>    → 컨셉 요청 목록
 //   POST /functions/v1/review?request=1&k=<키>     → 컨셉 요청 등록 {text, kind, theme}
 //
-// 심사 결과는 **배치 단위 결정 하나**다.
-//   accept : 이 컨셉으로 확정 — selected 필수 (4장 중 1장)
-//   revise : 다시 — selected 가 있으면 그 장 기준으로 다듬고, 없으면 컨셉째 수정
-//   reject : 컨셉 폐기
+// 일러스트 후보 심사(후보 고르기 · 배치 결정 제출 · 기각 배치 삭제)는 없앴다 (2026-09-17 —
+// 후보는 심사실에 올리지 않고 ComfyUI 출력 폴더에서 사람이 직접 본다). 이미 올라가 있는
+// 배치의 batch.json 은 그대로 읽는다 — 확정(accept) 배치의 캐릭터 설정이 여기에 산다.
 //
 // 인증은 둘 중 하나:
 //   t = 배치별 토큰 (batch.json 에 기록. 푸시 알림 링크에 실린다)
@@ -27,12 +27,15 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const BUCKET = 'review';
 const REQ_PREFIX = '_requests'; // 컨셉 요청 (배치 목록에서 제외되도록 _ 로 시작)
+const MUSIC_PREFIX = '_music';   // 곡 주문 (같은 이유로 _ 로 시작)
+const ROSTER_PATH = '_roster/roster.json'; // 게임에 등록된 캐릭터 명단 (PC 가 갱신)
+const MODELS_PATH = '_models.json'; // 고를 수 있는 ComfyUI 체크포인트 (PC 가 갱신)
 const SIGNED_TTL = 60 * 60 * 24; // 서명 URL 24시간
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
 };
 
 type DecisionType = 'accept' | 'revise' | 'reject';
@@ -72,6 +75,21 @@ interface CharacterSetup {
   } | null;
 }
 
+/** 곡 주문 — 게임에 이미 있는 캐릭터에 테마곡을 붙인다 */
+interface MusicOrder {
+  id: string;
+  character: string;              // src/utils/character.ts 의 id
+  name: string;                   // 표시용 이름 (주문 시점의 명단에서 복사)
+  note: string;                   // 사람이 적은 분위기 요청 (선택)
+  created: string;
+  /** pending → (composer 가 집음) picked → 링크 올라옴 review → done | dropped */
+  status: 'pending' | 'picked' | 'review' | 'done' | 'dropped';
+  title: string | null;           // composer 가 정한 곡 제목
+  tracks: { url: string; label: string }[];   // Suno 공유 링크 (음원은 안 받는다)
+  decision: { type: 'pick' | 'revise' | 'drop'; selected: string | null; note: string } | null;
+  updatedAt: string | null;
+}
+
 interface Batch {
   batch: string;
   label: string;
@@ -93,6 +111,24 @@ function json(body: unknown, status = 200): Response {
     status,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
+}
+
+// 체크포인트 목록. **여기에 목록을 베껴 적지 않는다** — 단일 진실은 저장소의
+// `workflows/comfyui/bindings.json` 이고, `scripts/publish-models.py` 가 밀어 넣는다.
+type ModelList = { default: string | null; models: { alias: string; file: string }[] };
+
+async function readModels(sb: ReturnType<typeof createClient>): Promise<ModelList> {
+  const d = await sb.storage.from(BUCKET).download(MODELS_PATH);
+  if (d.error || !d.data) return { default: null, models: [] };
+  try {
+    const parsed = JSON.parse(await d.data.text());
+    return {
+      default: parsed?.default ?? null,
+      models: Array.isArray(parsed?.models) ? parsed.models : [],
+    };
+  } catch {
+    return { default: null, models: [] };
+  }
 }
 
 Deno.serve(async (req: Request) => {
@@ -121,6 +157,12 @@ Deno.serve(async (req: Request) => {
       const theme = body?.theme === 'free' ? 'free' : body?.theme === 'it' ? 'it' : null;
       if (!text && kind !== 'auto') return json({ error: 'text_required' }, 400);
 
+      // 체크포인트: 올라와 있는 목록의 별칭만 받는다. 없거나 모르는 값이면 null →
+      // 생성 쪽이 bindings.json 의 기본 체크포인트를 쓴다.
+      const wanted = String(body?.model ?? '').trim();
+      const { models: allowed } = await readModels(sb);
+      const model = allowed.some((m) => m.alias === wanted) ? wanted : null;
+
       const now = new Date();
       const id =
         now.toISOString().replace(/[-:T]/g, '').slice(0, 14) +
@@ -130,6 +172,7 @@ Deno.serve(async (req: Request) => {
         id,
         kind, // manual = 사용자가 컨셉을 적음 / auto = 컨셉도 알아서 잡기
         theme,
+        model, // ComfyUI 체크포인트 별칭. null 이면 기본값
         text: text.slice(0, 2000),
         created: now.toISOString(),
         status: 'pending', // pending | picked | done | dropped
@@ -158,7 +201,123 @@ Deno.serve(async (req: Request) => {
     );
     const requests = items.filter((r) => r !== null);
     requests.sort((a, b) => (a!.created < b!.created ? 1 : -1));
-    return json({ requests });
+    const checkpoints = await readModels(sb);
+    return json({ requests, checkpoints });
+  }
+
+  // ── 곡 주문 ─────────────────────────────────────────────────────────────
+  // 이미지 심사와 달리 배치 폴더가 없다. 주문 하나가 `_music/<id>.json` 뿐이다.
+  // **음원은 저장하지 않는다** — 후보는 Suno 공유 링크로 듣는다 (브라우저 다운로드가
+  // 자주 끊기고, 심사에는 파일이 필요 없다). selected 에는 그 링크가 들어간다.
+  {
+    const musicParam = url.searchParams.get('music');
+    if (musicParam) {
+      if (!keyOk) return json({ error: 'forbidden' }, 403);
+
+      const readOrder = async (id: string): Promise<MusicOrder | null> => {
+        const d = await sb.storage.from(BUCKET).download(`${MUSIC_PREFIX}/${id}.json`);
+        if (d.error || !d.data) return null;
+        return JSON.parse(await d.data.text());
+      };
+      const writeOrder = async (o: MusicOrder) => {
+        return await sb.storage.from(BUCKET).upload(
+          `${MUSIC_PREFIX}/${o.id}.json`,
+          new Blob([JSON.stringify(o, null, 2)], { type: 'application/json' }),
+          { upsert: true, contentType: 'application/json' }
+        );
+      };
+
+      // ?music=1 → 목록 / 등록
+      if (musicParam === '1') {
+        if (req.method === 'POST') {
+          const body = await req.json().catch(() => null);
+          const character = String(body?.character ?? '').trim();
+          if (!/^[a-z0-9_-]{1,40}$/i.test(character)) return json({ error: 'character_required' }, 400);
+          // 명단(PC 가 publish-roster.py 로 올린 것)에 있는 캐릭터만 받는다 — 게임에 없는 id 로
+          // 주문이 쌓이면 워커가 그대로 곡을 만든다. 이름도 클라이언트 값 대신 명단 값을 쓴다
+          const rf = await sb.storage.from(BUCKET).download(ROSTER_PATH);
+          if (rf.error || !rf.data) return json({ error: 'roster_missing' }, 503);
+          const listedChars: { id: string; name: string }[] =
+            JSON.parse(await rf.data.text())?.characters ?? [];
+          const known = Array.isArray(listedChars) ? listedChars.find((c) => c.id === character) : undefined;
+          if (!known) return json({ error: 'unknown_character' }, 400);
+
+          const now = new Date();
+          const id =
+            now.toISOString().replace(/[-:T]/g, '').slice(0, 14) +
+            '-' + Math.random().toString(36).slice(2, 8);
+          const order: MusicOrder = {
+            id,
+            character,
+            name: String(known.name ?? character).slice(0, 40),
+            note: String(body?.note ?? '').trim().slice(0, 2000),
+            created: now.toISOString(),
+            status: 'pending',
+            title: null,
+            tracks: [],
+            decision: null,
+            updatedAt: null,
+          };
+          const up = await writeOrder(order);
+          if (up.error) return json({ error: up.error.message }, 500);
+          return json({ ok: true, order });
+        }
+
+        // 명단 (PC 가 갱신해 둔 것)
+        let roster: { id: string; name: string; grade: string; illust?: string; thumb?: string }[] = [];
+        const rf = await sb.storage.from(BUCKET).download(ROSTER_PATH);
+        if (!rf.error && rf.data) {
+          const parsed = JSON.parse(await rf.data.text());
+          roster = Array.isArray(parsed?.characters) ? parsed.characters : [];
+          const withIllust = roster.filter((c) => c.illust);
+          if (withIllust.length) {
+            const signed = await sb.storage
+              .from(BUCKET)
+              .createSignedUrls(withIllust.map((c) => `_roster/${c.illust}`), SIGNED_TTL);
+            (signed.data ?? []).forEach((sg, i) => {
+              if (sg.signedUrl) withIllust[i].thumb = sg.signedUrl;
+            });
+          }
+        }
+
+        const listed = await sb.storage.from(BUCKET).list(MUSIC_PREFIX, { limit: 200 });
+        if (listed.error) return json({ error: listed.error.message }, 500);
+        const files = (listed.data ?? []).filter((e) => e.name.endsWith('.json'));
+        const items = await Promise.all(
+          files.map(async (f) => readOrder(f.name.replace(/\.json$/, '')))
+        );
+        const orders = items.filter((o): o is MusicOrder => o !== null);
+
+        orders.sort((a, b) => (a.created < b.created ? 1 : -1));
+        return json({ orders, roster });
+      }
+
+      // ?music=<id> → 판정
+      if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
+      if (!/^[a-z0-9-]{1,64}$/i.test(musicParam)) return json({ error: 'invalid_order' }, 400);
+
+      const order = await readOrder(musicParam);
+      if (!order) return json({ error: 'not_found' }, 404);
+
+      const body = await req.json().catch(() => null);
+      const type = body?.type as 'pick' | 'revise' | 'drop' | undefined;
+      if (type !== 'pick' && type !== 'revise' && type !== 'drop') {
+        return json({ error: 'type_required' }, 400);
+      }
+      const selected = typeof body?.selected === 'string' ? body.selected : null;
+      if (type === 'pick' && !selected) return json({ error: 'selected_required' }, 400);
+      if (selected && !order.tracks.some((t) => t.url === selected)) {
+        return json({ error: 'unknown_track' }, 400);
+      }
+
+      order.decision = { type, selected, note: String(body?.note ?? '').slice(0, 2000) };
+      order.status = type === 'pick' ? 'done' : type === 'drop' ? 'dropped' : 'pending';
+      order.updatedAt = new Date().toISOString();
+
+      const up = await writeOrder(order);
+      if (up.error) return json({ error: up.error.message }, 500);
+      return json({ ok: true, order });
+    }
   }
 
   // ── 배치 목록 ───────────────────────────────────────────────────────────
@@ -280,51 +439,8 @@ Deno.serve(async (req: Request) => {
       return json({ ok: true, character: meta.character });
     }
 
-    const type = body?.decision?.type as DecisionType | undefined;
-    if (type !== 'accept' && type !== 'revise' && type !== 'reject') {
-      return json({ error: 'decision_required' }, 400);
-    }
-    const selected =
-      typeof body.decision.selected === 'string' ? body.decision.selected : null;
-    if (type === 'accept' && !selected) return json({ error: 'selected_required' }, 400);
-    if (selected && !meta.candidates.some((c) => c.file === selected)) {
-      return json({ error: 'unknown_candidate' }, 400);
-    }
-
-    meta.decision = {
-      type,
-      selected,
-      note: String(body.decision.note ?? '').slice(0, 2000),
-    };
-    meta.candidates = meta.candidates.map((c) => ({ ...c, selected: c.file === selected }));
-    meta.submitted = !!body.submitted;
-    meta.updatedAt = new Date().toISOString();
-    if (meta.submitted) meta.submittedAt = meta.updatedAt;
-
-    const up = await sb.storage.from(BUCKET).upload(
-      metaPath,
-      new Blob([JSON.stringify(meta, null, 2)], { type: 'application/json' }),
-      { upsert: true, contentType: 'application/json' }
-    );
-    if (up.error) return json({ error: up.error.message }, 500);
-
-    return json({ ok: true, submitted: meta.submitted, decision: meta.decision });
-  }
-
-  // ── 삭제 (기각된 배치만) ────────────────────────────────────────────────
-  if (req.method === 'DELETE') {
-    if (meta.decision?.type !== 'reject') {
-      return json({ error: 'reject_only' }, 409);
-    }
-    const listed = await sb.storage.from(BUCKET).list(batch, { limit: 200 });
-    if (listed.error) return json({ error: listed.error.message }, 500);
-
-    const paths = (listed.data ?? []).map((e) => `${batch}/${e.name}`);
-    if (paths.length) {
-      const removed = await sb.storage.from(BUCKET).remove(paths);
-      if (removed.error) return json({ error: removed.error.message }, 500);
-    }
-    return json({ ok: true, deleted: paths.length });
+    // 배치 결정(accept/revise/reject) 제출은 일러스트 후보 심사와 함께 없앴다.
+    return json({ error: 'character_required' }, 400);
   }
 
   return json({ error: 'method_not_allowed' }, 405);

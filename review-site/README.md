@@ -20,6 +20,23 @@ npx vercel --prod
 REVIEW_SITE_URL=https://ddong-review.vercel.app
 ```
 
+## 화면 구성
+
+한 페이지에 세 가지가 올라가 있다.
+
+| | 하는 일 | 데이터 |
+|---|---|---|
+| 후보 심사 | 일러스트 4장 중 고르고 확정·수정·기각 | `review/<배치>/batch.json` |
+| 컨셉 요청 | 새 캐릭터를 만들어 달라고 주문 | `review/_requests/*.json` |
+| 테마곡 | **게임에 있는 캐릭터**를 골라 곡을 주문하고, 올라온 Suno 링크로 듣고 채택 | `review/_music/*.json` |
+
+테마곡 탭의 캐릭터 명단은 PC 가 밀어 넣는다 — 정적 HTML 이라 저장소를 읽을 수 없다.
+캐릭터를 새로 등록했으면 한 번 돌린다.
+
+```bash
+C:\ComfyUI\.venv\Scripts\python.exe scripts/publish-roster.py
+```
+
 ## 접근 제어
 
 `?b=<배치>&t=<토큰>` 의 토큰(16자리 랜덤)이 유일한 열쇠다. 링크를 아는 사람은
