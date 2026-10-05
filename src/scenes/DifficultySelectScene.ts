@@ -2,6 +2,7 @@ import { Difficulty, GameMode, DIFFICULTIES, type DifficultyConfig } from '../ty
 import { isChristmasSeason } from '../utils/seasonChecker';
 import { getSafeSelectedWallpaper, getWallpaperDef } from '../utils/wallpaper';
 import BaseScene from './BaseScene';
+import { addBackground } from '../utils/background';
 
 interface ButtonCardConfig {
   color: number;
@@ -89,8 +90,7 @@ export default class DifficultySelectScene extends BaseScene {
     const yOff = (H - 600) / 2;
 
     // 배경 이미지 추가
-    const background = this.add.image(cx, H / 2, 'background');
-    background.setDisplaySize(W, H);
+    addBackground(this, 'background', W, H);
 
     // 반투명 오버레이로 가독성 향상
     this.add.rectangle(cx, H / 2, W, H, 0x000000, 0.4);

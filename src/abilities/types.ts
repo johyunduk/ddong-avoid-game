@@ -15,6 +15,8 @@ export interface GameSceneAPI {
 
   /** Phaser.Scene — time / tweens / add / cameras / physics 접근용 */
   readonly scene: Phaser.Scene;
+  /** 이번 판 배경 텍스처 키 — 땅 재질 팔레트(utils/background getGroundFx) 조회용 */
+  readonly backgroundKey: string;
 
   updateScore(amount: number): void;
   /** 어빌리티 자체 보너스 점수 추가 — updateScore와 동일하지만 abilityBonusTotal에 누적됨 */

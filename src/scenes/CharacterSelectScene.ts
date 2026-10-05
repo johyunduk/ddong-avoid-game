@@ -25,6 +25,7 @@ import {
 import { syncOwnedCharacters, syncOwnedWallpapers } from '../utils/gacha';
 import { destroyVideo } from '../utils/video';
 import BaseScene from './BaseScene';
+import { addBackground, coverBackground } from '../utils/background';
 
 // ── 캐릭터 그리드 설정 ──────────────────────────────────────────────────────
 const COLS = 3;
@@ -423,17 +424,19 @@ export default class CharacterSelectScene extends BaseScene {
     const H = this.scale.height;
     if (this.activeTab === 'character') {
       const def = CHARACTERS.find(c => c.id === this.selectedId) ?? CHARACTERS[0];
-      this.bgImage.setTexture(def.illustKey).setDisplaySize(W, H).setAlpha(1).clearTint();
+      this.bgImage.setTexture(def.illustKey).setOrigin(0.5).setPosition(W / 2, H / 2)
+        .setDisplaySize(W, H).setAlpha(1).clearTint();
     } else {
       const wpDef = this.selectedWpId
         ? WALLPAPERS.find(w => w.id === this.selectedWpId)
         : null;
       if (wpDef && this.textures.exists(wpDef.bgKey)) {
-        this.bgImage.setTexture(wpDef.bgKey).setDisplaySize(W, H).setAlpha(1).clearTint();
+        coverBackground(this.bgImage.setTexture(wpDef.bgKey), W, H).setAlpha(1).clearTint();
       } else {
         // 선택 배경 없음 → 캐릭터 일러스트를 어둡게 처리
         const def = CHARACTERS.find(c => c.id === this.selectedId) ?? CHARACTERS[0];
-        this.bgImage.setTexture(def.illustKey).setDisplaySize(W, H).setAlpha(0.2);
+        this.bgImage.setTexture(def.illustKey).setOrigin(0.5).setPosition(W / 2, H / 2)
+          .setDisplaySize(W, H).setAlpha(0.2);
       }
     }
   }
@@ -534,7 +537,7 @@ export default class CharacterSelectScene extends BaseScene {
 
     // 배경화면 전체화면 미리보기
     if (this.textures.exists(def.bgKey)) {
-      const bg = this.add.image(cx, H / 2, def.bgKey).setDisplaySize(W, H);
+      const bg = addBackground(this, def.bgKey, W, H);
       panel.add(bg);
     } else {
       const fallback = this.add.rectangle(cx, H / 2, W, H, 0x050515);
@@ -752,7 +755,8 @@ export default class CharacterSelectScene extends BaseScene {
     const def = CHARACTERS.find(c => c.id === id) ?? CHARACTERS[0];
     this.headerNameText.setText(`현재: ${def.name}`);
     this.headerNameText.setColor(def.gradeColor);
-    this.bgImage.setTexture(def.illustKey).setDisplaySize(this.scale.width, this.scale.height);
+    const { width: W, height: H } = this.scale;
+    this.bgImage.setTexture(def.illustKey).setOrigin(0.5).setPosition(W / 2, H / 2).setDisplaySize(W, H);
   }
 
   private showCharacterDetail(id: string): void {

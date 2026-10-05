@@ -19,6 +19,7 @@ import {
 import { getBattleTier, preloadTierImages } from '../utils/battleTier';
 import { getMyRating, getCachedMyRating, setCachedMyRating, clearCachedMyRating } from '../utils/battleLeaderboard';
 import BaseScene from './BaseScene';
+import { addBackground } from '../utils/background';
 
 /**
  * 대전 매칭 씬 — 상태별 UI 전환
@@ -108,8 +109,7 @@ export default class BattleMatchScene extends BaseScene {
     const yOff = (H - 600) / 2;
 
     // 배경 (모든 상태에서 유지)
-    const bg = this.add.image(cx, H / 2, 'background2');
-    bg.setDisplaySize(W, H);
+    addBackground(this, 'background2', W, H);
     this.add.rectangle(cx, H / 2, W, H, 0x000000, 0.6);
 
     // 타이틀 (모든 상태에서 유지)

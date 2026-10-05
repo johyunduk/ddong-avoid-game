@@ -11,6 +11,7 @@ import {
 } from '../utils/leaderboard';
 import { CHARACTERS, getVisibleCharacters, getGradeColorInt } from '../utils/character';
 import BaseScene from './BaseScene';
+import { addBackground } from '../utils/background';
 
 export default class LeaderboardScene extends BaseScene {
   private selectedDifficulty: Difficulty = DifficultyEnum.NORMAL;
@@ -79,8 +80,7 @@ export default class LeaderboardScene extends BaseScene {
     const yOff = (H - 600) / 2;
 
     // 배경 이미지 추가
-    const background = this.add.image(cx, H / 2, 'background2');
-    background.setDisplaySize(W, H);
+    addBackground(this, 'background2', W, H);
 
     // 타이틀
     this.add.text(cx, 40 + yOff, '🏆 랭킹보드 🏆', {

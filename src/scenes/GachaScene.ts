@@ -5,6 +5,7 @@ import { WALLPAPERS, getWallpaperDef, addOwnedWallpaper, WP_ACCENT_INT, WP_ACCEN
 import { getSkorBalance, getCachedSkorBalance, cacheSkorBalance } from '../utils/skor';
 import { destroyVideo } from '../utils/video';
 import BaseScene from './BaseScene';
+import { addBackground } from '../utils/background';
 
 // 개인 영상이 있는 캐릭터 — **캐릭터 정의에서 그대로 읽는다.** 영상 유무는 이미
 // `videoKey`/`videoPath` 가 말하고 있어서, 목록을 따로 두면 캐릭터를 추가할 때
@@ -483,7 +484,7 @@ export default class GachaScene extends BaseScene {
 
     // ── 배경: 실제 배경화면 이미지 (있으면) 또는 단색 ──
     if (def && this.textures.exists(def.bgKey)) {
-      this.add.image(_cx, _H / 2, def.bgKey).setDisplaySize(_W, _H);
+      addBackground(this, def.bgKey, _W, _H);
     } else {
       this.add.rectangle(_cx, _H / 2, _W, _H, 0x050515);
     }
@@ -698,8 +699,7 @@ export default class GachaScene extends BaseScene {
 
     // ── 배경: 사이버 우주 이미지 + 등급 컬러 헤이즈 ──
     if (this.textures.exists('gacha_background')) {
-      const bg = this.add.image(cx, H / 2, 'gacha_background');
-      bg.setDisplaySize(W, H);
+      addBackground(this, 'gacha_background', W, H);
     } else {
       this.add.rectangle(cx, H / 2, W, H, 0x050510);
     }
@@ -812,7 +812,7 @@ export default class GachaScene extends BaseScene {
     const _cx = _W / 2;
     const _yOff = (_H - 600) / 2;
     if (this.textures.exists('gacha_background')) {
-      this.add.image(_cx, _H / 2, 'gacha_background').setDisplaySize(_W, _H);
+      addBackground(this, 'gacha_background', _W, _H);
     } else {
       this.add.rectangle(_cx, _H / 2, _W, _H, 0x060612);
     }

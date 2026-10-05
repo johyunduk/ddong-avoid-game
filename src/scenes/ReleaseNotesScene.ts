@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { RELEASE_NOTES } from '../data/releaseNotes';
 import BaseScene from './BaseScene';
+import { addBackground } from '../utils/background';
 
 export default class ReleaseNotesScene extends BaseScene {
   private scrollContainer!: Phaser.GameObjects.Container;
@@ -35,8 +36,7 @@ export default class ReleaseNotesScene extends BaseScene {
     this.scrollY = 0;
 
     // 배경
-    const background = this.add.image(cx, H / 2, 'background2');
-    background.setDisplaySize(W, H);
+    addBackground(this, 'background2', W, H);
 
     // 반투명 오버레이 (더 어둡게)
     this.add.rectangle(cx, H / 2, W, H, 0x000000, 0.7);

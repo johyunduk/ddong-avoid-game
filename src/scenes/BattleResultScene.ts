@@ -3,6 +3,7 @@ import { submitBattleResult, setCachedMyRating, type SubmitBattleResultResponse 
 import { getBattleTier, getTierIndex, preloadTierImages } from '../utils/battleTier';
 import { BattleChannel } from '../utils/battleChannel';
 import BaseScene from './BaseScene';
+import { addBackground } from '../utils/background';
 
 interface BattleResultData {
   result: BattleResult;
@@ -83,8 +84,7 @@ export default class BattleResultScene extends BaseScene {
     const yOff = (H - 600) / 2;
 
     // 배경
-    const bg = this.add.image(cx, H / 2, 'background2');
-    bg.setDisplaySize(W, H);
+    addBackground(this, 'background2', W, H);
     this.add.rectangle(cx, H / 2, W, H, 0x000000, 0.75);
 
     // 결과 텍스트

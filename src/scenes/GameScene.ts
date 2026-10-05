@@ -29,6 +29,7 @@ import { realNow } from '../utils/realTime';
 import { preloadFxAssets, loadFxPickSheet, preloadFxSheet } from '../utils/vfx';
 import { preloadCharSheets, ensureCharAnims } from '../utils/charAnim';
 import BaseScene from './BaseScene';
+import { addBackground } from '../utils/background';
 
 export default class GameScene extends BaseScene {
   protected inputGuardMs = 0; // 게임플레이 씬은 즉시 입력 허용
@@ -123,6 +124,8 @@ export default class GameScene extends BaseScene {
   // ── 캐릭터 능력 시스템 ────────────────────────────────────────────────
   protected ability!: CharacterAbility;
   protected abilityAPI!: GameSceneAPI;
+  /** 이번 판 배경 텍스처 키 — create() 에서 정한다. 능력이 땅 팔레트(getGroundFx)를 고를 때 쓴다 */
+  protected backgroundKey = 'background';
   // [디버그] 수동 충돌 영역 시각화
   private manualHitboxDebug?: Phaser.GameObjects.Graphics;
 
@@ -319,8 +322,8 @@ export default class GameScene extends BaseScene {
     const H = this.scale.height;
     const cx = W / 2;
 
-    const background = this.add.image(cx, H / 2, backgroundKey);
-    background.setDisplaySize(W, H);
+    this.backgroundKey = backgroundKey;
+    addBackground(this, backgroundKey, W, H);
 
     // BGM 키 결정 (preload에서 이미 로드됨)
     let bgMusicKey = 'bgMusic';
@@ -660,6 +663,7 @@ export default class GameScene extends BaseScene {
       get topazPoops()      { return self.topazPoops; },
       get rainbowPoops()    { return self.rainbowPoops; },
       get scene()           { return self as unknown as Phaser.Scene; },
+      get backgroundKey()   { return self.backgroundKey; },
       updateScore:    (n) => self.updateScore(n),
       addAbilityBonus: (n) => { self.abilityBonusTotal += n; self.updateScore(n); },
       spawnGoldPoop:    () => self.spawnGoldPoop(),

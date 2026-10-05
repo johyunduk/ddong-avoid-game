@@ -3,6 +3,7 @@ import { GameMode, GAME_MODES, type GameModeConfig } from '../types/GameMode';
 import { getSkorBalance, getCachedSkorBalance, cacheSkorBalance } from '../utils/skor';
 import { setBgmMuted } from '../utils/settings';
 import BaseScene from './BaseScene';
+import { addBackground } from '../utils/background';
 
 export default class ModeSelectScene extends BaseScene {
   private skorText!: Phaser.GameObjects.Text;
@@ -29,8 +30,7 @@ export default class ModeSelectScene extends BaseScene {
     const cx = W / 2;
     const yOff = (H - 600) / 2;
 
-    const background = this.add.image(cx, H / 2, 'background2');
-    background.setDisplaySize(W, H);
+    addBackground(this, 'background2', W, H);
 
     const title = this.add.image(cx, 90 + yOff, 'title');
     title.setScale(0.4);
