@@ -1,7 +1,7 @@
 r"""레드 참새 궤도 — 머리 위 여백과 참새 아래폭을 실측하고, 실제로 렌더해 겹침을 본다.
 
 `RED_PARAMS.orbitHeadInsetH` / `orbitAbove` / `orbitRy` 의 출처다.
-검수 그림 `creative/_fx/red-orbit/orbit_check.png` 를 같이 낸다.
+검수 그림 `$DDONG_FX_WORK/red-orbit/orbit_check.png` 를 같이 낸다.
 
     C:\ComfyUI\.venv\Scripts\python.exe scripts/measure-orbit.py
 """
@@ -10,6 +10,8 @@ import math
 import pathlib
 
 from PIL import Image, ImageDraw
+import os
+FX_WORK = os.environ.get('DDONG_FX_WORK', 'C:/Users/user/ddong-fx-work')  # 생성 원본·작업물 (저장소 밖)
 
 PW, PH = 47, 80          # character.ts 의 playerDisplaySize
 SPARROW_FRAME = 128
@@ -19,7 +21,7 @@ RX, RY = 52, 12          # orbitRx, orbitRy
 ABOVE = 25               # orbitAbove
 BACK_SCALE, BACK_ALPHA = 0.85, 0.82
 
-OUT = pathlib.Path('creative/_fx/red-orbit')
+OUT = pathlib.Path(f'{FX_WORK}/red-orbit')
 OUT.mkdir(parents=True, exist_ok=True)
 
 

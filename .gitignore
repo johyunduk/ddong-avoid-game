@@ -48,6 +48,9 @@ creative/*/reference*.jpg
 creative/*/gameplay.mp4
 creative/*/song*.mp3
 creative/_axis-test/
+# 이펙트 생성 원본·작업물은 **저장소 밖**으로 옮겼다 (2026-09-27, 사람 지시: "쓸데없는 게 프로젝트에
+# 들어가는 게 싫다"). 위치: $DDONG_FX_WORK (기본 C:/Users/user/ddong-fx-work). 스크립트가 거기서 읽고
+# 확정 시트만 public/ 에 쓴다. 누가 다시 여기에 만들어도 안 올라가게 규칙은 남겨 둔다
 creative/_fx/
 release/social/*/
 
@@ -66,3 +69,12 @@ __pycache__/
 # 누수 검사 하네스가 굽는 번들 출력 (node scripts/run-fx-leak-check.mjs 로 재생성)
 # 검사 한 번에 수백 개가 쌓인다 — 89MB 까지 불어난 적이 있다
 .fx-leak-out/
+
+# 심사실 캐릭터 파이프라인 산출물 — 게임에 들어가지 않는다 (2026-09-27 정리, 디스크에서도 삭제)
+# 워커가 다시 돌면 creative/<id>-01/ · production/<id>-01.yaml 이 새로 생기지만 깃엔 안 올린다
+creative/*-01/
+production/*-01.yaml
+creative/_bg/
+creative/_music/
+# 작업용 원본·연구 파일 (3D 모델·얼굴 연구·퓨요 원본) — public/ 에 두면 빌드에 딸려 나간다
+creative/_study/

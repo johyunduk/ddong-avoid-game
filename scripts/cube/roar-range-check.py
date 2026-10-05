@@ -9,11 +9,13 @@ import math
 import pathlib
 
 from PIL import Image, ImageDraw
+import os
+FX_WORK = os.environ.get('DDONG_FX_WORK', 'C:/Users/user/ddong-fx-work')  # 생성 원본·작업물 (저장소 밖)
 
 W, H = 360, 640
 RING_ART_R = 87.4          # scripts/measure-ring.py 실측
 ROAR_X, ROAR_Y = W / 2, H - 96
-OUT = pathlib.Path('creative/_fx/ted-cube')
+OUT = pathlib.Path(f'{FX_WORK}/ted-cube')
 OUT.mkdir(parents=True, exist_ok=True)
 
 CASES = [

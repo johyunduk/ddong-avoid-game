@@ -8,6 +8,8 @@ r"""레드 마무리 로봇 — 강하·베기가 화면 안에서 도는지 검
 import pathlib
 
 from PIL import Image, ImageDraw
+import os
+FX_WORK = os.environ.get('DDONG_FX_WORK', 'C:/Users/user/ddong-fx-work')  # 생성 원본·작업물 (저장소 밖)
 
 # 가장 좁고 짧은 흔한 모바일 세로 화면. 여기서 안 잘리면 다른 데서도 안 잘린다
 W, H = 320, 568
@@ -15,7 +17,7 @@ FRAME = 192
 ART_W = 136 / 192          # ROBOT_ART_W
 LAND_Y = H * 0.42
 PLAYER_W, PLAYER_H = 47, 80
-OUT = pathlib.Path('creative/_fx/red-orbit')
+OUT = pathlib.Path(f'{FX_WORK}/red-orbit')
 OUT.mkdir(parents=True, exist_ok=True)
 
 sheet = Image.open('public/assets/fx/sheets/robot_192x192.png').convert('RGBA')

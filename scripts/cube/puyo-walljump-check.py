@@ -10,6 +10,8 @@ r"""뿌요 벽차기 — 게임 크기로 궤적을 그려 본다.
 import re
 
 from PIL import Image
+import os
+FX_WORK = os.environ.get('DDONG_FX_WORK', 'C:/Users/user/ddong-fx-work')  # 생성 원본·작업물 (저장소 밖)
 
 W, H = 360, 640                 # 세로 폰 기준
 GROUND = 560                    # 바닥선 (플레이어 발밑)
@@ -81,7 +83,7 @@ def main():
     for i, c in enumerate(panels):
         bg.alpha_composite(c, (i * (W + 8), 0))
 
-    out = 'creative/_fx/heidi-puyo/_검수_벽차기_게임크기.png'
+    out = f'{FX_WORK}/heidi-puyo/_검수_벽차기_게임크기.png'
     bg.convert('RGB').save(out)
     print(f'saved {out}')
     print(f'  표시 높이 {DISP:.1f}px (플레이어 {PLAYER_H}px 의 {SCALE}배) · '

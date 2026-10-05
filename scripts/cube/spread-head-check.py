@@ -12,13 +12,15 @@ import math
 import pathlib
 
 from PIL import Image, ImageDraw
+import os
+FX_WORK = os.environ.get('DDONG_FX_WORK', 'C:/Users/user/ddong-fx-work')  # 생성 원본·작업물 (저장소 밖)
 
 SHEET = 'public/assets/fx/sheets/chess_96x128.png'
 FW, FH = 96, 128
 DISP_W, DISP_H = 54, 72          # chessHeight 72 × 0.75 — 게임이 실제로 그리는 크기
 HEAD = [0.4688, 0.3281, 0.1953, 0.1484, 0.0547,
         0.4375, 0.3125, 0.1953, 0.1484, 0.0625]
-OUT = pathlib.Path('creative/_fx/ted-cube')
+OUT = pathlib.Path(f'{FX_WORK}/ted-cube')
 OUT.mkdir(parents=True, exist_ok=True)
 
 sheet = Image.open(SHEET).convert('RGBA')

@@ -1,6 +1,6 @@
 r"""레드 참새 — **위를 보는** 시트 조립.
 
-composer 가 낸 낱장(`creative/_fx/red-companions/up/<개체>/<개체>_up_1..4.png`)을
+composer 가 낸 낱장(`$DDONG_FX_WORK/red-companions/up/<개체>/<개체>_up_1..4.png`)을
 게임 시트 한 장으로 굽는다. 재생성:
 
     C:\ComfyUI\.venv\Scripts\python.exe scripts/build-sparrow-up.py
@@ -24,8 +24,9 @@ import pathlib
 import numpy as np
 from PIL import Image
 from scipy import ndimage as nd
+FX_WORK = os.environ.get('DDONG_FX_WORK', 'C:/Users/user/ddong-fx-work')  # 생성 원본·작업물 (저장소 밖)
 
-SRC_DIR = 'creative/_fx/red-companions/up'
+SRC_DIR = f'{FX_WORK}/red-companions/up'
 OUT_DIR = 'public/assets/fx/sheets'
 SIDE_GLOB = 'public/assets/fx/sheets/sparrow_*_128x128.png'
 SIDE_FW = 128

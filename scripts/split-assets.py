@@ -2,7 +2,7 @@
 """여러 대상이 한 장에 그려진 시안을 **대상별 PNG 로 쪼갠다**.
 
     C:\\ComfyUI\\.venv\\Scripts\\python.exe scripts/split-assets.py \\
-        --in <시안.png> --out creative/_fx/red --prefix red --min-area 8000
+        --in <시안.png> --out $DDONG_FX_WORK/red --prefix red --min-area 8000
 
 컨셉 시안은 티라노·로봇·참새 5마리처럼 여러 대상을 한 장에 몰아 그려서 온다.
 이걸 능력 이펙트로 쓰려면 대상마다 따로 떼어내야 한다.

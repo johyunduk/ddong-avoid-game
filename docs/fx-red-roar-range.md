@@ -57,7 +57,7 @@
 - `[R9]` 티라노 54% 가 로봇 100% 보다 명확히 좁음
 - 기존 `[R4] 특수 똥은 하나도 안 지워짐` 유지 — 새 측정에서도 8/8 그대로
 
-검수 그림: `creative/_fx/ted-cube/roar_range.png` (노랑 = 보이는 링, 파랑 = 판정 반경)
+검수 그림: `C:/Users/user/ddong-fx-work/ted-cube/roar_range.png` (노랑 = 보이는 링, 파랑 = 판정 반경)
 
 ---
 
@@ -110,7 +110,7 @@
 - `[R10]` 아래쪽 참새가 머리를 안 파고듦 — 여유 **1.4px**
 - `[R11]` 참새가 서로 뭉치지 않음 — 최소 간격 **14.1px**
 
-실측·렌더: `scripts/measure-orbit.py` → `creative/_fx/red-orbit/orbit_check.png`
+실측·렌더: `scripts/measure-orbit.py` → `C:/Users/user/ddong-fx-work/red-orbit/orbit_check.png`
 (빨간 선 = 진짜 머리 꼭대기, 윗줄 before / 아랫줄 after, 위상 4가지)
 
 ## 참새 간격 — `orbitRx` 로는 안 넓어진다
@@ -206,7 +206,7 @@ C:\ComfyUI\.venv\Scripts\python.exe scripts/build-sparrow-up.py
 를 그대로 쓰므로, 프레임이 커진 만큼 그림이 커져 몸통이 맞는다.
 128 을 고집하면 몸통이 24% 작아져 전환에서 튄다.
 
-검수: `creative/_fx/red-orbit/sparrow_swap.png` (프레임마다 [옆|위] 쌍, 게임 배율 0.25)
+검수: `C:/Users/user/ddong-fx-work/red-orbit/sparrow_swap.png` (프레임마다 [옆|위] 쌍, 게임 배율 0.25)
 
 ### 전환 배선
 
@@ -328,7 +328,7 @@ y = -74 로 여전히 화면 밖이다. 손댈 게 없었다.
 판정은 `Infinity`(화면 전체)라 크기와 무관하다. 그림이 커져도 **전체 삭제**라는
 읽기는 그대로다 — 오히려 커진 쪽이 "화면 전체" 와 더 어울린다.
 
-검수: `creative/_fx/red-orbit/robot_stage.png`
+검수: `C:/Users/user/ddong-fx-work/red-orbit/robot_stage.png`
 (행: 120 / 132 / 132·화면 왼쪽 끝, 열: 강하 시작·착지·예비·베기. 위 여백은 화면 밖)
 
 ### 회귀

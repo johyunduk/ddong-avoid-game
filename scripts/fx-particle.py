@@ -6,7 +6,7 @@ ComfyUI 는 알파가 없는 RGB 를 내놓는다. 파티클은 검은 배경에
 바로 쓸 수 있는 텍스처가 된다.
 
     # 생성물 → 게임 에셋
-    python scripts/fx-particle.py --in creative/_fx/particles --out public/assets/fx/particles
+    python scripts/fx-particle.py --in $DDONG_FX_WORK/particles --out public/assets/fx/particles
 
     # 수학적으로 그린 기준 텍스처도 같이 만든다 (비교용)
     python scripts/fx-particle.py --procedural --out public/assets/fx/particles
@@ -384,6 +384,37 @@ def bolt(width: int = 512, height: int = 256, seed: int = 0,
 
     rgb = np.full((height, width, 3), 255, dtype=np.uint8)
     return Image.fromarray(np.dstack([rgb, (a * 255).astype(np.uint8)]), "RGBA")
+
+
+def bolt_dark_sheet(frame_w: int = 160, frame_h: int = 40, frames: int = 8,
+                    ss: int = 3, seed0: int = 100) -> Image.Image:
+    """**검은 번개** 플립북 — 테드 어센트 흑 소환의 체인 라이트닝 한 마디.
+
+    검은 몸통 + 흰 테두리. 색을 시트에 **구워 넣는다** — 착색(tint)은 곱셈이라
+    검게 물들이면 형태만 남고 번개가 안 읽힌다. 흰 테두리가 있어야 밝은 배경
+    (`background2`)과 어두운 배경(`background`) 양쪽에서 선다.
+
+    가로가 진행 방향이다. 체인 한 마디는 최대 160px 이라 프레임도 160 으로 두고,
+    게임에서는 **길이만** 늘였다 줄인다 (두께는 그대로 — 짧은 마디도 굵기가 같다).
+    몸통은 하드 엣지다 — CLAUDE.md 이펙트 화풍의 '오브젝트는 하드 엣지'.
+
+    프레임마다 시드를 바꿔 줄기가 매번 다르다 — 재생하면 지직댄다.
+    """
+    from PIL import ImageChops
+
+    W, H = frame_w * ss, frame_h * ss
+    sheet = Image.new("RGBA", (frame_w * frames, frame_h), (0, 0, 0, 0))
+    for i in range(frames):
+        a = bolt(width=W, height=H, seed=seed0 + i * 7, segs=7, amp=0.26,
+                 stroke=0.17, branches=1).getchannel("A")
+        a = a.point(lambda v: 255 if v > 90 else 0)
+        # 테두리 = 굵힌 것 − 원본. 1배 기준 2px
+        edge = ImageChops.subtract(a.filter(ImageFilter.MaxFilter(2 * 2 * ss + 1)), a)
+        img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+        img.paste((255, 255, 255, 255), mask=edge)
+        img.paste((8, 6, 14, 255), mask=a)
+        sheet.paste(img.resize((frame_w, frame_h), Image.LANCZOS), (i * frame_w, 0))
+    return sheet
 
 
 def slash_frame(t: float, width: int = 256, height: int = 160,
@@ -901,6 +932,8 @@ def main() -> int:
     p.add_argument("--plume", action="store_true", help="꼬리 텍스처를 절차 생성")
     p.add_argument("--bolt", action="store_true", help="낙뢰 텍스처를 절차 생성")
     p.add_argument("--bolt-seed", type=int, default=0)
+    p.add_argument("--bolt-dark-sheet", action="store_true",
+                   help="검은 번개 플립북 (체인 라이트닝 한 마디, 160x40 x8)")
     p.add_argument("--orb", action="store_true", help="구슬 텍스처를 절차 생성")
     p.add_argument("--orb-size", type=int, default=192)
     p.add_argument("--cutout", help="검은 배경 생성물을 알파 컷아웃 (형태가 있는 대상)")
@@ -963,6 +996,13 @@ def main() -> int:
         out.parent.mkdir(parents=True, exist_ok=True)
         plume().save(out)
         print(f"꼬리: {out}")
+        return 0
+
+    if a.bolt_dark_sheet:
+        out = Path(a.out_file or "public/assets/fx/sheets/boltdark_160x40.png")
+        out.parent.mkdir(parents=True, exist_ok=True)
+        bolt_dark_sheet().save(out)
+        print(f"검은 번개 시트: {out}")
         return 0
 
     if a.bolt:
