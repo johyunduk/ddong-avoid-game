@@ -9,9 +9,6 @@ const AVAILABLE_TEXTURES: string[] = isChristmasSeason()
   ? [...REGULAR_POOP_KEYS, ...CHRISTMAS_POOP_KEYS]
   : [...REGULAR_POOP_KEYS];
 
-// 크기를 크게 설정하는 크리스마스 똥 목록
-const SPECIAL_CHRISTMAS_TEXTURES = ['xmas_poop_nose', 'xmas_poop_ribbon', 'xmas_poop_santa', 'xmas_poop_beard'];
-
 export default class Poop extends PoolablePoopBase {
   private _displaySize: number = 0;
   private _hitboxSize: number = 0;
@@ -54,11 +51,8 @@ export default class Poop extends PoolablePoopBase {
     this.setTexture(randomTexture);
 
     const isExtreme = difficulty === DifficultyEnum.EXTREME || difficulty === DifficultyEnum.PHYSICAL;
-    const isSpecial = SPECIAL_CHRISTMAS_TEXTURES.includes(randomTexture);
-
-    const displaySize = isSpecial
-      ? (isExtreme ? POOP_CONFIG.normal.specialSize.extreme : POOP_CONFIG.normal.specialSize.normal)
-      : (isExtreme ? POOP_CONFIG.normal.size.extreme : POOP_CONFIG.normal.size.normal);
+    // 크리스마스 똥도 같은 크기 — 그림 몸통이 14종 모두 같다 (예전엔 성탄 넷만 1.4배로 키워 맞췄다)
+    const displaySize = isExtreme ? POOP_CONFIG.normal.size.extreme : POOP_CONFIG.normal.size.normal;
     const hitboxSize = isExtreme ? POOP_CONFIG.normal.hitbox.extreme : POOP_CONFIG.normal.hitbox.normal;
 
     if (displaySize !== this._displaySize) {

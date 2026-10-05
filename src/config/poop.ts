@@ -12,15 +12,8 @@ export interface PoopConfig {
     baseSpeed: number;
     /** 난이도 레벨당 속도 증가량 */
     speedIncrement: number;
-    /** 일반 똥 크기 */
+    /** 일반 똥 표시 크기 — 크리스마스 똥도 같다 (그림 몸통이 14종 모두 같아서 따로 키우지 않는다) */
     size: {
-      /** 기본 크기 */
-      normal: number;
-      /** EXTREME 난이도 크기 */
-      extreme: number;
-    };
-    /** 크리스마스 특수 똥 크기 (코, 리본, 산타, 수염) */
-    specialSize: {
       /** 기본 크기 */
       normal: number;
       /** EXTREME 난이도 크기 */
@@ -114,10 +107,6 @@ export const POOP_CONFIG: PoopConfig = {
     size: {
       normal: 40,
       extreme: 38
-    },
-    specialSize: {
-      normal: 56,
-      extreme: 52
     },
     hitbox: {
       normal: 125,
