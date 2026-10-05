@@ -105,40 +105,40 @@ export const POOP_CONFIG: PoopConfig = {
     baseSpeed: 200,
     speedIncrement: 40,
     size: {
-      normal: 40,
-      extreme: 38
+      normal: 44,   // 40 → 44: v1r 그림은 몸통이 캔버스의 70% 라 40 이면 옛 그림보다 작아 보였다
+      extreme: 42
     },
     hitbox: {
-      normal: 125,
-      extreme: 118
+      normal: 114,  // 125×40/44 — 표시를 키운 만큼 줄여 화면상 판정 px 는 그대로 (≈19.6)
+      extreme: 107  // 118×38/42 (≈17.6)
     }
   },
   gold: {
     baseSpeed: 200,
     speedReduction: 30,
-    size: 40,
-    hitbox: 125,
+    size: 44,
+    hitbox: 114,
     depth: 100
   },
   diamond: {
     baseSpeed: 200,
     speedReduction: 10,
-    size: 40,
-    hitbox: 125,
+    size: 44,
+    hitbox: 114,
     depth: 100
   },
   topaz: {
     baseSpeed: 200,
     speedReduction: -160, // 사용자 요청에 따라 20 더 빠르게 (-140에서 -160으로)
-    size: 40,
-    hitbox: 125,
+    size: 44,
+    hitbox: 114,
     depth: 100
   },
   rainbow: {
     baseSpeed: 200,
     speedReduction: 0, // 토파즈보다 조금 더 빠르게
-    size: 40,
-    hitbox: 125,
+    size: 44,
+    hitbox: 114,
     depth: 100
   },
   destroyOffset: 50
