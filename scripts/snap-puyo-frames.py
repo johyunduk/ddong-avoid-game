@@ -38,9 +38,10 @@ import os
 import numpy as np
 from PIL import Image
 from scipy import ndimage as nd
+FX_WORK = os.environ.get('DDONG_FX_WORK', 'C:/Users/user/ddong-fx-work')  # 생성 원본·작업물 (저장소 밖)
 
-SRC_DIR = 'creative/_fx/heidi-puyo'
-OUT_DIR = 'creative/_fx/heidi-puyo/pixel64'
+SRC_DIR = f'{FX_WORK}/heidi-puyo'
+OUT_DIR = f'{FX_WORK}/heidi-puyo/pixel64'
 # 프레임은 **모델이 실제로 그린 네이티브**를 담을 만큼 잡는다. 좁게 잡고 줄이면
 # 코·눈처럼 몇 픽셀짜리 디테일이 가장 먼저 죽는다 (48 로 줄였다가 얼굴이 지워졌다).
 FRAME_W, FRAME_H = 80, 72

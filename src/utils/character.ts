@@ -488,15 +488,15 @@ export const CHARACTERS: CharacterDef[] = [
     illustPath: 'assets/illustrations/heidi.webp',
     basicEffect: HEIDI_DESC.basicEffect,
     specialAbility: HEIDI_DESC.specialAbility,
-    // 동반자 강아지 뿌요 5동작 24프레임. 재생용이 아니라 텍스처만 올리고 애니메이션은
-    // HeidiAbility 가 직접 등록한다 (레드 참새와 같은 길, 합 1.50MB · 하이디 전용)
+    // 강아지 뿌요 + 변신 캐릭터 여덟의 시트. 재생용이 아니라 텍스처만 올리고 애니메이션은
+    // HeidiAbility 가 직접 등록한다 (레드 참새와 같은 길). 하이디를 골랐을 때만 올라간다 —
+    // 목록은 HEIDI_SHEETS
     extraFxSheets: HEIDI_SHEETS,
+    extraFxAnims: ['boltBlue', 'chidori', 'kaiten'],   // 카카시 치도리. 1.88MB 라 전원에게 올리지 않는다
     // 긴 머리가 뒤로 날려 캔버스가 236x312 다 — 표시 비율을 캔버스에 맞춘다.
     // 좌우가 반전이 아니라 각각 그린 그림이다 (모자 리본·해골 장식이 비대칭).
     playerDisplaySize: [45, 80],
     cardDisplaySize: [45, 80],
-    // **미공개** — 실기 확인이 끝나면 이 줄을 지우고 항목을 SR 구간(red 뒤) 로 옮긴다
-    unreleased: true,
   },
 ];
 

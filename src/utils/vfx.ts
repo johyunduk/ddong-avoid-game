@@ -129,6 +129,21 @@ const FX_SHEETS: FxSheetAsset[] = [
     defaultScale: 1, defaultDepth: 310, blend: 'normal', maxConcurrent: 4, preload: true },
   { fxKey: 'boltRed', file: 'boltred_160x384.png', frameCount: 8, frameRate: 22,
     defaultScale: 1, defaultDepth: 310, blend: 'normal', maxConcurrent: 4, preload: true },
+  // 치도리용 청백 낙뢰. **금색을 틴트로 파랗게 만들 수 없어서** 다시 칠했다 —
+  // 틴트는 곱하기라 파랑 채널이 거의 없는 금색에 파랑을 곱하면 누런 초록이 된다.
+  // 밝기를 뽑아 파랑 램프로 구운 판본이다 (심지 흰색 → 가장자리 짙은 파랑).
+  // **하이디를 고른 판에서만 올린다** (1.88MB) — character.ts 의 extraFxAnims
+  { fxKey: 'boltBlue', file: 'boltblue_160x384.png', frameCount: 8, frameRate: 22,
+    defaultScale: 1, defaultDepth: 310, blend: 'normal', maxConcurrent: 4, preload: false },
+  // 치도리 — 손에 쥔 청백 번개 구. 심지 크기·자리는 고정이고 **갈래만 프레임마다 바뀐다**
+  // (빨리 돌리면 지직댄다). 검정 배경 생성본을 밝기 → 알파로 구웠다.
+  // 원본 C:/Users/user/ddong-fx-work/chidori/chidori_src.png. 하이디를 고른 판에서만 올린다 (1.13MB)
+  { fxKey: 'chidori', file: 'chidori_192x192.png', frameCount: 8, frameRate: 20,
+    defaultScale: 1, defaultDepth: 122, blend: 'add', maxConcurrent: 2, preload: false },
+  // 회천 — 소용돌이 띠가 한 방향으로 도는 청백 구. 가운데는 비어 있어 안의 캐릭터가 보인다.
+  // 구 반지름이 칸 반폭의 약 90% (87/96px). 원본 C:/Users/user/ddong-fx-work/kaiten/kaiten_src.png (1.13MB)
+  { fxKey: 'kaiten', file: 'kaiten_192x192.png', frameCount: 8, frameRate: 18,
+    defaultScale: 1, defaultDepth: 122, blend: 'add', maxConcurrent: 2, preload: false },
   // 부활 연꽃 — 피어나는 과정이 프레임에 들어 있다. 9fps 로 천천히 핀다
   { fxKey: 'lotusBloom', file: 'lotus_192x192.png', frameCount: 8, frameRate: 9,
     defaultScale: 1, defaultDepth: 353, blend: 'normal', maxConcurrent: 2, preload: true },
@@ -283,7 +298,7 @@ function parseFrameSize(file: string): { w: number; h: number } | null {
 /**
  * 시트 하나만 골라 올린다 — `preload: false` 인 큰 시트를 **그게 필요한 캐릭터의
  * 씬에서만** 올리기 위한 것이다. 전원에게 preload 하면 안 쓰는 사람의 VRAM 까지 먹는다.
- * (체스 큐브 시트 하나가 5.9MB 다)
+ * (카카시 치도리 묶음이 1.88MB 다)
  */
 export function preloadFxSheet(scene: Phaser.Scene, key: FxKey): void {
   // 이 연출이 같이 쓰는 절차 이펙트를 **지금** 구워 둔다 (발동 프레임에 굽지 않도록)
@@ -391,7 +406,9 @@ export type FxKey =
   | 'impactHit' | 'itemPop'              // 시트 — 똥 파괴 / 아이템 획득
   | 'sparkleField' | 'auraRing'          // 시트 — 아직 미사용(로딩 안 함)
   | 'swordSlash'                         // 시트 — 참격 (프레임마다 형태가 바뀐다)
-  | 'boltGold' | 'boltRed'               // 시트 — 낙뢰 (번쩍임이 프레임에 들어 있다)
+  | 'boltGold' | 'boltRed' | 'boltBlue'  // 시트 — 낙뢰 (번쩍임이 프레임에 들어 있다)
+  | 'chidori'                            // 시트 — 치도리 (손에 쥔 번개 구, 지직대는 루프)
+  | 'kaiten'                             // 시트 — 회천 (몸을 감싸고 도는 차크라 구, 루프)
   | 'lotusBloom'                         // 시트 — 부활 연꽃 (봉오리 → 만개 → 흩어짐)
   | 'foxFire' | 'foxFireCore'            // 시트 — 여우불 (착색 외곽 + 흰 심지 두 겹)
   | 'foxTail'                            // 시트 — 구미호 꼬리 (털이 살랑이는 루프)
@@ -501,6 +518,21 @@ const FX_REGISTRY: Record<FxKey, FxDefinition> = {
     textureKey: 'fxsheet_boltRed',
     frameWidth: 160, frameHeight: 384, frameCount: 8, frameRate: 22,
     defaultScale: 1, defaultDepth: 310, blend: 'normal', maxConcurrent: 4,
+  },
+  boltBlue: {
+    textureKey: 'fxsheet_boltBlue',
+    frameWidth: 160, frameHeight: 384, frameCount: 8, frameRate: 22,
+    defaultScale: 1, defaultDepth: 310, blend: 'normal', maxConcurrent: 4,
+  },
+  kaiten: {
+    textureKey: 'fxsheet_kaiten',
+    frameWidth: 192, frameHeight: 192, frameCount: 8, frameRate: 18,
+    defaultScale: 1, defaultDepth: 122, blend: 'add', maxConcurrent: 2,
+  },
+  chidori: {
+    textureKey: 'fxsheet_chidori',
+    frameWidth: 192, frameHeight: 192, frameCount: 8, frameRate: 20,
+    defaultScale: 1, defaultDepth: 122, blend: 'add', maxConcurrent: 2,
   },
   lotusBloom: {
     textureKey: 'fxsheet_lotusBloom',
@@ -2006,7 +2038,7 @@ export function projectile(
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** 불티 / 파편 / 반짝임 / 연기 / 기운 / 섬광선 */
-export type BurstPreset = 'ember' | 'shard' | 'sparkle' | 'smoke' | 'wisp' | 'streak';
+export type BurstPreset = 'ember' | 'shard' | 'sparkle' | 'smoke' | 'wisp' | 'streak' | 'poof';
 
 export interface BurstOptions {
   count?: number;
@@ -2024,10 +2056,12 @@ export interface BurstOptions {
   angle?: { min: number; max: number };
   /** 수명 배율 */
   lifespan?: number;
+  /** 시작 불투명도 오버라이드 (끝은 0). 연기 기본 0.45 는 '펑'으로 읽히기엔 옅다 */
+  alpha?: number;
 }
 
 /** 에셋이 없을 때 쓰는 런타임 생성 폴백 텍스처 */
-type ProcTexture = 'fx_p_dot' | 'fx_p_shard' | 'fx_p_star';
+type ProcTexture = 'fx_p_dot' | 'fx_p_shard' | 'fx_p_star' | 'fx_p_puff';
 
 interface BurstLayerDef {
   /** 에셋 텍스처 키 */
@@ -2062,6 +2096,7 @@ const PROC_FALLBACK_SCALE: Record<ProcTexture, number> = {
   fx_p_dot: 4,
   fx_p_shard: 8,
   fx_p_star: 4,
+  fx_p_puff: 2,
 };
 
 const BURST_PRESETS: Record<BurstPreset, BurstPresetDef> = {
@@ -2129,6 +2164,24 @@ const BURST_PRESETS: Record<BurstPreset, BurstPresetDef> = {
     alpha: { start: 0.45, end: 0 },
     rotate: { min: -40, max: 40 },
   },
+  // 펑 — 닌자 변신의 **흰 연기 뭉치.** smoke 에셋은 하늘색(평균 RGB 147,198,225)이라
+  // tint(곱셈)로는 하얘지지 않는다. 그래서 흰 구름을 직접 그린다 (fx_p_puff).
+  // 애니풍: 흰 몸통 + 아래쪽 옅은 회청 그림자, 윤곽은 하드 엣지
+  poof: {
+    layers: [
+      { texture: 'fx_p_puff', fallback: 'fx_p_puff', ratio: 1, scaleMul: 1, tintable: true },
+    ],
+    blend: 'normal',
+    count: 14,
+    speed: { min: 20, max: 90 },
+    lifespanMs: { min: 900, max: 1500 },
+    scale: { start: 0.45, end: 1.0 },
+    gravityY: -25,
+    depth: 119,
+    tint: 0xffffff,
+    alpha: { start: 1, end: 0 },
+    rotate: { min: -30, max: 30 },
+  },
   // 기운 — 유기적 에너지 가닥. 자체 색(청록)을 살린다
   wisp: {
     layers: [
@@ -2164,13 +2217,22 @@ const BURST_PRESETS: Record<BurstPreset, BurstPresetDef> = {
 function ensureProcTexture(scene: Phaser.Scene, key: ProcTexture): boolean {
   if (scene.textures.exists(key)) return true;
 
-  const size = key === 'fx_p_shard' ? 16 : 32;
+  const size = key === 'fx_p_shard' ? 16 : key === 'fx_p_puff' ? 64 : 32;
   const tex = scene.textures.createCanvas(key, size, size);
   if (!tex) return false;
   const ctx = tex.getContext();
   const c = size / 2;
 
-  if (key === 'fx_p_dot') {
+  if (key === 'fx_p_puff') {
+    // 흰 구름 — 원 여러 개를 겹친 뭉치. 그림자를 먼저 아래로 비껴 깔고 흰 몸통을 덮는다
+    const blobs: [number, number, number][] = [
+      [32, 36, 17], [20, 38, 12], [44, 38, 12], [26, 26, 12], [40, 25, 13], [32, 18, 10],
+    ];
+    ctx.fillStyle = '#c9d2e0';
+    for (const [bx, by, r] of blobs) { ctx.beginPath(); ctx.arc(bx, by + 4, r, 0, Math.PI * 2); ctx.fill(); }
+    ctx.fillStyle = '#ffffff';
+    for (const [bx, by, r] of blobs) { ctx.beginPath(); ctx.arc(bx, by, r, 0, Math.PI * 2); ctx.fill(); }
+  } else if (key === 'fx_p_dot') {
     const grad = ctx.createRadialGradient(c, c, 0, c, c, c);
     grad.addColorStop(0, 'rgba(255,255,255,1)');
     grad.addColorStop(0.4, 'rgba(255,255,255,0.6)');
@@ -2279,7 +2341,8 @@ export function burst(
     // 자체 색을 가진 텍스처에 tint 를 곱하면 탁해지므로 착색 가능한 레이어에만 적용
     if (resolved.tintable) config.tint = opts.tint ?? def.tint;
     if (def.rotate) config.rotate = def.rotate;
-    if (def.alpha) config.alpha = def.alpha;
+    if (opts.alpha !== undefined) config.alpha = { start: opts.alpha, end: 0 };
+    else if (def.alpha) config.alpha = def.alpha;
 
     const emitter = scene.add.particles(x, y, resolved.key, config).setDepth(opts.depth ?? def.depth);
     st.emitters.add(emitter);
@@ -2466,6 +2529,135 @@ export interface ImpactOptions {
   shake?: { duration?: number; intensity?: number };
   /** 대상 스케일 펀치 */
   punch?: { target: PunchTarget; amount?: number; duration?: number };
+  /**
+   * **임팩트 프레임** — 타격 순간 화면 전체를 1~2프레임 덮는다.
+   *
+   * 나루티밋 오의·드래곤볼 레전즈 피니시의 "탁" 하는 느낌은 사실상 이 2프레임이다.
+   * `ms` 는 기본 33 (60fps 기준 2프레임). 길게 주면 화면이 하얘진 채로 머문다.
+   */
+  flash?: { color?: number; alpha?: number; ms?: number };
+}
+
+export interface SpeedLinesOptions {
+  /** 들어오고 나가는 시간을 포함한 총 지속(ms) */
+  ms?: number;
+  /** 최대 불투명도. 0.3~0.4 면 배경이 바뀐 느낌만 나고 화면을 안 먹는다 */
+  alpha?: number;
+  tint?: number;
+  depth?: number;
+  /** 가운데 빈 구멍의 반지름 비율 (0~1). 캐릭터가 가려지면 안 된다 */
+  hole?: number;
+}
+
+const LINES_TEX = 'fx_speedlines';
+const LINES_SIZE = 512;
+
+/**
+ * 집중선 텍스처 — **한 번만 굽는다.**
+ *
+ * 가운데에 구멍을 두고 바깥으로 얇은 삼각형을 방사로 그린다.
+ * 각도를 고르게 두면 바퀴살처럼 보이므로 **간격을 흩는다.**
+ */
+function ensureLinesTexture(scene: Phaser.Scene): boolean {
+  if (scene.textures.exists(LINES_TEX)) return true;
+  const tex = scene.textures.createCanvas(LINES_TEX, LINES_SIZE, LINES_SIZE);
+  if (!tex) return false;
+  const ctx = tex.getContext();
+  const c = LINES_SIZE / 2;
+  const rng = new Phaser.Math.RandomDataGenerator(['speedlines']);   // 매번 같은 그림
+
+  ctx.clearRect(0, 0, LINES_SIZE, LINES_SIZE);
+  ctx.fillStyle = '#ffffff';
+  const n = 54;
+  for (let i = 0; i < n; i++) {
+    // 고르게 두면 바퀴살이 된다 — 칸 안에서 흔든다
+    const a = ((i + rng.frac() * 0.85) / n) * Math.PI * 2;
+    const half = (rng.frac() * 0.5 + 0.25) * (Math.PI / n);   // 선마다 굵기가 다르다
+    const r0 = c * (0.30 + rng.frac() * 0.22);                // 구멍 가장자리도 들쭉날쭉
+    const r1 = c * 1.5;                                        // 모서리까지 확실히 덮는다
+    ctx.beginPath();
+    ctx.moveTo(c + Math.cos(a) * r0, c + Math.sin(a) * r0);
+    ctx.lineTo(c + Math.cos(a - half) * r1, c + Math.sin(a - half) * r1);
+    ctx.lineTo(c + Math.cos(a + half) * r1, c + Math.sin(a + half) * r1);
+    ctx.closePath();
+    ctx.fill();
+  }
+  tex.refresh();
+  return true;
+}
+
+/**
+ * **집중선** — 배경이 방사형 선으로 바뀌었다 걷힌다.
+ *
+ * 오브젝트 하나를 띄우고 알파만 움직이므로 비용은 사실상 없다.
+ * 화면 비율이 제각각(360~430)이라 **짧은 변이 아니라 대각선**에 맞춰 키운다.
+ */
+export function speedLines(scene: Phaser.Scene, o: SpeedLinesOptions = {}): void {
+  if (!isLive(scene) || !ensureLinesTexture(scene)) return;
+  const st = getState(scene);
+  const W = scene.scale.width;
+  const H = scene.scale.height;
+  const span = Math.hypot(W, H) * 1.1;
+
+  const img = scene.add.image(W / 2, H / 2, LINES_TEX)
+    .setDisplaySize(span, span)
+    .setScrollFactor(0)
+    .setDepth(o.depth ?? 100)     // 게임 위, 컷인(110) 아래
+    .setTint(o.tint ?? 0xffffff)
+    .setAlpha(0)
+    .setBlendMode(Phaser.BlendModes.ADD);
+
+  const ms = Math.max(120, o.ms ?? 700);
+  const peak = o.alpha ?? 0.35;
+  const done = trackDisposable(scene, st, img, () => {});
+
+  // 들어왔다 머물다 나간다. 트윈은 히트스톱에 멈추므로 **회수는 실시간 타이머**가 맡는다
+  scene.tweens.add({
+    targets: img, alpha: peak, duration: ms * 0.18, ease: 'Sine.easeOut',
+    yoyo: true, hold: ms * 0.5, onComplete: done,
+  });
+  trackedTimeout(scene, ms + 400, done);
+}
+
+/** 임팩트 프레임용 1x1 흰 텍스처 — Image 라서 기존 정리 경로(st.sprites)를 탄다 */
+const FLASH_TEX = 'fx_flash_px';
+
+function ensureFlashTexture(scene: Phaser.Scene): boolean {
+  if (scene.textures.exists(FLASH_TEX)) return true;
+  const tex = scene.textures.createCanvas(FLASH_TEX, 4, 4);
+  if (!tex) return false;
+  const ctx = tex.getContext();
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, 4, 4);
+  tex.refresh();
+  return true;
+}
+
+/**
+ * 화면 전체를 한 번 덮었다 뗀다.
+ *
+ * **제거를 씬 타이머로 걸면 안 된다.** 임팩트 프레임은 히트스톱과 같이 터지는데
+ * 히트스톱은 `time.timeScale = 0` 이라 씬 타이머가 멈춘다 — 화면이 하얀 채로 남는다.
+ * 실시간 타이머(`trackedTimeout`)를 쓰는 이유가 그것이다.
+ */
+function playFlash(scene: Phaser.Scene, o: NonNullable<ImpactOptions['flash']>): void {
+  if (!ensureFlashTexture(scene)) return;
+  const st = getState(scene);
+  const cam = scene.cameras.main;
+  if (!cam) return;
+  const W = scene.scale.width;
+  const H = scene.scale.height;
+
+  const img = scene.add.image(W / 2, H / 2, FLASH_TEX)
+    .setDisplaySize(W * 1.2, H * 1.2)   // 흔들림 중에도 가장자리가 안 비게 넉넉히
+    .setScrollFactor(0)
+    // 컷인(110)·HUD(10)보다 위, 게임오버 오버레이(500)보다 아래
+    .setDepth(480)
+    .setTint(o.color ?? 0xffffff)
+    .setAlpha(o.alpha ?? 1);
+
+  const done = trackDisposable(scene, st, img, () => {});
+  trackedTimeout(scene, Math.min(120, o.ms ?? 33), done);
 }
 
 const HITSTOP_MAX_MS = 200;
@@ -2576,6 +2768,11 @@ export function impact(scene: Phaser.Scene, opts: ImpactOptions): void {
   }
   if (opts.punch) {
     applyPunch(scene, opts.punch.target, opts.punch.amount ?? 1.16, opts.punch.duration ?? 220);
+  }
+  // **섬광은 히트스톱보다 먼저.** 히트스톱이 걸린 뒤에 만들면 같은 프레임에
+  // 안 그려질 수 있다
+  if (opts.flash) {
+    playFlash(scene, opts.flash);
   }
   if (opts.hitstop) {
     applyHitstop(scene, opts.hitstop);

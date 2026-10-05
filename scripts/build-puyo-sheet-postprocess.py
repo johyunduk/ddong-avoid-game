@@ -1,7 +1,7 @@
 r"""뿌요 시트 — **격자 스냅 + 외곽선 후처리**.
 
 생성물(부드러운 벡터 곡선)을 이 저장소의 화풍(하드 엣지 · 평탄한 면 · 두른 외곽선)으로
-바꾼다. `creative/_fx/heidi-puyo/frames/` 의 낱장을 읽어 동작별 128x128 시트를 굽는다.
+바꾼다. `$DDONG_FX_WORK/heidi-puyo/frames/` 의 낱장을 읽어 동작별 128x128 시트를 굽는다.
 
     C:\ComfyUI\.venv\Scripts\python.exe scripts/build-puyo-sheet.py
 
@@ -37,9 +37,10 @@ import re
 import numpy as np
 from PIL import Image
 from scipy import ndimage as nd
+FX_WORK = os.environ.get('DDONG_FX_WORK', 'C:/Users/user/ddong-fx-work')  # 생성 원본·작업물 (저장소 밖)
 
-SRC_DIR = 'creative/_fx/heidi-puyo/frames'
-OUT_DIR = 'creative/_fx/heidi-puyo/pixel'
+SRC_DIR = f'{FX_WORK}/heidi-puyo/frames'
+OUT_DIR = f'{FX_WORK}/heidi-puyo/pixel'
 ACTIONS = ['walk', 'idle', 'crouch', 'jump', 'spin']
 FRAME = 128
 BASELINE = 124          # 바닥선 — composer 가 낱장을 이 기준으로 하단 정렬해 뒀다
@@ -232,7 +233,7 @@ def make_check(done, sp):
             (max(1, round(arr.shape[1] * k)), 56), Image.LANCZOS)
         s = s.resize((s.width * 2, s.height * 2), Image.NEAREST)
         sheet.alpha_composite(s, (i * CW * Z + (CW * Z - s.width) // 2, CH * Z + 8))
-    out = 'creative/_fx/heidi-puyo/_검수_후처리_참새대조.png'
+    out = f'{FX_WORK}/heidi-puyo/_검수_후처리_참새대조.png'
     sheet.convert('RGB').save(out)
     print(f'saved {out}  (윗줄 7배 확대 · 아랫줄 실제 표시 크기 56px)')
 
@@ -249,7 +250,7 @@ def make_check(done, sp):
                 one = Image.fromarray(cell, 'RGBA').resize(
                     (FRAME * Z2, FRAME * Z2), Image.NEAREST)
                 im.alpha_composite(one, (c * FRAME * Z2, r * FRAME * Z2))
-        o = f'creative/_fx/heidi-puyo/_검수_후처리_시간순_{tag}.png'
+        o = f'{FX_WORK}/heidi-puyo/_검수_후처리_시간순_{tag}.png'
         im.convert('RGB').save(o)
         print(f'saved {o}  (행 = {", ".join(a for a, _ in rows)})')
 

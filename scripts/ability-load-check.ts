@@ -19,7 +19,7 @@
 // @ts-nocheck
 import Phaser, { live, created, createFakeScene } from 'phaser';
 import { getFxStats, preloadFxAssets, fxPickSheetKey } from '../src/utils/vfx';
-import { RED_SHEETS } from '../src/config/abilityParams';
+import { RED_SHEETS, HEIDI_SHEETS } from '../src/config/abilityParams';
 
 import { ArchieveAbility } from '../src/abilities/ArchieveAbility';
 import { GlitchAbility } from '../src/abilities/GlitchAbility';
@@ -30,6 +30,7 @@ import { KnightAbility } from '../src/abilities/KnightAbility';
 import { LegacyAbility } from '../src/abilities/LegacyAbility';
 import { MaehwaAbility } from '../src/abilities/MaehwaAbility';
 import { RedAbility } from '../src/abilities/RedAbility';
+import { HeidiAbility } from '../src/abilities/HeidiAbility';
 import { MinerAbility } from '../src/abilities/MinerAbility';
 import { MugiAbility } from '../src/abilities/MugiAbility';
 import { NoiseAbility } from '../src/abilities/NoiseAbility';
@@ -70,6 +71,7 @@ const CASES = [
   ['K (UR)',      () => new KAbility(0),        'k'],
   ['K 초사이언',   () => new KAbility(0),        'k_ss'],
   ['레드 (SR)',   () => new RedAbility(0),      'red'],
+  ['하이디 (SR)', () => new HeidiAbility(0),    'heidi'],
 ];
 
 function makeScene() {
@@ -78,6 +80,8 @@ function makeScene() {
   // 레드의 동반자 시트는 FX_SHEETS 가 아니라 extraFxSheets 로 올라간다 —
   // 여기서 올려 두지 않으면 참새가 한 마리도 안 뜨고 계측이 조용히 0 이 된다
   for (const f of RED_SHEETS) scene.textures.__addAsset(fxPickSheetKey(f));
+  // 하이디도 같은 길 (뿌요 + 변신 캐릭터 여덟의 시트)
+  for (const f of HEIDI_SHEETS) scene.textures.__addAsset(fxPickSheetKey(f));
   return scene;
 }
 
@@ -86,7 +90,10 @@ function makePoops(n) {
   return Array.from({ length: n }, (_, i) => ({
     x: 40 + (i % 8) * 40,
     y: 120 + Math.floor(i / 8) * 70,
-    active: true,
+    active: true, visible: true,
+    // 하이디 기술은 똥 모양 그대로 연출용 사본을 만든다 (텍스처·크기·회전을 읽는다)
+    texture: { key: 'poop' }, frame: { name: 0 }, displayWidth: 32, displayHeight: 32,
+    rotation: 0, setAlpha() { return this; },
     recycle() { this.active = false; },
   }));
 }
@@ -152,9 +159,12 @@ async function runCase(label, make, kind) {
   function advance(n) {
     const intervals = ability.getSpawnIntervals();
     let budget = SPAWN_BUDGET;
-    const to = score + n;
-    for (let s = score + 1; s <= to; s++) {
-      score = s;
+    // GameScene.updateScore 와 같게 **먼저 더하고** 지나간 구간을 훑는다. 예전엔 순회 끝에
+    // `score = to` 로 덮어써서, 마일스톤 안에서 곧바로 들어온 보너스(루트 삭제 점수)가 지워졌다
+    const from = score;
+    score += n;
+    const to = from + n;
+    for (let s = from + 1; s <= to; s++) {
       if (s % intervals.gold === 0 && s > lastGold) {
         if (budget > 0) { spawnedSpecials++; budget--; }
         lastGold = s;
@@ -171,7 +181,6 @@ async function runCase(label, make, kind) {
       ability.onScoreMilestone(s, api);
       if (created.sprites + created.graphics > before) fires++;
     }
-    score = to;
   }
 
   ability.onCreate(api);
@@ -192,9 +201,15 @@ async function runCase(label, make, kind) {
     }
     if (i % 60 === 0 && kind === 'sentinel') ability.onHitPoop(api);
     sample();
-    if (i % 10 === 0) await sleep(4);      // 트윈·타이머가 실제로 돌 시간을 준다
+    // **하이디는 실기 속도로 돈다** (100ms 마다 1점 = 30초). 점수가 차면 예약만 걸고
+    // 도약·변신·기술이 실제 시간(scene.time.now)으로 몇 초에 걸쳐 펼쳐진다 — 몰아 돌리면
+    // 한 번도 안 뛰어서 계측이 조용히 0 이 된다
+    if (kind === 'heidi') await sleep(100);
+    else if (i % 10 === 0) await sleep(4);      // 트윈·타이머가 실제로 돌 시간을 준다
   }
   sample();
+  // 하이디는 마일스톤에서 아무것도 안 만든다 (예약만) — 발동은 능력이 센 값으로 읽는다
+  if (kind === 'heidi') fires = ability.fireCount;
 
   ability.onDestroy(api);
   await sleep(400);

@@ -410,30 +410,333 @@ export const RED_PARAMS = {
 // ── 하이디 (SR) — 동반자 강아지 "뿌요" ──────────────────────────────────────
 // 시트 목록이 여기 있는 이유는 레드와 같다: `character.ts`(데이터)와 `HeidiAbility`(행동)가
 // 둘 다 봐야 하는데, 능력 파일에 두면 데이터가 행동을 import 하게 된다.
+/**
+ * **칸 크기가 동작마다 다르다.** 가로도 세로도 다르다 —
+ * `scripts/build-puyo-sheet.py` 가 **모든 시트에 같은 배율**을 쓰기 때문이다.
+ * 가로가 긴 자세(웅크림·도약·고속 이동)에서 개를 줄이는 대신 칸을 넓혔다.
+ * 예전에는 개를 줄여서 시트마다 49~84px 로 제각각이었고, 동작이 바뀔 때마다
+ * 개가 커졌다 작아졌다 했다. 표시할 때 칸 비율을 그대로 반영한다.
+ */
 export const HEIDI_PUYO_SHEETS = {
   walk:   'puyo_walk_128x128.png',
   idle:   'puyo_idle_128x128.png',
-  crouch: 'puyo_crouch_128x128.png',
-  jump:   'puyo_jump_128x128.png',
+  crouch: 'puyo_crouch_136x128.png',
+  jump:   'puyo_jump_152x128.png',
   kick:   'puyo_kick_128x128.png',
   wall:   'puyo_wall_128x128.png',
+  // 벽에 붙어 **던지는** 3컷. 처음엔 `wall` 의 3번(앞발 뻗음)을 재활용했는데
+  // 원래 "벽을 차고 나가는" 동작이라 **차는 걸로 읽혔다** (사람 실기 판정).
+  // 뒷발은 벽에 박아 두고 앞발만 던지는 그림이라 그 혼동이 없다
+  throw:  'puyo_throw_128x128.png',
+  // 공중에서 **인을 맺는** 6컷 (정면). 변신 직전에 쓴다 — 합장 → 깍지 → 한 발 세움 →
+  // 눈 감고 집중 → 눈 뜨며 털이 솟는다. 변신한 캐릭터는 HEIDI_CLONE_SHEETS 의 `seal` 을
+  // 쓰고, 그게 없으면 sheetFor 가 이 그림으로 떨어진다
+  seal:   'puyo_seal_128x128.png',
+  // **아랑아** — 옆으로 누운 회오리 드릴 8컷 (끝이 오른쪽). 기본 발동의 돌진·벽 튕김·
+  // 내리꽂기가 전부 이것. 코드는 드릴 끝을 가는 방향으로 겨누기만 하고, 도는 것은 그림이
+  // 맡는다. 캐릭터별 색 판본은 HEIDI_CLONE_SHEETS 의 `tsuga` (scripts/tsuga-tint.py)
+  tsuga:  'tsuga_160x112.png',
+  // 고속 이동 전용. `kick` 을 재활용했더니 **차는 걸로 읽혔다** — 발차기는 발이 앞서고
+  // 육구가 정면을 보지만, 고속 이동은 머리가 앞서고 네 다리가 뒤로 붙는다.
+  // 출발 섬광 · 늘어난 잔상 · 도착 섬광이 그림 안에 들어 있다
+  // 등을 보이고 머리가 위를 향한 그림이다 — 코드가 **가는 방향으로 회전**시킨다.
+  // 옆모습이면 좌우 뒤집기로 방향이 둘뿐이라 대각선 이동이 어색했다
+  // (레드의 '위 보는 참새' 와 같은 구조)
+  dash:   'puyo_dash_128x160.png',
+} as const;
+
+/**
+ * 투척 무기 3종이 든 시트 한 장. 프레임 순서 = 아래 {@link HEIDI_WEAPON} 의 값.
+ *
+ * `FX_PARTICLE_ASSETS`(전 캐릭터 공용 로딩)에 **안 넣었다** — 하이디를 안 고른 판에서도
+ * VRAM 을 먹는다. 하이디 전용 `extraFxSheets` 로 간다 (192x64, 0.047MB).
+ */
+export const HEIDI_WEAPON_SHEET = 'puyo_weapon_64x64.png';
+
+/** 시트 안 프레임 번호. 세 무기는 그림이 아니라 **하는 일**이 다르다 */
+export const HEIDI_WEAPON = {
+  // 시트의 0·1번(수리검·쿠나이)은 옛 분신술 것이라 안 쓴다 — 미나토 비뢰신 표식만 남았다
+  marker:   2,   // 삼지창 · 안 지움. 비뢰신 순간이동의 목적지
 } as const;
 /**
  * `character.ts` 의 `extraFxSheets` 에 그대로 들어간다 (하이디를 고른 판에서만 올라간다).
  *
- * `puyo_spin_128x128.png` 는 **일부러 빠져 있다** — 회오리를 치며 도는 연출을 빼고
- * 그냥 점프로 바꿨다. 파일은 `public/assets/fx/sheets/` 에 그대로 두었고
- * (되살리려면 여기 한 줄), 안 올리는 만큼 VRAM 0.50MB 가 준다.
+ * 아랑아는 회오리 드릴 전용 시트(`tsuga`)를 쓴다. 옛 몸 말기 회전 시트(`puyo_spin`)는
+ * 쓸 데가 없어 지웠다 (2026-09-27).
  */
-export const HEIDI_SHEETS: string[] = Object.values(HEIDI_PUYO_SHEETS);
+/**
+ * **분신이 입는 캐릭터.** 분신술에서 6마리가 각자 다른 닌자로 나온다 —
+ * 흰 강아지 일곱이 똑같이 붙어 있으면 누가 누군지 안 읽힌다.
+ *
+ * 분신이 실제로 쓰는 동작은 셋뿐이다 (`fly` 는 `dash` 시트를 같이 쓴다):
+ *   fly(=dash) → perch(=wall) → throwing(=throw) → dash
+ * walk·idle·crouch·jump·kick 은 **본체가 땅에서 돌아다닐 때만** 쓰므로 안 만든다.
+ * 그 덕에 캐릭터당 8장이 아니라 **3장**이면 된다 (6명 = 18장, 약 3.4MB).
+ *
+ * 50px 에서 서로 갈리는지 먼저 확인하고 정했다 —
+ * 검수본 `C:/Users/user/ddong-fx-work/heidi-puyo/_검수_일곱_게임크기.png`.
+ * 색과 실루엣으로 갈린다: 긴 갈색머리 · 은발 · 검은망토 · 금발 · 상투 · 뚱뚱함.
+ */
+export const HEIDI_CLONE_CHARS = [
+  'neji', 'kakashi', 'itachi', 'minato', 'shikamaru', 'choji',
+  'orochimaru', 'jiraiya',
+  // **기본 뿌요 자신** — 변신 뽑기에 들어간다 (사람 지시: "기본 뿌요는 처음에만 나오고
+  // 다시 안 나온다"). 기술은 그림자 분신술 + 강화 아랑아. 캐릭터 시트가 없어 모든 동작이
+  // 기본 뿌요 그림으로 나가고, 컷인만 전용 그림을 쓴다
+  'puyo',
+] as const;
+export type HeidiCloneChar = (typeof HEIDI_CLONE_CHARS)[number];
+
+/**
+ * 캐릭터별 시트. **없는 캐릭터는 기본 뿌요 시트로 조용히 떨어진다.**
+ *
+ * 명단(`HEIDI_CLONE_CHARS`)이 분신 수(6)보다 많아도 된다 — 발동마다 명단을 섞어
+ * 앞에서 6명을 쓴다. 명단이 길수록 판마다 나오는 조합이 달라진다.
+ */
+/**
+ * `fin` 은 **마무리 기술 시트**(4컷: 준비-발동-절정-회수)다. 아직 안 그린 캐릭터가
+ * 있으므로 선택 항목으로 둔다 - 없으면 `sheetFor()` 가 `throw` 로 떨어진다.
+ */
+/**
+ * 캐릭터별 **대표 기술의 형(型)**. 여덟 명이 다 다른 이펙트를 그리는 대신
+ * **세 가지 형에 여덟 스킨**을 입힌다 - 지우는 모양이 달라지는 것이 핵심이고,
+ * 그림은 이미 각자의 `fin` 시트가 다르다.
+ *
+ * - `ring`  제자리에서 파동이 퍼진다 (회천 - 육탄전차 - 두꺼비 착지)
+ * - `beam`  붙은 자리에서 반대편까지 한 줄 (뇌절 - 비뢰신 - 뱀)
+ * - `field` 화면 전체에서 흩어진 여러 곳 (까마귀 떼 - 그림자)
+ */
+/**
+ * 캐릭터마다 **동사가 다르다**. 처음엔 형이 셋이고 여덟이 스킨으로 나뉘었는데,
+ * 그림만 다르고 하는 일이 같으니 **누가 나왔는지가 안 읽혔다.**
+ *
+ * 기준은 "무슨 기술이냐"가 아니라 **"똥에게 무슨 일이 일어나느냐"** 다.
+ * 전체 표와 이유는 docs/fx-heidi-clone.md 의 "형(型) 여덟".
+ */
+export type CloneFinForm =
+  | 'blink'                            // 미나토 — 걷다가 쿠나이를 던져 비뢰신 3연속
+  | 'surge' | 'deflect' | 'ignite'     // 카카시 · 네지 · 이타치
+  | 'bind' | 'roll' | 'gate' | 'toad'        // 시카마루 · 쵸지 · 오로치마루 · 지라이야
+  | 'clone';                                // 기본 뿌요 — 그림자 분신술 + 강화 아랑아
+
+export const HEIDI_CLONE_FIN: Record<string, CloneFinForm> = {
+  minato: 'blink',
+  // ── 아직 안 옮긴 일곱. 하나씩 전용 형으로 바꾼다 ──
+  kakashi: 'surge',
+  neji: 'deflect',
+  choji: 'roll', jiraiya: 'toad',
+  orochimaru: 'gate',
+  puyo: 'clone',
+  itachi: 'ignite', shikamaru: 'bind',
+};
+
+/**
+ * `walk`~`kick` 은 **변신한 캐릭터가 뿌요로 돌아다닐 때** 쓰는 배회 동작이다.
+ * 이게 없으면 걷는 순간 `sheetFor()` 가 기본 뿌요로 떨어져 정체가 사라진다.
+ * 없는 키는 전부 기본 뿌요 시트로 조용히 떨어진다 — 옛 분신술 마무리(`fin`·`cut`)와
+ * 미나토 밖의 던지기 시트는 쓰는 곳이 없어 뺐다 (2026-09-27, 하이디 출시 정리)
+ */
+export const HEIDI_CLONE_SHEETS: Record<string, {
+  wall?: string; dash?: string; cutin?: string;
+  /** 던지기 3컷 — 미나토 비뢰신만 쓴다 */
+  throw?: string;
+  walk?: string; idle?: string; crouch?: string; jump?: string; kick?: string;
+  seal?: string;
+  /** 네지 팔괘 64장 — 낮은 자세로 장을 번갈아 내지르는 6컷 (원본 $DDONG_FX_WORK/hakke/) */
+  hakke?: string;
+  /** 아랑아 회오리 드릴 8컷 — 기본 시트에 캐릭터 특징 색을 입힌 것 (scripts/tsuga-tint.py) */
+  tsuga?: string;
+  /** 땅에서 기술을 모으는 정면 6컷 (지금은 카카시 치도리만). 없으면 웅크림으로 떨어진다 */
+  charge?: string;
+  /** 제자리 한 바퀴 6컷 (정면 → 옆 → 뒤 → 옆, 지금은 네지 회천만). 루프로 돈다 */
+  spin?: string;
+  /** 눈을 뜨고 망토를 펼쳐 까마귀를 푸는 정면 6컷 (이타치 만화경) */
+  eye?: string;
+  /** 쪼그려 앉아 쥐 인(子)을 맺는 정면 6컷 (시카마루 그림자 흉내) */
+  bind?: string;
+  /** 숨을 들이마셔 부풀다 공으로 말리는 정면 6컷 (쵸지 배가술). 컷마다 몸이 커진다 */
+  inflate?: string;
+  /** 무릎 꿇고 두 손바닥으로 땅을 치는 정면 6컷 (오로치마루 삼중라생문) */
+  gate?: string;
+  /** 두루마리를 펼쳐 손을 짚는 정면 6컷 (지라이야 가마분타 소환) */
+  summon?: string;
+}> = {
+  neji:       { wall: 'neji_wall_128x128.png', dash: 'neji_dash_128x136.png', cutin: 'neji_cutin_512x244.png' , walk: 'neji_walk_128x128.png', idle: 'neji_idle_128x128.png', crouch: 'neji_crouch_128x128.png', jump: 'neji_jump_136x128.png', kick: 'neji_kick_128x128.png', seal: 'neji_seal_128x128.png', spin: 'neji_spin_128x128.png', tsuga: 'neji_tsuga_160x112.png', hakke: 'neji_hakke_128x128.png' },
+  kakashi:    { wall: 'kakashi_wall_128x128.png', dash: 'kakashi_dash_128x168.png', cutin: 'kakashi_cutin_512x244.png' , walk: 'kakashi_walk_128x128.png', idle: 'kakashi_idle_128x128.png', crouch: 'kakashi_crouch_136x128.png', jump: 'kakashi_jump_160x128.png', kick: 'kakashi_kick_136x128.png', seal: 'kakashi_seal_128x128.png', charge: 'kakashi_charge_128x128.png', tsuga: 'kakashi_tsuga_160x112.png' },
+  itachi:     { wall: 'itachi_wall_128x128.png', dash: 'itachi_dash_128x152.png', cutin: 'itachi_cutin_512x244.png' , walk: 'itachi_walk_128x128.png', idle: 'itachi_idle_128x128.png', crouch: 'itachi_crouch_136x128.png', jump: 'itachi_jump_144x128.png', kick: 'itachi_kick_128x128.png', seal: 'itachi_seal_128x128.png', eye: 'itachi_eye_136x128.png', tsuga: 'itachi_tsuga_160x112.png' },
+  minato:     { wall: 'minato_wall_128x128.png', throw: 'minato_throw_128x128.png', dash: 'minato_dash_128x152.png', cutin: 'minato_cutin_512x244.png', walk: 'minato_walk_128x128.png', idle: 'minato_idle_128x128.png', crouch: 'minato_crouch_128x128.png', jump: 'minato_jump_136x128.png', kick: 'minato_kick_128x128.png', seal: 'minato_seal_128x128.png', tsuga: 'minato_tsuga_160x112.png' },
+  shikamaru:  { wall: 'shikamaru_wall_128x128.png', dash: 'shikamaru_dash_128x160.png', cutin: 'shikamaru_cutin_512x244.png' , walk: 'shikamaru_walk_136x128.png', idle: 'shikamaru_idle_128x128.png', crouch: 'shikamaru_crouch_152x128.png', jump: 'shikamaru_jump_168x128.png', kick: 'shikamaru_kick_152x128.png', seal: 'shikamaru_seal_128x128.png', bind: 'shikamaru_bind_128x128.png', tsuga: 'shikamaru_tsuga_160x112.png' },
+  choji:      { wall: 'choji_wall_128x128.png', dash: 'choji_dash_128x128.png', cutin: 'choji_cutin_512x244.png' , walk: 'choji_walk_128x128.png', idle: 'choji_idle_128x128.png', crouch: 'choji_crouch_128x128.png', jump: 'choji_jump_136x128.png', kick: 'choji_kick_128x128.png', seal: 'choji_seal_128x128.png', inflate: 'choji_inflate_128x128.png', tsuga: 'choji_tsuga_160x112.png' },
+  orochimaru: { wall: 'orochimaru_wall_128x128.png', dash: 'orochimaru_dash_128x136.png', cutin: 'orochimaru_cutin_512x244.png' , walk: 'orochimaru_walk_128x128.png', idle: 'orochimaru_idle_128x128.png', crouch: 'orochimaru_crouch_136x128.png', jump: 'orochimaru_jump_144x128.png', kick: 'orochimaru_kick_128x128.png', seal: 'orochimaru_seal_128x128.png', gate: 'orochimaru_gate_128x128.png', tsuga: 'orochimaru_tsuga_160x112.png' },
+  // 기본 뿌요 — 그림자 분신술 컷인만 전용이다 (나머지는 기본 뿌요 시트로 떨어진다)
+  puyo:       { cutin: 'puyo_cutin_512x244.png' },
+  jiraiya:    { wall: 'jiraiya_wall_128x128.png', dash: 'jiraiya_dash_128x128.png', cutin: 'jiraiya_cutin_512x244.png' , walk: 'jiraiya_walk_128x128.png', idle: 'jiraiya_idle_128x128.png', crouch: 'jiraiya_crouch_128x128.png', jump: 'jiraiya_jump_152x128.png', kick: 'jiraiya_kick_128x128.png', seal: 'jiraiya_seal_128x128.png', summon: 'jiraiya_summon_176x208.png', tsuga: 'jiraiya_tsuga_160x112.png' },
+};
+
+/**
+ * 캐릭터 시트 **표시 보정 배율** — 칸 안에 개가 작게 그려진 시트만 그만큼 키워 띄운다.
+ * 같은 동작의 기본 뿌요 시트와 보이는 높이를 비교한 값이다 (키우기만, 최대 1.35).
+ * 지라이야 떨어지는 시트가 미나토보다 29% 작게 나왔다 (사람 판정). **손으로 고치지 말고**
+ * 시트를 바꾼 뒤 `scripts/heidi-sheet-fix.py` 를 다시 돌려 이 표를 통째로 갈아 끼운다.
+ */
+export const HEIDI_SHEET_FIX: Record<string, number> = {
+  'minato_walk_128x128.png': 1.06,
+  'minato_idle_128x128.png': 1.07,
+  'minato_crouch_128x128.png': 1.18,
+  'minato_jump_136x128.png': 1.33,
+  'minato_kick_128x128.png': 1.26,
+  'minato_wall_128x128.png': 1.04,
+  'kakashi_crouch_136x128.png': 1.15,
+  'kakashi_jump_160x128.png': 1.31,
+  'kakashi_kick_136x128.png': 1.15,
+  'neji_walk_128x128.png': 1.19,
+  'neji_idle_128x128.png': 1.12,
+  'neji_crouch_128x128.png': 1.26,
+  'neji_jump_136x128.png': 1.35,
+  'neji_kick_128x128.png': 1.33,
+  'neji_wall_128x128.png': 1.13,
+  'neji_dash_128x136.png': 1.31,
+  'neji_seal_128x128.png': 1.01,
+  'neji_spin_128x128.png': 1.19,
+  'itachi_walk_128x128.png': 1.14,
+  'itachi_idle_128x128.png': 1.01,
+  'itachi_crouch_136x128.png': 1.21,
+  'itachi_jump_144x128.png': 1.35,
+  'itachi_kick_128x128.png': 1.30,
+  'itachi_eye_136x128.png': 1.14,
+  'shikamaru_jump_168x128.png': 1.16,
+  'choji_walk_128x128.png': 1.04,
+  'choji_crouch_128x128.png': 1.10,
+  'choji_jump_136x128.png': 1.24,
+  'choji_kick_128x128.png': 1.16,
+  'choji_dash_128x128.png': 1.16,
+  'choji_inflate_128x128.png': 1.04,
+  'orochimaru_walk_128x128.png': 1.12,
+  'orochimaru_idle_128x128.png': 1.06,
+  'orochimaru_crouch_136x128.png': 1.23,
+  'orochimaru_jump_144x128.png': 1.35,
+  'orochimaru_kick_128x128.png': 1.31,
+  'orochimaru_wall_128x128.png': 1.14,
+  'orochimaru_dash_128x136.png': 1.14,
+  'orochimaru_gate_128x128.png': 1.12,
+  'jiraiya_walk_128x128.png': 1.21,
+  'jiraiya_idle_128x128.png': 1.10,
+  'jiraiya_crouch_128x128.png': 1.25,
+  'jiraiya_jump_152x128.png': 1.27,
+  'jiraiya_kick_128x128.png': 1.31,
+  'jiraiya_wall_128x128.png': 1.21,
+  'jiraiya_dash_128x128.png': 1.28,
+  'jiraiya_seal_128x128.png': 1.01,
+  'jiraiya_summon_176x208.png': 1.21,
+};
+
+/**
+ * 이타치 아마테라스 — 까마귀(옆모습 날갯짓 6컷)와 검은 불(8컷 루프, 붉은 테).
+ * 불 색은 사람 판정: 순수 검정은 어두운 배경에 묻혀 **붉은 테**를 둘렀다.
+ * 원본 C:/Users/user/ddong-fx-work/itachi/ · 조립 scripts/fx-grid-ingest.py (0.21MB + 0.28MB)
+ */
+export const HEIDI_FX_CROW = 'crow_96x96.png';
+/**
+ * 기본 뿌요 그림자 분신술 — 분신마다 잡는 **서로 다른 자세** 한 컷씩 (왼쪽을 본다, 12컷).
+ * 원본 C:/Users/user/ddong-fx-work/clone/poses*_raw.png (ChatGPT) -> scripts/clone-pose-sheet.py 가 강아지를
+ * 덩어리별로 떼어 **같은 배율**로 조립한다 (컷마다 맞추면 자세별로 크기가 널뛴다)
+ */
+export const HEIDI_FX_CLONEPOSE = 'puyo_clonepose_128x128.png';
+/**
+ * 미나토 **비뢰신 나선환** — 나선환 8컷 루프 · 내려찍은 폭발 8컷 (바닥선 기준, 가산 블렌드).
+ * 원본 $DDONG_FX_WORK/rasen/ (ChatGPT) — 검은 배경 그대로 두고 가산으로 겹친다
+ */
+export const HEIDI_FX_RASENGAN = 'rasengan_128x128.png';
+export const HEIDI_FX_RASENBLAST = 'rasenblast_192x192.png';
+/**
+ * 이타치 **스사노오** 8컷 — 기운 · 갈비뼈 · 갑옷 · 칼 내림 · 올려 베기 시작 · **대각선 위로 올려 베기** ·
+ * 칼 든 여운 · 흩어짐.
+ * 오른쪽을 본다, 바닥선 기준. 원본 $DDONG_FX_WORK/susanoo/ (ChatGPT, 원작 조사 후 생성)
+ */
+// 256 → 384 칸 — 화면에 306px 로 **키워** 띄워 픽셀이 깨졌다 (사람 판정). 이제 줄여서 띄운다
+export const HEIDI_FX_SUSANOO = 'susanoo_384x384.png';
+/** 스사노오 **검기** — 오른쪽으로 날아가는 붉은 초승달 칼날 8컷 루프 (원본 $DDONG_FX_WORK/susanoo/) */
+export const HEIDI_FX_SWORDWAVE = 'swordwave_256x256.png';
+/**
+ * 네지 마무리 **팔괘 64장** — 팔괘 진(정면 원 한 장, 코드가 납작하게 눌러 바닥에 깐다)과
+ * 손바닥 타격 8컷. 원본 $DDONG_FX_WORK/hakke/ (ChatGPT, 원작 조사 후 생성)
+ */
+export const HEIDI_FX_TRIGRAM = 'trigram_512x512.png';
+export const HEIDI_FX_PALM = 'palm_160x160.png';
+/** 쵸지 마무리 **초배가 내려찍기** 충격파 8컷 (바닥선 기준, 좌우로 퍼짐). 원본 $DDONG_FX_WORK/choji-slam/ */
+export const HEIDI_FX_CHOJISLAM = 'chojislam_256x128.png';
+/**
+ * 시카마루 마무리 **기폭찰** — 부적 4컷(멀쩡 → 타들어 감)과 **공중** 폭발 8컷(컷 가운데 기준, 사방으로 둥글게).
+ * 원본 $DDONG_FX_WORK/shadow-tag/ (ChatGPT, 나선환 폭발 시트를 화풍 참조로 첨부)
+ */
+export const HEIDI_FX_BOMBTAG = 'bombtag_96x160.png';
+export const HEIDI_FX_TAGBLAST = 'tagblast_256x256.png';
+export const HEIDI_FX_AMATERASU = 'amaterasu_96x96.png';
+
+/**
+ * 쵸지 육탄전차 — 몸을 만 공 4컷 (머리띠 끝·털만 살짝 다르다). **구르는 회전은 코드가 준다** —
+ * 공은 돌려도 어색하지 않다 (캐릭터를 통째로 돌리면 어색했던 것과 다르다).
+ * 원본 C:/Users/user/ddong-fx-work/choji/ball_src.png · 조립 scripts/fx-grid-ingest.py (0.25MB)
+ */
+export const HEIDI_FX_CHOJIBALL = 'chojiball_128x128.png';
+
+/**
+ * 오로치마루 삼중라생문 — **세 문이 서로 다르다** (원작 42화 확인, 사람 지적):
+ * 제1문 빨강(불꽃 가시) · 제2문 초록(뿔 모양 잎) · 제3문 파랑(갈고리 · 사슬 추).
+ * 한 줄 12컷 = 문 셋 x 4컷 (멀쩡 · 금 · 크게 금 · 무너짐). 문 i 의 컷 = i*4 + 금 단계.
+ * 아래 가장자리가 평평하다 (땅에 선다). 원본 C:/Users/user/ddong-fx-work/orochimaru/gate_src.png (0.87MB)
+ */
+export const HEIDI_FX_GATE = 'rashomon3_128x148.png';
+
+/**
+ * 지라이야 화둔·가마유탄 — 가마분타 정면 4컷 (착지 · 곰방대 · 볼 빵빵 · 입 쩍), 머리 위에
+ * 강아지 지라이야가 타 있다. 입 자리 = 칸 가로 50% · 세로 65% (실측). 원본 C:/Users/user/ddong-fx-work/jiraiya/
+ * 화염 줄기 — 가로 512 에 입(왼쪽 끝 · 세로 가운데)에서 오른쪽으로 뻗는 6컷 루프. 코드가 돌린다
+ */
+// 칸 320 — 192 로 구웠더니 화면 폭의 72% 로 띄울 때 1.6배 늘어나 뭉개졌다 (사람 판정).
+// 원본 컷이 약 530px 이라 여유가 있다. VRAM 1.56MB (하이디를 고른 판에서만)
+// 6컷 — 착지 · 곰방대 · 볼 빵빵 · **입에서 기름** · **머리 위 지라이야가 불을 뿜어 붙임** ·
+// 입이 불타오름. 합동 기술이 그림 자체에 들어 있다 (사람 판정: 합동 느낌이 아쉽다 → 다시 그림)
+export const HEIDI_FX_TOAD = 'gamabunta_256x256.png';
+// 화염 줄기 — 굵고 끝이 거대한 불덩이로 부푸는 '유탄'. 기름 줄기는 전용 시트 (예전엔 불을 누렇게 칠했다)
+export const HEIDI_FX_FIREJET = 'firejet_512x128.png';
+export const HEIDI_FX_OILJET = 'oiljet_512x96.png';
+
+export const HEIDI_SHEETS: string[] = [
+  ...Object.values(HEIDI_PUYO_SHEETS),
+  HEIDI_WEAPON_SHEET,
+  HEIDI_FX_CROW,
+  HEIDI_FX_CLONEPOSE,
+  HEIDI_FX_RASENGAN,
+  HEIDI_FX_RASENBLAST,
+  HEIDI_FX_SUSANOO,
+  HEIDI_FX_SWORDWAVE,
+  HEIDI_FX_TRIGRAM,
+  HEIDI_FX_PALM,
+  HEIDI_FX_CHOJISLAM,
+  HEIDI_FX_BOMBTAG,
+  HEIDI_FX_TAGBLAST,
+  HEIDI_FX_AMATERASU,
+  HEIDI_FX_CHOJIBALL,
+  HEIDI_FX_GATE,
+  HEIDI_FX_TOAD,
+  HEIDI_FX_FIREJET,
+  HEIDI_FX_OILJET,
+  // 캐릭터 시트는 **있는 것만** 올린다 — 아직 안 그린 캐릭터가 있으면 로딩이
+  // "Failed to process file" 을 뱉는다. 그려진 순서대로 여기에 더한다
+  ...HEIDI_CLONE_CHARS.flatMap(c => Object.values(HEIDI_CLONE_SHEETS[c] ?? {})),
+];
 
 // 뿌요는 땅에서 혼자 좌우로 돌아다니다가 일정 점수마다 **먼 쪽 화면 끝까지 도약해
 // 벽을 짚고, 내려오면서 반대편까지 날라차기로 가로지른다.** 지나간 길의 일반 똥이
 // 부서진다. 자세한 설계는 docs/fx-heidi-puyo.md.
 export const HEIDI_PARAMS = {
   // ── 배회 ──
-  puyoScale:      0.62,  // 플레이어 표시 높이 대비 (80px → 50px). 태이는 0.8 인데
-                         // 뿌요는 강아지라 더 작아야 사람 옆에 선 개로 읽힌다
+  puyoScale:      0.72,  // 플레이어 표시 높이 대비 (80px → 58px). 태이는 0.8 인데
+                         // 뿌요는 강아지라 더 작아야 사람 옆에 선 개로 읽힌다.
+                         // 0.62 에서 올렸다 (사람: "조금만 크게, 너무 많이는 말고") —
+                         // 변신 후 캐릭터로 걸어 다니면서 50px 로는 누군지 안 읽혔다.
+                         // 태이(0.8)보다는 작게 둬서 사람 옆 강아지 느낌은 지킨다
   puyoSpeed:      150,   // 배회 속도 px/s. 태이(130)보다 빠르다 — 다리가 짧아 느리게
                          // 잡았더니, 발동마다 도약 대기 지점까지 144px 을 걸어 돌아오는
                          // 구조가 되면서 **바닥에서 굼떠 보였다.** 종종걸음이 맞다
@@ -452,28 +755,457 @@ export const HEIDI_PARAMS = {
                          // 거의 없다. 조건이 찰 때까지 배회를 계속한다 (달려가서 뛰는 모양)
   puyoCrouchMs:   220,   // **예비 동작.** 점수 도달 즉시 뛰면 도약이 가벼워 보인다.
                          // 로봇의 예비 동작이 260ms 인데 뿌요는 작고 빨라 조금 짧게 잡았다
-  puyoJumpMs:     560,   // ① 도약 — 지금 자리에서 먼 쪽 화면 끝까지
+  puyoJumpMs:     380,   // ① 아랑아 돌진 — 지금 자리에서 먼 쪽 벽까지 일직선. 560 → 380 (빠르게)
   puyoRiseH:      0.12,  // 도약 중간의 **웃자람**(화면 높이 대비). 끝점이 이미 높으므로
                          // 예전처럼 크게 잡으면 화면 위로 튀어나간다
   puyoWallH:      0.42,  // 벽을 짚는 높이 (바닥에서, 화면 높이 대비)
-  puyoWallMargin: 6,     // 짚을 때 스프라이트 바깥 끝과 화면 끝 사이 간격(px)
-  puyoWallMs:     260,   // ② 벽에 붙어 버티는 시간. 접촉 → 웅크림 → 차기의 3컷이 여기서 돈다
-  puyoKickMs:     520,   // ③ 날라차기 — 벽을 밀고 반대편으로 대각선 하강
+  puyoWallMargin: -10,   // 짚을 때 스프라이트 바깥 끝과 화면 끝 사이 간격(px).
+                         // **음수면 몸 일부가 화면 밖으로 나간다** — 128칸 안에 빈 여백이
+                         // 있어서 0 으로 둬도 발바닥이 벽에서 떠 보인다 (사람 판정:
+                         // "좀 더 벽에 가까이 붙으면 좋겠")
+  puyoWallMs:      90,   // ② 벽을 **튕기는** 틈. 260 → 90 — 회오리는 벽에 붙지 않고 튕겨 나간다
+  puyoKickMs:     420,   // ③ 내리꽂기 — 벽에서 튕겨 반대편으로 대각선 하강. 520 → 420
+  // 아랑아 회전
+  tsugaFps:         30,   // 회오리 시트 재생 속도 (8컷이 나선 띠 한 바퀴)
+  tsugaTrailEvery:  26,   // 잔상 간격(ms)
+  tsugaTrailMs:    150,   // 잔상이 사라지는 시간
+  tsugaTrailAlpha: 0.40,
   puyoLandW:      0.70,  // 착지점 — **짚은 벽에서** 화면 폭의 이만큼 간 자리.
                          // 가장자리(46px)에 박아 두면 끝에 처박혔다가 반대쪽 도약
                          // 대기 지점까지 한참을 걸어 돌아와야 한다. 안쪽으로 당기면
                          // 착지와 다음 대기 지점이 가까워져 되돌아 걷는 거리가 준다
   puyoKickHitR:   48,    // 하강 중 판정 반경. 뻗은 발만큼 넓다 (도약 구간은 34)
-  puyoKickPoints: 30,    // 하강 중 지운 똥 하나당 점수 (도약 구간은 20)
+  puyoKickPoints: 40,    // 내리꽂기 구간이 지운 똥 하나당 점수. 30 → 40 (2026-09-27 사람 지시: "레드·하이디는 전부 40")
+
+  // ── 변신 공통 ──
+  // (옛 그림자 분신술에서 이어받은 값이라 이름에 clone 이 남아 있다)
+  cloneRiseMs:     520,  // 변신 ① 화면 가운데로 솟구치는 시간
+  cloneFinPoints:   40,  // 고유 기술이 지운 똥 하나당 점수 (기술별 값이 따로 없을 때). 18 → 40
+                         // 무기(6)보다 높고 날라차기(30)보다 낮다 - 한 판을 끝내면 안 된다
+
+  // ── 컷인 (`cutin` 일러스트가 있는 캐릭터만) ──
+  // 메이플 어센트류의 "화면을 통째로 쓰는" 느낌은 그림보다 **화면 점유**에서 온다.
+  // 실측: 지금 컷신이 화면의 2.9% 였고 어센트류는 60~100% 다.
+  cutinMs:         900,  // 컷인이 떠 있는 시간. 이만큼 기술이 뒤로 밀린다
+  cutinInMs:       140,  // 밀려 들어오는 시간
+  cutinOutMs:      180,  // 빠져나가는 시간
+  // **화면 위쪽에 가로 띠로 건다.** 세로 전체화면도 만들어 봤지만(9:16 8장)
+  // 사람이 가로 띠 쪽을 골랐다 — 화면을 다 덮지 않으니 덜 답답하다.
+  // 띠 그림은 그 세로 원본을 16:9 로 **잘라서** 만든다 (941x1672 -> 941x529).
+  // 확대가 아니라 크롭이라 하드 엣지가 그대로 살고, 얼굴 높이가 캐릭터마다 달라
+  // 크롭 위치는 한 명씩 맞췄다 (scripts/cutin-ingest.sh 의 TOP).
+  // 띠는 **2.1:1** 이다. 16:9 로 시작했다가 "세로 사이즈 살짝만 줄여 달라"는
+  // 판정에 폭은 그대로 두고 높이만 15% 깎았다 (360 화면에서 202 -> 171px)
+  // **화면 틀에 붙인다** — 예전엔 판 중심을 화면 높이의 24% 에 띄워서 폰 비율마다 위아래가
+  // 떠 보였다. 이제 띠 윗변을 HUD(36px) 바로 아래에 딱 붙이고, 테 두께도 판 높이에 맞춘다
+  cutinTopPx:       36,  // 그림 윗변 — GameScene 의 HUD_H(점수칸) 바로 아래. 셔터가 여기서 아래로 열린다
+  // ── 만화 칸 컷인 (2026-09-27, 사람 지시: "띠는 커서 불편 — 왼쪽 위에 만화 한 컷처럼") ──
+  cutinPanelW:     0.52,  // 칸 폭 (화면 폭 대비). 0.45 → 0.52 (사람 지시: "조금만 키워")
+  cutinPanelAspect: 0.66, // 칸 높이 / 폭
+  cutinMarginX:       0,  // 화면 왼끝에서 칸까지(px). 0 — **왼변은 화면 끝에 딱 붙인다** (사람 지시)
+  cutinTopGap:        0,  // 점수칸 아래에서 칸까지(px). 0 — **윗변은 점수칸 아랫선에 딱 붙인다** (사람 지시)
+  cutinTiltDeg:       0,  // 칸 기울기(도). 4 → 0 — 윗변·왼변이 화면 틀과 직각으로 맞아야 한다 (사람 지시)
+  cutinZigRight:      5,  // 오른변 톱니 마디 수
+  cutinZigBottom:     7,  // 아랫변 톱니 마디 수
+  cutinZigAmp:        6,  // 톱니 높이(px)
+  cutinBorder:        6,  // 검은 테 두께(px) — 꼭짓점은 원으로 이어 뭉툭하게
+  cutinRim:           3,  // 검은 테 바깥 흰 테(px) — 어느 배경에서도 칸이 읽히게
+  cutinImgOver:    1.12,  // 그림을 칸 높이보다 이만큼 크게 띄운다 (가장자리 빈틈 방지)
+  // 컷인 그림 속 **얼굴의 가로 위치** (그림 폭 대비) — 칸 가운데로 민다. 그림을 보고 잰 값
+  cutinFaceX: {
+    minato: 0.68, kakashi: 0.66, neji: 0.72, itachi: 0.66, shikamaru: 0.72,
+    choji: 0.76, orochimaru: 0.72, jiraiya: 0.72, puyo: 0.50,
+  } as Record<string, number>,
+  screenShake:    false, // 하이디 기술의 화면 흔들림. false — "정신없다" (사람 판정). 히트스톱·섬광은 남는다
+  cutinFreeze:    false, // 컷인 동안 똥을 멈추고 새 똥을 막을까. true → false (사람 지시:
+                         // "컷인 때 멈추는 거 없애줘"). 무적은 유지한다 — 암전 아래로 똥이 흐르므로
+
+  // ── 미나토 비뢰신 표식 · 섬광 ──
+  chainMarkScale: 0.55,  // 표식(삼지창) 표시 배율
+  // ── 임팩트 연출 (나루티밋 오의 · 드래곤볼 레전즈 피니시 문법) ──
+  // 점프마다 섬광이 **세지다가 마지막에 터진다**. 넷이 똑같으면 밋밋하다.
+  // 줌은 뺐다 — HUD 전용 카메라가 없어서 점수 텍스트까지 같이 커진다
+  finFlashStep:   0.45,  // 중간 점프의 섬광 세기
+  finFlashLast:   1.00,  // 마지막 점프의 섬광 세기
+  finFlashMs:       33,  // 섬광이 떠 있는 시간(ms). 60fps 기준 2프레임
+  chainMarkTint: 0xffd24a,  // 비뢰신 노랑. 원반의 파랑과 **다른 순간에** 나와야 안 섞인다
+
+  /**
+   * **실기 확인용 강제 지정.** 빈 문자열이면 평소대로 무작위다.
+   *
+   * 변신은 2번째 발동마다 나오고 캐릭터는 8명 중 하나라, 특정 캐릭터의 기술을
+   * 보려면 평균 16번 발동해야 한다. 한 명씩 확인할 때만 켠다.
+   *
+   *   debugCloneChar: 'minato'   ← 확인할 때만. 확인이 끝나면 '' 로 되돌린다
+   */
+  debugCloneChar: '' as string,
+
+  /**
+   * **진단 로그.** 변신·기술이 어디까지 갔는지 콘솔에 찍는다 (F12 → Console).
+   * "적용이 안 된 것 같다"가 반복될 때 추측 대신 데이터를 보려고 넣었다.
+   * 확인이 끝나면 false 로 되돌린다.
+   */
+  debugFinLog: false,
+
+  // ── 변신 주기 · 컷인 ──
+  summonEvery:        2,  // 몇 번째 발동마다 변신인가. 나머지는 평소 도약·날라차기
+                          // (도약은 하이디의 기본기이자 점수원이라 없애지 않고 **번갈아** 둔다)
+  summonCutinMs:   1200,  // 컷인이 떠 있는 시간. 850 → 1200 — 만화 칸은 작아서 덜 거슬린다
+  summonCutinInMs:  160,
+  summonCutinOutMs: 220,
+
+  // ── 변신 (B안 개정) ──
+  // "이렇게 말고 뿌요가 화면 정가운데로 점프해 인을 맺고, 랜덤 캐릭터로 변신해서
+  //  고유 능력을 쓴다" (사람 지시). 닌자가 **어디선가 나오는** 게 아니라 **뿌요 자신이**
+  // 변한다 — 누가 무엇이 됐는지가 인과로 읽힌다.
+  transformY:     0.48,  // 인을 맺는 높이 (화면 높이 대비, 위에서). 0.42 → 0.48
+                         // (사람 판정: "살짝 아래로")
+  sealHitR:       0.42,  // 인 맺는 동안 몸에 닿은 똥을 지우는 반경 (뿌요 크기 대비).
+                         // 없으면 공중에 떠 있는 큰 뿌요를 똥이 그냥 통과했다 (사람 판정)
+  travelScale:    0.55,  // 솟구치기·내리꽂기 동안 크기 (플레이어 키 대비). 고속 이동 시트는
+                         // 칸이 세로로 길어(128x160) 같은 배율이면 더 커 보인다 —
+                         // 사람 판정 "올라가고 내려가는 건 사이즈 줄여"
+  transformScale: 1.25,  // 공중에서 커지는 배율 (플레이어 키 대비). 평소 0.62 로는 인이 안 보인다
+  sealFps:           5,  // 인 맺기 6컷 속도 → 1.2초. 10(600ms)은 손이 빨라 인 모양이
+                         // 안 읽혔다. 사람 판정 두 번("조금만 천천히" → "조금만 더")에 10→7→5
+  sealHoldMs:      180,  // 마지막 컷(눈 뜨며 털이 솟음)에 머무는 시간. 여기서 펑 한다
+  // 변신 펑 — 흰 연기가 티 나게 (사람: "아주 흰 뿌연 연기, 티 날 정도로")
+  poofAlpha:      1.0,   // 연기 시작 불투명도. 공용 smoke 의 0.45 로는 배경에 묻힌다
+  poofLife:       1.1,   // 수명 배율 (poof 프리셋 900~1500ms 에 곱함 → 약 1~1.65초).
+                         // 사람 판정 "조금 더 길게"에 smoke×0.75(0.5~1초)에서 늘렸다
+  poofCoreCount:    16,  // 몸을 덮는 짙은 뭉치
+  poofCoreScale:   1.5,
+  poofRingCount:    10,  // 바깥으로 튀는 고리
+  poofRingSpeed:   2.6,
+  landMs:          320,  // 능력을 쓰고 땅으로 떨어지는 시간
+
+  // ── 미나토 고유: 비뢰신 3연속 (blink) ──
+  // 변신해 착지한 뒤 **걸어 다니다가** 아무 방향으로 표식 쿠나이를 던지고,
+  // **벽(좌·우·천장·바닥)까지** 일직선으로 날아가 꽂힌 자리로 순간이동한다.
+  // 쿠나이는 돌지 않고 날아가는 방향을 본다. 지나간 선 위의 똥이 베인다.
+  // 마지막(blinkCount 번째) 쿠나이는 바닥 가운데 — 비뢰신 나선환으로 끝낸다 (사람 지시)
+  rasenChargeMs:    420,  // 바닥에서 웅크려 나선환을 모으는 시간
+  rasenHandY:      0.55,  // 나선환 자리 — 발바닥 위로 뿌요 크기의 이만큼
+  rasenOrbSize:    0.85,  // 다 모인 나선환 크기 (뿌요 크기 대비)
+  rasenBlastW:     0.82,  // 폭발 돔 표시 폭 (화면 폭 대비). 0.70 → 0.82 (사람 지시: "살짝만 더 크게")
+  rasenBlastMs:     700,  // 폭발 8컷 재생 시간
+  rasenHoldMs:      150,  // 폭발 뒤 걷기까지
+  rasenR:           175,  // 폭발 판정 최대 반경(px) — 돔이 부푸는 만큼 자란다. 150 → 175 (돔이 커진 만큼)
+  // 푸른 파동 — 내려찍는 순간 화면 끝까지 퍼지는 고리. 고리가 지나간 자리의 똥이 날아간다
+  rasenWaveMs:      900,  // 화면 끝까지 퍼지는 시간. 650 → 900 (사람 판정: "잘 안 보인다")
+  rasenWaveW:        34,  // 고리 두께(px) — 판정도 이 두께만큼. 26 → 34
+  rasenWaveTint: 0x5ab8ff,  // 가운데 하늘색 띠
+  rasenWaveEdge: 0x1646b8,  // 바깥 진한 파랑 — 밝은 배경에서도 고리 윤곽이 서게
+  blinkCount:        5,   // 연속 몇 번. 3 → 5 (사람 지시: "횟수 2개 늘려줘")
+  blinkSpreadJitter: 60,  // 다음 자리 고를 때 섞는 무작위(px). 0 이면 늘 '들른 곳에서 가장 먼 곳' 하나로 굳는다
+  blinkWalkMs:     700,   // 착지 후 걷다가 첫 쿠나이를 던지기까지
+  blinkThrowMs:    150,   // 던지는 자세 → 쿠나이가 손을 떠나기까지
+  blinkFlyMs:      230,   // 쿠나이가 날아가는 시간
+  blinkStickMs:    110,   // 꽂힌 쿠나이가 **먼저 보이는** 틈. 이게 있어야 "저기로 가겠구나"가 읽힌다
+  blinkHoldMs:     200,   // 도착해서 다음 쿠나이를 던지기 전 멈춤 (공중에서)
+  blinkDistMin:    170,   // 벽까지 최소 거리. 이보다 짧은 방향은 다시 뽑는다
+  blinkDistMax:    260,   // 비행 시간 환산용 기준 거리 (실제 도착은 벽)
+  blinkR:           90,   // 순간이동 **선** 위 판정 반경. 점이 아니라 지나간 길을 벤다. 46 → 90
+                          // (사람 지시: "카카시랑 똑같이" — surgeLegR 와 같은 값). 빛띠 폭도 따라 넓어진다
+  blinkLimit:        0,   // 한 번에 지울 똥 상한 (0 = 선 위 전부)
+  blinkDashMs:      70,   // **고속 이동.** 몸을 감추고 섬광선이 출발점에서 도착점까지 뻗는 시간.
+                         // 순간이동(0ms)이면 "사라졌다 나타남"이고, 선이 뻗어야 "지나갔다"가 읽힌다
+  blinkTrailMs:    220,   // 섬광 잔상이 걷히는 시간
+  blinkTrailCore:   12,   // 잔상 가운데 밝은 심지 두께(px)
+  blinkTrailAlpha: 0.45,
+  // 비뢰신 색 — **노랑.** 심지를 거의 흰색(0xfff8d8)으로 두고 가산 합성했더니 흰 섬광으로
+  // 읽혔다 (사람 판정: "흰색으로 보여"). 파랑 성분을 0 에 가깝게 두면 가산으로 겹쳐도
+  // 빨강·초록만 차올라 끝까지 노랑이 남는다
+  blinkCoreTint:  0xffd400,  // 섬광선 심지
+  blinkGlowTint:  0xff9c00,  // 바깥 빛띠 (심지보다 짙은 호박색 — 가장자리가 노랑을 받쳐 준다)
+  blinkFlashColor: 0xffc800, // 화면 섬광 (기본은 흰색)  // 바깥 빛띠 불투명도. 빛띠 폭 = 판정 폭(blinkR x 2) — 보이는 만큼 지운다
+  blinkWallPadPx:    8,   // 쿠나이가 벽에 꽂힐 때 스프라이트 반 장만 물리는 여백(px)
+
+  // ── 카카시 `surge` — 치도리를 모아 세로로 꿰뚫는다 ──
+  // 잠수(두더지 은신)로 시작했다가 **차징으로 바꿨다.** 치도리의 정체는 이동이 아니라
+  // 모으는 시간이다 ("천 마리 새 우는 소리"). 게다가 컷인이 이미 앞발에 번개를 모으고 있다.
+  // 정적은 "아무 일도 안 일어남"이지만 차징은 "무언가 차오름"이라, 같은 시간에 긴장이 붙는다.
+  //
+  // 방향도 유일하다 — 똥은 위에서 내려오는데 카카시만 **아래에서 위로** 거슬러 올라간다.
+  // 발사는 **장전 → 벽으로 돌진** 세 번 (사람 지시: "가운데서 장전, 한쪽 벽으로 치도리,
+  // 장전 후 반대쪽 벽 살짝 위로, 또 장전 후 반대쪽 벽 좀 위로")
+  surgeDashes:        5,  // 돌진 횟수 (장전 → 돌진). 3 → 5 (사람 판정: "2번 더 할 수 있겠다")
+  // 닿을 자리 고르기 — 좌·우 벽과 천장 위 후보 중 **지금 자리에서 멀고 들른 곳과도 먼** 곳
+  // (사람 판정: "좌우보다 좀 더 멀리멀리"). 예전엔 좌우 벽을 번갈아 높이만 조금씩 올렸다
+  surgeFloorH:     0.22,  // 벽 위 후보의 가장 낮은 높이 — 바닥선 위 이만큼 (화면 높이 대비)
+  surgeSpreadW:    0.60,  // '들른 곳과 먼' 쪽에 주는 무게 (0 이면 거리만 본다)
+  surgeAimJitterPx:  60,  // 고를 때 섞는 무작위(px) — 매번 같은 길로 굳지 않게
+  surgeWallPad:    0.40,  // 벽에서 몸 가운데까지 (뿌요 크기 대비) — 몸이 화면 밖으로 안 나가게
+  surgeLegMs:       200,  // 한 번 돌진하는 시간
+  surgeRechargeMs: 1200,  // 벽에서 다시 장전하는 시간 (첫 장전은 surgeChargeMs). 700 → 1200
+                         // (사람 판정: "장전 시간이 많이 줄어든 것 같다")
+  surgeRezapMax:      3,  // 재장전 동안 전기로 태우는 최대 개수
+  surgeBolts:         4,  // 돌진 한 번에 겹치는 번개 줄 수 (사람 판정: "한 줄은 초라하다")
+  surgeBoltGapMs:    50,  // 줄과 줄 사이 시간차
+  surgeBoltJitterDeg: 5,  // 줄마다 트는 각도(±)
+  surgeBoltOffPx:    12,  // 줄마다 옆으로 비키는 거리(±)
+  surgeLegR:         90,  // 돌진 선 위 판정 반경. 잔상이 떠 있는 동안 계속 태운다. 52 → 90
+                         // (사람 지시: "삭제 범위 많이 늘려줘"). 빛띠 폭도 이 값을 따라 넓어진다
+  surgeOrb:        0.75,  // 치도리 구 최대 크기 (뿌요 크기 대비). 차징 동안 0.25 배에서 자란다
+  surgeOrbStrike:  1.15,
+  // 모으는 동안 **주변 똥이 전기에 타서** 없어진다 (사람 지시). 구에서 가장 가까운 똥으로
+  // 번개 한 가닥이 튀고, 맞은 똥은 청백으로 번쩍였다가 까맣게 타며 쪼그라든다
+  surgeZapEvery:    170,  // 몇 ms 마다 한 번 튀는가
+  surgeZapR0:        80,  // 반경 — 모으기 시작 (px). 구가 자랄수록 넓어진다
+  surgeZapR1:       150,  // 반경 — 다 모았을 때
+  surgeZapMax:       10,  // 한 번 모으는 동안 태우는 최대 개수
+  surgeZapMs:       260,  // 번개 가닥 · 타는 똥이 사라지는 시간
+  surgeOrbFrontY: 0.17,  // 정면 모으기 시트에서 구 자리 — 발바닥 위로 뿌요 크기의 이만큼.
+                         // 교차한 두 앞발이 칸의 y 95/128 에 있다 (발바닥 118)  // 솟구치는 순간 한 번 더 부푸는 배율
+  // ── 카카시 땅 판본 (변신 → 착지 → 모으기 → 발사) ──
+  // 사람 지시: "변신 후 밑에 내려와서 치도리를 2초간 모으는 연출이 필요해. 그리고 발사"
+  surgeLandDelayMs: 150,  // 착지 후 모으기 시작까지 (걷지 않고 거의 바로)
+  surgeChargeMs:   2000,  // 치도리를 모으는 시간
+  surgeSparkEvery:  280,  // 모으는 동안 앞발에서 튀는 전기 조각 간격(ms)
+  surgeTopHoldMs:   160,  // 마지막 벽에서 멈추는 틈 — 이게 있어야 "꿰뚫고 닿았다"가 읽힌다
+  surgeTint:  0xbfe6ff,  // 치도리 청백. boltGold(금색) 시트를 틴트해서 쓴다
+
+  // ── 네지 `deflect` — 회천으로 튕기고, 튕긴 똥이 또 친다 ──
+  // 회천은 원래 **막는** 기술이다. 없애는 게 아니라 튕겨낸다 — 그래서 네지만
+  // "똥이 그 자리에서 터지지 않고 바깥으로 날아가 화면 밖으로 사라진다".
+  // 판이 지저분할수록 강해지는 유일한 놈이기도 하다.
+  deflectR:        150,  // 회천 반경 — 이 안의 똥이 튕긴다
+  deflectMax:        8,  // 한 번에 튕기는 최대 개수
+  deflectSpeed:    520,  // 튕겨 나가는 속도(px/s)
+  deflectSpin:       9,  // 날아가는 동안 회전(rad/s)
+  deflectHitR:      22,  // 날아간 똥이 다른 똥을 치는 판정 반경
+  deflectPierce:     3,  // 총알 하나가 최대 몇 개를 칠 수 있나. **연쇄는 1단까지** —
+                         // 맞은 똥이 또 총알이 되면 똥이 많은 판에서 무한히 번진다
+  deflectTotal:     16,  // 한 번의 마무리로 없앨 수 있는 총 개수 (직접 + 연쇄)
+  deflectChainPts:   40,  // 연쇄로 터진 똥의 점수. 9 → 40 (직접과 같게 — 하이디는 전부 40)
+                         // 문서에 "대표 기술이 한 판을 끝내면 안 된다"고 적어 뒀다
+  // ── 네지 땅 판본 (변신 → 착지 → 백안 → 회천) ──
+  // ── 이타치 땅 판본 (변신 → 착지 → 만화경 → 까마귀 → 아마테라스) ──
+  // ── 시카마루 땅 판본 (변신 → 착지 → 쥐 인 → 그림자 → 정적 → 조르기) ──
+  // 그림자는 시트 없이 **코드로 그린다** — 원래 납작한 검은 모양이라 그림이 필요 없고,
+  // 뻗고 팽팽해지는 움직임을 자유롭게 줄 수 있다 (VRAM 0)
+  // ── 쵸지 땅 판본 (변신 → 착지 → 배가술 → 육탄전차 → 쪼그라듦) ──
+  // ── 오로치마루 땅 판본 (변신 → 착지 → 삼중라생문) ──
+  // 사람 판정: 잠영다수수(뱀)는 "좀 징그럽다" → 삼중라생문으로 교체.
+  // 원작은 도깨비 얼굴 문 셋이 땅에서 솟아 공격을 막는다. 게임에서는 **화면 폭을 셋으로
+  // 나눠 나란히 솟고, 문 윗면에 떨어진 똥이 부서진다** — 문 아래가 몇 초 동안 지붕이 된다.
+  // 다른 일곱이 전부 "지운다"인데 이것만 **"막는다"**
+  // ── 지라이야 땅 판본 (변신 → 착지 → 두루마리 소환 → 가마분타 → 화둔·가마유탄) ──
+  // 가마분타가 기름을 뿜고 머리 위 지라이야가 불을 붙인다 — 둘이 함께 하는 기술 (사람 선택)
+  toadLandDelayMs:  200,
+  // ── 기본 뿌요: 그림자 분신술 + 강화 아랑아 ──
+  // 착지해 인을 맺고(컷인) 펑 — 본체가 사라지고 흰 회오리 드릴 여럿이 위쪽 부채꼴로
+  // 엇갈려 튀어나가 벽·천장·바닥을 튕기며 화면을 누빈다. 다 사라지면 본체가 돌아온다
+  cloneLandDelayMs: 250,  // 착지 후 인을 맺기 시작할 때까지
+  cloneSealMs:      700,  // 인을 맺는 시간 (컷인이 이 사이에 뜬다) — 끝에 펑
+  cloneCount:        12,  // 분신 수 (본체도 그중 하나로 사라진다). 8 → 12 (사람 판정: "적어 보인다")
+  clonePoseFrames:   12,  // 자세 시트 컷 수 (puyo_clonepose — scripts/clone-pose-sheet.py). 분신마다 다른 컷
+  cloneEdgeW:      0.12,  // 분신이 나타나는 가로 범위 — 화면 양끝에서 이만큼 안쪽
+  cloneTopH:       0.10,  // 나타나는 세로 범위 — 점수칸 아래 이만큼부터 (화면 높이 대비)
+  cloneBottomH:    0.10,  //                 — 바닥선 위 이만큼까지
+  cloneMinGap:       70,  // 분신끼리 최소 간격(px) — 겹쳐 나타나지 않게
+  clonePoseScale:  0.85,  // 자세 그림 표시 크기 (뿌요 크기 대비). 그림이 칸을 꽉 채워 조금 줄인다
+  clonePoseMs:      650,  // 나타나 자세를 잡고 버티는 시간 (그 뒤 한 마리씩 튀어나간다)
+  clonePoseJitterMs: 220, // 나타나는 박자를 마리마다 이만큼 안에서 어긋나게
+  cloneAimJitterDeg: 35,  // 튀어 나가는 방향 — 화면 가운데를 향한 방향에서 이만큼 비튼다
+  cloneStaggerMs:    70,  // 한 마리씩 엇갈려 출발하는 간격 — 한꺼번에 나가면 정신없다
+  cloneSpeed:       640,  // 드릴 속도(px/s)
+  cloneBounces:       2,  // 이만큼 튕기고, 다음 벽에 닿으면 펑 하고 사라진다
+  cloneMaxMs:      2600,  // 보험 — 튕김 수를 못 채워도 이 시간이 지나면 사라진다
+  cloneDrillW:     1.35,  // 드릴 표시 폭 (뿌요 크기 대비) — '강화' 라 평소 아랑아보다 크다
+  cloneHitR:         40,  // 드릴 경로 판정 반경
+  clonePoints:       40,  // 지운 똥 하나당 점수. 10 → 40 (하이디는 전부 40)
+  cloneTotal:        36,  // 한 번의 분신술이 지울 수 있는 최대 개수 (한 판을 끝내면 안 된다)
+  toadPoseMs:      1300,  // 두루마리 소환 **8컷** — 쥠 · 던짐 · 공중에서 펼쳐짐 · 활짝 · 툭 떨어짐 ·
+                         // 바닥에 놓임 · 뛰어올라 · 쾅. 떨어지는 두루마리가 읽히게 느긋하게
+  toadCallAt:      0.76,  // 두루마리를 **쾅 찍는** 7번째 컷에 연기 펑 · 가마분타가 떨어지기 시작
+  // 소환은 **연기 펑 속에서 나타난다** (원작 口寄せ). 하늘에서 떨어지게 했더니 소환이 아니라
+  // 그냥 떨어지는 것 같았다 (사람 판정). 거대한 흰 연기가 먼저 터지고, 그 속에서 부풀며 나타난다
+  toadDropMs:       380,  // 연기가 터지고 가마분타가 그 속에서 나타나기까지
+  toadLandMs:       220,  // 착지 찌그러짐 컷
+  toadIdleMs:       320,  // 곰방대 물고 노려보는 틈
+  toadInhaleMs:     450,  // 볼 빵빵 — 기름을 머금는다 (지라이야 인)
+  toadW:           0.50,  // 가마분타 폭 (화면 폭 대비). 0.72 → 0.64 → 0.56 → 0.50 (사람 판정: 크다)
+  toadMouthY:      0.70,  // 가마분타 입 자리 — 칸 세로 대비 (새 시트 실측: 기름이 나오는 자리)
+  // **합동 기술로 읽히게** 원작 순서대로 (사람 판정: "합동으로 하는 느낌이 아니라 아쉽다"):
+  //   ① 가마분타가 기름을 V 자로 뿜는다 → ② 머리 위 지라이야가 불을 훅 뿜어 입가 기름에
+  //   붙인다 (이 순간 컷인 · 화면 정지) → ③ 불이 기름 줄기를 타고 바깥으로 번진다
+  // 불길은 **돌지 않는다** — 예전엔 한 줄기가 부채꼴로 휩쓸어 빙글 도는 것처럼 보였다 (사람 판정)
+  oilMs:            320,  // ① 기름이 뻗는 시간
+  breathMs:         220,  // ② 지라이야가 불을 뿜는 컷(그림)을 보여 주는 시간
+  igniteMs:         200,  // ③ 불이 기름을 타고 끝까지 번지는 시간
+  fireHoldMs:      2400,  // 불길이 버티며 **천천히 쓸고 지나가는** 시간
+  // **한 줄기가 천천히 쓸고 지나간다** (사람 지시: 왼쪽 45° → 오른쪽 45°).
+  // 기름은 시작 각도로 뿜고, 불이 붙은 뒤 끝 각도까지 일정한 속도로 옮겨 간다.
+  // 예전 부채꼴(-168° → -12°, 1.9초)은 빙글 도는 것 같았다 — 폭을 90° 로 줄이고 느리게 했다
+  fireSweepFrom:   -135,  // 위에서 왼쪽으로 45°
+  fireSweepTo:      -45,  // 위에서 오른쪽으로 45°
+  fireLen:          620,  // 불길 길이(px) — 화면 끝까지
+  fireH:            200,  // 불길 굵기(px, 표시) — 한 줄기라 140 → 200
+  fireR:             84,  // 불길 판정 반경 (선분 기준) — 42 → 64 → 84 (사람 지시: "조금 더 크게")
+  firePoints:        40,  // 불에 탄 똥 하나당 점수 (한도 없음). 14 → 40
+  // 가마분타 몸 — **서 있는 내내** 몸에 닿는 똥이 짓눌린다 (예전엔 착지 순간 한 번뿐)
+  toadBodyHalfW:  0.42,  // 판정 반폭 (가마분타 폭 대비)
+  toadBodyH:      0.80,  // 판정 높이 (바닥에서, 가마분타 폭 대비 — 그림이 정사각 칸)
+  toadBodyPoints:   40,  // 짓눌린 똥 하나당 점수. 14 → 40
+  gateLandDelayMs:  200,
+  gatePoseMs:       600,  // 땅에 손을 짚는 6컷
+  gateRiseAt:      0.55,  // 이 진행도(손이 땅에 닿는 4번째 컷)에 문이 솟기 시작한다
+  gateStagger:      120,  // 문 셋이 솟는 시차(ms) — 가운데 → 양옆
+  gateRiseMs:       260,  // 문 하나가 다 솟는 시간
+  gateHoldMs:      4000,  // 버티는 시간
+  gateShatterMs:    340,  // 끝에 **박살 나 사라지는** 시간 — 터지는 컷 → 흩어지는 컷.
+                         // 예전엔 땅으로 가라앉았다 (사람 판정: "그냥 박살나서 없어지는 느낌")
+  gateAspect:      1.16,  // 문 높이 = 문 폭(화면 폭의 1/3) x 이것. 시트 칸 비율 (128x148) —
+                         // 높이를 화면 비율로 따로 주면 문이 세로로 늘어난다. 문 윗면 = 막는 선
+  gatePoints:        40,  // 문 위에서 부서진 똥 하나당 점수. 12 → 40
+  rollLandDelayMs:  200,  // 착지 후 배가술까지
+  inflateMs:        700,  // 배가술 6컷 — 숨 들이마심 → 부풂 → 공으로 말림
+  rollBallD:        100,  // 공 지름(px). 130 → 100 (사람 판정: "사이즈 조금 줄이고")
+  // 사람 지시: "회전을 엄청 빠르게 하면서 화면 여기저기 3초 동안 튕겼으면"
+  // 땅 왕복 → 화면 전체를 튀어 다니는 공으로 바꿨다
+  rollMs:          3000,  // 튕겨 다니는 시간
+  rollSpeed:        640,  // 날아다니는 속도(px/s) — 벽·천장·바닥에서 반사된다. 430 → 640
+                         // (사람 판정: "더 빠르게 벽 여기저기")
+  rollSpinRate:      40,  // 회전 속도(rad/s) — 초당 약 6바퀴. 진행 방향 쪽으로 돈다
+  // 마무리 — 초배가 내려찍기 (사람 지시). 튕기기 뒤 가운데 위로 솟아 거대해졌다가 쿵
+  slamRiseMs:       450,  // 가운데 위로 솟으며 커지는 시간
+  slamHangMs:       150,  // 꼭대기에서 멈추는 틈
+  slamDropMs:       240,  // 내리꽂히는 시간
+  slamWaveMs:       700,  // 충격파 8컷 · 공이 원래 크기로 줄어드는 시간
+  slamBallW:       0.55,  // 거대해진 공 지름 (화면 폭 대비)
+  slamTopY:        0.30,  // 솟는 높이 (화면 높이 대비, 위에서)
+  slamWaveW:       1.20,  // 충격파 최대 폭 (화면 폭 대비) — 끝까지 퍼지면 화면 밖까지
+  slamWaveH:       0.30,  // 충격파 판정 높이 — 바닥에서 화면 높이의 이만큼 위까지
+  rollTopY:        0.12,  // 튕기는 천장 높이 (화면 높이 대비). HUD 아래
+  rollTrailEvery:    32,  // 잔상 간격(ms) — 빨라진 만큼 촘촘히 (띄엄띄엄 찍히면 끊겨 보인다)
+  rollPoints:        40,  // 공에 부서진 똥 하나당 점수. **한도 없음** (사람 판정). 15 → 40
+  bindLandDelayMs:  200,  // 착지 후 인을 맺기까지
+  bindSealMs:       600,  // 쪼그려 앉아 쥐 인을 맺는 6컷 (끝 컷에서 멈춰 끝까지 유지)
+  bindMax:            0,  // 묶는 똥 수. 0 = **화면 안의 일반 똥 전부** (사람 지시).
+                         // 설계표 8~10 → 12 → 전부
+  // 가닥 하나가 뻗는 두 박자 (사람 지시: "처음 나가는 부분쯤만 꿈틀, 그 뒤는 직선으로 쭉 빠르게")
+  bindCreepMs:      260,  // ① 발밑에서 꿈틀대며 조금 기어 나온다
+  bindCreepPx:       48,  //    이때 나오는 길이(px). 가닥이 짧으면 전체의 절반까지만
+  bindDashMs:       110,  // ② 나머지를 **직선으로** 쭉 — 꿈틀거림은 여기서 곧게 펴진다
+  bindStaggerMs:     45,  // 가닥끼리 출발 시차 — 한꺼번에 뻗으면 한 덩어리로 보인다
+  bindMinRiseH:    0.30,  // 땅에서 화면 높이의 이만큼 **위에 있는** 똥만 묶는다. 60px → 화면 30%
+                         // (사람 지시: "아래쪽 똥에는 향하지 않게" — 이타치 까마귀와 같은 값)
+  bindStaggerSpan:  540,  // 시차의 총합 상한. 똥이 많으면 간격을 줄여 이 안에 다 출발시킨다
+                         // (40개 x 45ms = 1.8초면 정적이 오기 전에 늘어진다)
+  bindHoldMs:       500,  // **정적.** 전부 묶인 뒤 아무 일도 없는 틈 — 이게 이 기술의 전부다
+  bindSqueezeMs:    260,  // 조르기 — 묶인 똥이 한꺼번에 찌그러져 터지는 시간
+  bindWiggle:        10,  // ① 동안 **꿈틀대는 폭(px)**. 머리 쪽으로 갈수록 커진다 —
+                         // 4 → 10 (사람 판정: "좀 더 꿈틀되게"). 땅 구간은 이것의 40%
+  bindWiggleLen:     42,  // 물결 한 마디 길이(px). 짧을수록 잘게 꿈틀댄다
+  bindWiggleSpeed: 0.022, // 물결이 가닥을 타고 흐르는 속도 — 머리 쪽으로 기어가는 느낌
+  bindStraightenMs:  70,  // ② 가 시작되면 이 시간 안에 꿈틀거림이 펴져 직선이 된다
+  bindWidth:          6,  // 그림자 가닥 굵기 (땅 쪽). 올라갈수록 가늘어진다
+  bindColor:   0x0a0a12,  // 그림자 색 (거의 검정, 살짝 푸른 기)
+  bindPoints:        40,  // 묶어 터뜨린 똥 하나당 점수. 18 → 40
+  // 마무리 — 그림자 꿰매기 (사람 지시). 조르기 뒤 그림자가 바닥 전체로 번지고 바늘이 솟는다
+  nuiSpreadMs:      320,  // 그림자가 바닥 전체로 번지는 시간
+  nuiRiseMs:        110,  // 바늘 하나가 솟아 똥에 닿기까지 — 짧아야 "꿰뚫는다"
+  nuiStaggerMs:      30,  // 바늘끼리 시차 (하이디에게 가까운 똥부터 바깥으로)
+  nuiStaggerSpan:   450,  // 시차 총합 상한
+  nuiHoldMs:        300,  // 다 꿰뚫은 뒤 바늘이 서 있는 틈
+  nuiFadeMs:        260,  // 바늘이 가라앉고 그림자가 걷히는 시간
+  nuiMinSpikes:      10,  // 똥이 적어도 최소 이만큼은 솟는다 (빈 바늘)
+  nuiW:               6,  // 바늘 밑동 반폭(px)
+  nuiPoints:         40,  // 꿰뚫은 똥 하나당 점수
+  // 기폭찰 (사람 지시) — 꿰뚫은 자리에 붙었다가 그림자가 걷히면 연쇄로 터진다
+  tagMax:            24,  // 붙는 부적 수 상한 (넘으면 점수만) — 폭발 스프라이트 수를 묶는다
+  tagSize:         0.55,  // 부적 높이 (뿌요 크기 대비)
+  tagBurnMs:        300,  // 불붙어 다 타기까지 (부적 1→3 컷)
+  tagChainMs:        45,  // 부적끼리 터지는 시차 — 동시 폭발을 6개 안팎으로 묶는다
+  tagBlastFps:       20,  // 폭발 8컷 속도 (8/20 = 0.4초)
+  tagBlastSize:     1.6,  // 폭발 크기 (플레이어 키 대비)
+  tagBlastR:       0.40,  // 폭발 판정 반경 (폭발 크기 대비)
+  tagBlastPoints:    40,  // 폭발에 **새로** 휘말린 똥 하나당 점수 (부적 자리 똥은 이미 꿰뚫어 셌다)
+  igniteLandDelayMs: 200, // 착지 후 만화경까지
+  eyeMs:            900,  // 만화경 6컷 (눈 감음 → 뜸 → 손 → 망토 펼침 → 깃털 → 가라앉음)
+  eyeCrowAt:       0.62,  // 이 진행도(5번째 컷 부근, 망토가 깃털로 흩어질 때)에 까마귀가 난다
+  // 스사노오 (사람 지시) — 아마테라스 끝 무렵 뒤에서 솟아 올려 베고, 칼끝에서 검기가 날아간다
+  susanooBeforeEndMs: 800, // 마지막 불기둥이 꺼지기 이만큼 전에 솟는다 (사람 지시: "끝나기 0.8초 전")
+  susanooMs:       1500,  // 8컷 전체 길이
+  susanooW:        0.85,  // 표시 크기 (화면 폭 대비, 정사각 칸)
+  susanooAlpha:    0.88,  // 반투명 차크라
+  susanooSlashFrame:  5,  // 올려 베는 컷 (0부터) — 이 컷에 검기를 날린다
+  susanooEdge:     0.34,  // 화면 끝에서 스사노오 가운데까지 (스사노오 크기 대비) — 반쯤 걸쳐 서게
+  swordWaveSpeed:   620,  // 검기 속도(px/s)
+  swordWaveW:      0.46,  // 검기 표시 크기 (화면 폭 대비)
+  swordWaveHitR:   0.38,  // 판정 반경 (검기 크기 대비)
+  swordWavePoints:   70,  // 검기에 베인 똥 하나당 점수 (사람 지시: 70 — 하이디 나머지는 40)
+  swordWaveFromX:  0.22,  // 검기가 나오는 자리 — 스사노오 가운데에서 앞으로 (키 대비)
+  swordWaveFromY:  0.62,  //                   — 바닥에서 위로 (키 대비)
+  igniteCrows:       12,  // 까마귀 수. 6 → 8 → 12 (사람 지시)
+  crowMinRiseH:    0.30,  // 땅에서 화면 높이의 이만큼 **위에 있는** 똥만 노린다 (사람 지시: "아래쪽 똥에는
+                         // 향하지 않게"). 목표가 없는 까마귀는 위로 날다 일정 시간 뒤 그 자리에서 불을 피운다
+  crowSpeed:        480,  // 까마귀 최고 속도(px/s)
+  crowLaunch:       260,  // 날아오르는 첫 속도 — 부채꼴로 위로 퍼진 뒤 목표로 꺾는다
+  crowTurn:        0.14,  // 목표 쪽으로 꺾는 정도 (프레임당 보간 비율)
+  crowFuseMs:      1000,  // 이 안에 똥을 못 맞히면 **그 자리에서** 아마테라스가 피어난다
+                         // (사람 지시: "똥을 맞지 않고 일정 시간이 지난 경우 거기서 아마테라스")
+  crowScale:       0.42,
+  crowTiltMax:       28,  // 까마귀 기울기 상한(도). 목표가 아래면 머리를 곤두박질쳐 보였다 —
+                         // 새는 몸을 거의 수평으로 두고 난다 (사람 판정: "아래를 향하기도")
+  crowSpreadX:       34,  // 까마귀가 망토에서 흩어져 나오는 가로 폭(px). 한 점에서 나오면 겹쳐서 수가 안 읽혔다  // 까마귀 표시 크기 (플레이어 키 대비)
+  // 아마테라스 **불기둥** — 까마귀가 닿은 자리(또는 못 닿고 멈춘 자리)에 4초 동안 선다.
+  // 그 불에 닿는 똥은 불타 없어진다 (사람 지시). 옮겨붙기(전염 1회)는 이것으로 대신했다 —
+  // 4초 동안 자리를 지키는 불이 떨어지는 똥을 계속 태우므로 번지는 효과가 이미 난다
+  igniteFireMs:    4000,  // 불기둥 지속
+  igniteFireSize:    72,  // 불기둥 표시 크기(px)
+  igniteFireR:       30,  // 불기둥 판정 반경(px) — 불 몸통 가운데 기준
+  igniteFireMax:     40,  // 한 번의 아마테라스로 태우는 최대 개수 (불기둥 전부 합쳐서)
+  igniteBurnMs:     650,  // 불에 닿은 똥이 까맣게 타서 사라지는 시간
+  kaitenLandDelayMs: 200, // 착지 후 백안까지
+  byakuganMs:       450,  // 백안 — 정면으로 멈춰 눈에 힘. 이 틈이 "이제 돈다"를 예고한다
+  kaitenMs:        4000,  // 회천 — 돌면서 돔을 유지하는 시간. 1100 → 4000 (사람 지시:
+                         // "좌우 왔다갔다 하면서 4초 지속")
+  kaitenMoveSpeed:  170,  // 돌면서 좌우로 미끄러지는 속도(px/s). 화면 끝에서 되돌아온다
+  kaitenHitR:       185,  // 회천 **판정** 반경. 구 그림(deflectR 150)보다 크게 잡는다 —
+                         // 판정은 똥의 중심으로 재서, 같게 두면 구에 닿아 보이는 똥이 안 튕겼다
+                         // (사람 판정: "vfx 범위보다 좁은 거 같은데, 이펙트보다 조금 더 크게")
+  kaitenTotal:       30,  // 한 번의 회천으로 없앨 총량 (직접 + 연쇄). 4초라 16 으로는 1초 만에 바닥난다
+  kaitenGrowMs:     160,  // 돔이 확 펼쳐지는 시간
+  kaitenFadeMs:     240,  // 끝에 돔이 흩어지는 시간
+  // 마무리 — 팔괘 64장 (사람 지시). 회천 뒤 발밑에 팔괘 진, 2·4·8·16·32·64 장 박자로 연타
+  hakkeBeats: [2, 4, 8, 16, 32, 64],  // 박자마다 치는 수 (진 안의 똥이 모자라면 있는 만큼)
+  hakkeOpenMs:      350,  // 진이 펼쳐지는 시간
+  hakkeBeatMs:      260,  // 박자 간격
+  hakkeHoldMs:      450,  // 마지막 박자 뒤 진이 사라지기까지
+  hakkeW:          1.05,  // 진 표시 폭 (화면 폭 대비)
+  hakkeSquash:     0.30,  // 진을 바닥에 눕힌 비율 (세로/가로)
+  hakkeR:          0.62,  // 판정 반경 (화면 폭 대비) — 네지 몸 가운데 기준
+  hakkePalmSize:   2.00,  // 손바닥 타격 크기 (뿌요 크기 대비). 1.1 → 2.0 (사람 판정: "잘 안 보인다")
+  kaitenFps:         16,  // 한 바퀴 6컷을 도는 속도 (16fps = 초당 약 2.7바퀴)
+  kaitenPushEvery:  180,  // 도는 동안 몇 ms 마다 돔 안의 똥을 튕기나 (새로 들어온 똥도 튕긴다)
+  kaitenDomeAlpha: 0.85,
+  deflectTint: 0xc9a9ff,  // 회천 연보라
+  cutinDepth:      110,  // HUD(10)보다 위. HackerAbility 오버레이와 같은 대역
+
+  // 무기
+  // **처음 값이 전부 너무 느렸다** (사람 실기 판정: "수리검들 이상하게 날라가고 너무 느려").
+  // 레드 참새가 620px/s 인데 수리검이 520 이었다 — *던진* 무기가 *날아가는 새*보다
+  // 느리면 던진 것으로 안 읽힌다.
+  // **중력.** 셋 다 직선으로 날면 자로 그은 것 같아서 "이상하게" 보인다.
+  // 무거운 쪽일수록 많이 처져 세 무기의 궤적이 저절로 갈린다
+  // **마리를 7로 늘렸으면 한 발은 약해야 한다.** 18발이 다 세면 한 번에 판이 끝난다 —
+  // 실측으로 화면의 똥 36개 중 34개가 지워졌다. 연출은 그대로 두고 판정만 좁혔다
+  wpnPoints:         6,  // 무기가 지운 똥 하나당 점수. 15 → 9 → 6.
+                         // 마리가 3 → 7 이 되면서 던지는 무기가 6발 → 18발이 됐다.
+                         // 개당 점수를 그대로 두면 한 번에 들어오는 점수가 3배로 뛴다
+  puyoLandMarginPx: 46,  // 표식이 화면 밖에 꽂히지 않게 물리는 여백(px)
 
   // ── 똥 ──
   puyoHitR:       34,    // 도약 구간의 경로 판정 반경(px)
-  puyoPoints:     20,    // 도약 구간이 지운 똥 하나당 점수 (테드 낙하와 같은 값)
+  puyoPoints:     40,    // 돌진 구간이 지운 똥 하나당 점수. 20 → 40 (2026-09-27 사람 지시: "레드·하이디는 전부 40")
 } as const;
 
 export const HEIDI_DESC = {
   basicEffect:    `강아지 뿌요가 발밑을 돌아다닌다`,
-  specialAbility: `${HEIDI_PARAMS.puyoInterval}점마다 뿌요가 웅크렸다 먼 쪽 화면 끝까지 도약 — 경로의 일반 똥 제거 (+${HEIDI_PARAMS.puyoPoints}점/개). 화면을 짚고 **날라차기로 반대편까지 하강**하며 더 넓게 쓸어낸다 (+${HEIDI_PARAMS.puyoKickPoints}점/개)`,
+  // 캐릭터 이름은 쓰지 않는다 — 화면에 나가는 글이다. 기술도 동작으로만 적는다
+  specialAbility: `${HEIDI_PARAMS.puyoInterval}점마다 발동. 번갈아 두 가지를 쓴다 — ① 뿌요가 회오리 드릴이 되어 먼 쪽 벽까지 돌진했다 **튕겨 반대편으로 내리꽂히며** 경로의 일반 똥 제거 (+${HEIDI_PARAMS.puyoPoints}점/개) ② 화면 가운데로 뛰어올라 인을 맺고 **닌자 여덟 또는 뿌요 자신으로 변신**, 고유 기술로 똥을 쓸어낸다 — 순간이동 · 번개 돌진 · 회전 방어 · 검은 불꽃 · 그림자 묶기 · 몸통 구르기 · 세 겹 문 · 두꺼비 화염 · 그림자 분신 회오리`,
 } as const;
 
 export const RED_DESC = {

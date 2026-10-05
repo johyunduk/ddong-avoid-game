@@ -42,13 +42,23 @@ import os
 import numpy as np
 from PIL import Image
 from scipy import ndimage as nd
+FX_WORK = os.environ.get('DDONG_FX_WORK', 'C:/Users/user/ddong-fx-work')  # 생성 원본·작업물 (저장소 밖)
 
-SRC_DIR = 'creative/_fx/heidi-puyo'
-OUT_DIR = 'creative/_fx/heidi-puyo/sheet'
+SRC_DIR = f'{FX_WORK}/heidi-puyo'
+OUT_DIR = f'{FX_WORK}/heidi-puyo/sheet'
 ORIGINAL = r'C:/Users/user/OneDrive/바탕 화면/똥/뿌요.jpg'
 FRAME = 128
 BASELINE = 118         # 프레임 안 바닥선
-BODY_H = 84            # 몸통 높이(px). 참새 몸통(97x75)과 같은 밀도
+BODY_H = 84            # (옛 기준) 바깥 상자 높이. TARGET_GIRTH 로 대체됐다
+# **몸통 두께**(거리변환 최대값)를 맞춘다. 바깥 상자 높이로 맞추면 자세마다 재는
+# 대상이 달라진다 — 벽 짚기는 개가 누워 있고 고속 이동은 세로로 길어서,
+# 상자가 큰 자세일수록 개가 작아진다 (실측: dash 가 같은 캐릭터 안에서도 20~25% 작았고,
+# 따로 생성한 캐릭터끼리는 25% 차이가 났다). 두께는 보는 각도에 안 휘둘린다
+TARGET_GIRTH = 28.0
+# 칸은 **가로도 세로도** 필요한 만큼 넓힌다. 개를 줄여서 칸에 맞추면 시트끼리
+# 크기가 어긋난다 — 그게 이 스크립트가 두 번 틀렸던 지점이다.
+# 코드는 칸 크기를 128 기준으로 환산해 표시하므로 칸이 커져도 개 크기는 같다
+MAX_CELL_H = 256
 BG_TOL = 30
 MIN_ISLAND = 4000
 HOLE_RING = 10        # 구멍 둘레에서 함께 지울 외곽선 두께(원본 px)
@@ -141,12 +151,19 @@ def shrink(rgba, h):
     return np.clip(o, 0, 255).astype(np.uint8)
 
 
-def place(cell):
+def place(cell, fw=FRAME, fh=FRAME):
+    """칸 안에 놓는다. 가로 중앙, 세로는 바닥선 정렬 (동작이 바뀌어도 발이 안 뜬다).
+
+    칸 **높이는 언제나 FRAME** 이다 — 원점(`FOOT_ORIGIN_Y`)이 높이 기준이라 세로가
+    바뀌면 모든 동작의 발 위치가 어긋난다. 넓히는 것은 가로뿐이다.
+    """
     ys, xs = np.where(cell[:, :, 3] > 8)
     body = cell[ys.min():ys.max() + 1, xs.min():xs.max() + 1]
-    out = np.zeros((FRAME, FRAME, 4), np.uint8)
-    x0 = max(0, min((FRAME - body.shape[1]) // 2, FRAME - body.shape[1]))
-    y0 = max(0, min(BASELINE - body.shape[0], FRAME - body.shape[0]))
+    out = np.zeros((fh, fw, 4), np.uint8)
+    x0 = max(0, min((fw - body.shape[1]) // 2, fw - body.shape[1]))
+    # 바닥선은 칸 높이에 **비례**해서 내려간다 (128칸에서 118 = 아래로 10px 여유)
+    base = fh - (FRAME - BASELINE)
+    y0 = max(0, min(base - body.shape[0], fh - body.shape[0]))
     out[y0:y0 + body.shape[0], x0:x0 + body.shape[1]] = body
     return out
 
@@ -166,11 +183,16 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--action', required=True)
     ap.add_argument('--raw', default=None, help='기본: <action>_v7_raw.png')
-    ap.add_argument('--body', type=int, default=BODY_H, help='몸통 높이(px)')
+    ap.add_argument('--body', type=int, default=BODY_H, help='(옛 기준) 상자 높이(px)')
+    ap.add_argument('--girth', type=float, default=TARGET_GIRTH,
+                    help='맞출 **몸통 두께**(px). 시트끼리 개 크기를 같게 하는 기준이다')
     ap.add_argument('--flip', action='store_true',
                     help='좌우 반전. **모든 시트의 기본 방향은 왼쪽**이어야 한다 — '
                          '코드가 `setFlipX(진행 방향)` 으로 뒤집기 때문에 '
                          '오른쪽을 보고 생성된 시트는 여기서 한 번 뒤집어 맞춘다')
+    ap.add_argument('--keep', type=int, default=0,
+                    help='**큰 섬 N개만** 남긴다. 생성물에 그림 밖 부속(던져진 수리검 등)이 '
+                         '떨어져 나오면 조립기가 그걸 프레임으로 세어 칸이 어긋난다')
     ap.add_argument('--check', action='store_true')
     args = ap.parse_args()
 
@@ -178,42 +200,89 @@ def main():
     rgb, fg, bg = foreground(raw)
     h, w, _ = rgb.shape
     boxes = islands(fg, h)
+    if args.keep and len(boxes) > args.keep:
+        # 면적 큰 순으로 자르고 다시 **왼쪽부터** 세운다 (프레임 순서는 x 순이다)
+        areas = [((x1 - x0) * (y1 - y0), b) for b in boxes for x0, y0, x1, y1 in [b]]
+        areas.sort(key=lambda t: -t[0])
+        dropped = len(boxes) - args.keep
+        boxes = sorted([b for _, b in areas[:args.keep]], key=lambda b: b[0])
+        print(f'  작은 섬 {dropped}개를 버렸다 (--keep {args.keep})')
     src = '알파 채널' if bg is None else f'테두리 flood (배경 {bg.astype(int)})'
     print(f'{raw} {w}x{h} · {src} · 프레임 {len(boxes)}개')
 
-    # 웅크리기처럼 **세로보다 가로가 긴** 자세는 높이만 맞추면 칸을 넘는다.
-    # 칸 안에 들어가도록 한 번 더 줄이되, **전 프레임에 같은 배율**을 써야
-    # 동작 사이에서 개 크기가 널뛰지 않는다
+    # **모든 시트가 같은 배율을 쓴다.**
+    #
+    # 예전에는 가로가 긴 자세(웅크림·고속 이동)일 때 칸에 넣으려고 **개를 줄였다.**
+    # 그래서 시트마다 개 크기가 49 ~ 84px 로 제각각이 됐고, 게임에서 동작이 바뀔 때마다
+    # 개가 커졌다 작아졌다 했다. 개를 줄이는 대신 **칸을 넓힌다** —
+    # 몸통 높이는 언제나 `--body`(기본 84)이고, 남는 것은 칸의 가로다.
     crops = []
     for x0, y0, x1, y1 in boxes:
         crops.append(np.dstack([rgb[y0:y1, x0:x1], (fg[y0:y1, x0:x1] * 255).astype(np.uint8)]))
-    widest = max(c.shape[1] / c.shape[0] for c in crops)
-    limit = FRAME - 6
-    body_h = args.body
-    if widest * body_h > limit:
-        body_h = int(limit / widest)
-        print(f'  가로가 긴 자세가 있어 몸통 높이를 {args.body} → {body_h} 로 줄였다 '
-              f'(칸 {FRAME} 안에 넣기 위해)')
-    cells = [place(shrink(c, body_h)) for c in crops]
+    # **공통 배율 = 몸통 두께를 맞추는 배율.** 프레임마다 자세가 달라도 시트 하나에는
+    # 하나의 배율만 쓴다 (동작 중간에 개가 커졌다 작아지면 안 된다)
+    girths = [float(nd.distance_transform_edt(c[:, :, 3] > 16).max()) for c in crops]
+    med = sorted(girths)[len(girths) // 2]
+    k = args.girth / max(1e-6, med)
+    heights = [max(1, round(c.shape[0] * k)) for c in crops]
+    if max(heights) > MAX_CELL_H:                 # 여기까지 오면 그림이 비정상이다
+        k *= MAX_CELL_H / max(heights)
+        heights = [max(1, round(c.shape[0] * k)) for c in crops]
+        print(f'  ** 칸 높이 상한({MAX_CELL_H})에 걸렸다 — 그림을 확인해라')
+    print(f'  몸통 두께 {med:.1f} -> {args.girth:.1f} (배율 {k:.2f})')
+    cells0 = [shrink(c, h) for c, h in zip(crops, heights)]
+    need = max(c.shape[1] for c in cells0) + 6
+    fw = max(FRAME, int(np.ceil(need / 8) * 8))     # 8의 배수로 올린다
+    if fw > FRAME:
+        print(f'  가로가 긴 자세가 있어 칸을 {FRAME} -> {fw} 로 넓혔다 '
+              f'(개는 안 줄인다. 시트끼리 크기가 같아야 한다)')
+    fh = max(FRAME, int(np.ceil((max(c.shape[0] for c in cells0) + 12) / 8) * 8))
+    if fh > FRAME:
+        print(f'  세로가 긴 자세라 칸을 {FRAME} -> {fh} 로 높였다')
+    cells = [place(c, fw, fh) for c in cells0]
     if args.flip:
         cells = [c[:, ::-1] for c in cells]
-        print('  좌우 반전 — 기본 방향을 왼쪽으로 맞췄다')
+        print('  좌우 반전. 기본 방향을 왼쪽으로 맞췄다')
 
     os.makedirs(OUT_DIR, exist_ok=True)
     strip = np.concatenate(cells, axis=1)
-    path = f'{OUT_DIR}/puyo_{args.action}_{FRAME}x{FRAME}.png'
+    path = f'{OUT_DIR}/puyo_{args.action}_{fw}x{fh}.png'
     Image.fromarray(strip, 'RGBA').save(path)
     c, s = stats(strip)
     print(f'  → {path}')
     print(f'  {len(cells)}프레임 · {strip.shape[1]}x{strip.shape[0]} · 색 {c} · 반투명 {s:.1f}% · '
           f'{strip.shape[1] * strip.shape[0] * 4 / 1048576:.3f}MB')
+    # **다른 시트와 키가 맞는가.** 섬에 그림 밖 장식(섬광·잔상)이 크게 붙어 있으면
+    # 칸에 맞추느라 개가 그만큼 작아진다 — 실제로 고속 이동 시트가 38px 로 나왔다
+    # (다른 시트는 81~84px). 조용히 지나가면 게임에서야 보인다.
+    ref_h = []
+    for f in sorted(os.listdir(OUT_DIR)) if os.path.isdir(OUT_DIR) else []:
+        if not f.endswith('.png') or f.startswith('_'):
+            continue
+        if f == os.path.basename(path):
+            continue
+        rw = int(f.rsplit('_', 1)[1].split('x')[0])
+        r = np.array(Image.open(f'{OUT_DIR}/{f}').convert('RGBA'))[:, :rw]
+        g = float(nd.distance_transform_edt(r[:, :, 3] > 16).max())
+        if g > 0:
+            ref_h.append((f, g))
+    mine = round(float(np.median(
+        [nd.distance_transform_edt(c[:, :, 3] > 16).max() for c in cells])), 1)
+    if ref_h:
+        med = sorted(h for _, h in ref_h)[len(ref_h) // 2]
+        print(f'  몸통 두께 {mine} (다른 시트 중앙값 {med:.1f})')
+        if mine < med * 0.9 or mine > med * 1.12:
+            print(f'  ** 경고: 다른 시트와 개 크기가 어긋난다 ({mine} vs {med:.1f}). '
+                  f'섬광이나 무기 같은 장식이 섬에 붙어 있으면 개가 그만큼 작아진다. '
+                  f'--keep 으로 떼거나 그림에서 빼라')
+
     sp = np.array(Image.open(REF_SPARROW).convert('RGBA').crop((0, 0, 128, 128)))
     sc, ss = stats(sp)
     print(f'  (참새 기준: 색 {sc} · 반투명 {ss:.1f}%)')
 
     mp = f'{OUT_DIR}/_meta.json'
     meta = json.load(open(mp, encoding='utf-8')) if os.path.exists(mp) else {}
-    meta[args.action] = {'frames': len(cells), 'frame': FRAME, 'body': body_h}
+    meta[args.action] = {'frames': len(cells), 'fw': fw, 'fh': fh, 'girth': args.girth}
     json.dump(meta, open(mp, 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
 
     if args.check:

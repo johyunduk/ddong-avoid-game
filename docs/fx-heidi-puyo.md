@@ -400,7 +400,7 @@ puyoVortexTint:   0xb8c6d8  // 차가운 회색-청색 — 크림색 개와 갈�
 - `[H5]` 특수 똥 0개 제거 · `[H6]` 비행 후 회오리 전량 회수
 - `[H7]` 재진입 가드 · `[H8]` 정리 후 기준선 복귀
 
-검수: `creative/_fx/heidi-puyo/_검수_게임화면.png` (실제 표시 크기, 밝은·어두운 배경)
+검수: `C:/Users/user/ddong-fx-work/heidi-puyo/_검수_게임화면.png` (실제 표시 크기, 밝은·어두운 배경)
 
 ## 이동 기준 확정 (w1 지시 반영)
 
@@ -547,7 +547,7 @@ walk 0.375 + idle 0.250 + crouch 0.188 + jump 0.188 + **kick 0.375** = **1.38MB*
 
 원본 6프레임이 그대로 살아났다: 준비 → 도약 → 체공 → **앞발을 쭉 뻗고 육구가 정면,
 입을 벌린 결정타** → 팔로스루 → 착지.
-검수: `creative/_fx/heidi-puyo/_검수_날라차기_원본대조.png` (윗줄 원본 / 아랫줄 픽셀아트)
+검수: `C:/Users/user/ddong-fx-work/heidi-puyo/_검수_날라차기_원본대조.png` (윗줄 원본 / 아랫줄 픽셀아트)
 
 **좌우 방향**: 원본이 오른쪽을 보고 있어 생성물도 오른쪽을 본다. 다른 시트는 전부
 왼쪽 기준이고 코드가 `setFlipX(진행 방향)` 으로 뒤집으므로, 조립할 때 한 번 뒤집어
@@ -662,7 +662,7 @@ that is OFF THE LEFT EDGE of the frame" 라고만 하고 접촉 → 압축 → �
 
 - `scripts/cube/puyo-walljump-check.py` — 360x640 게임 크기로 두 구간을 **나누어** 그린다.
   한 그림에 겹치면 도약과 하강의 경로가 거의 같아 섞인다.
-  → `creative/_fx/heidi-puyo/_검수_벽차기_게임크기.png`
+  → `C:/Users/user/ddong-fx-work/heidi-puyo/_검수_벽차기_게임크기.png`
 - 하네스 77검사 전부 통과. 새 검사:
   - `[H12]` 매번 `crouch → jump → wall → kick → walk` (8/8)
   - `[H14]` 벽을 화면 끝에서 짚었다 (x=31 / 화면 360)
