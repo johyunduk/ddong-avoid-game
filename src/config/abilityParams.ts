@@ -11,12 +11,13 @@
 export const HACKER_PARAMS = {
   deleteInterval: 100,      // 터미널 삭제 점수 간격
   deleteCount: 7,           // 삭제하는 똥 개수
+  deletePoints: 35,         // 삭제한 똥 1개당 점수 (0 → 35, 사람 지시)
   specialPoopSlowdown: 40,  // 특수 똥 낙하 속도 감소 (px/s)
 } as const;
 
 export const HACKER_DESC = {
   basicEffect: '금똥·다이아똥 낙하 속도 감소',
-  specialAbility: `${HACKER_PARAMS.deleteInterval}점마다 일반 똥 ${HACKER_PARAMS.deleteCount}개 터미널 삭제`,
+  specialAbility: `${HACKER_PARAMS.deleteInterval}점마다 일반 똥 ${HACKER_PARAMS.deleteCount}개 터미널 삭제 (+${HACKER_PARAMS.deletePoints}점/개)`,
 } as const;
 
 // ── 광부 (Miner / SR) ─────────────────────────────────────────────────
@@ -35,6 +36,7 @@ export const MAEHWA_PARAMS = {
   speedBonus: 50,           // 이동 속도 보너스 (px/s)
   slashInterval: 100,       // 칼 베기 점수 간격
   slashCount: 3,            // 한 번에 베는 똥 개수
+  slashPoints: 80,          // 벤 똥 1개당 점수 (0 → 80, 사람 지시)
   awake2SpecialBonus: 5,    // ★2+ 특수 똥 수집 추가 점수
   synergyBurstInterval: 2000,
   synergyBurstBonus: 150,    // 매화×매화 버스트 발동 시 고정 보너스 점수
@@ -42,7 +44,7 @@ export const MAEHWA_PARAMS = {
 
 export const MAEHWA_DESC = {
   basicEffect: `이동 속도 +${MAEHWA_PARAMS.speedBonus}px/s`,
-  specialAbility: `${MAEHWA_PARAMS.slashInterval}점마다 위쪽 똥 ${MAEHWA_PARAMS.slashCount}개 칼로 제거`,
+  specialAbility: `${MAEHWA_PARAMS.slashInterval}점마다 위쪽 똥 ${MAEHWA_PARAMS.slashCount}개 칼로 제거 (+${MAEHWA_PARAMS.slashPoints}점/개)`,
 } as const;
 
 // ── 아카이브 (Archieve / SR) ──────────────────────────────────────────
@@ -97,7 +99,7 @@ export const SENTINEL_DESC = {
 
 // ── 나이트 (Knight / SR) ──────────────────────────────────────────────
 export const KNIGHT_PARAMS = {
-  beamKillBonus: 1,        // 검기로 제거한 일반 똥 1개당 추가 점수
+  beamKillBonus: 40,       // 검기로 제거한 일반 똥 1개당 추가 점수 (1 → 40, 사람 지시)
   beamInterval: 100,       // 검기 발사 점수 간격
 } as const;
 
@@ -468,7 +470,7 @@ export const RED_PARAMS = {
                          // 22 → 30 (사람 지시: "레드가 점수내기 어렵다").
                          // 30 은 몸통 접촉(27.4)보다 살짝 넓고 날개 끝(40.4)보다는 훨씬
                          // 좁다 — 20px 떨어진 날개 끝으로 똥을 부수는 건 그림과 안 맞는다
-  sparrowPoints:   30,   // 참새가 부순 똥 하나당 점수. 25 → 30 (사람 지시).
+  sparrowPoints:   40,   // 참새가 부순 똥 하나당 점수. 30 → 40 (2026-09-27 사람 지시: "레드·하이디는 전부 40")
                          // 한 마리가 **경로의 똥을 전부** 부수므로 한 번 발사의 성과가
                          // 0/1개에서 0~여러 개가 됐다 — 점수 총량은 개수 쪽이 더 키운다
   // ── 마무리: 티라노 ──
@@ -491,7 +493,7 @@ export const RED_PARAMS = {
   trexRingMs:      380,  // 파동 링이 최대 반경까지 퍼지는 시간
   trexRingDelayMs:  90,  // 둘째 겹이 늦게 출발하는 간격
   trexRingInner:  0.72,  // 둘째 겹의 최종 반경 (첫 겹 대비). 안쪽에 한 겹 더 보이게
-  trexPoints:      25,   // 포효로 지운 똥 하나당 점수 (20 → 25)
+  trexPoints:      40,   // 포효로 지운 똥 하나당 점수. 25 → 40 (2026-09-27 사람 지시: "레드·하이디는 전부 40")
   // ── 마무리: 로봇 ──
   robotFrame:      160,  // 로봇 **프레임** 표시 높이(px). 시트 192px 기준 → 배율 0.8333.
                          // 120 → 132 → 160. 프레임 안 그림이 136x169 밖에 안 되므로
@@ -507,7 +509,7 @@ export const RED_PARAMS = {
   robotRaiseMs:    260,  // 검을 들어올리는 예비 동작 — 짧고 강한 파열의 앤티시페이션
   robotSlashMs:    180,  // 베는 순간
   robotLeaveMs:    520,  // 베고 나서 사라지는 시간
-  robotPoints:     30,   // 전체 삭제로 지운 똥 하나당 점수 (25 → 30)
+  robotPoints:     40,   // 전체 삭제로 지운 똥 하나당 점수. 30 → 40 (2026-09-27 사람 지시: "레드·하이디는 전부 40")
 } as const;
 
 // ── 하이디 (SR) — 동반자 강아지 "뿌요" ──────────────────────────────────────

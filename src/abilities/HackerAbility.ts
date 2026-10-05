@@ -16,6 +16,9 @@ export class HackerAbility extends BaseAbility {
   }
 
   override onScoreMilestone(score: number, api: GameSceneAPI): void {
+    // **자기 보너스로 들어온 마일스톤은 삼킨다** (레드·테드·하이디와 같은 규칙). 삭제 점수가
+    // 생기면서 보너스 한 번이 발동 간격을 넘길 수 있게 됐다 — 이 줄이 없으면 발동이 연쇄로 번진다
+    if (this.awarding) return;
     if (score % HACKER_PARAMS.deleteInterval === 0 && score > this.lastHackerScore) {
       this.lastHackerScore = score;
       this.removeRandomPoops(HACKER_PARAMS.deleteCount, api);
@@ -28,10 +31,12 @@ export class HackerAbility extends BaseAbility {
       .filter(p => (p as Phaser.GameObjects.GameObject).active) as Phaser.Physics.Arcade.Sprite[];
 
     active.sort(() => Math.random() - 0.5);
-    active.slice(0, count).forEach(p => {
+    const picked = active.slice(0, count);
+    picked.forEach(p => {
       this.playTerminalEffect(p.x, p.y, api);
       (p as PoolablePoopBase).recycle();
     });
+    this.awardBonus(api, picked.length * HACKER_PARAMS.deletePoints);
   }
 
   /** 초록 테두리 검정 박스 flash → 픽셀 비산 */

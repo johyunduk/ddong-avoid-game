@@ -108,6 +108,9 @@ export class KnightAbility extends BaseAbility {
   private pendingTimers: Phaser.Time.TimerEvent[] = [];
 
   override onScoreMilestone(score: number, api: GameSceneAPI): void {
+    // **자기 보너스로 들어온 마일스톤은 삼킨다** (레드·테드·하이디와 같은 규칙). 삭제 점수가
+    // 생기면서 보너스 한 번이 발동 간격을 넘길 수 있게 됐다 — 이 줄이 없으면 발동이 연쇄로 번진다
+    if (this.awarding) return;
     if (score % KNIGHT_PARAMS.beamInterval === 0 && score > this.lastBeamScore) {
       this.lastBeamScore = score;
       this.fireVolley(api);
@@ -271,7 +274,7 @@ export class KnightAbility extends BaseAbility {
       // 타격 이펙트는 recycle() 안에서 이미 나간다 — 여기서 또 깔면 대상당 큰 가산
       // 스프라이트가 2장씩 겹쳐 상한을 잡아먹고 화면 채우기 비용이 배로 든다
       (sp as PoolablePoopBase).recycle();
-      api.addAbilityBonus(KNIGHT_PARAMS.beamKillBonus);
+      this.awardBonus(api, KNIGHT_PARAMS.beamKillBonus);
     });
   }
 }

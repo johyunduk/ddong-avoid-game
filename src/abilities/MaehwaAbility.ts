@@ -75,6 +75,9 @@ export class MaehwaAbility extends BaseAbility {
   }
 
   override onScoreMilestone(score: number, api: GameSceneAPI): void {
+    // **자기 보너스로 들어온 마일스톤은 삼킨다** (레드·테드·하이디와 같은 규칙). 삭제 점수가
+    // 생기면서 보너스 한 번이 발동 간격을 넘길 수 있게 됐다 — 이 줄이 없으면 발동이 연쇄로 번진다
+    if (this.awarding) return;
     if (score % MAEHWA_PARAMS.slashInterval === 0 && score > this.lastMaehwaScore) {
       this.lastMaehwaScore = score;
       this.slashClosestPoops(MAEHWA_PARAMS.slashCount, api);
@@ -179,7 +182,10 @@ export class MaehwaAbility extends BaseAbility {
     // (타격 이펙트는 칼날과 겹치면 '터지는' 느낌이 되므로 조용히 회수한다)
     this.later(api, CUT_MS, () => {
       const cut = livePos(poop, last);
-      if (poop.active) (poop as PoolablePoopBase).recycle(true);
+      if (poop.active) {
+        (poop as PoolablePoopBase).recycle(true);
+        this.awardBonus(api, MAEHWA_PARAMS.slashPoints);
+      }
       this.afterglow(api, cut.x, cut.y);
     });
   }
