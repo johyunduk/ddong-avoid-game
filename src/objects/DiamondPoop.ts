@@ -15,7 +15,7 @@ export default class DiamondPoop extends PoolablePoopBase {
 
     const body = this.body as Phaser.Physics.Arcade.Body;
     if (body) {
-      body.setSize(POOP_CONFIG.diamond.hitbox, POOP_CONFIG.diamond.hitbox);
+      this.fitBodyToPoop(POOP_CONFIG.diamond.hitbox);
       body.setCollideWorldBounds(false);
     }
 

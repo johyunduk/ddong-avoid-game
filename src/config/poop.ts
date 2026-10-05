@@ -26,7 +26,8 @@ export interface PoopConfig {
       /** EXTREME 난이도 크기 */
       extreme: number;
     };
-    /** 히트박스 크기 */
+    /** 히트박스 **폭** (텍스처 px) — 몸통 상자 비율로 높이를 정하고 몸통 가운데에 둔다 (PoolablePoopBase.fitBodyToPoop).
+     *  몸통 폭(180)과 같게 하면 몸통 전체가 판정이다 */
     hitbox: {
       /** 기본 히트박스 */
       normal: number;
@@ -99,6 +100,13 @@ export interface PoopConfig {
  * // 다이아똥: 40x40px, 히트박스 450x450, 일반보다 10 느림
  * // 토파즈똥: 40x40px, 히트박스 450x450, 일반보다 20 빠름 (speedReduction: -20)
  */
+/**
+ * 똥 그림의 **몸통 상자** — 텍스처(256x256 캔버스) 픽셀. 14종 전부 같다 (builder poops/body.json).
+ * 장식(안경·모자·뿔·수염·리본·반짝이)은 이 상자 밖으로 나간다 — 충돌 판정은 이 상자만 기준으로 한다.
+ * 그림을 바꾸면 body.json 의 body 값을 여기에 옮긴다
+ */
+export const POOP_BODY = { left: 38, top: 62, right: 218, bottom: 230 } as const;
+
 export const POOP_CONFIG: PoopConfig = {
   normal: {
     baseSpeed: 200,

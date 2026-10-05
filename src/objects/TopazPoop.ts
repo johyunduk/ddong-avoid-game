@@ -15,7 +15,7 @@ export default class TopazPoop extends PoolablePoopBase {
 
     const body = this.body as Phaser.Physics.Arcade.Body;
     if (body) {
-      body.setSize(POOP_CONFIG.topaz.hitbox, POOP_CONFIG.topaz.hitbox);
+      this.fitBodyToPoop(POOP_CONFIG.topaz.hitbox);
       body.setCollideWorldBounds(false);
     }
 

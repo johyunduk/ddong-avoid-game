@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { POOP_CONFIG } from '../config/poop';
+import { POOP_BODY, POOP_CONFIG } from '../config/poop';
 import { playFx } from '../utils/vfx';
 
 /**
@@ -11,6 +11,24 @@ import { playFx } from '../utils/vfx';
  * - recycle(): 화면 안에서 사라지면 = 파괴 → 타격 이펙트를 재생한다
  */
 export default class PoolablePoopBase extends Phaser.Physics.Arcade.Sprite {
+  /**
+   * 충돌 판정을 **몸통 기준**으로 — 폭 hitboxW(텍스처 px), 높이는 몸통 상자 비율, 자리는 몸통 가운데.
+   * 캔버스 가운데가 아니라 몸통 가운데에 두므로 위로 나간 장식(모자·뿔·반짝이)은 판정에 안 들어간다.
+   * 크기·오프셋은 텍스처 px 이라 표시 크기(setDisplaySize)를 바꿔도 같은 비율로 따라간다
+   */
+  protected fitBodyToPoop(hitboxW: number): void {
+    const body = this.body as Phaser.Physics.Arcade.Body | null;
+    if (!body) return;
+    const bw = POOP_BODY.right - POOP_BODY.left;
+    const bh = POOP_BODY.bottom - POOP_BODY.top;
+    const w = hitboxW;
+    const h = (bh * hitboxW) / bw;
+    const cx = (POOP_BODY.left + POOP_BODY.right) / 2;
+    const cy = (POOP_BODY.top + POOP_BODY.bottom) / 2;
+    body.setSize(w, h, false);
+    body.setOffset(cx - w / 2, cy - h / 2);
+  }
+
   reinit(x: number, y: number) {
     this.setActive(true).setVisible(true);
     const body = this.body as Phaser.Physics.Arcade.Body;

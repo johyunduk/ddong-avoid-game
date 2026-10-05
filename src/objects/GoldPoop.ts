@@ -15,7 +15,7 @@ export default class GoldPoop extends PoolablePoopBase {
 
     const body = this.body as Phaser.Physics.Arcade.Body;
     if (body) {
-      body.setSize(POOP_CONFIG.gold.hitbox, POOP_CONFIG.gold.hitbox);
+      this.fitBodyToPoop(POOP_CONFIG.gold.hitbox);
       body.setCollideWorldBounds(false);
     }
 

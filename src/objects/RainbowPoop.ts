@@ -15,7 +15,7 @@ export default class RainbowPoop extends PoolablePoopBase {
 
     const body = this.body as Phaser.Physics.Arcade.Body;
     if (body) {
-      body.setSize(POOP_CONFIG.rainbow.hitbox, POOP_CONFIG.rainbow.hitbox);
+      this.fitBodyToPoop(POOP_CONFIG.rainbow.hitbox);
       body.setCollideWorldBounds(false);
     }
 

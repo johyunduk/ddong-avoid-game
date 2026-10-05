@@ -34,7 +34,7 @@ export default class Poop extends PoolablePoopBase {
 
     const body = this.body as Phaser.Physics.Arcade.Body;
     if (body) {
-      body.setSize(initHitbox, initHitbox);
+      this.fitBodyToPoop(initHitbox);
       this._hitboxSize = initHitbox;
       body.setCollideWorldBounds(false);
     }
@@ -71,7 +71,7 @@ export default class Poop extends PoolablePoopBase {
     if (body) {
       body.reset(x, y); // position + velocity 초기화 (내부에서 setPosition 호출)
       if (hitboxSize !== this._hitboxSize) {
-        body.setSize(hitboxSize, hitboxSize);
+        this.fitBodyToPoop(hitboxSize);
         this._hitboxSize = hitboxSize;
       }
       body.setEnable(true);
