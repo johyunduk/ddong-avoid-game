@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { CHARACTER_GRADES } from '../_shared/roster.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -22,40 +23,39 @@ function pullWallpaper(): { id: string } {
 }
 
 // ── 뽑기 풀 정의 ────────────────────────────────────────────────────────
-// R 종당 ≈7.79% (10종), SR 종당 ≈2.35% (9종 → 총 ≈21.2%), UR 종당 ≈0.227% (4종 → 총 ≈0.91%)
+// R 종당 ≈7.61% (10종), SR 종당 ≈2.30% (10종 → 총 ≈23.0%), UR 종당 ≈0.222% (4종 → 총 ≈0.89%)
 // 종을 늘릴 때 **종당 가중치는 그대로 두고 대역 총합이 늘어나게** 한다 (UR_W 주석의 선례).
 // 가중치 합이 100 이 아니므로 아래 숫자는 가중치지 확률이 아니다 — 실제 확률은
 // weight / POOL_TOTAL 이다. UR 4번째를 넣기 전에는 합이 정확히 100.0 이었다.
-const SR_W  = 19.3 / 8;         // 가중치 ≈2.413 (기존 8종 산출값 유지 — 9종이어도 기존 SR 너프 없음)
+const SR_W  = 19.3 / 8;         // 가중치 ≈2.413 (기존 8종 산출값 유지 — 10종이어도 기존 SR 너프 없음)
 const UR_W  = 0.7  / 3;         // 종당 ≈0.233% (기존 3종 산출값 유지 — 4종이어도 종당 확률 동일, 기존 UR 너프 없음)
-const POOL = [
-  // ── R등급 ──
-  { id: 'log',     grade: 'R',  weight: 8 },
-  { id: 'swap',    grade: 'R',  weight: 8 },
-  { id: 'sum',     grade: 'R',  weight: 8 },
-  { id: 'fork',    grade: 'R',  weight: 8 },
-  { id: 'seed',    grade: 'R',  weight: 8 },
-  { id: 'session', grade: 'R',  weight: 8 },
-  { id: 'branch',  grade: 'R',  weight: 8 },
-  { id: 'hook',    grade: 'R',  weight: 8 },
-  { id: 'socket',  grade: 'R',  weight: 8 },
-  { id: 'index',   grade: 'R',  weight: 8 },
-  // ── SR등급 ──
-  { id: 'hacker',   grade: 'SR', weight: SR_W },
-  { id: 'miner',    grade: 'SR', weight: SR_W },
-  { id: 'maehwa',   grade: 'SR', weight: SR_W },
-  { id: 'archieve', grade: 'SR', weight: SR_W },
-  { id: 'glitch',   grade: 'SR', weight: SR_W },
-  { id: 'noise',    grade: 'SR', weight: SR_W },
-  { id: 'knight',   grade: 'SR', weight: SR_W },
-  { id: 'k',        grade: 'SR', weight: SR_W },
-  { id: 'red',      grade: 'SR', weight: SR_W },
-  // ── UR등급 ──
-  { id: 'mugi',     grade: 'UR', weight: UR_W },
-  { id: 'gumi',     grade: 'UR', weight: UR_W },
-  { id: 'sentinel', grade: 'UR', weight: UR_W },
-  { id: 'legacy',   grade: 'UR', weight: UR_W },
+/** 등급별 종당 가중치 */
+const WEIGHT_BY_GRADE: Record<string, number> = { R: 8, SR: SR_W, UR: UR_W };
+
+/**
+ * **뽑을 수 있는 캐릭터 id 만** 적는다. 등급과 가중치는 적지 않는다 —
+ * 등급은 `_shared/roster.ts`(= character.ts 에서 생성) 에서 오고, 가중치는 등급에서 온다.
+ *
+ * 여기 등급을 같이 적어 두면 character.ts 에서 등급을 올렸을 때 뽑기 확률만 옛 등급에
+ * 남는다. 실제로 그 부류의 사고가 랭킹 쪽에서 났다 (명단을 베껴 둔 화이트리스트).
+ *
+ * chibi 는 기본 보유라 넣지 않는다. 미공개 캐릭터를 넣을지는 별도 판단이다.
+ */
+const OBTAINABLE_IDS = [
+  'log', 'swap', 'sum', 'fork', 'seed', 'session', 'branch', 'hook', 'socket', 'index',
+  'hacker', 'miner', 'maehwa', 'archieve', 'glitch', 'noise', 'knight', 'k', 'red', 'heidi',
+  'mugi', 'gumi', 'sentinel', 'legacy',
 ];
+
+const POOL = OBTAINABLE_IDS.map((id) => {
+  const grade = CHARACTER_GRADES[id];
+  // 명단에 없는 id 가 들어오면 가중치가 NaN 이 되어 뽑기가 조용히 망가진다.
+  // 조용히 틀리느니 배포 즉시 터지는 쪽이 낫다
+  if (!grade) throw new Error(`gacha POOL: '${id}' 가 캐릭터 명단에 없다 (_shared/roster.ts)`);
+  const weight = WEIGHT_BY_GRADE[grade];
+  if (weight === undefined) throw new Error(`gacha POOL: 등급 '${grade}' 의 가중치가 없다 ('${id}')`);
+  return { id, grade, weight };
+});
 
 const POOL_TOTAL = POOL.reduce((s, c) => s + c.weight, 0);
 

@@ -6,11 +6,12 @@ import { getSkorBalance, getCachedSkorBalance, cacheSkorBalance } from '../utils
 import { destroyVideo } from '../utils/video';
 import BaseScene from './BaseScene';
 
-// vids/ 디렉토리에 개인 영상이 존재하는 캐릭터 목록
-const CHARS_WITH_VIDS = new Set([
-  'chibi', 'hacker', 'miner', 'maehwa', 'archieve', 'glitch', 'noise', 'sentinel', 'legacy', 'knight', 'mugi', 'gumi', 'k',
-  'red',
-]);
+// 개인 영상이 있는 캐릭터 — **캐릭터 정의에서 그대로 읽는다.** 영상 유무는 이미
+// `videoKey`/`videoPath` 가 말하고 있어서, 목록을 따로 두면 캐릭터를 추가할 때
+// 한쪽만 고치고 다른 쪽이 낡는다 (랭킹 화이트리스트가 그렇게 어긋났다).
+const CHARS_WITH_VIDS = new Set(
+  CHARACTERS.filter(c => c.videoKey && c.videoPath).map(c => c.id),
+);
 
 // 현재 픽업 배너 설정 — 출시 캐릭터 변경 시 characterId만 수정
 const CURRENT_BANNER = {

@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { isKnownCharacter } from '../_shared/roster.ts';
 
 /** 현재 달 'YYYY-MM' 반환 (UTC 기준) */
 function getCurrentYearMonth(): string {
@@ -217,13 +218,10 @@ Deno.serve(async (req: Request) => {
     const yearMonth = getCurrentYearMonth();
     const season = calcSeason(yearMonth);
 
-    const validCharacterTypes = [
-      'chibi', 'mugi', 'gumi', 'knight', 'k',
-      'log', 'swap', 'sum', 'fork', 'seed', 'session', 'branch', 'hook', 'socket', 'index',
-      'hacker', 'miner', 'maehwa', 'archieve', 'glitch', 'noise',
-      'sentinel', 'legacy',
-    ];
-    const safeCharacterType = validCharacterTypes.includes(characterType) ? characterType : 'chibi';
+    // 명단은 `_shared/roster.ts` 하나만 본다 (character.ts 에서 생성된다).
+    // 여기 손으로 베껴 두던 시절, red·ted·heidi 가 빠져 있어 그 캐릭터로 플레이해도
+    // 조용히 chibi 로 저장됐다. 에러도 로그도 없어 아무도 몰랐다.
+    const safeCharacterType = isKnownCharacter(characterType) ? characterType : 'chibi';
 
     // 현재 시즌 기존 점수 조회
     const { data: existing } = await supabaseAdmin

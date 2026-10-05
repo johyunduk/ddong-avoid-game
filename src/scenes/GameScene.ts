@@ -18,7 +18,7 @@ import { getHighScore, updateHighScore } from '../utils/localStorage';
 import { submitScore, getUserInitials, setUserInitials, startGameSession } from '../utils/leaderboard';
 import { getExtremeCharBest, updateExtremeCharBest } from '../utils/extremeCharBest';
 import { submitSkor, type SkorSubmitResponse, getQuestProgressCache, setQuestProgressCache, estimateQuestRewards, formatQuestRewardText } from '../utils/skor';
-import { getSafeSelectedCharacter, getCharacterDef, getDuplicateCount, getAwakeningLevel } from '../utils/character';
+import { CHARACTERS, getSafeSelectedCharacter, getCharacterDef, getDuplicateCount, getAwakeningLevel } from '../utils/character';
 import { getSafeSelectedWallpaper, getWallpaperDef } from '../utils/wallpaper';
 import { getSynergy, type WallpaperSynergy } from '../config/synergyMap';
 import { isChristmasSeason } from '../utils/seasonChecker';
@@ -93,7 +93,16 @@ export default class GameScene extends BaseScene {
     return Math.max(400, this.difficultyConfig.spawnDelay - (this.difficultyLevel * 80));
   }
 
-  private static readonly CHARS_WITH_SPRITES = ['miner', 'maehwa', 'hacker', 'archieve', 'glitch', 'noise', 'sentinel', 'legacy', 'log', 'swap', 'sum', 'fork', 'seed', 'session', 'branch', 'hook', 'socket', 'index', 'knight', 'gumi', 'mugi', 'k', 'ted', 'red', 'heidi'];
+  /**
+   * 전용 플레이어 스프라이트(`assets/players/<id>_{front,left,right}.webp`)를 가진 캐릭터.
+   *
+   * **캐릭터 정의에서 유도한다** — 손으로 적어 두면 캐릭터를 추가할 때 빠뜨리고,
+   * 빠뜨려도 조용히 치비 스프라이트로 폴백해서 아무도 모른다.
+   * chibi 자신은 폴백 대상이라 목록에서 뺀다 (`getAnimSheetId` 참고).
+   */
+  private static readonly CHARS_WITH_SPRITES = CHARACTERS
+    .filter(c => c.id !== 'chibi')
+    .map(c => c.id);
   private static readonly RAINBOW_COLORS = [
     '#ff0000', '#ff7f00', '#ffff00', '#00ff00', '#0000ff', '#4b0082', '#9400d3',
   ];

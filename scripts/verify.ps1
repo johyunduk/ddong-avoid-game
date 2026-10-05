@@ -10,15 +10,21 @@ if (-not (Test-Path 'node_modules\typescript')) {
   exit 2
 }
 
-Write-Host '== 1/3 tsc --noEmit ==' -ForegroundColor Cyan
+Write-Host '== 1/4 tsc --noEmit ==' -ForegroundColor Cyan
 npx --no-install tsc --noEmit
 if ($LASTEXITCODE -ne 0) { $failed += 'typecheck' }
 
-Write-Host '== 2/3 npm run build ==' -ForegroundColor Cyan
+Write-Host '== 2/4 npm run build ==' -ForegroundColor Cyan
 npm run build
 if ($LASTEXITCODE -ne 0) { $failed += 'build' }
 
-Write-Host '== 3/3 캐릭터 에셋 참조 확인 ==' -ForegroundColor Cyan
+Write-Host '== 3/4 캐릭터 명단 불변식 ==' -ForegroundColor Cyan
+# 명단이 여러 곳에 흩어져 있고 어긋나도 아무 데서도 안 걸리던 것이 원인이었다 —
+# 레드로 플레이해도 랭킹에 치비로 저장됐고, 그전엔 무기가 뽑기 풀에서 통째로 빠졌다.
+node scripts/check-roster.mjs
+if ($LASTEXITCODE -ne 0) { $failed += 'roster' }
+
+Write-Host '== 4/4 캐릭터 에셋 참조 확인 ==' -ForegroundColor Cyan
 $src = Join-Path $root 'src\utils\character.ts'
 $missing = @()
 if (Test-Path $src) {
