@@ -15,6 +15,14 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
   // 캔버스 DOM 이벤트 (scene.input 우회 → 게임오브젝트 pointerdown 과 충돌 없음)
   private readonly canvas: HTMLCanvasElement;
   private canvasRect: DOMRect;
+  /**
+   * 이동 판정에서 **빼는** 게임 좌표 영역 (액티브 스킬 버튼 자리).
+   *
+   * 이동은 `scene.input` 을 우회해 캔버스 DOM 이벤트로 좌/우 반을 가른다. 그래서
+   * Phaser 버튼 위를 눌러도 **DOM 은 그걸 모른 채 화면 오른쪽으로 읽는다** —
+   * 버튼을 누를 때마다 캐릭터가 오른쪽으로 걷는다. 여기 등록된 영역은 무시한다.
+   */
+  private inputExclusion: Phaser.Geom.Rectangle | null = null;
   private readonly onTouchTrack: (e: TouchEvent) => void;
   private readonly onInputEnd: () => void;
   private readonly onMouseDown: (e: MouseEvent) => void;
@@ -93,8 +101,15 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     this.canvas = scene.game.canvas;
     this.canvasRect = this.canvas.getBoundingClientRect();
 
-    const applyDir = (clientX: number) => {
+    const applyDir = (clientX: number, clientY: number) => {
       const gameX = (clientX - this.canvasRect.left) * (scene.scale.width / this.canvasRect.width);
+      const gameY = (clientY - this.canvasRect.top) * (scene.scale.height / this.canvasRect.height);
+      // 버튼 자리를 누른 것이면 이동으로 읽지 않는다 (누르고 있던 방향도 놓는다)
+      if (this.inputExclusion && this.inputExclusion.contains(gameX, gameY)) {
+        this.touchLeft = false;
+        this.touchRight = false;
+        return;
+      }
       const cx = scene.scale.width / 2;
       const newLeft  = gameX < cx;
       const newRight = gameX > cx;
@@ -104,11 +119,11 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     };
 
     this.onTouchTrack = (e: TouchEvent) => {
-      if (e.touches.length > 0) applyDir(e.touches[0].clientX);
+      if (e.touches.length > 0) applyDir(e.touches[0].clientX, e.touches[0].clientY);
     };
     this.onInputEnd  = () => { this.touchLeft = false; this.touchRight = false; };
-    this.onMouseDown = (e: MouseEvent) => { applyDir(e.clientX); };
-    this.onMouseMove = (e: MouseEvent) => { if (e.buttons > 0) applyDir(e.clientX); };
+    this.onMouseDown = (e: MouseEvent) => { applyDir(e.clientX, e.clientY); };
+    this.onMouseMove = (e: MouseEvent) => { if (e.buttons > 0) applyDir(e.clientX, e.clientY); };
     this.onResize    = () => { this.canvasRect = this.canvas.getBoundingClientRect(); };
 
     const canvas = this.canvas;
@@ -123,6 +138,14 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
 
     // shutdown은 restart/stop/destroy 시 항상 먼저 호출됨 → 한 번만 등록으로 충분
     scene.events.once('shutdown', this.removeListeners, this);
+  }
+
+  /**
+   * 이동 판정에서 뺄 영역을 등록한다 (게임 좌표). `null` 이면 해제.
+   * GameScene 이 액티브 스킬 버튼을 만든 뒤 그 자리를 넘긴다.
+   */
+  setInputExclusion(rect: Phaser.Geom.Rectangle | null): void {
+    this.inputExclusion = rect;
   }
 
   private removeListeners() {

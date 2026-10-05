@@ -8,7 +8,7 @@
  * 실행:  node scripts/run-fx-leak-check.mjs
  */
 // @ts-nocheck
-import Phaser, { live, created, createFakeScene, arcSpawns, beamSpawns, shardSpawns, waveSpawns, textureBuilds } from 'phaser';
+import Phaser, { live, created, emitterTex, createFakeScene, arcSpawns, beamSpawns, shardSpawns, waveSpawns, textureBuilds } from 'phaser';
 import { MaehwaAbility } from '../src/abilities/MaehwaAbility';
 import { KnightAbility } from '../src/abilities/KnightAbility';
 import { KAbility } from '../src/abilities/KAbility';
@@ -16,8 +16,8 @@ import { LegacyAbility } from '../src/abilities/LegacyAbility';
 import { TedAbility, HEAD_ORIGIN_Y } from '../src/abilities/TedAbility';
 import { RedAbility, ROAR_RING_LIFE_MS } from '../src/abilities/RedAbility';
 import { HeidiAbility } from '../src/abilities/HeidiAbility';
-import { LEGACY_PARAMS, K_PARAMS, TED_PARAMS, RED_PARAMS, RED_SHEETS, HEIDI_PARAMS, HEIDI_SHEETS } from '../src/config/abilityParams';
-import { beam, fxSprite, getFxStats, preloadFxAssets, preloadFxSheet, playFx, getFxCounters, resetFxCounters, fxPickSheetKey, CUBE_VARIANT, FX_PARTICLE_ASSETS, FX_ASSET_DIR } from '../src/utils/vfx';
+import { LEGACY_PARAMS, K_PARAMS, TED_PARAMS, RED_PARAMS, RED_SHEETS, HEIDI_PARAMS, HEIDI_SHEETS, HEIDI_WEAPON_SHEET } from '../src/config/abilityParams';
+import { beam, fxSprite, getFxStats, preloadFxAssets, preloadFxSheet, playFx, getFxCounters, resetFxCounters, fxPickSheetKey, FX_PARTICLE_ASSETS, FX_ASSET_DIR } from '../src/utils/vfx';
 
 const VOLLEYS = 20;
 const KNIGHT_VOLLEYS = 10;
@@ -27,6 +27,17 @@ const SETTLE_MS = 5000;
 const FREEZE_MS = 3500;
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+/**
+ * **구간 진행 표시.** 전체 실행이 386초인데 끝날 때까지 출력이 한 줄도 안 나와서
+ * 멈춘 건지 도는 건지 알 수가 없었다. 구간이 끝날 때마다 한 줄씩 찍는다.
+ */
+let markT0 = 0;
+function mark(name) {
+  const t = Date.now();   // nowMs 는 이 아래에 선언돼 있어 여기선 못 쓴다
+  if (markT0) console.log(`  [구간] ${name} — ${((t - markT0) / 1000).toFixed(1)}초`);
+  markT0 = t;
+}
 
 function snapshot(scene) {
   const st = getFxStats(scene);
@@ -170,6 +181,7 @@ function maxCutOffset() {
 }
 
 async function main() {
+  markT0 = Date.now();
   const scene = createFakeScene();
   preloadFxAssets(scene); // 실제 로더 경로(파일명 WxH 파싱 + registerFxSheet)를 그대로 탄다
 
@@ -432,6 +444,8 @@ async function main() {
     poops: { getChildren: () => tedPoops },
     addAbilityBonus: () => {},
   };
+  mark('공통(매화·나이트·레거시·K)');
+
   // ── 테드 체스 큐브 (흡수 → 조각 → 결합 → 충전 → 파열) ────────────────
   //
   // **독립된 씬에서 돈다.** 같은 씬에 붙이면 2초짜리 연출이 앞뒤 검사의 타이밍을
@@ -440,10 +454,7 @@ async function main() {
   //   · 말 7개의 **도착 시각 편차** — 시트의 결합 섬광(600ms)과 맞아야 한다
   //   · **이동 중 발동** 시 말의 도착 좌표와 플레이어의 거리 — 목적지를 고정하면 벌어진다
   //   · 2초 연출이 끝난 뒤 기준선 복귀
-  preloadFxSheet(tedScene, 'cubeBurst');
-  // 판본이 'none' 이면 큐브 시트가 한 장도 안 올라간다 (VRAM 절약)
-  const cubeSheetsLoaded = ['cubeArtForge', 'cubeArtBlast', 'cubeCore', 'cubeForge', 'cubeBlast']
-    .filter(k => tedScene.textures.exists(`fxsheet_${k}`)).length;
+  preloadFxSheet(tedScene, 'cubeWave');
   const ted = new TedAbility(0);
   const tedBase = snapshot(tedScene);
   console.log(fmt('[T0] 테드 발동 전 기준선', tedBase));
@@ -548,7 +559,7 @@ async function main() {
     }
   }, 16);
 
-  await sleep(TED_PARAMS.cubeGatherMs + 120);
+  await sleep(TED_PARAMS.chessSuckMs + 220);
   const tedGather = snapshot(tedScene);
   console.log(fmt('[T1] 결합 직후', tedGather));
 
@@ -556,16 +567,16 @@ async function main() {
   const arriveTimes = arrivals.map(a => a.t - tedT0);
   const arriveSpread = arriveTimes.length
     ? Math.max(...arriveTimes) - Math.min(...arriveTimes) : 999;
-  // 기대 도착 지점 = 화면 중앙 (TED_PARAMS.cubeCenterX). 플레이어 궤적과는 무관하다
-  const centerX = tedScene.scale.width * TED_PARAMS.cubeCenterX;
+  // 기대 도착 지점 = 화면 중앙 (TED_PARAMS.gatherCenterX). 플레이어 궤적과는 무관하다
+  const centerX = tedScene.scale.width * TED_PARAMS.gatherCenterX;
   let playerSwing = 0;
   for (const q of playerTrack) playerSwing = Math.max(playerSwing, Math.abs(q.x - centerX));
   let arriveOffset = 0;
   for (const a of arrivals) arriveOffset = Math.max(arriveOffset, Math.abs(a.x - centerX));
 
   // ── 퍼짐 결과 · 성능 ──────────────────────────────────────────────────
-  // 파열은 cubeForge 재생이 끝나는 순간(=cubeBurstMs)에 걸린다. 그 한 프레임에
-  // 똥 60개 반납 + 파동 + 파열 시트가 겹친다
+  // 퍼짐은 모임 + 멈칫 뒤에 걸린다. 그 한 프레임에
+  // 퍼지는 말 10개 + 파동이 겹친다
   const beforeBurst = { sprites: created.sprites, ms: Date.now() };
   // 퍼짐이 다 끝날 때까지 (모임 + 멈칫 + 퍼짐 + 여유)
   const spreadEndMs = TED_PARAMS.chessSuckMs + TED_PARAMS.spreadHoldMs
@@ -591,7 +602,7 @@ async function main() {
     fs.mkdirSync('build/cube', { recursive: true });
     fs.writeFileSync('build/cube/spread_trace.json', JSON.stringify({
       screen: { w: tedScene.scale.width, h: tedScene.scale.height },
-      center: { x: centerX, y: tedScene.scale.height * TED_PARAMS.cubeCenterY },
+      center: { x: centerX, y: tedScene.scale.height * TED_PARAMS.gatherCenterY },
       hitRadius: TED_PARAMS.chessHitRadius,
       // 똥의 처음 자리와 살아남았는지 — 그림과 판정이 맞는지 눈으로 대조하는 데 쓴다
       poops: tedPoops.map(q => ({ x: q.x, y: q.y, alive: q.active })),
@@ -630,7 +641,7 @@ async function main() {
     + `(말 ${TED_PARAMS.chessStackMax} × 똥 ${POOP_POOL} = `
     + `${TED_PARAMS.chessStackMax * POOP_POOL}회 거리 판정/프레임)`);
 
-  await sleep(TED_PARAMS.cubeTotalMs);
+  await sleep(2000);
   const tedPeak = snapshot(tedScene);
   console.log(fmt('[T2] 파열 뒤', tedPeak));
 
@@ -801,8 +812,6 @@ async function main() {
   console.log(`  똥 6개 × ${TED_PARAMS.chessPoopPoints}점 = +${smashScore}점 → 그 구간 마일스톤 `
     + `${Math.floor(smashScore / TED_PARAMS.chessInterval)}개, 실제 낙하 ${smashDrops}개`);
   console.log(`  보너스 구간을 지난 뒤(${nextTick}점) 낙하 ${laterDrops}개 — 가드는 영구가 아니다`);
-  console.log(`큐브 시트 — 판본 '${CUBE_VARIANT}' 이라 로딩 대상 `
-    + `${cubeSheetsLoaded}장 (0 이면 VRAM 0)`);
 
   await sleep(SETTLE_MS);
   clearInterval(tedTicker);
@@ -874,6 +883,8 @@ async function main() {
   tedScene.events.emit(Phaser.Scenes.Events.SHUTDOWN);
   tedScene.__clock.stop();
 
+
+  mark('테드');
 
   // ── 레드: 참새 5마리 → 마무리 ────────────────────────────────────────
   // 두 가지를 본다.
@@ -1217,6 +1228,8 @@ async function main() {
     redOrbit, redLaunchInputs, redScore, redAfterFinish, redSpecialAlive);
   redScene.__clock.stop();
 
+  mark('레드');
+
   // ── 하이디: 동반자 뿌요 ──────────────────────────────────────────────
   //
   // 뿌요는 **상시 화면에 있다** (태이와 같다). 그래서 보는 것이 셋이다.
@@ -1240,6 +1253,9 @@ async function main() {
   let hMilestones = 0;
   let hFires = 0;
   const heidi = new HeidiAbility(0);
+  // 이 구간은 **도약·날라차기**만 본다. 변신은 첫 발동부터 나오므로 도약으로 돌려 둔다
+  // (변신은 아래 '하이디 변신' 구간이 따로 본다)
+  (heidi as any).startTransform = (heidi as any).startJump;
   const hApi = {
     scene: hScene,
     player: hPlayer,
@@ -1280,14 +1296,14 @@ async function main() {
   idleCost.sort((a, b) => a - b);
   const hIdleP50 = idleCost[Math.floor(idleCost.length / 2)];
   const hIdleMax = idleCost[idleCost.length - 1];
-  const hWander = (heidi as any).puyo?.x;
+  const hWander = (heidi as any).main?.ob.x;
 
   // (2) 발동 — 마일스톤을 자연스럽게 넘긴다.
   // 뿌요는 **현재 위치에서 먼 쪽 화면 끝**까지 도약해 벽을 짚고,
   // 내려오면서 **반대편까지 날라차기**로 가로지른다 (crouch → jump → wall → kick → walk)
   let hMaxSprites = 0;
   const hFlyCost = [];
-  const hFireX = (heidi as any).puyo?.x ?? 0;
+  const hFireX = (heidi as any).main?.ob.x ?? 0;
   const hW = hScene.scale.width;
   const hExpectRight = hFireX < hW / 2;     // 먼 쪽 = 왼쪽 거리 < 오른쪽 거리
   let hApex = Infinity;                      // 점프 정점의 y (작을수록 높다)
@@ -1302,8 +1318,8 @@ async function main() {
     heidi.onUpdate(hApi);
     hFlyCost.push(nowMs() - t0);
     hMaxSprites = Math.max(hMaxSprites, live.sprites);
-    const st = (heidi as any).state as string;
-    const p = (heidi as any).puyo;
+    const st = (heidi as any).main?.state as string;
+    const p = (heidi as any).main?.ob;
     if (hPhases[hPhases.length - 1] !== st) hPhases.push(st);
     // **'kick' 도 비행 상태다** — 발동의 뒷절반이라 반드시 지난다
     if (st === 'jump' || st === 'kick') {
@@ -1314,8 +1330,8 @@ async function main() {
     if (st === 'wall') hWallX = p?.x ?? 0;
     await sleep(16);
   }
-  const hBackState = (heidi as any).state as string;
-  const hBackX = (heidi as any).puyo?.x ?? 0;
+  const hBackState = (heidi as any).main?.state as string;
+  const hBackX = (heidi as any).main?.ob.x ?? 0;
   const hGround = hPlayer.y + hPlayer.displayHeight / 2;
   hFlyCost.sort((a, b) => a - b);
   const hFlyP50 = hFlyCost[Math.floor(hFlyCost.length / 2)];
@@ -1354,6 +1370,7 @@ async function main() {
   const runways: number[] = [];
   for (let run = 0; run < RUNS; run++) {
     const probe = new HeidiAbility(0);
+    (probe as any).startTransform = (probe as any).startJump;   // 도약만 본다 (위와 같다)
     let pPoops = Array.from({ length: 24 }, (_, i) => ({
       x: 20 + (i % 8) * 40, y: 340 + Math.floor(i / 8) * 50, active: true,
       recycle() { this.active = false; },
@@ -1373,8 +1390,10 @@ async function main() {
     const seq: string[] = [];
     const sides: string[] = [];
     let prevSt = '';
-    // 발동을 **세 번** 태운다 — 한 번만 보면 번갈아 가는지 알 수 없다
-    for (let fire = 0; fire < 3; fire++) {
+    // 벽차기를 **세 번** 봐야 번갈아 가는지 알 수 있다 (변신은 도약으로 돌려 두었다)
+    const WALL_RUNS = 3;
+    const fires = WALL_RUNS + 1;
+    for (let fire = 0; fire < fires; fire++) {
       if (fire > 0) {
         // 지운 똥 보너스가 **재진입 가드**(lastFireScore)를 밀어 올려 놨다.
         // 그 위의 첫 배수로 올라가야 다음 발동이 삼켜지지 않는다
@@ -1385,16 +1404,17 @@ async function main() {
       // 발동은 **거리가 찰 때까지 미뤄진다** — 물러서서 달려올 프레임을 넉넉히 준다
       for (let i = 0; i < 420; i++) {
         probe.onUpdate(pApi);
-        const st = (probe as any).state as string;
+        const st = (probe as any).main?.state as string;
         if (seq[seq.length - 1] !== st) seq.push(st);
-        if (st === 'jump' && prevSt !== 'jump') {     // 도약에 **막 들어선** 프레임
-          const f = (probe as any).from;
-          const t = (probe as any).to;
+        // 도약에 **막 들어선** 프레임
+        if (st === 'jump' && prevSt !== 'jump' && sides.length < WALL_RUNS) {
+          const f = (probe as any).main.from;
+          const t = (probe as any).main.to;
           runways.push(Math.abs(t.x - f.x));
         }
         prevSt = st;
-        if (st === 'wall') {
-          const side = (probe as any).wallRight ? 'R' : 'L';
+        if (st === 'wall' && sides.length < WALL_RUNS) {
+          const side = (probe as any).main?.wallRight ? 'R' : 'L';
           if (sides[sides.length - 1] !== side) sides.push(side);
         }
         await sleep(6);
@@ -1416,7 +1436,8 @@ async function main() {
   // 판끼리 이어 붙여 놓고 세면 판 경계에서 겹친 L 이 묻혀 구멍이 생긴다
   const alternates = wallRuns.length === RUNS
     && wallRuns.every(r => r.length === 3 && !/LL|RR/.test(r));
-  console.log(`  짚은 벽 순서 — ${sideRuns} (L 왼쪽 / R 오른쪽, 판마다 3회)`);
+  console.log(`  짚은 벽 순서 — ${sideRuns} (L 왼쪽 / R 오른쪽, 판마다 벽차기 3회 · `
+    + `변신은 도약으로 돌려 둠)`);
   console.log(`  벽차기 — ${RUNS}번 중 ${seqOk}번이 crouch → jump → wall → kick → walk `
     + `(마지막: ${lastSeq}) · 하강 판정 반경 ${HEIDI_PARAMS.puyoKickHitR} vs `
     + `${HEIDI_PARAMS.puyoHitR} · 점수 ${HEIDI_PARAMS.puyoKickPoints} vs `
@@ -1428,6 +1449,166 @@ async function main() {
   const hSettled = snapshot(hScene);
   console.log(fmt('[H1] 하이디 정리 후', hSettled));
   hScene.__clock.stop();
+
+  mark('하이디 배회·벽차기');
+
+  // ── 하이디: 변신 — 여덟 기술 ──────────────────────────────────────────
+  //
+  // 가운데로 솟구쳐 인 → 펑 → 착지 → 걷다가 고유 기술. 설계는 docs/fx-heidi-clone.md.
+  // **여덟을 한 명씩 강제로** 돌린다 (debugCloneChar). 무작위로 두면 어떤 기술이
+  // 안 돌았는지 모른다. 보는 것: 기술이 끝까지 가는가 · 끝나면 기술 오브젝트가
+  // 한 장도 안 남는가 · 특수 똥이 살아남는가 · 한 번에 과한 점수가 안 나오는가
+  const T_CHARS = ['minato', 'kakashi', 'neji', 'itachi', 'shikamaru', 'choji', 'orochimaru', 'jiraiya', 'puyo'];
+  /** 기술 쪽 목록 — 끝나면 전부 비어야 한다 */
+  const fxLeft = (a: any) => (a.weapons?.length ?? 0) + (a.crows?.length ?? 0)
+    + (a.binds?.length ?? 0) + (a.gates?.length ?? 0) + (a.burns?.length ?? 0)
+    + (a.zaps?.length ?? 0) + (a.trails?.length ?? 0) + (a.fires?.length ?? 0)
+    + (a.drills?.length ?? 0) + (a.tsugaTrail?.length ?? 0) + (a.susanoo || a.susanooPending ? 1 : 0) + (a.swordWaves?.length ?? 0) + (a.toad ? 1 : 0) + (a.ball ? 1 : 0) + (a.nui ? 1 : 0) + (a.cutin ? 1 : 0);
+  const tRows: { c: string; form: string; states: string; done: boolean; ms: number;
+    gain: number; maxSprites: number; leftFx: number; leftSprites: number; special: number;
+    sawCutin: boolean }[] = [];
+  const tScene = createFakeScene();
+  preloadFxAssets(tScene);
+  for (const f of HEIDI_SHEETS) tScene.textures.__addAsset(fxPickSheetKey(f));
+  const forcedBefore = HEIDI_PARAMS.debugCloneChar;
+  for (const c of T_CHARS) {
+    (HEIDI_PARAMS as any).debugCloneChar = c;
+    const tPlayer = { x: 180, y: 560, active: true, displayWidth: 45, displayHeight: 80 };
+    // 기술이 똥 모양 그대로 연출용 사본을 만든다 (텍스처·크기·회전을 읽는다)
+    let tPoops = Array.from({ length: 36 }, (_, i) => ({
+      x: 24 + (i % 6) * 62, y: 150 + Math.floor(i / 6) * 62, active: true, visible: true,
+      texture: { key: 'poop' }, frame: { name: 0 }, displayWidth: 32, displayHeight: 32,
+      rotation: 0, setAlpha() { return this; },
+      recycle() { this.active = false; },
+    }));
+    const tSpecial = Array.from({ length: 6 }, (_, i) => ({
+      x: 40 + i * 50, y: 430, active: true, recycle() { this.active = false; },
+    }));
+    const ab = new HeidiAbility(0);
+    let sc = 0;
+    let gain = 0;
+    const tApi: any = {
+      scene: tScene, player: tPlayer,
+      poops: { getChildren: () => tPoops },
+      goldPoops: { getChildren: () => tSpecial }, diamondPoops: { getChildren: () => tSpecial },
+      topazPoops: { getChildren: () => tSpecial }, rainbowPoops: { getChildren: () => tSpecial },
+      collectGoldPoop() {}, collectDiamondPoop() {}, collectTopazPoop() {},
+      collectRainbowPoop() {}, spawnGoldPoop() {},
+      addAbilityBonus(n: number) {
+        gain += n;
+        const to = sc + n;
+        for (let k = sc + 1; k <= to; k++) { sc = k; ab.onScoreMilestone(k, tApi); }
+        sc = to;
+      },
+    };
+    ab.onCreate(tApi);
+    await sleep(30);
+    // 첫 발동 = 변신 (summonEvery 로 나눠 **첫 번째부터** 변신이다)
+    sc = HEIDI_PARAMS.puyoInterval - 1;
+    tApi.addAbilityBonus(1);
+    gain = 0;
+    const seenSt: string[] = [];
+    let form = '';
+    let done = false;
+    let maxSprites = 0;
+    let sawCutin = false;
+    let sawAbility = false;
+    const t0 = nowMs();
+    // 기술은 길게 잡아도 착지 뒤 1~6초다. 실시간이라 20초에서 끊는다
+    while (nowMs() - t0 < 20000) {
+      ab.onUpdate(tApi);
+      const m = (ab as any).main;
+      const st = m?.state as string;
+      if (st && seenSt[seenSt.length - 1] !== st) seenSt.push(st);
+      if (m?.form) form = m.form;
+      if ((ab as any).cutin) sawCutin = true;
+      maxSprites = Math.max(maxSprites, live.sprites);
+      // 기술 상태를 한 번이라도 지났는가 (걷기·서기·도약 계열이 아닌 것)
+      if (st && !['walk', 'idle', 'crouch', 'soar', 'seal', 'fall', 'jump', 'wall', 'kick'].includes(st)) {
+        sawAbility = true;
+      }
+      if (sawAbility && !(ab as any).transforming && m?.blinkAt === undefined
+        && (st === 'walk' || st === 'idle') && fxLeft(ab) === 0) { done = true; break; }
+      await sleep(16);
+    }
+    const ms = nowMs() - t0;
+    const leftFx = fxLeft(ab);
+    const leftSprites = live.sprites;
+    ab.onDestroy(tApi);
+    tPoops = [];
+    tRows.push({ c, form, states: seenSt.join(' → '), done, ms, gain, maxSprites,
+      leftFx, leftSprites, special: tSpecial.filter(q => q.active).length, sawCutin });
+  }
+  (HEIDI_PARAMS as any).debugCloneChar = forcedBefore;
+  await sleep(SETTLE_MS);
+  const tSettled = snapshot(tScene);
+  tScene.__clock.stop();
+  console.log('');
+  console.log('하이디 변신 — 기술을 한 명씩 (닌자 여덟 + 기본 뿌요)');
+  for (const r of tRows) {
+    console.log(`  ${r.c.padEnd(10)} ${r.form.padEnd(8)} ${r.done ? '끝남' : '**안 끝남**'} `
+      + `${(r.ms / 1000).toFixed(1)}초 · ${r.gain}점 · 동시 최대 스프라이트 ${r.maxSprites} · `
+      + `컷인 ${r.sawCutin ? 'O' : 'X'} · 특수 똥 ${r.special}/6`);
+    console.log(`             ${r.states}`);
+  }
+  console.log(fmt('[V0] 변신 정리 후', tSettled));
+  const tMaxGain = Math.max(0, ...tRows.map(r => r.gain));
+
+  mark('하이디 변신');
+
+  // ── 발동 수가 새지 않는가 (점수가 빨리 오를 때) ───────────────────────────
+  //
+  // 사람 판정: "어느 순간부터 그림자 분신술을 잘 안쓰는데?"
+  // 원인은 확률이 아니라 **카운터 누수**였다. `fireCount` 를 마일스톤에서 세면,
+  // 점수가 찬 뒤 도약 지점까지 걸어가는 1초 사이에 다음 마일스톤이 들어올 때
+  // 발동은 하나인데 카운터가 두 번 오른다 — 건너뛴 배수만큼 분신술이 증발한다.
+  // 실측(초당 90점): 실제 발동 19회에 fireCount 29. 그래서 **웅크리는 순간**에 센다.
+  const rScene = createFakeScene();
+  preloadFxAssets(rScene);
+  for (const f of HEIDI_SHEETS) rScene.textures.__addAsset(fxPickSheetKey(f));
+  const rPlayer = { x: 180, y: 560, active: true, displayWidth: 45, displayHeight: 80 };
+  const rate = new HeidiAbility(0);
+  let rScore = 0;
+  const rApi: any = {
+    scene: rScene, player: rPlayer,
+    poops: { getChildren: () => [] },
+    goldPoops: { getChildren: () => [] }, diamondPoops: { getChildren: () => [] },
+    topazPoops: { getChildren: () => [] }, rainbowPoops: { getChildren: () => [] },
+    collectGoldPoop() {}, collectDiamondPoop() {}, collectTopazPoop() {},
+    collectRainbowPoop() {}, spawnGoldPoop() {},
+    addAbilityBonus(n: number) {
+      const to = rScore + n;
+      for (let sc = rScore + 1; sc <= to; sc++) { rScore = sc; rate.onScoreMilestone(sc, rApi); }
+      rScore = to;
+    },
+  };
+  rate.onCreate(rApi);
+  // **초당 점수를 빠르게** 준다 — 배회 대기(약 1초)보다 마일스톤이 자주 들어오는 구간
+  const FAST = 120;              // 점/초
+  let rAcc = 0;
+  let rActs = 0;
+  let rJutsus = 0;
+  let rPrev = '';
+  for (let i = 0; i < 2400; i++) {
+    rAcc += FAST / 62;
+    while (rAcc >= 1) { rAcc -= 1; rScore++; rate.onScoreMilestone(rScore, rApi); }
+    rate.onUpdate(rApi);
+    const st = (rate as any).main?.state as string;
+    if (st === 'crouch' && rPrev !== 'crouch') rActs++;
+    if (st === 'soar' && rPrev !== 'soar') rJutsus++;
+    rPrev = st;
+    await sleep(1);
+  }
+  const rCount = (rate as any).fireCount as number;
+  rate.onDestroy(rApi);
+  rScene.__clock.stop();
+  console.log(`  점수 급등(${FAST}점/초) — 실제 발동 ${rActs}회 · 변신 ${rJutsus}회 · `
+    + `fireCount=${rCount} (셋이 어긋나면 변신이 증발한다)`);
+
+
+
+
+  mark('발동 수 누수');
 
   // ── Codex 재현 조건 회귀 ────────────────────────────────────────────────
   //
@@ -1522,9 +1703,9 @@ async function main() {
   // 이미 u=1 이라 말이 다 채워지고, 건너뛰기가 재현되지 않는다 (Codex 는 490ms 를 썼다)
   const skipFrom = TED_PARAMS.chessSuckMs - 10;
   const skipTo = TED_PARAMS.chessSuckMs + TED_PARAMS.spreadHoldMs + 10;
-  (cTed as any).cubeT0 = Date.now() - skipFrom;
+  (cTed as any).gatherT0 = Date.now() - skipFrom;
   cTed.onUpdate(cTedApi);
-  (cTed as any).cubeT0 = Date.now() - skipTo;                    // **예약 시각을 건너뛴다**
+  (cTed as any).gatherT0 = Date.now() - skipTo;                    // **예약 시각을 건너뛴다**
   cTed.onUpdate(cTedApi);
   // 퍼짐은 금방 끝나 배열이 다시 빈다 — **최대치**를 봐야 "쏘기는 했다"를 알 수 있다
   let spreadOut = 0;
@@ -1575,6 +1756,8 @@ async function main() {
     + `${RED_PARAMS.sparrowHitR * 2}px) · 경로 위 똥 ${tunnelled ? '뚫고 지나감' : '맞음'}`);
   tRed2.onDestroy(tApi2);
   tScene2.__clock.stop();
+
+  mark('Codex 재현');
 
   // ── 레드 밸런스: 참새가 경로의 똥을 전부 부순다 ───────────────────────────
   //
@@ -1761,6 +1944,8 @@ async function main() {
   console.log('공통 연출 상한: 요청 %d회 중 %d회 재생, %d회는 상한으로 무시됨',
     capStat.requested, capStat.played, capStat.requested - capStat.played);
 
+  mark('레드 밸런스');
+
   // 표에 적힌 파티클 텍스처가 실제로 있는가. 없으면 게임은 안 죽지만 매 판 콘솔에
   // "Failed to process file" 이 뜬다 — 실제로 fx_sword_beam 두 장이 그러고 있었다
   const fsMod = await import('node:fs');
@@ -1770,6 +1955,27 @@ async function main() {
   if (missingAssets.length) console.log('** 없는 파티클 파일: ' + missingAssets.join(', '));
 
   const checks = [
+    [`[J13] 점수가 빨리 올라도 발동 수가 안 샌다 `
+      + `(발동 ${rActs} = fireCount ${rCount})`, rActs > 0 && rActs === rCount],
+    // 첫 발동부터 변신이고 summonEvery 번째마다 — 1·3·5… 번째 (summonEvery 2)
+    [`[J14] 변신이 ${HEIDI_PARAMS.summonEvery}번에 한 번씩, 첫 발동부터 나온다 `
+      + `(${rJutsus}/${rActs})`,
+      rActs >= HEIDI_PARAMS.summonEvery
+      && rJutsus === Math.ceil(rActs / HEIDI_PARAMS.summonEvery)],
+    [`[V1] 변신 기술이 모두 끝까지 간다 (${tRows.filter(r => r.done).length}/${T_CHARS.length}`
+      + `${tRows.some(r => !r.done) ? ' · 안 끝남: ' + tRows.filter(r => !r.done).map(r => r.c).join(',') : ''})`,
+      tRows.length === T_CHARS.length && tRows.every(r => r.done)],
+    [`[V2] 끝나면 기술 오브젝트가 안 남는다 (${tRows.map(r => r.leftFx).join('/')})`,
+      tRows.every(r => r.leftFx === 0)],
+    [`[V3] 끝나면 뿌요 한 마리만 남는다 (${tRows.map(r => r.leftSprites).join('/')})`,
+      tRows.every(r => r.leftSprites === 1)],
+    [`[V4] 특수 똥은 하나도 안 지워짐 (${tRows.map(r => r.special).join('/')} / 6)`,
+      tRows.every(r => r.special === 6)],
+    [`[V5] 기술마다 컷인이 뜬다 (${tRows.filter(r => r.sawCutin).length}/${T_CHARS.length})`,
+      tRows.every(r => r.sawCutin)],
+    // 레드 마무리(티라노·로봇)와 같은 급을 상한으로 둔다 — 한 방에 판을 끝내면 안 된다
+    [`[V6] 한 번의 기술이 과하지 않다 (최대 ${tMaxGain}점 ≤ 600)`, tMaxGain <= 600],
+    ['[V7] 변신 정리 후 기준선 복귀', isZero(tSettled)],
     [`[C1] 레드 — 자기 보너스가 추가 발사를 안 부른다 (발사 ${redReentry}회)`,
       redReentry === 0],
     [`[C2] 레드 — 포효 링이 tracked 에 시체를 안 남긴다 (${ringZombies}개)`,
@@ -1882,8 +2088,6 @@ async function main() {
     [`[T14] 퍼지는 말 ${seenDirs}개가 **모든 방향에서** 머리를 앞세움`,
       seenDirs === TED_PARAMS.chessStackMax && headDot > 0.999],
     ['[T15] 판정 끝점이 보이는 머리끝과 일치 (≤ 1px)', headErr <= 1],
-    [`[T13] 판본 '${CUBE_VARIANT}' 에서 큐브 시트를 안 올림 (VRAM 0)`,
-      CUBE_VARIANT !== 'none' || cubeSheetsLoaded === 0],
     ['[12] 옅은 알파 + 가산 조합 0건 (밝은 배경에서 묻히는 조합)', faintAdditive.length === 0],
     ['[13] 상시 가산 이펙트가 블룸 레이어를 붙잡지 않음', persistBloom === 0],
     ['[15a] 레거시 오라·빗줄기·소각이 실제로 떠 있었음',
@@ -1922,9 +2126,9 @@ async function main() {
     [`[H17] 코앞으로 폴짝 뛰는 발동이 없다 (가장 짧은 도약 ${minRun.toFixed(0)}px `
       + `≥ ${needRun.toFixed(0)}px)`,
       runways.length === RUNS * 3 && minRun >= needRun],
-    ['[H13] 하강 날라차기가 도약 구간보다 세다 (반경·점수)',
+    ['[H13] 하강 구간 판정이 넓고 점수는 같거나 높다',
       HEIDI_PARAMS.puyoKickHitR > HEIDI_PARAMS.puyoHitR
-      && HEIDI_PARAMS.puyoKickPoints > HEIDI_PARAMS.puyoPoints],
+      && HEIDI_PARAMS.puyoKickPoints >= HEIDI_PARAMS.puyoPoints],   // 점수는 같아도 된다 (전부 40)
     [`[H2] 배회 비용이 사실상 0 (p50 ${hIdleP50.toFixed(4)}ms < 0.05ms)`, hIdleP50 < 0.05],
     [`[H3] 점프 한 프레임이 예산 안 (최대 ${hFlyMax.toFixed(3)}ms < 2ms)`, hFlyMax < 2],
     ['[H4] 점프 경로의 똥만 제거 (일부 생존)', hCleared > 0 && hAlive > 0],

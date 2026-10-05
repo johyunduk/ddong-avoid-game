@@ -39,6 +39,16 @@ export interface CharacterDef {
    */
   extraFxAnims?: FxKey[];
   /**
+   * 능력이 쓰는 한 장짜리 그림 — `{ 텍스처 키: 'assets/...' 경로 }`. 액티브 컷인 일러스트처럼
+   * 큰 그림이라 그 캐릭터의 판에서만 올린다. 같은 파일을 키 여러 개로 올리지 않는다 (VRAM 배수)
+   */
+  extraImages?: Record<string, string>;
+  /**
+   * 능력이 칸을 골라 쓰는 **큰 그림 시트** — `{ 텍스처 키: 경로 }`, 경로는 assets/ 아래 `이름_<칸폭>x<칸높이>.webp`.
+   * 칸 크기는 파일 이름 끝의 `_WxH` 에서 읽는다 (테드 수묵 컷신). 그 캐릭터의 판에서만 올린다
+   */
+  extraSpriteSheets?: Record<string, string>;
+  /**
    * **아직 공개하지 않은 캐릭터.** 사람에게 보이는 목록(캐릭터 선택 격자·도감)에서 감춘다.
    *
    * `CHARACTERS` 에서 지우지 **않는** 이유: 우리가 계속 테스트해야 하고, 지우면
@@ -60,6 +70,17 @@ const UNRELEASED_KEY = 'showUnreleased';
  * 콘솔 — `localStorage.setItem('showUnreleased', '1')`
  *
  * 값을 기억하는 이유: 폰 실기 확인에서 매번 주소를 고쳐 넣기 어렵다.
+ *
+ * ## ⚠ 토스 출시 전에 막아야 한다
+ *
+ * 이 스위치는 **주소만 알면 누구나 켤 수 있다.** 공개 테스터도 미완성 캐릭터를 보고
+ * 고를 수 있다는 뜻이다 ({@link grantUnreleasedForTest} 가 보유까지 부여하므로 플레이도 된다).
+ * 소수 내부 테스트 동안은 그게 목적이지만, **토스 인앱 출시 전에는 반드시 닫아야 한다.**
+ *
+ * 닫는 방법은 셋 중 하나다:
+ *   1. `unreleased` 를 단 캐릭터가 하나도 남지 않게 한다 (전부 공개) — 그러면 스위치는 무해해진다
+ *   2. 이 함수가 개발 빌드에서만 true 를 반환하게 한다 (`import.meta.env.DEV`)
+ *   3. 이 함수와 {@link grantUnreleasedForTest} 를 통째로 지운다
  */
 export function showUnreleased(): boolean {
   try {
@@ -195,6 +216,73 @@ export const CHARACTERS: CharacterDef[] = [
     specialAbility: LEGACY_DESC.specialAbility,
   },
   // ── SR등급 ─────────────────────────────────────────────────────────────
+  {
+    id: 'ted',
+    name: '테드',
+    grade: 'SR',
+    gradeColor: '#4488ff',
+    imageKey: 'ted_front',
+    imagePath: 'assets/players/ted_front.webp',
+    illustKey: 'illust_ted',
+    illustPath: 'assets/illustrations/ted.webp',
+    basicEffect: TED_DESC.basicEffect,
+    specialAbility: TED_DESC.specialAbility,
+    extraFxSheets: ['chess_96x128.png',
+      // 충전 큐브 (TedAbility 충전 게이지) — ChatGPT 판, 흑 31칸(정지 16 + 45° 15). tedChargeCube.gen.ts 와 짝
+      'chargecube_black_72x72.png',
+      // 소닉붐 충격파 (1.57MB) — builder chess-fx
+      'sonicboom_256x256.png'],
+    // 어센트 수묵 컷신 (TedAbility 의 TED_INK). builder 원본: ddong-fx-work/ted-ascent/ink/prod23/ (2:3 판, 칸 480x720)
+    // + prod/s7 먹 이펙트. 텍스처 합계 약 87.1MB (GPU RGBA, 시트 86.0 + 판 시작에 굽는 진한 먹·흰 눈동자·아지랑이 1.05) — 테드를 고른 판에서만, **판 시작 때 전부** 올린다.
+    // 발동 때 올리면 디코드·GPU 업로드(큰 시트 장당 수십 ms)가 컷신 첫 장면과 겹쳐 끊긴다.
+    // 모든 시트 한 변 ≤2048 (저사양 MAX_TEXTURE_SIZE). 화선지(s1_paper)는 한 색이라 텍스처 대신 사각형
+    extraSpriteSheets: {
+      ted_ink_s1_form: 'assets/illustrations/ink/ted_ink_s1_form_480x720.webp',
+      ted_ink_s1_smoke: 'assets/illustrations/ink/ted_ink_s1_smoke_480x720.webp',
+      // 1-A 와이프 · 2-C 각성 (레전즈 ULTRA 에서 빠졌던 장면, 합 약 24MB). 1-B 자세 변화(sB)·1-A 대각선 붓질(sA_stroke)은 뺐다
+      ted_ink_sA_wipe: 'assets/illustrations/ink/ted_ink_sA_wipe_480x720.webp',
+      ted_ink_sC_face: 'assets/illustrations/ink/ted_ink_sC_face_480x720.webp',
+      ted_ink_sC_burst: 'assets/illustrations/ink/ted_ink_sC_burst_480x720.webp',
+      ted_ink_s2_face_0: 'assets/illustrations/ink/ted_ink_s2_face_0_480x720.webp',   // 0~7칸
+      ted_ink_s2_face_1: 'assets/illustrations/ink/ted_ink_s2_face_1_480x720.webp',   // 8~9칸
+      ted_ink_s3_eyes: 'assets/illustrations/ink/ted_ink_s3_eyes_480x234.webp',
+      ted_ink_s4_reveal: 'assets/illustrations/ink/ted_ink_s4_reveal_480x720.webp',
+      ted_ink_s5_wind: 'assets/illustrations/ink/ted_ink_s5_wind_480x720.webp',
+      ted_ink_s6_cube: 'assets/illustrations/ink/ted_ink_s6_cube_480x720.webp',
+      ted_ink_s7_stroke: 'assets/illustrations/ink/ted_ink_s7_stroke_384x512.webp',
+      ted_ink_s7_splash: 'assets/illustrations/ink/ted_ink_s7_splash_512x512.webp',
+      ted_ink_s7_swirl: 'assets/illustrations/ink/ted_ink_s7_swirl_384x512.webp',
+      // 결과 컷 s8 은 뺐다 (대표 결정) — 컷신은 큐브 손동작(s6)에서 걷힌다
+    },
+    extraFxAnims: [
+      'cubeWave',   // 퍼짐 파동 — 절차 생성이라 발동 프레임에 굽지 않게 미리 굽는다
+    ],
+    // 달리기 자세의 코트가 뒤로 길게 날려 캔버스가 332x312 다. 표시 크기를 캔버스와
+    // 같은 비율로 잡아야 setDisplaySize 가 가로로 찌그러뜨리지 않는다 (히트박스는 불변).
+    playerDisplaySize: [54, 80],
+    cardDisplaySize: [54, 80],
+  },
+  {
+    id: 'heidi',
+    name: '하이디',
+    grade: 'SR',
+    gradeColor: '#4488ff',
+    imageKey: 'heidi_front',
+    imagePath: 'assets/players/heidi_front.webp',
+    illustKey: 'illust_heidi',
+    illustPath: 'assets/illustrations/heidi.webp',
+    basicEffect: HEIDI_DESC.basicEffect,
+    specialAbility: HEIDI_DESC.specialAbility,
+    // 강아지 뿌요 + 변신 캐릭터 여덟의 시트. 재생용이 아니라 텍스처만 올리고 애니메이션은
+    // HeidiAbility 가 직접 등록한다 (레드 참새와 같은 길). 하이디를 골랐을 때만 올라간다 —
+    // 목록은 HEIDI_SHEETS
+    extraFxSheets: HEIDI_SHEETS,
+    extraFxAnims: ['boltBlue', 'chidori', 'kaiten'],   // 카카시 치도리. 1.88MB 라 전원에게 올리지 않는다
+    // 긴 머리가 뒤로 날려 캔버스가 236x312 다 — 표시 비율을 캔버스에 맞춘다.
+    // 좌우가 반전이 아니라 각각 그린 그림이다 (모자 리본·해골 장식이 비대칭).
+    playerDisplaySize: [45, 80],
+    cardDisplaySize: [45, 80],
+  },
   {
     id: 'red',
     name: '레드',
@@ -456,47 +544,6 @@ export const CHARACTERS: CharacterDef[] = [
     illustPath: 'assets/illustrations/index.webp',
     basicEffect: '특수 똥 수집 시 +1점 추가',
     specialAbility: '없음',
-  },
-  {
-    id: 'ted',
-    name: '테드',
-    grade: 'SR',
-    gradeColor: '#4488ff',
-    imageKey: 'ted_front',
-    imagePath: 'assets/players/ted_front.webp',
-    illustKey: 'illust_ted',
-    illustPath: 'assets/illustrations/ted.webp',
-    basicEffect: TED_DESC.basicEffect,
-    specialAbility: TED_DESC.specialAbility,
-    extraFxSheets: ['chess_96x128.png'],
-    extraFxAnims: ['cubeBurst'],
-    // 달리기 자세의 코트가 뒤로 길게 날려 캔버스가 332x312 다. 표시 크기를 캔버스와
-    // 같은 비율로 잡아야 setDisplaySize 가 가로로 찌그러뜨리지 않는다 (히트박스는 불변).
-    playerDisplaySize: [54, 80],
-    cardDisplaySize: [54, 80],
-    // **미공개** — 실기 확인이 끝나면 이 줄을 지우고 항목을 SR 구간(red 뒤) 로 옮긴다
-    unreleased: true,
-  },
-  {
-    id: 'heidi',
-    name: '하이디',
-    grade: 'SR',
-    gradeColor: '#4488ff',
-    imageKey: 'heidi_front',
-    imagePath: 'assets/players/heidi_front.webp',
-    illustKey: 'illust_heidi',
-    illustPath: 'assets/illustrations/heidi.webp',
-    basicEffect: HEIDI_DESC.basicEffect,
-    specialAbility: HEIDI_DESC.specialAbility,
-    // 강아지 뿌요 + 변신 캐릭터 여덟의 시트. 재생용이 아니라 텍스처만 올리고 애니메이션은
-    // HeidiAbility 가 직접 등록한다 (레드 참새와 같은 길). 하이디를 골랐을 때만 올라간다 —
-    // 목록은 HEIDI_SHEETS
-    extraFxSheets: HEIDI_SHEETS,
-    extraFxAnims: ['boltBlue', 'chidori', 'kaiten'],   // 카카시 치도리. 1.88MB 라 전원에게 올리지 않는다
-    // 긴 머리가 뒤로 날려 캔버스가 236x312 다 — 표시 비율을 캔버스에 맞춘다.
-    // 좌우가 반전이 아니라 각각 그린 그림이다 (모자 리본·해골 장식이 비대칭).
-    playerDisplaySize: [45, 80],
-    cardDisplaySize: [45, 80],
   },
 ];
 

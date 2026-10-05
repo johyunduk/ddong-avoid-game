@@ -38,6 +38,14 @@ export const textureBuilds = [];
 export const arcSpawns = [];
 /** 테드 큐브의 '말 → 칸' 전환 조각이 생긴 좌표·시각 */
 export const shardSpawns = [];
+/**
+ * 만들어진 이미터를 **텍스처별로** 센다.
+ *
+ * `created.emitters` 만으로는 "뭐라도 만들어졌나" 밖에 못 묻는다. 동시 상한에
+ * 밀려 **어떤 이펙트가 통째로 버려졌는지**를 알려면 종류를 갈라야 한다 —
+ * 실제로 마무리 연기가 섬광에 슬롯을 다 뺏겨 하나도 안 나온 일이 있었다
+ */
+export const emitterTex = new Map();
 /** 파열 파동 겹이 뜬 시각 — 동시 상한에 걸려 조용히 잘리는지 확인용 */
 export const waveSpawns = [];
 /** 시트 이펙트 생성 로그 — 어떤 시트가 몇 번 나갔는지 (발사 횟수 계측) */
@@ -81,6 +89,8 @@ class GameObj extends Emitter {
   }
   setDepth(d) { this.depth = d; return this; }
   setPosition(x, y) { this.x = x; this.y = y; return this; }
+  setX(x) { this.x = x; return this; }
+  setY(y) { this.y = y; return this; }
   destroy() {
     if (!this.scene) return;
     this.scene = null;
@@ -104,15 +114,30 @@ class Sprite extends GameObj {
   setRotation(r) { this.rotation = r; return this; }
   /** 레드 참새가 궤도를 돌며 매 프레임 좌표를 갱신한다 */
   setPosition(x, y) { this.x = x; this.y = y; return this; }
+  setX(x) { this.x = x; return this; }
+  setY(y) { this.y = y; return this; }
   /** 시트가 전부 왼쪽을 봐서, 오른쪽 반원에서는 뒤집어 쓴다 */
   setFlipX(v) { this.flipX = !!v; return this; }
+  setFlipY(v) { this.flipY = !!v; return this; }
   setOrigin(x, y) { this.originX = x; this.originY = y === undefined ? x : y; return this; }
   setVisible(v) { this.visible = v; return this; }
   setAlpha(a) { this.alpha = a; return this; }
   setBlendMode(m) { this.blendMode = m; return this; }
   setTint() { return this; }
+  // 하이디 변신 기술(라생문 금 가는 컷 · 가마분타 컷 · 불에 탄 똥 · 문 마스크)이 쓴다
+  setFrame(f) { this.frame = f; return this; }
+  setTexture(k, f) { this.textureKey = k; this.texture = { key: k }; this.frame = { name: f ?? 0 }; return this; }
+  setTintFill() { return this; }
+  clearTint() { return this; }
+  setMask(m) { this.mask = m; return this; }
+  clearMask() { this.mask = null; return this; }
+  setSize(w, h) { this.width = w; this.height = h; return this; }
   /** 시트 재생 위상 — sheetStart 로 루프를 어긋나게 하는 경로가 여기를 탄다 */
-  anims = { setProgress() {}, currentFrame: null };
+  anims = {
+    setProgress() {}, currentFrame: null, currentAnim: null, timeScale: 1, isPaused: false,
+    pause() { this.isPaused = true; return this; },
+    resume() { this.isPaused = false; return this; },
+  };
   /**
    * 씬 클럭(anims.globalTimeScale 반영)으로 애니메이션 완료를 흉내 낸다.
    *
@@ -192,9 +217,16 @@ class GraphicsObj extends GameObj {
   fillRoundedRect() { return this; }
   strokeRoundedRect() { return this; }
   lineBetween() { return this; }
+  strokePoints() { return this; }
+  fillPoints() { return this; }
+  createGeometryMask() { return { destroy() {} }; }
   setPosition(x, y) { this.x = x; this.y = y; return this; }
+  setX(x) { this.x = x; return this; }
+  setY(y) { this.y = y; return this; }
   setDepth(d) { this.depth = d; return this; }
   setVisible() { return this; }
+  setScrollFactor() { return this; }
+  setAlpha() { return this; }
   save() { return this; }
   restore() { return this; }
   translateCanvas() { return this; }
@@ -427,8 +459,7 @@ export function createFakeScene() {
     o.frame = { name: frame ?? 0 };
     if (key === 'fx_proc_arc') arcSpawns.push({ x, y, t: Date.now(), obj: o });
     if (key === 'fx_cubewave') waveSpawns.push({ t: Date.now() });
-    // 전환 조각은 판본에 따라 텍스처가 다르다 (proc-shard / 픽셀 칸) — 둘 다 센다
-    if (key === 'fx_proc_shard' || String(key).startsWith('fx_px_cubie')) {
+    if (key === 'fx_proc_shard') {
       shardSpawns.push({ x, y, t: Date.now() });
     }
     if (typeof key === 'string' && key.startsWith('fxsheet_')) beamSpawns.push(key);
@@ -437,7 +468,11 @@ export function createFakeScene() {
   scene.add = {
     sprite: (x, y, key, frame) => spawn(x, y, key, frame),
     image: (x, y, key, frame) => spawn(x, y, key, frame),
-    particles: () => new ParticleEmitterObj(scene),
+    particles: (_x, _y, key) => {
+      const k = String(key ?? '?');
+      emitterTex.set(k, (emitterTex.get(k) ?? 0) + 1);
+      return new ParticleEmitterObj(scene);
+    },
     // 전체 화면 섬광 사각형 (K 승계 연출) — 장부 밖이지만 destroy 는 불려야 한다
     rectangle: (x, y) => spawn(x, y, '__rect'),
     layer: () => new Layer(scene),
@@ -479,6 +514,7 @@ export function createFakeScene() {
     },
   };
   scene.children = { moveBelow: () => {} };
+  scene.make = { graphics: () => new GraphicsObj(scene) };
 
   return scene;
 }
@@ -490,7 +526,10 @@ const Phaser = {
   Scenes: { Events: { SHUTDOWN: 'shutdown', DESTROY: 'destroy' } },
   GameObjects: { Events: { DESTROY } },
   Animations: { Events: { ANIMATION_COMPLETE: ANIM_COMPLETE } },
-  Utils: { Array: { GetRandom: a => a[Math.floor(Math.random() * a.length)] } },
+  Utils: { Array: {
+    GetRandom: a => a[Math.floor(Math.random() * a.length)],
+    Shuffle: a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; },
+  } },
   Textures: { FilterMode: { LINEAR: 0, NEAREST: 1 } },
   Math: {
     DegToRad: d => (d * Math.PI) / 180,
@@ -507,6 +546,7 @@ const Phaser = {
     Between: (lo, hi) => lo + Math.floor(Math.random() * (hi - lo + 1)),
     FloatBetween: (lo, hi) => lo + Math.random() * (hi - lo),
     Linear: (a, b, u) => a + (b - a) * u,
+    Vector2: class { constructor(x = 0, y = 0) { this.x = x; this.y = y; } },
   },
 };
 

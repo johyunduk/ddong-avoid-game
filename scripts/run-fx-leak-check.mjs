@@ -1,5 +1,6 @@
 /**
  * fx-leak-check 러너.
+
  *
  * vite 로 `scripts/fx-leak-check.ts` 를 node 용으로 번들하면서 `phaser` 를
  * 계측용 스텁으로 갈아끼운 뒤 실행한다. (Phaser 본체는 DOM 이 필요해 node 에서 못 뜬다)
@@ -31,7 +32,11 @@ await build({
   },
 });
 
-const child = spawn(process.execPath, [path.join(outDir, 'fx-leak-check.mjs')], { stdio: 'inherit' });
+const child = spawn(
+  process.execPath,
+  [path.join(outDir, 'fx-leak-check.mjs'), ...process.argv.slice(2)],
+  { stdio: 'inherit' },
+);
 child.on('exit', code => {
   rmSync(outDir, { recursive: true, force: true });
   process.exit(code ?? 1);

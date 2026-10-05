@@ -174,27 +174,26 @@ export const TED_PARAMS = {
   chessPieces:    10,   // 시트 프레임 수 (흑/백 × 폰·나이트·비숍·퀸·킹)
   chessSpread:    35,   // 수직에서 기울일 수 있는 최대 각도(도)
   chessSpeed:     1900, // 낙하 속도 (px/s) — 꽂히는 느낌이 나려면 눈이 못 따라갈 만큼 빨라야 한다
-  chessHeight:    72,   // 화면에 그릴 높이 (px)
+  chessHeight:    64,   // 화면에 그릴 높이 (px). 72 -> 64 (사람 지시: "조금만 작게")
   chessGroundY:   40,   // 화면 아래에서 이만큼 위가 바닥선 (플레이어 발밑과 같은 높이)
   chessStackMax:  10,   // 바닥에 이만큼 꽂히면 한꺼번에 사라진다
+  // 땅에 박힌 느낌 — 밑동을 바닥선 아래로 묻고, 앞에서 흙더미가 경계를 덮는다
+  chessSinkRatio:  0.10, // 착지 뒤 말의 축을 따라 더 파고드는 깊이 (말 키 대비)
+  chessMoundScale: 1.0,  // 흙더미·균열 크기 (구운 텍스처 46x12 · 96x28 기준 배율)
+  chessMoundPopMs: 140,  // 흙더미가 솟는 시간 (살짝 넘쳤다 돌아온다)
+  chessCrackAlpha: 0.9,  // 균열 진하기
+  chessLandDecoFadeMs: 150, // 말이 걷힐 때 흙더미·균열이 꺼지는 시간
+  chessLandSmoke:   4,   // 착지 흙먼지 알갱이 수 (흙더미가 생겨 6 → 4)
                         // 60점 × 10 = 600점마다 한 사이클
   chessFadeMs:    260,  // 사라지는 시간
-  // ── 흡수 → 큐브 결합 타이밍 (src/config/cube-timeline.json 과 짝이다) ──
+  // ── 흡수 타이밍 ──
   // **늦게 떠난 말은 짧게 간다** (dur_i = chessSuckMs - delay_i). 출발만 어긋뜨리고
-  // 도착은 한 시점에 모아야 시트의 결합 섬광과 맞는다. 지켜야 하는 부등식:
-  //   (chessStackMax - 1) * chessFadeStep < chessSuckMs < cubeGatherMs
-  //   = 9 × 28 = 252  <  500  <  600 ✓   (말 10개 기준)
+  // 도착은 한 시점에 모은다. 지켜야 하는 부등식:
+  //   (chessStackMax - 1) * chessFadeStep < chessSuckMs
+  //   = 9 × 28 = 252  <  500 ✓   (말 10개 기준)
   chessFadeStep:  28,   // 걷힐 때 말마다 어긋나는 **출발** 간격 (도착은 동시다)
-  chessSuckMs:    500,  // 말이 몸 중앙에 닿는 시각 (= cube-timeline 의 pieceArriveMs)
-  cubeGatherMs:   600,  // 시트의 결합 섬광 시각 (= cube-timeline 의 gatherMs)
-  cubeShardMs:    100,  // 말이 조각으로 부서져 있는 시간 (500 → 600)
-  cubeShards:     3,    // 말 하나가 부서지는 조각 수.
-                        // 큐브 한 자세에서 보이는 칸이 26개라 **조각 수를 거기 맞춘다** —
-                        // 조각이 칸으로 바뀌는 연출이라 수가 크게 어긋나면 전환이 안 읽힌다.
-                        // 10말 × 3 = 30 ≈ 26 (말 7개 시절엔 7 × 4 = 28 이었다)
-  cubeBurstMs:    1200, // 발동 후 파열까지 (= cubeForge 시트 길이 36f / 30fps)
-  cubeTotalMs:    2000, // 연출 전체 길이
-  cubeHitstopMs:  70,   // 파열 히트스톱. vfx 의 상한 200ms 안이고 물리는 멈추지 않는다
+  chessSuckMs:    500,  // 말이 화면 가운데에 닿는 시각
+  spreadHitstopMs: 70,  // 퍼지는 순간 히트스톱. vfx 의 상한 200ms 안이고 물리는 멈추지 않는다
   // ── 마무리: 말이 사방으로 퍼진다 ──
   // 모인 자리에서 바로 터져 나간다. 퍼지는 말이 지나간 자리의 똥만 지워진다
   // (화면 전체를 지우지 않는다 — 말이 안 닿은 구석은 살아남는다).
@@ -217,38 +216,12 @@ export const TED_PARAMS = {
   spreadRotSteps:  0,   // 회전 각도 양자화 단계 수 (8 = 8방향). 0 이면 연속.
                         // 말 시트는 96x128 을 54x72 로 **줄여서** 그리므로 임의 각도로
                         // 돌려도 계단이 안 생긴다 → 기본은 0 (양자화 안 함)
-  // ── 큐브가 서는 자리 (화면 기준) ──
+  // ── 말이 모이는 자리 (화면 기준) ──
   // 플레이어를 따라다니지 않는다. 화면 좌표라 기기마다 같은 자리에 선다.
   // 세로 0.42 인 이유: 정확히 한가운데(0.5)면 플레이어의 회피 구역(H-80 부근)과 가깝고,
   // 더 위(0.3)면 점수 HUD 와 겹친다. 0.42 는 HUD 아래·플레이어 위의 빈 띠다
-  cubeCenterX:    0.5,  // 화면 폭 대비
-  cubeCenterY:    0.42, // 화면 높이 대비
-  // ── 표시 배율 — 생성과 파열을 따로 잡는다 ──
-  // 뭉치는 동안은 작게 두어 플레이 화면을 덜 가리고, 파열에서 제 크기로 튄다.
-  // 0.72 인 이유는 182px 검수에서 한 면 3×3 이 읽히는 하한이 이 부근이기 때문이다
-  // (큐브 몸통 116px → 84px, 칸 하나 약 28px).
-  cubeForgeScale: 0.72, // 모임·결합·충전 (프레임 192px)
-  // ── 반투명 — **표시 알파만** 건드린다. 시트에 알파를 굽지 않는다 ──
-  // (구우면 원본 원화와 달라지고 되돌리기도 어렵다. verify-artwork.py 가 그걸 잡아낸다)
-  //
-  // 균일 알파는 **큐브 안쪽 대비를 배경과 무관하게 A배로만 줄인다** —
-  //   (bg + A(x-bg)) - (bg + A(y-bg)) = A(x-y)
-  // 배경이 식에서 사라지므로 밝은 배경이든 어두운 배경이든 체크 대비가 같다.
-  // 시트 실측 아이보리 215 / 검은 칸 30 → 대비 186. 게임의 체스 말 스프라이트가 168 이라
-  // 0.82 (대비 152) 면 같은 자리수다 → 3×3 판독이 안 무너진다
-  cubeForgeAlpha: 0.82,
-  // 파열은 화면 가로를 꽉 채우므로 더 옅게. **커질수록 더 옅어진다** —
-  // 퍼지면서 가리는 면적이 커지니 알파로 상쇄한다
-  cubeBlastAlpha:    0.72, // 파열 시작 (섬광 구간은 진해야 한다)
-  cubeBlastAlphaEnd: 0.34, // 다 퍼졌을 때
-  // 파열은 **화면 가로를 채운다.** 화면 폭이 기기마다 다르므로(Scale.RESIZE) 배율을
-  // 상수로 박지 않고 런타임에 계산한다. 계산 기준은 프레임(256)이 아니라 **내용 폭** —
-  // 프레임 안에 여백이 있으면 프레임 기준으로 맞춰도 그림이 화면에 안 닿는다.
-  cubeBlastContentPx: 250, // 프레임 256 안에서 파편이 실제로 닿는 폭 (알파 bbox 실측)
-  cubeBlastFillW:  1.0,    // 내용 폭이 화면 폭의 이 배 이상이 되게 한다
-  cubeBlastScaleMax: 6,    // 안전 상한. 초광폭 화면에서 스프라이트가 무한정 커지지 않게
-  // **정수 배율만 쓴다.** 1.76배 같은 소수 배율은 NEAREST 로도 어떤 픽셀은 2칸,
-  // 어떤 픽셀은 1칸이 되어 격자가 불규칙해진다 — 픽셀 원화를 키우는 거라 치명적이다
+  gatherCenterX:    0.5,  // 화면 폭 대비
+  gatherCenterY:    0.42, // 화면 높이 대비
   chessMaxAlive:  5,    // 동시에 **날고 있을 수 있는** 말 수 — 메모리 상한.
                         // 낙하 간격이 40점으로 줄어 큰 보너스 한 번에 마일스톤이 여러 개
                         // 터질 수 있다. 비행이 354~432ms 라 평시엔 2개를 안 넘지만
@@ -274,20 +247,150 @@ export const TED_PARAMS = {
   chessWindWide:  0.5,  // 바람선 두께 (말 높이 대비)
   chessWindAlpha: 0.85, // 바람선이 가장 짙을 때의 알파
   // 앞쪽 불꽃 — 운석 머리에 불이 붙는 그것. vfx 의 여우불 루프를 착색해 쓴다
-  chessFireWide:  1.1,  // 불꽃 폭 (말 높이 대비)
-  chessFireLong:  1.7,  // 불꽃 길이 (말 높이 대비) — 코끝에서 뒤로 뻗는다
-  chessFireLead:  0.18, // 말 코끝에서 앞으로 띄우는 거리 (말 높이 대비)
-  chessFireAlpha: 0.95, // 불꽃이 가장 짙을 때의 알파
+  // 앞 끝 공기 가르기 (TedAbility makeAirBow/stepAirBow) — 불은 메인이 아니다. 열기 점 + V자 공기 갈래, 기본 파티클만
+  chessFireLead:  0.18, // 열기 점·갈래를 말 앞 끝에서 앞으로 띄우는 거리 (말 높이 대비)
+  // 공기 갈래 — 진행 반대 방향에서 벌어지는 각도(도). 줄 수 = 원소 수. 말 몸통을 감싸 바깥으로 나와야 보인다
+  // (좁고 짧으면 말 실루엣 안에 묻혀 안 보였다 — 말 밑에 그려 안쪽은 말이 가리고 몸통 밖으로 나온 부분만 보인다)
+  chessBowAngles: [-32, 32] as readonly number[],
+  chessBowLen:    1.0,  // 갈래 길이 (말 키 대비)
+  chessBowWidth:   2,   // 갈래 두께 (px)
+  chessBowAlpha: [0.45, 0.7] as readonly number[],     // 갈래 알파 (평소, 소닉붐 뒤) × 낙하 짙기
+  chessBowBoost:   1.3, // 소닉붐 뒤 갈래 길이 배율 (1.3 이내)
+  chessBowBoostMs: 120, // 소닉붐 뒤 길어지기까지
+  chessBowGlow: [0.11, 0.14] as readonly number[],     // 열기 점 배율 (평소, 소닉붐 뒤) — proc-glow 192px
+  chessBowGlowAlpha: [0.45, 0.75] as readonly number[], // 열기 점 알파 (평소, 소닉붐 뒤)
   chessPoopPoints: 20,  // 낙하 경로에서 깨뜨린 똥 하나당 점수
-  cubeBurstPoints: 100, // 큐브 파열 **정액** 보너스. 지운 똥 개수와 무관하다.
+  spreadBonusPoints: 100, // 퍼짐 발동 **정액** 보너스. 지운 똥 개수와 무관하다.
                         // 이 점수로 다시 낙하가 걸리지 않게 TedAbility 가 먼저
                         // lastChessScore 를 올린 뒤 준다 (smashPoops 와 같은 가드)
   chessHitRadius:  26,  // 경로 판정 반경 (px) — 말 반폭 + 똥 반폭
+
+  // ── 액티브 스킬 "어센트" (누르는 스킬) ──────────────────────────
+  // 흑백 3x3 큐브가 층별로 돌다가 한 면이 순백/순흑으로 맞춰진다. **랜덤**이고
+  // 나온 색이 뒤에 붙는 효과를 가른다. 즉시 전체 제거는 **양쪽 공통** —
+  // 안 그러면 "흑 뽑으면 손해" 가 되어 슬롯머신이 된다.
+  ascentChargeScore: 5000, // 충전 한 칸에 필요한 점수 (화면 점수 기준)
+  ascentMaxCharges:  3,    // 쌓아 둘 수 있는 최대 칸 (메이플 어센트와 같다)
+  ascentStartCharges: 1,   // 판 시작부터 한 칸 차 있다 — 첫 5,000점 전에도 한 번 쓸 수 있게
+  ascentPoopPoints:  40,   // 액티브가 지운 똥 하나당 점수 (저장소 기준값)
+
+  // ── 컷신 — 수묵 (대표 승인) ─────────────────────────────────────
+  // 화선지 붓질 → 와이프·소용돌이 → 어둠 속 흰 눈 → 얼굴 → 각성 → 섬광·컬러 테드 → 큐브 → 걷힘.
+  // 장면별 박자는 아래 TED_PARAMS.ink, 그림 자리는 TedAbility 의 TED_INK.
+  // 이전 연출(corner·approach·kinesis 컷인)은 정리했다 (2026-10 출시 묶음)
+  // 큐에 거는 시각 (ms, 발동부터 누적). 무적 = endMs
+  ascentTiming: {
+    revealMs:     2670,  // = ink.cubeAt + 4 × cubeFrameMs — 큐브 손동작 마지막 수 (확정·히트스톱·흔들림)
+    effectMs:     2800,  // 마지막 칸에 130ms 머문 뒤, 화면이 아직 가려진 동안 효과 (화면 똥 제거)
+    outMs:        2800,  // 같은 순간 검정·s6 가 걷히기 시작 → 게임 복귀
+    endMs:        3000,  // 다 걷힘 — 여기까지 무적. 소환 큐브(summonMs)는 여기서 시작
+  },
+
+  // 수묵 (ink) — ms 는 발동부터 누적. 그림은 builder 판 (ddong-fx-work/ted-ascent/ink/prod23), 자리는 TedAbility 의 TED_INK.
+  // 순서 (3.0초 — 대표 지시로 3.88 → 3.0, 장면은 그대로·머묾·페이드·이동을 줄임):
+  //   세로 붓질·튀김·전신 0~550 → 와이프 550~700 (걷히며 빈 화선지) → 소용돌이 → 검정 700~850
+  //   → 흰 눈동자 켜짐 850~910 → 그 둘레로 눈매·눈썹 그어짐 910~1150 → 세트 완성·일렁임 ~1250 (완성 모습 100ms)
+  //   → 세트가 통째로 얼굴 두 눈 자리로 옮겨 가며 줄고 얼굴(s2 다 뜬 칸)이 어둠에서 켜짐 1250~1600 (세트는 녹아듦)
+  //   → 눈빛 확 밝아짐 1600~1700 → 섬광·각성(sC)+먹 터짐 1700~2100 (각성 표정 0칸 100ms) → 섬광·컬러 2100~2250
+  //   → 바람·큐브 2250~2800 (마지막 수 2670 · 펑·히트스톱 · 머묾 130ms) → 걷힘 2800~3000 → 게임 (소환 큐브 8초 시작)
+  //   뺀 것 (대표 결정): 결과 컷(s8)·그 앞 섬광, 1-B 자세 변화(sB), 1-A 대각선 붓질(sA_stroke), 3 빨려 듦(둥근 얼굴)
+  ink: {
+    paperInMs:       100,  // 게임 위로 화선지가 깔리는 시간 (하드 컷 없이)
+    strokeAt:         30,  // s7 붓질 8칸 — 세로로 돌려 위에서 아래로 내리긋는 한 획 (TedAbility TED_INK.strokeRot)
+    strokeFrameMs:    24,
+    strokeOutMs:     110,  // 형체가 잡히는 동안 붓질이 스며 사라진다
+    splashAt:        200,  // s7 먹 튀김 6칸 — 이 순간 전신이 형체를 잡기 시작
+    splashFrameMs:    36,
+    formAt:  [200, 295, 390] as readonly number[], // s1 형체 3단계가 바뀌는 시각
+    formFadeMs:       65,
+    smokeAt:         480,  // s1 먹 연기 반복 시작 (형체 → 연기 크로스페이드) — 와이프가 덮을 때까지
+    smokeFrameMs:     80,
+    // 1-A — 검은 먹 덩어리가 화면을 가리며 지나감 (sA_wipe, 3·4칸이 화면 97% 를 덮는다 — 그 밑에서 전신이 빠진다).
+    //       150ms 에 8칸이면 칸당 19ms 라 뭉개진다 → 6칸만(1·6칸 건너뜀) 25ms 씩
+    wipeAt:          550,
+    wipeFrameMs:      25,
+    wipeFrames: [0, 2, 3, 4, 5, 7] as readonly number[],
+    wipeCoverFrame:    3,  // 이 시트 칸부터 전신(s1)을 감춘다
+    // 장면 2 — 소용돌이가 빈 화선지를 삼켜 완전 검정. 150ms — 6칸만(1·4칸 건너뜀) 25ms 씩
+    swirlAt:         700,
+    swirlFrameMs:     25,
+    swirlFrames: [0, 2, 3, 5, 6, 7] as readonly number[],
+    swirlGrow:       2.9,  // 소용돌이 마지막 배율 (화면을 덮는다)
+    darkAt:          770,  // 검정이 깔리기 시작 → darkAt + 80 에 완전히 덮는다
+    // 2 — 흰 눈 세트 (눈동자 + s3 눈매·눈썹) — 완전 검정 위, s3 눈매 자리에서. 눈동자가 먼저 켜지고(irisOnMs)
+    //     곧바로 그 둘레로 눈매·눈썹이 그어진다(eyesAt, s3 8칸). 구운 눈동자는 s3 홍채가 차는 3~6칸 동안 넘겨준다
+    pupilAt:         850,
+    irisOnMs:         60,
+    eyesAt:          910,
+    // 3 — 세트가 통째로(같은 변환) 얼굴(s2 다 뜬 칸) 두 눈 자리로 옮겨 가며 줄어들고, 그 둘레로 얼굴이 어둠에서 켜진다
+    //     (곱셈 틴트 검정 → 원래 밝기). 세트는 얼굴이 밝아지는 만큼 녹아든다. 옮겨 감 = 켜짐 박자 (Sine.easeInOut)
+    faceAt:         1250,
+    faceLitTo:      1600,
+    facePush:       0.05,  // 얼굴 느린 밀어 들어가기 (faceAt → awakeFlashAt)
+    // 4 — 눈빛이 확 밝아짐 (pupilSurgeAt → awakeFlashAt). 그동안 각성(sC) 두 눈 자리로 살짝 맞춤 (판 차이 3~6px)
+    pupilShiftAt:   1600,
+    pupilSurgeAt:   1600,
+    //     → 흰 섬광(코드) → 각성 표정 (sC_face 0칸) → 먹 터짐 1~4칸 → 0칸. sC_burst 는 섬광 순간 위에
+    awakeFlashAt:   1700,  // 흰 화면 (20ms 에 차오름)
+    awakeAt:        1760,  // 각성 표정 + 끊듯이 걷힘(flashFadeMs)
+    awakeHoldMs:     100,  // 0칸 유지 — 각성 표정이 읽히는 시간
+    awakeLoopMs:      45,  // 1~4칸 한 바퀴 (180ms) 뒤 0칸으로 (섬광까지)
+    awakeBurstMs:     40,  // sC_burst 4칸
+    //   흰 눈 세트 — 눈매 8칸 박자 · 맥동
+    eyesFrameMs:      30,  // 8칸 = 240ms, 이후 마지막 칸 맥동 (세트 완성 모습 100ms)
+    eyesPulseMs:     160,
+    //   홍채 일렁임 — 눈마다 ADD 발광 + 홍채 아지랑이 복제 (위치·배율·알파만, 필터 없음). 눈동자가 켜질 때부터
+    irisGlowAlpha:  0.55,  // 평소 발광 알파 (밝아짐 때 1 까지)
+    hazeAlpha:      0.30,  // 아지랑이 복제 알파
+    hazeShiftPx:     1.5,  // 아지랑이 좌우 떨림 (띠 px)
+    shimmerRampAt:  1150,  // 세트가 완성된 뒤부터 일렁임이 세진다 → awakeFlashAt 에 shimmerAmpMax 배
+    shimmerAmpMax:   2.5,
+    surgeScale:      2.6,  // 4 눈빛 밝아짐 끝에 발광 크기 (평소 대비 +배)
+    // 5 — 각성에서 바로 섬광 → 컬러 테드 + 먹 튀김 (중심 = 각성 얼굴 두 눈 중점)
+    flashAt:        2100,
+    flashMs:          50,  // 흰 화면 유지
+    flashFadeMs:      30,  // 거의 끊듯이 걷힌다 — 컬러 테드 위에 회색 막이 남지 않게
+    revealAt:       2150,  // = flashAt + flashMs. 섬광이 걷히는 순간 컬러 원색 100%
+    revealFrameMs:    50,
+    // s4 에서 쓰는 칸 — 0(흰 폭발)·1(회색 반쯤)은 탁해서 건너뛰고 컬러 2·3칸만
+    revealFrames: [2, 3] as readonly number[],
+    burstMs:         200,  // 진한 먹이 바깥으로 날아가 화면 밖으로 빠지는 시간 (Cubic.Out)
+    burstFrom:      1.39,  // 먹 폭 (원본 폭 480 대비) 시작
+    burstTo:        4.86,  // 끝 — 가운데 구멍이 화면 대각선 반보다 커진다 (480x720 에서 구멍 반지름 467 > 433)
+    // 장면 6 — 살아 있는 컬러 테드 → 큐브 손동작 → 마지막 수
+    windAt:         2250,
+    windFrameMs:      60,  // s5 4칸 한 바퀴
+    cubeAt:         2490,
+    cubeFrameMs:      45,  // s6 5칸 — 마지막 칸(2670 = ascentTiming.revealMs)에 머문 뒤 걷힌다
+  },
+
+  // 어센트 효과 (결과 하나 — 대표 결정, 백/흑 분기·체인 라이트닝 삭제)
+  // 컷신 뒤 머리 옆 소환 큐브가 summonMs 동안 돈다. 그동안 떨어지는 체스 말은 낙하 거리의 sonicAt 에서 소닉붐 —
+  // 원뿔 증기 링 + 둥근 파장(닿은 똥 삭제, 체스 낙하와 같은 점수) → 남은 거리를 sonicSpeedMul 배 속도로
+  summonMs:          8000, // 소환 큐브 유지
+  summonCubeSize:      32, // 머리 옆 큐브 **몸통** 폭(px) — 충전 큐브 시트(72px 칸, 몸통 46px)를 칸 50px 로 줄여 쓴다
+  // 소환 큐브는 충전 큐브와 같은 실제 수순(섞인 상태 → 앞면 검정 9/9)을 재생한다 — 이 비율 시점에 완성, 남은 동안 완성 모습
+  summonSolveAt:     0.92,
+  // 소환 큐브가 도는 동안 직접 떨어뜨리는 말 — 점수 마일스톤 낙하(60점 ≈ 생존 6초)와 별도.
+  // 마일스톤만으로는 8초에 소닉붐이 한두 번이고, 컷신 직후 화면 똥이 다 지워진 뒤라 파장이 거의 빈 화면을 지났다
+  summonFirstDropMs:  500, // 효과 발동 뒤 첫 말 (화면이 비었다가 똥이 다시 내려오기 시작할 즈음)
+  summonDropEveryMs: 1000, // 그다음 간격 → 8초에 약 8개 (+ 마일스톤 낙하)
+  sonicAt:            0.5, // 소닉붐 지점 (낙하 거리 비율)
+  sonicSpeedMul:      1.2, // 소닉붐 뒤 속도 — 붐 순간 속도의 이 배로 남은 거리를 등속 (아주 살짝 빨라지는 정도)
+  sonicRingR:         140, // 파장 최대 반경(px)
+  sonicRingMs:        250, // 파장이 퍼지는 시간 (Cubic.Out)
+  sonicRingBand:       18, // 판정 띠 반폭(px) — 링 선 + 똥 반폭. 매 프레임 지난 반경~지금 반경 ± 띠
+  sonicRingMax:         4, // 동시 파장 상한 (넘으면 가장 오래된 것을 끝낸다)
+  sonicConeMs:        140, // 원뿔 증기 링이 터지는 시간 (응결 원반·바람 줄기는 builder 충격파 시트에 들어 있다)
+  sonicRimAlpha:     0.28, // 충격파 바깥 보강 겹(옅은 어두운 띠) 알파 — 밝은 구름 위 대비
+  sonicTrailMs:        32, // 붐 뒤 잔상 간격 (평소 chessTrailMs 와 같게)
+  sonicTrailMax:        4, // 붐 뒤 잔상 추가 장수 (붐 앞에서 낙하 몫 8장을 다 쓰므로 붐 뒤 몫)
+  sonicWindLen:       1.2, // 붐 뒤 바람선 길이 배율
 } as const;
 
 export const TED_DESC = {
-  basicEffect:    `${TED_PARAMS.chessInterval}점마다 체스 말 하나가 하늘에서 비스듬히 날아와 바닥에 꽂힌다 — 경로상 똥 제거 (+${TED_PARAMS.chessPoopPoints}점/개)`,
-  specialAbility: `말 ${TED_PARAMS.chessStackMax}개가 쌓이면 화면 한가운데로 모였다가 사방으로 퍼진다 — 퍼지는 말이 지나간 자리의 일반 똥 제거 (+${TED_PARAMS.chessPoopPoints}점/개, 발동 +${TED_PARAMS.cubeBurstPoints}점)`,
+  basicEffect:    `${TED_PARAMS.chessInterval}점마다 체스 말 하나가 하늘에서 비스듬히 날아와 바닥에 꽂힌다 — 경로상 똥 제거 (+${TED_PARAMS.chessPoopPoints}점/개). 말 ${TED_PARAMS.chessStackMax}개가 쌓이면 화면 가운데로 모였다가 사방으로 퍼진다`,
+  specialAbility: `**액티브 — 어센트.** 시작 시 ${TED_PARAMS.ascentStartCharges}칸, ${TED_PARAMS.ascentChargeScore}점마다 한 칸 충전(최대 ${TED_PARAMS.ascentMaxCharges}칸), 버튼 또는 스페이스로 발동. 수묵 컷신 동안 무적, 끝나면 화면의 똥을 모두 지우고(+${TED_PARAMS.ascentPoopPoints}점/개) 큐브가 ${TED_PARAMS.summonMs / 1000}초 동안 머리 옆을 돌며 ${TED_PARAMS.summonDropEveryMs / 1000}초마다 체스 말을 떨어뜨린다 — 그동안 떨어지는 체스 말은 낙하 도중 소닉붐을 일으켜 둥근 파장으로 주변 똥을 지우고(+${TED_PARAMS.chessPoopPoints}점/개) 남은 거리를 ${TED_PARAMS.sonicSpeedMul}배 빠르게 내리꽂는다. 큐브가 도는 동안에는 다시 발동할 수 없다`,
 } as const;
 
 // ── 레드 (Red / SR) — 참새 동료 ──────────────────────────────────

@@ -73,6 +73,49 @@ export interface CharacterAbility {
   /** 피격 시 호출. true → 보호막 소모, 게임오버 방지 (센티넬) */
   onHitPoop(api: GameSceneAPI): boolean;
 
+  // ── 액티브 스킬 (누르는 스킬) ──────────────────────────────────────
+  //
+  // **게임의 첫 액티브 스킬은 테드지만, 틀은 캐릭터를 모른다.** 충전은 GameScene 이
+  // 세고(점수), 버튼도 GameScene 이 그린다. 능력은 "얼마마다 차는가 · 몇 칸까지 ·
+  // 지금 쓸 수 있는가 · 쓰면 무엇을 하는가" 넷만 답한다.
+  //
+  // 충전은 **화면 점수**로 센다. 스킬로 번 점수도 다음 충전에 들어가므로, 그 몫은
+  // 스킬의 똥 개당 점수로 조절한다 (기본 점수로만 세던 때는 보너스가 많은 캐릭터가
+  // 화면 5,000점을 넘겨도 한 칸이 안 찼다).
+
+  /** 충전 한 칸에 필요한 점수. `0` 이면 이 캐릭터는 액티브가 없다 */
+  getActiveChargeScore(): number;
+
+  /** 쌓아 둘 수 있는 최대 칸 수 */
+  getActiveMaxCharges(): number;
+
+  /** 판을 시작할 때 이미 차 있는 칸 수 */
+  getActiveStartCharges(): number;
+
+  /** 지금 발동할 수 있는가 — 연출이 도는 중이면 false */
+  canUseActive(api: GameSceneAPI): boolean;
+
+  /** 버튼을 눌렀다. 칸은 GameScene 이 이미 차감했다 */
+  onActiveSkill(api: GameSceneAPI): void;
+
+  /**
+   * 한 칸이 새로 찼다 (판 시작 때 채워 주는 칸 포함, 칸마다 한 번). 칸마다 결과를 미리 정해 두는
+   * 능력(테드)이 여기서 큐에 넣는다
+   */
+  onActiveChargeGained(api: GameSceneAPI): void;
+
+  /**
+   * 충전 표시를 능력이 직접 그리는가. true 면 GameScene 은 가운데 숫자와 진행 링을 숨기고 원만 그린다.
+   * btn = 버튼 원의 중심·반지름 (화면 좌표), s = 버튼 배율 (ACTIVE_BTN.scale — 딸린 표시도 이만큼)
+   */
+  createActiveChargeView(api: GameSceneAPI, btn: { x: number; y: number; r: number; s: number }): boolean;
+
+  /**
+   * 충전 상태가 바뀔 때마다 (점수 변경마다 · 발동 가능 여부가 바뀔 때) — progress = 다음 칸까지 0~1,
+   * usable = 지금 누르면 발동되는가 (canUseActive). false 면 칸이 있어도 흐리게 그린다
+   */
+  updateActiveChargeView(api: GameSceneAPI, s: { charges: number; max: number; progress: number; usable: boolean }): void;
+
   /** update() 매 프레임 호출 (글리치 분신 추적 등) */
   onUpdate(api: GameSceneAPI): void;
 

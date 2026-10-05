@@ -25,7 +25,7 @@ const CURRENT_BANNER = {
 // 여기 넣으면 preload 가 그 캐릭터 일러스트(768x1344)를 미리 받으므로, 늘릴 때마다
 // 가챠 씬의 텍스처 메모리가 장당 약 4MB 늘어난다. 전 캐릭터를 넣지 않는 이유가 그것이다.
 // 미공개 캐릭터(`unreleased`)는 넣지 않는다.
-const SLIDESHOW_IDS = ['mugi', 'gumi', 'sentinel', 'legacy', 'red', 'k', 'knight', 'hacker', 'miner', 'maehwa', 'archieve', 'glitch', 'noise'];
+const SLIDESHOW_IDS = ['ted', 'mugi', 'gumi', 'sentinel', 'legacy', 'heidi', 'red', 'k', 'knight', 'hacker', 'miner', 'maehwa', 'archieve', 'glitch', 'noise'];
 
 export default class GachaScene extends BaseScene {
   private skorBalance = 0;

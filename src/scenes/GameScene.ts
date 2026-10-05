@@ -29,6 +29,7 @@ import { realNow } from '../utils/realTime';
 import { preloadFxAssets, loadFxPickSheet, preloadFxSheet } from '../utils/vfx';
 import { preloadCharSheets, ensureCharAnims } from '../utils/charAnim';
 import BaseScene from './BaseScene';
+import { ACTIVE_BTN } from '../config/activeButton';
 import { addBackground } from '../utils/background';
 
 export default class GameScene extends BaseScene {
@@ -74,6 +75,21 @@ export default class GameScene extends BaseScene {
   private rainbowCollected: number = 0;
   private collectBonusTotal: number = 0; // ability.onCollectSpecial + synergy.collectBonus 누계
   private abilityBonusTotal: number = 0; // addAbilityBonus() + getTickScore 배율 초과분 누계
+  // ── 액티브 스킬 (누르는 스킬) ─────────────────────────────────────
+  /** 지금 쓸 수 있는 충전 칸 수 */
+  private activeCharges: number = 0;
+  /** 마지막으로 칸을 채운 점수 기준선 (화면 점수) */
+  private lastChargeScore: number = 0;
+  private activeBtn?: Phaser.GameObjects.Arc;
+  private activeBtnLabel?: Phaser.GameObjects.Text;
+  /** 버튼 배율 (ACTIVE_BTN.scale) — 테두리·링 굵기에 곱한다 */
+  private activeBtnScale = 1;
+  /** 마지막으로 버튼에 그린 발동 가능 여부 — 바뀌면 다시 그린다 (테드 소환 중 등) */
+  private activeUsable = true;
+  /** 다음 칸까지 차오르는 테두리 */
+  private activeRing?: Phaser.GameObjects.Graphics;
+  /** 마지막으로 그린 진행률(%) — 같으면 다시 그리지 않는다 */
+  private lastRingPct: number = -1;
   // 피버 타임 관련
   protected isFeverTime: boolean = false; // 피버 타임 활성화 여부
   private feverTimeRemaining: number = 0; // 피버 타임 남은 시간 (ms)
@@ -151,6 +167,15 @@ export default class GameScene extends BaseScene {
     this.rainbowCollected = 0;
     this.collectBonusTotal = 0;
     this.abilityBonusTotal = 0;
+    // 씬 재시작 후에도 클래스 프로퍼티는 남는다 — 액티브 충전도 반드시 여기서 초기화
+    this.activeCharges = 0;
+    this.lastChargeScore = 0;
+    this.activeBtn = undefined;
+    this.activeBtnLabel = undefined;
+    this.activeBtnScale = 1;
+    this.activeUsable = true;
+    this.activeRing = undefined;
+    this.lastRingPct = -1;
     this.sessionPromise = null; // 재시작 시 이전 세션 프로미스 해제
     // 디버그 Graphics 참조 초기화 (씬 재시작 시 이전 객체는 Phaser가 파괴하므로 참조만 해제)
     this.manualHitboxDebug = undefined;
@@ -213,6 +238,18 @@ export default class GameScene extends BaseScene {
     // 이 캐릭터 전용 재생 시트 (테드의 체스 큐브) — 크기 때문에 전원에게 올리지 않는다
     for (const key of getCharacterDef(this.selectedCharId).extraFxAnims ?? []) {
       preloadFxSheet(this, key);
+    }
+    // 능력 전용 한 장 그림 (테드 어센트 컷인 일러스트)
+    for (const [key, path] of Object.entries(getCharacterDef(this.selectedCharId).extraImages ?? {})) {
+      if (!this.textures.exists(key)) this.load.image(key, path);
+    }
+    // 능력 전용 큰 그림 시트 (테드 수묵 컷신) — 칸 크기는 파일 이름 끝 `_WxH`.
+    // 여러 줄 시트도 그대로 읽는다 (왼→오, 위→아래 순). 한 변 2048 이하로 묶는다 — 저사양 MAX_TEXTURE_SIZE
+    for (const [key, path] of Object.entries(getCharacterDef(this.selectedCharId).extraSpriteSheets ?? {})) {
+      const m = /_(\d+)x(\d+)\.\w+$/.exec(path);
+      if (m && !this.textures.exists(key)) {
+        this.load.spritesheet(key, path, { frameWidth: Number(m[1]), frameHeight: Number(m[2]) });
+      }
     }
 
     // 선택된 배경화면 조건부 로딩 (DifficultySelectScene에서 미리 로드 안 된 경우 fallback)
@@ -531,6 +568,9 @@ export default class GameScene extends BaseScene {
     this.abilityAPI = this.buildAPI();
     this.ability.onCreate(this.abilityAPI);
 
+    // 액티브 스킬 버튼 — 능력이 액티브를 가진 캐릭터에서만 생긴다
+    this.createActiveSkillButton();
+
     // 시너지 뱃지 (배경화면-캐릭터 조합 일치 시 게임 시작 직후 표시)
     if (this.activeSynergy) {
       const badge = this.add.text(cx, 15, `✦ ${this.activeSynergy.label}`, {
@@ -621,6 +661,8 @@ export default class GameScene extends BaseScene {
 
       // 캐릭터 능력 프레임 업데이트 (글리치 분신 추적 등)
       this.ability.onUpdate(this.abilityAPI);
+      // 발동 가능 여부는 점수와 무관하게 바뀐다 (연출·소환이 끝날 때) — 바뀐 프레임에만 버튼을 다시 그린다
+      if (this.activeBtn && this.ability.canUseActive(this.abilityAPI) !== this.activeUsable) this.refreshActiveBtn();
 
       // 레이어 2: rAF 조작 감지 (5초마다 구간 비율 체크)
       // realNow vs Phaser time 비교 — Date.now·performance.now 동시 조작도 감지
@@ -921,7 +963,160 @@ export default class GameScene extends BaseScene {
 
       // 점수 증가 범위 내에서 건너뛴 생성 포인트를 확인
       this.checkMissedSpawnPoints(oldScore, this.score);
+
+      // 액티브 충전 (기본 점수 기준)
+      this.checkActiveCharge();
     }
+  }
+
+  /**
+   * 액티브 스킬 충전 — **화면에 보이는 점수**로 센다.
+   *
+   * 한때 능력 보너스를 뺀 "기본 점수"로 셌다. 스킬로 번 점수가 다음 충전으로
+   * 되돌아오는 걸 막으려던 건데, 기본 점수는 생존 10점/초가 대부분이라 테드처럼
+   * 보너스를 많이 버는 캐릭터는 **화면에 5,000점이 떠도 한 칸이 안 찼다.**
+   * 사람이 정한 기준은 "5,000점마다 한 칸"이고 그건 화면 점수다.
+   * 스킬 점수가 충전에 되돌아오는 몫은 스킬의 똥 개당 점수로 조절한다.
+   */
+  private checkActiveCharge(): void {
+    const step = this.ability.getActiveChargeScore();
+    if (step <= 0) return;                       // 액티브 없는 캐릭터
+    const max = this.ability.getActiveMaxCharges();
+    while (this.score - this.lastChargeScore >= step) {
+      this.lastChargeScore += step;
+      if (this.activeCharges < max) {
+        this.activeCharges++;
+        this.ability.onActiveChargeGained(this.abilityAPI);
+      }
+      // 꽉 찼으면 기준선만 넘긴다 — 쌓아 두지 않는다 (쓰면 바로 다시 차는 것 방지)
+    }
+    this.refreshActiveBtn();
+  }
+
+  /** 버튼 눌림 — 칸을 먼저 깎고 능력에 넘긴다 */
+  private useActiveSkill(): void {
+    if (this.gameOver || this.activeCharges <= 0) return;
+    if (!this.ability.canUseActive(this.abilityAPI)) return;   // 연출 중이면 삼킨다
+    this.activeCharges--;
+    // 능력이 먼저 칸을 꺼내 쓴다 (테드는 결과 큐에서 뺀다) — 그 뒤에 버튼을 다시 그려야 맞다
+    this.ability.onActiveSkill(this.abilityAPI);
+    this.refreshActiveBtn();
+  }
+
+  /** 남은 칸 수와 다음 칸까지의 진행을 버튼에 반영. 0칸이거나 지금 발동할 수 없으면(canUseActive) 흐리게 */
+  private refreshActiveBtn(): void {
+    if (!this.activeBtn || !this.activeBtnLabel) return;
+    const usable = this.ability.canUseActive(this.abilityAPI);
+    this.activeUsable = usable;
+    const ready = this.activeCharges > 0 && usable;
+    this.activeBtn.setFillStyle(ready ? 0x1b2340 : 0x15161c, ready ? 0.92 : 0.55);
+    this.activeBtn.setStrokeStyle(Math.max(1.5, 3 * this.activeBtnScale), ready ? 0xffd166 : 0x3a3d45);
+    this.activeBtnLabel.setText(String(this.activeCharges));
+    this.activeBtnLabel.setColor(ready ? '#ffd166' : '#555a63');
+    this.drawActiveRing();
+    const step = this.ability.getActiveChargeScore();
+    const max = this.ability.getActiveMaxCharges();
+    this.ability.updateActiveChargeView(this.abilityAPI, {
+      charges: this.activeCharges, max, usable,
+      progress: this.activeCharges >= max ? 1 : Phaser.Math.Clamp((this.score - this.lastChargeScore) / step, 0, 1),
+    });
+  }
+
+  /**
+   * 다음 칸까지 차오르는 테두리.
+   *
+   * 칸 수만 보이면 0 → 1 이 되기 전까지 진행이 안 보여 "안 차는 건지 아직인 건지"
+   * 알 수 없다 (실제로 그렇게 버그 신고가 들어왔다). 점수가 오를 때마다 불리지만
+   * **1% 단위로 바뀔 때만** 다시 그린다 — 초당 10번 Graphics 를 비우고 그릴 필요가 없다.
+   */
+  private drawActiveRing(): void {
+    const ring = this.activeRing;
+    const btn = this.activeBtn;
+    if (!ring || !btn) return;
+    const step = this.ability.getActiveChargeScore();
+    const max = this.ability.getActiveMaxCharges();
+    const frac = this.activeCharges >= max
+      ? 1
+      : Phaser.Math.Clamp((this.score - this.lastChargeScore) / step, 0, 1);
+    const pct = Math.floor(frac * 100);
+    if (pct === this.lastRingPct) return;
+    this.lastRingPct = pct;
+
+    const s = this.activeBtnScale;
+    const R = btn.radius + 6 * s;
+    ring.clear();
+    ring.lineStyle(4 * s, 0x2a2d36, 0.8).strokeCircle(btn.x, btn.y, R);  // 빈 트랙
+    if (frac <= 0) return;
+    const start = -Math.PI / 2;                                           // 12시에서 시작
+    ring.lineStyle(4 * s, 0xffd166, 1);
+    ring.beginPath();
+    ring.arc(btn.x, btn.y, R, start, start + Math.PI * 2 * frac, false);
+    ring.strokePath();
+  }
+
+  /**
+   * 액티브 스킬 버튼 — 오른쪽 아래 원형.
+   *
+   * 이동이 `scene.input` 을 우회해 캔버스 DOM 으로 좌/우를 가르기 때문에, 버튼 자리를
+   * Player 에게 알려 **이동 판정에서 빼야 한다.** 안 그러면 버튼을 누를 때마다
+   * 오른쪽으로 걷는다.
+   */
+  private createActiveSkillButton(): void {
+    if (this.ability.getActiveChargeScore() <= 0) return;      // 액티브 없는 캐릭터
+    // 시작 칸 — init() 에서 0 으로 돌린 뒤 여기서 채운다 (재시작해도 다시 채워진다)
+    this.activeCharges = Math.min(this.ability.getActiveStartCharges(), this.ability.getActiveMaxCharges());
+    for (let i = 0; i < this.activeCharges; i++) this.ability.onActiveChargeGained(this.abilityAPI);
+    const { width: W, height: H } = this.scale;
+    // 크기·자리·터치 영역은 ACTIVE_BTN 한 곳에서 (모든 캐릭터 공통)
+    const s = ACTIVE_BTN.scale;
+    const R = ACTIVE_BTN.baseRadius * s;
+    const cx = W - ACTIVE_BTN.centerFromRight;
+    const cy = H - ACTIVE_BTN.centerFromBottom;
+    this.activeBtnScale = s;
+
+    this.activeBtn = this.add.circle(cx, cy, R, 0x1b2340, 0.92)
+      .setStrokeStyle(Math.max(1.5, 3 * s), 0xffd166)
+      .setDepth(11)
+      .setScrollFactor(0);
+    this.activeBtnLabel = this.add.text(cx, cy, '0', {
+      fontSize: `${Math.round(26 * s)}px`, color: '#ffd166', fontStyle: 'bold', fontFamily: 'monospace',
+    }).setOrigin(0.5).setDepth(12).setScrollFactor(0);
+
+    this.activeRing = this.add.graphics().setDepth(12).setScrollFactor(0);
+    // 능력이 충전 표시를 직접 그리면(테드의 충전 큐브) 숫자와 진행 링은 능력 몫 — 원만 그대로
+    if (this.ability.createActiveChargeView(this.abilityAPI, { x: cx, y: cy, r: R, s })) {
+      this.activeBtnLabel.setVisible(false);
+      this.activeRing.setVisible(false);
+    }
+
+    // 눌리는 영역은 보이는 원보다 넓게 (지름 44 이상). 원의 로컬 좌표는 왼쪽 위가 0 이라 중심이 (R, R)
+    const hitR = Math.max(R, ACTIVE_BTN.hitRadius);
+    this.activeBtn.setInteractive({
+      hitArea: new Phaser.Geom.Circle(R, R, hitR),
+      hitAreaCallback: Phaser.Geom.Circle.Contains,
+      useHandCursor: true,
+    });
+    this.activeBtn.on('pointerup', () => this.useActiveSkill());
+
+    // 버튼 자리를 이동 판정에서 뺀다 — 보이는 원이 아니라 **눌리는 영역** 기준
+    const ex = hitR + ACTIVE_BTN.exclusionPad;
+    this.player.setInputExclusion(new Phaser.Geom.Rectangle(cx - ex, cy - ex, ex * 2, ex * 2));
+
+    // PC — 스페이스로도 발동한다. 이동 키와 같은 방식(창 레벨 · 캡처 단계)으로 받는다:
+    // 외부 스크립트(Vercel 프리뷰 툴바 등)가 키를 가로채도 먼저 받는다 (Player 참고)
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== 'Space' || e.repeat) return;
+      // 게임 오버 후 이니셜 입력칸 등에 스페이스를 치는 경우 — 건드리지 않는다
+      const t = e.target as HTMLElement | null;
+      if (this.gameOver || (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA'))) return;
+      e.preventDefault();                                     // 페이지 스크롤 방지
+      this.useActiveSkill();
+    };
+    window.addEventListener('keydown', onKey, { capture: true });
+    // 재시작·종료 때 반드시 떼야 한다 — 남으면 다음 판에 한 번 누를 때 두 번 발동한다
+    this.events.once('shutdown', () => window.removeEventListener('keydown', onKey, { capture: true }));
+
+    this.refreshActiveBtn();
   }
 
   /**

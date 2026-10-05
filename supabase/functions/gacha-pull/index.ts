@@ -23,11 +23,11 @@ function pullWallpaper(): { id: string } {
 }
 
 // ── 뽑기 풀 정의 ────────────────────────────────────────────────────────
-// R 종당 ≈7.61% (10종), SR 종당 ≈2.30% (10종 → 총 ≈23.0%), UR 종당 ≈0.222% (4종 → 총 ≈0.89%)
+// R 종당 ≈7.44% (10종), SR 종당 ≈2.24% (11종 → 총 ≈24.7%), UR 종당 ≈0.217% (4종 → 총 ≈0.87%)
 // 종을 늘릴 때 **종당 가중치는 그대로 두고 대역 총합이 늘어나게** 한다 (UR_W 주석의 선례).
 // 가중치 합이 100 이 아니므로 아래 숫자는 가중치지 확률이 아니다 — 실제 확률은
 // weight / POOL_TOTAL 이다. UR 4번째를 넣기 전에는 합이 정확히 100.0 이었다.
-const SR_W  = 19.3 / 8;         // 가중치 ≈2.413 (기존 8종 산출값 유지 — 10종이어도 기존 SR 너프 없음)
+const SR_W  = 19.3 / 8;         // 가중치 ≈2.413 (기존 8종 산출값 유지 — 11종이어도 기존 SR 너프 없음)
 const UR_W  = 0.7  / 3;         // 종당 ≈0.233% (기존 3종 산출값 유지 — 4종이어도 종당 확률 동일, 기존 UR 너프 없음)
 /** 등급별 종당 가중치 */
 const WEIGHT_BY_GRADE: Record<string, number> = { R: 8, SR: SR_W, UR: UR_W };
@@ -44,7 +44,7 @@ const WEIGHT_BY_GRADE: Record<string, number> = { R: 8, SR: SR_W, UR: UR_W };
 const OBTAINABLE_IDS = [
   'log', 'swap', 'sum', 'fork', 'seed', 'session', 'branch', 'hook', 'socket', 'index',
   'hacker', 'miner', 'maehwa', 'archieve', 'glitch', 'noise', 'knight', 'k', 'red', 'heidi',
-  'mugi', 'gumi', 'sentinel', 'legacy',
+  'mugi', 'gumi', 'sentinel', 'legacy', 'ted',
 ];
 
 const POOL = OBTAINABLE_IDS.map((id) => {

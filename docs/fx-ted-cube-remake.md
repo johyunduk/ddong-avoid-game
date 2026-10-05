@@ -3,6 +3,11 @@
 > 작성: w7 `연출·Claude` (fx) · 2026-09-11
 > 상태: **구현 완료** (1차안 승인 후). §1~§8 은 승인받은 설계 원문 그대로 두고,
 > 실제로 만들면서 달라진 것과 측정값은 **§9 구현 보고**에 적었다.
+> **2026-09-28 삭제 (사람 지시).** 큐브 연출은 `CUBE_VARIANT = 'none'` 으로 꺼진 채 남아 있다가
+> 코드·시트·재생성 스크립트(`scripts/cube/` 의 큐브 전용 파일, `make-cube-sheet.py`,
+> `make-ted-cube-pixel.py`, `cube-timeline.json`)까지 전부 지웠다. 지금 테드 마무리는
+> 말이 모였다가 사방으로 퍼지는 연출과 흑백 파동(`cubeWave`, 코드 생성)뿐이다.
+> 이 문서는 경위·판단 근거로만 남긴다 — 본문의 경로·상수는 더 이상 존재하지 않는다.
 > 표기: 측정한 값은 그대로 적었고, 확인하지 못한 것은 **(추정)** 을 붙였다.
 > §1~§8 의 (추정) 중 실물로 확인된 것은 §9.2 에 정정해 두었다.
 
@@ -477,7 +482,7 @@ onUpdate(api):
 | `public/assets/fx/sheets/cubeforge_192x192.png` | 36f · 1152×1152 · 5.06MB |
 | `public/assets/fx/sheets/cubeblast_256x256.png` | 24f · 1536×1024 · 6.00MB |
 | `public/assets/fx/sheets/cubecore_128x128.png` | 24f · 768×512 · 1.50MB |
-| `creative/_fx/ted-cube/result_180px.png` | **게임 표시 크기 검증 이미지** (2시트 × 배경 3종) |
+| `C:/Users/user/ddong-fx-work/ted-cube/result_180px.png` | **게임 표시 크기 검증 이미지** (2시트 × 배경 3종) |
 
 고친 것: `src/utils/vfx.ts` · `src/abilities/TedAbility.ts` · `src/config/abilityParams.ts` ·
 `scripts/fx-leak-check.ts` · `scripts/fx-leak-stub-phaser.mjs`.
@@ -544,7 +549,7 @@ onUpdate(api):
 
 # 10. 픽셀 판본 (2026-09-12, 채택)
 
-사람이 `creative/_fx/ted-cube/pixel-chatgpt/` 의 픽셀아트 4장을 최종 아트 디렉션으로 채택했다.
+사람이 `C:/Users/user/ddong-fx-work/ted-cube/pixel-chatgpt/` 의 픽셀아트 4장을 최종 아트 디렉션으로 채택했다.
 **게임 기본 재생을 픽셀 판본으로 바꾸고, 3D 판본은 전부 보존한다.**
 
 ## 10.1 전환 지점 — 한 줄
@@ -691,7 +696,7 @@ composer(w8)의 중간 키프레임이 오기 전에 **실측 · 검증 도구 �
 
 원화의 픽셀 덩어리는 1254px 기준 약 8px → 네이티브 해상도 약 157px.
 
-## 11.2 전달 규격 — `creative/_fx/ted-cube/ALIGNMENT.md`
+## 11.2 전달 규격 — `C:/Users/user/ddong-fx-work/ted-cube/ALIGNMENT.md`
 
 `scripts/cube/artwork.py spec` 이 생성한다. 요지:
 
@@ -863,8 +868,8 @@ composer 의 `metrics.md` 가 짚은 그대로 **원화마다 큐브가 그려�
 **색적중은 1.000 인데 IoU·NCC 가 바닥이다** — 팔레트만 가져오고 형태를 새로 그린 것이
 숫자로 그대로 드러난다. 검사가 제 구실을 한다는 증거다.
 
-비교 이미지: `creative/_fx/ted-cube/artwork_vs_sheet.png` (원본 4장 ↔ 해당 시트 프레임)
-182px 검수: `creative/_fx/ted-cube/artwork_182px.png` (어두운·밝은·중간 배경 3종)
+비교 이미지: `C:/Users/user/ddong-fx-work/ted-cube/artwork_vs_sheet.png` (원본 4장 ↔ 해당 시트 프레임)
+182px 검수: `C:/Users/user/ddong-fx-work/ted-cube/artwork_182px.png` (어두운·밝은·중간 배경 3종)
 
 ## 12.4 조립에서 쓴 연산
 
@@ -950,7 +955,7 @@ composer 의 `metrics.md` 가 짚은 그대로 **원화마다 큐브가 그려�
 
 ### 검수
 
-`node scripts/run-fx-wave-preview.mjs` → `creative/_fx/ted-cube/wave_check.png`
+`node scripts/run-fx-wave-preview.mjs` → `C:/Users/user/ddong-fx-work/ted-cube/wave_check.png`
 (0/45/90/140/190/250ms × 어두운·밝은·중간 배경)
 
 이 검수는 **게임에 나가는 `drawCubeWaveFrame` 을 그대로 돌린다.** node 에는 캔버스가 없어서
@@ -1074,7 +1079,7 @@ composer 의 `metrics.md` 가 짚은 그대로 **원화마다 큐브가 그려�
 
 ## 14.5 검증
 
-`node scripts/run-fx-wave-preview.mjs` → `creative/_fx/ted-cube/wave_check.png`
+`node scripts/run-fx-wave-preview.mjs` → `C:/Users/user/ddong-fx-work/ted-cube/wave_check.png`
 **화면 크기(390×640) 캔버스에 플레이어 위치(195,560) 기준**으로 합성한다 —
 셀 하나가 실제 게임 한 화면이다. 0/60/120/180/260/360ms × 배경 2종 × 색조 3종.
 
@@ -1203,7 +1208,7 @@ composer 의 `metrics.md` 가 짚은 그대로 **원화마다 큐브가 그려�
 | 헤일로 | 0.12 | **0.14** |
 
 띠 두께·도달 반지름·겹 수는 건드리지 않았다.
-검수: `creative/_fx/ted-cube/wave_check.png` (mono/cool/gold × 어두운·밝은 배경).
+검수: `C:/Users/user/ddong-fx-work/ted-cube/wave_check.png` (mono/cool/gold × 어두운·밝은 배경).
 
 ## 15.5 검증
 
@@ -1300,7 +1305,7 @@ cubeCenterY: 0.42,  // 화면 높이 대비
 | `cubeBlastScale` (파열) | **1.0** | 그대로 |
 
 **0.72 를 고른 근거** — 182px 검수에서 배율을 4단계로 찍어 한 면 3×3 이 읽히는 하한을 봤다
-(`creative/_fx/ted-cube/forge_scale.png`, 어두운·밝은·중간 배경 각각).
+(`C:/Users/user/ddong-fx-work/ted-cube/forge_scale.png`, 어두운·밝은·중간 배경 각각).
 
 | 배율 | 큐브 몸통 | 칸 하나 | 판정 |
 |---|---|---|---|
@@ -1447,7 +1452,7 @@ HUD 는 `depth 9~10`, 파열은 `depth 210` 이라 **짧은 화면에서는 0.8�
 스프라이트의 실제 `scaleX` 를 읽어 정수인지, 내용 폭이 화면 폭 이상인지 본다).
 실측: 화면 폭 360 → 배율 2, 내용 500px = 화면의 139%.
 회귀 3개 유지, 원화 diff 그대로. `.\scripts\verify.ps1` **PASS**.
-검수 이미지: `creative/_fx/ted-cube/blast_fill.png` (320×640 / 430×760).
+검수 이미지: `C:/Users/user/ddong-fx-work/ted-cube/blast_fill.png` (320×640 / 430×760).
 
 ---
 
@@ -1510,7 +1515,7 @@ HUD 는 `depth 9~10`, 파열은 `depth 210` 이라 **짧은 화면에서는 0.8�
 
 ## 19.3 검수
 
-`creative/_fx/ted-cube/alpha_check.png` — 390×640 화면에 **똥과 플레이어를 큐브 뒤에**
+`C:/Users/user/ddong-fx-work/ted-cube/alpha_check.png` — 390×640 화면에 **똥과 플레이어를 큐브 뒤에**
 두고 합성했다 (큐브 정중앙 뒤에도 똥 하나). 줄 순서: forge(어두움) / forge(밝음) /
 blast(어두움) / blast(밝음).
 
@@ -1652,7 +1657,7 @@ export const CUBE_VARIANT: CubeVariant = 'none';   // → 'artwork' | 'pixel' | 
 
 하네스 **33검사 전부 PASS**. `.\scripts\verify.ps1` **PASS**.
 원화 diff 그대로 (시트 파일 불변) — IoU 0.933–0.991 / 색적중 1.000.
-검수 이미지: `creative/_fx/ted-cube/spread_check.png` — **하네스가 실제로 돌린 좌표**를
+검수 이미지: `C:/Users/user/ddong-fx-work/ted-cube/spread_check.png` — **하네스가 실제로 돌린 좌표**를
 `build/cube/spread_trace.json` 으로 덤프해 그린 것이다 (리플리카가 아니다).
 
 ## §21 퍼질 때는 머리가 앞선다
@@ -1683,7 +1688,7 @@ B(원점은 발에 두고 판정 좌표만 앞으로 밀기)가 싸 보이지만
 ### 양자화는 안 썼다
 
 말 시트는 96×128 을 54×72 로 **줄여서** 그린다(확대가 아니다). 임의 각도로 돌려도
-계단이 안 생기는 것을 `creative/_fx/ted-cube/head_zoom.png` (5배 확대)로 확인했다.
+계단이 안 생기는 것을 `C:/Users/user/ddong-fx-work/ted-cube/head_zoom.png` (5배 확대)로 확인했다.
 양자화하면 오히려 머리가 진행 방향에서 틀어지므로 기본은 `spreadRotSteps: 0`.
 필요하면 8/16 방향으로 바꿀 수 있게 손잡이만 남겼다 (`spreadRotFollow` 도 같이 —
 아래로 가는 말이 뒤집히는 게 거슬리면 1 미만으로 낮춘다).

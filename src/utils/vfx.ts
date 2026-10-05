@@ -80,9 +80,6 @@ export const FX_PARTICLE_ASSETS: Record<string, string> = {
   fx_proc_ring:   'proc-ring.png',
   fx_proc_streak: 'proc-streak.png',
   fx_proc_shard:  'proc-shard.png',
-  // 픽셀 판본의 '말 → 칸' 전환 조각. 채택 팔레트로 그린 칸 하나 (32×32, 합쳐서 8KB)
-  fx_px_cubie_ivory: 'px-cubie-ivory.png',
-  fx_px_cubie_dark:  'px-cubie-dark.png',
 };
 
 const FX_SHEET_DIR = 'assets/fx/sheets/';
@@ -173,100 +170,7 @@ const FX_SHEETS: FxSheetAsset[] = [
     defaultScale: 0.5, defaultDepth: 121, blend: 'add', maxConcurrent: 3, preload: false },
   { fxKey: 'auraRing', file: 'ring_fire_421x425.png', frameCount: 30, frameRate: 30,
     defaultScale: 0.5, defaultDepth: 120, blend: 'add', maxConcurrent: 2, preload: false },
-  // 체스 큐브 (테드 전용) — 합쳐서 12.56MB 다. 전원에게 올리면 안 쓰는 사람의 VRAM 까지 먹는다.
-  // `preloadFxSheet(scene, 'cubeBurst')` 한 번이면 아래 세 장이 같이 올라간다(FX_SHEET_GROUPS).
-  { fxKey: 'cubeForge', file: 'cubeforge_192x192.png', frameCount: 36, frameRate: 30,
-    defaultScale: 1, defaultDepth: 210, blend: 'normal', maxConcurrent: 1, preload: false },
-  { fxKey: 'cubeBlast', file: 'cubeblast_256x256.png', frameCount: 24, frameRate: 30,
-    defaultScale: 1, defaultDepth: 210, blend: 'normal', maxConcurrent: 1, preload: false },
-  { fxKey: 'cubeCore', file: 'cubecore_128x128.png', frameCount: 24, frameRate: 30,
-    defaultScale: 1.5, defaultDepth: 212, blend: 'add', maxConcurrent: 1, preload: false },
-  // 픽셀 판본 — 프레임 수·크기·길이가 3D 판본과 **똑같다**. 시트만 갈아 끼우는 구조라
-  // 타임라인 상수도 TedAbility 의 로직도 손대지 않는다.
-  // 가산 발광층(cubeCore)이 없다: 픽셀아트의 빛은 부드러운 번짐이 아니라 팔레트 단계와
-  // 각진 광선으로 만들고, 그건 이미 시트 안에 그려져 있다. 그만큼 VRAM 도 1.50MB 줄었다
-  // 원화 판본 — composer 가 편집한 ChatGPT 원화를 `scripts/cube/artwork.py` 가
-  // **정수 자르기·정수 평행이동·정수배 축소만으로** 조립한 것이다. 그림을 새로 그리지 않는다
-  { fxKey: 'cubeArtForge', file: 'cubeartforge_192x192.png', frameCount: 36, frameRate: 30,
-    defaultScale: 1, defaultDepth: 210, blend: 'normal', maxConcurrent: 1, preload: false },
-  // 파열만 확대해서 쓴다 (화면 가로를 채운다) → NEAREST. forge 는 0.72 로 **줄여** 쓰므로
-  // 선형이 낫다 (NEAREST 로 줄이면 픽셀이 불규칙하게 빠져 지글거린다)
-  { fxKey: 'cubeArtBlast', file: 'cubeartblast_256x256.png', frameCount: 24, frameRate: 30,
-    defaultScale: 1, defaultDepth: 210, blend: 'normal', maxConcurrent: 1, preload: false,
-    nearest: true },
-  { fxKey: 'cubePxForge', file: 'cubepxforge_192x192.png', frameCount: 36, frameRate: 30,
-    defaultScale: 1, defaultDepth: 210, blend: 'normal', maxConcurrent: 1, preload: false },
-  { fxKey: 'cubePxBlast', file: 'cubepxblast_256x256.png', frameCount: 24, frameRate: 30,
-    defaultScale: 1, defaultDepth: 210, blend: 'normal', maxConcurrent: 1, preload: false,
-    nearest: true },
 ];
-
-/**
- * **큐브 연출 판본 전환 지점.** 이 한 줄이 전부다 — 재생도, 프리로드도 여기서 갈린다.
- *
- * - `'none'`    — **기본.** 큐브를 쓰지 않는다. 테드의 마무리는 말이 직접 퍼지는 연출이고
- *                 큐브 시트는 **로딩조차 하지 않는다** (VRAM 11.06MB 절약).
- *                 에셋·스크립트·문서는 전부 남아 있으므로 아래 값만 바꾸면 되살아난다
- * - `'artwork'` — 채택된 ChatGPT 원화를 그대로 조립한 판본.
- *                 `scripts/cube/artwork.py` 가 정수 자르기·정수 평행이동·정수배 축소만으로
- *                 만든다 (그림을 새로 그리지 않는다). 검증: `scripts/cube/verify-artwork.py`
- * - `'pixel'`   — 원화의 팔레트만 쓰고 형태는 코드로 그린 절차 판본 (`scripts/cube/pixel.py`).
- *                 사람이 퇴짜 놓은 판본이다. 비교용으로만 보존
- * - `'render'`  — 3D 렌더 판본 (`scripts/cube/render.py`). 보존용
- *
- * 어느 값이든 프레임 수·길이가 같아서 **시트만 갈아 끼운다** — 타임라인 상수도
- * `TedAbility` 의 로직도 건드리지 않는다.
- */
-export type CubeVariant = 'none' | 'artwork' | 'pixel' | 'render';
-
-interface CubeVariantDef {
-  /** `null` 이면 큐브를 쓰지 않는다 — 시트도 안 올리고 재생도 안 한다 */
-  forge: FxKey | null;
-  blast: FxKey | null;
-  /** 가산 발광 보강 시트. 픽셀 판본에는 없다 */
-  core: FxKey | null;
-  /**
-   * 파열 파동. 픽셀 계열 판본만 쓴다 — 3D 판본에는 부드러운 링(`softFx`)이 따로 있어서
-   * 둘을 같이 얹으면 화풍이 섞인다
-   */
-  wave: FxKey | null;
-  /**
-   * 코드가 얹는 **부드러운** 레이어(발광 링·충격파·불똥·연기)를 켤지.
-   * 픽셀 판본에서는 끈다 — 그라데이션 파티클이 하드 엣지 옆에 붙으면 화풍이 깨지고,
-   * 그 역할(방사 광선·별빛)은 이미 시트에 각진 형태로 그려져 있다.
-   */
-  softFx: boolean;
-}
-
-const CUBE_VARIANTS: Record<CubeVariant, CubeVariantDef> = {
-  none: { forge: null, blast: null, core: null, wave: 'cubeWave', softFx: false },
-  artwork: { forge: 'cubeArtForge', blast: 'cubeArtBlast', core: null, wave: 'cubeWave', softFx: false },
-  pixel: { forge: 'cubePxForge', blast: 'cubePxBlast', core: null, wave: 'cubeWave', softFx: false },
-  render: { forge: 'cubeForge', blast: 'cubeBlast', core: 'cubeCore', wave: null, softFx: true },
-};
-
-export const CUBE_VARIANT: CubeVariant = 'none';
-
-/** 판본 구성. 호출부(TedAbility)는 키를 직접 쓰지 않고 여기만 본다 */
-export const CUBE_SHEETS: CubeVariantDef = CUBE_VARIANTS[CUBE_VARIANT];
-
-/**
- * **키 하나가 시트 여러 장을 뜻하는 경우.**
- *
- * 연출 하나를 시간으로 쪼개 여러 시트로 굽는 일이 생긴다 (체스 큐브: 모임·충전은 작은
- * 프레임, 파열만 큰 프레임 — §5.1). 캐릭터 정의는 "이 캐릭터는 큐브 연출을 쓴다" 까지만
- * 알면 되고, **그게 몇 장인지는 이 레이어가 정한다.** 그래서 캐릭터 쪽 목록을 건드리지 않고
- * 시트 구성을 바꿀 수 있다.
- *
- * §5.3 의 VRAM 손잡이도 여기서 잡는다 — `cubeCore` 한 줄을 빼면 1.50MB 가 준다
- * (가산 보강층이 빠지고 어두운 배경에서 발광이 조금 얌전해진다. 그림은 그대로 성립한다).
- */
-const FX_SHEET_GROUPS: Partial<Record<FxKey, FxKey[]>> = {
-  // 파동(`cubeWave`)은 절차 생성이라 여기 없다 — 첫 재생 때 캔버스에서 만들어진다.
-  // 판본이 `'none'` 이면 **빈 배열**이라 큐브 시트가 한 장도 안 올라간다
-  cubeBurst: [CUBE_SHEETS.forge, CUBE_SHEETS.blast, CUBE_SHEETS.core]
-    .filter((k): k is FxKey => k !== null),
-};
 
 /**
  * **같이 미리 구워 둘 절차 생성 이펙트.**
@@ -277,7 +181,7 @@ const FX_SHEET_GROUPS: Partial<Record<FxKey, FxKey[]>> = {
  * 시트를 미리 올릴 때 **같이 구워 둔다.**
  */
 const FX_WARM_GROUPS: Partial<Record<FxKey, FxKey[]>> = {
-  cubeBurst: ['cubeWave'],
+  cubeWave: ['cubeWave'],
 };
 
 /**
@@ -304,11 +208,6 @@ export function preloadFxSheet(scene: Phaser.Scene, key: FxKey): void {
   // 이 연출이 같이 쓰는 절차 이펙트를 **지금** 구워 둔다 (발동 프레임에 굽지 않도록)
   for (const k of FX_WARM_GROUPS[key] ?? []) warmFx(scene, k);
 
-  const group = FX_SHEET_GROUPS[key];
-  if (group) {
-    for (const k of group) preloadFxSheet(scene, k);
-    return;
-  }
   const sheet = FX_SHEETS.find(s => s.fxKey === key);
   if (!sheet) return;
   const size = parseFrameSize(sheet.file);
@@ -414,11 +313,7 @@ export type FxKey =
   | 'foxTail'                            // 시트 — 구미호 꼬리 (털이 살랑이는 루프)
   | 'kBeam' | 'kBeamSs'                  // 시트 — K 에너지파 (기본 / 초사이언, 전기 포함)
   | 'legacyFlame' | 'legacyBurn'         // 시트 — 레거시 불꽃 / 소각 폭발
-  | 'cubeArtForge' | 'cubeArtBlast'      // 시트 — 체스 큐브 **원화 판본** (채택 원화를 그대로 조립)
-  | 'cubeWave'                           // 절차 생성 — 파열 파동 (흑백 반투명 에너지 띠)
-  | 'cubePxForge' | 'cubePxBlast'        // 시트 — 체스 큐브 절차 픽셀 판본 (보존)
-  | 'cubeForge' | 'cubeBlast' | 'cubeCore'  // 시트 — 체스 큐브 3D 렌더 판본 (보존)
-  | 'cubeBurst';                         // (구) 절차 생성 큐브 시트. 교체됨 — 로딩하지 않는다
+  | 'cubeWave';                          // 절차 생성 — 테드 퍼짐 파동 (흑백 반투명 에너지 띠)
 
 /** 프레임 하나를 캔버스에 그리는 함수. t 는 0(첫 프레임) ~ 1(마지막) 정규화 진행도 */
 type FrameDrawer = (ctx: CanvasRenderingContext2D, t: number, w: number, h: number) => void;
@@ -574,29 +469,6 @@ const FX_REGISTRY: Record<FxKey, FxDefinition> = {
     frameWidth: 192, frameHeight: 192, frameCount: 8, frameRate: 22,
     defaultScale: 1, defaultDepth: 200, blend: 'normal', maxConcurrent: 6,
   },
-  // ── 체스 큐브 (테드) ──
-  // 하나의 연출을 시간으로 쪼갠 두 시트 + 가산 보강 한 장이다.
-  // **모임·충전에는 큰 프레임이 필요 없다** — 전 구간을 256px 로 통일하면 15.7MB 인데,
-  // 그 절반이 빈 알파다. 시간으로 나누면 5.06 + 6.00 = 11.06MB 로 끝난다.
-  // 색이 그림에 구워져 있어(상아·검정·금) 착색하지 않는다.
-  cubeForge: {
-    textureKey: 'fxsheet_cubeForge',
-    frameWidth: 192, frameHeight: 192, frameCount: 36, frameRate: 30,
-    defaultScale: 1, defaultDepth: 210, blend: 'normal', maxConcurrent: 1,
-  },
-  cubeBlast: {
-    textureKey: 'fxsheet_cubeBlast',
-    frameWidth: 256, frameHeight: 256, frameCount: 24, frameRate: 30,
-    defaultScale: 1, defaultDepth: 210, blend: 'normal', maxConcurrent: 1,
-  },
-  // 절반 해상도 — 발광은 저주파라 2배로 늘려 붙여도 뭉갬이 안 보인다 (VRAM 1/4)
-  cubeCore: {
-    textureKey: 'fxsheet_cubeCore',
-    frameWidth: 128, frameHeight: 128, frameCount: 24, frameRate: 30,
-    // 128px 프레임이 forge 의 192px 프레임과 **같은 월드 범위**를 담는다 → 1.5배로 띄워야
-    // 본체와 정확히 겹친다 (해상도만 절반이지 크기는 같다)
-    defaultScale: 1.5, defaultDepth: 212, blend: 'add', maxConcurrent: 1,
-  },
   // 파열 파동 — **절차 생성**. 시트가 아니라 캔버스에 그려서 만든다 (다운로드 0, 텍스처 1장).
   // `shockwave` 키와 따로 두는 이유: 그건 구미·K·무기가 쓰는 공용 키라 손대면 안 된다.
   cubeWave: {
@@ -604,34 +476,6 @@ const FX_REGISTRY: Record<FxKey, FxDefinition> = {
     frameWidth: 160, frameHeight: 160, frameCount: 9, frameRate: 30,
     defaultScale: 1, defaultDepth: 214, blend: 'normal', maxConcurrent: 6,
     draw: drawCubeWaveFrame,
-  },
-  // 원화 판본. 세 판본 모두 프레임 수·크기가 같아서 시트만 갈아 끼우면 된다
-  cubeArtForge: {
-    textureKey: 'fxsheet_cubeArtForge',
-    frameWidth: 192, frameHeight: 192, frameCount: 36, frameRate: 30,
-    defaultScale: 1, defaultDepth: 210, blend: 'normal', maxConcurrent: 1,
-  },
-  cubeArtBlast: {
-    textureKey: 'fxsheet_cubeArtBlast',
-    frameWidth: 256, frameHeight: 256, frameCount: 24, frameRate: 30,
-    defaultScale: 1, defaultDepth: 210, blend: 'normal', maxConcurrent: 1, nearest: true,
-  },
-  // 절차 픽셀 판본. 3D 판본과 프레임 수·크기가 같다
-  cubePxForge: {
-    textureKey: 'fxsheet_cubePxForge',
-    frameWidth: 192, frameHeight: 192, frameCount: 36, frameRate: 30,
-    defaultScale: 1, defaultDepth: 210, blend: 'normal', maxConcurrent: 1,
-  },
-  cubePxBlast: {
-    textureKey: 'fxsheet_cubePxBlast',
-    frameWidth: 256, frameHeight: 256, frameCount: 24, frameRate: 30,
-    defaultScale: 1, defaultDepth: 210, blend: 'normal', maxConcurrent: 1, nearest: true,
-  },
-  // (구) 절차 생성 큐브. 파일은 남겨 두되 로딩하지 않는다 — 위 판본들로 교체됐다
-  cubeBurst: {
-    textureKey: 'fxsheet_cubeBurst',
-    frameWidth: 192, frameHeight: 192, frameCount: 40, frameRate: 24,
-    defaultScale: 1, defaultDepth: 210, blend: 'normal', maxConcurrent: 2,
   },
 };
 
