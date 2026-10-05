@@ -57,9 +57,38 @@ STATE_FILE = STATE_FILES["all"]  # main() 이 --queues 에 맞춰 바꾼다
 COMFY_CANDIDATES = ["http://127.0.0.1:8188", "http://127.0.0.1:8000"]
 COMFY = os.environ.get("COMFYUI_SERVER", COMFY_CANDIDATES[0]).rstrip("/")
 
-BUILDER = "builder"        # w3 제작·Claude — 컨셉·생성·심사 업로드·능력 제안
-INTEGRATOR = "integrator"  # w2 구현·Claude — 게임 반영·검증
+BUILDER = "builder"        # w3 제작·Claude — 컨셉·일러스트·능력 제안
+DEFAULT_IMAGER = BUILDER   # 이미지도 builder 가 뽑는다 (docs/team/builder.md)
+IMAGER = DEFAULT_IMAGER    # 이미지 담당. main() 이 --imager 로 바꾼다
+INTEGRATOR = "dev"         # w2 개발·Claude — 게임 반영·검증
 COMPOSER = "composer"      # w8 음악·Claude — 가사·Suno·곡 후보 업로드
+
+# **이미지 담당은 Codex 일 수도 Claude 일 수도 있다** — `--imager <에이전트>` 로 고른다.
+# 둘은 지시문이 달라진다:
+#   1. 슬래시 명령(`/create-character`)은 Claude 전용이다. Codex 에게 스킬을 시키려면
+#      **파일 경로**를 가리켜야 한다 (마크다운이라 Codex 도 읽는다).
+#   2. Codex 에는 Claude 프로젝트 메모리가 안 실린다 — 화풍 규칙을 매번 물려야 한다.
+# 그래서 **종류를 묻지 말고 herdr 에게 물어본다.** 이름만 보고 추측하면(=`imager` 면
+# Codex) 사람이 그 이름에 Claude 를 올리는 순간 어긋난다.
+IMAGER_PREAMBLE_CODEX = [
+    "먼저 `.claude/skills/create-character/SKILL.md` 를 읽고 그 절차를 그대로 따라라 "
+    "(노출 기준·표현 축·화각·후보 변주 폭이 전부 거기 적혀 있다).",
+    "이어서 `CLAUDE.md` 의 '이펙트 화풍' 절도 읽어라 — 이 저장소의 화풍 기준이다.",
+    "규칙 전문을 이 지시문에 옮겨 적지 않는다. 베끼면 원본이 바뀔 때 낡는다.",
+]
+IMAGER_PREAMBLE_CLAUDE = [
+    "`/create-character` 스킬의 절차를 그대로 따라라 "
+    "(노출 기준·표현 축·화각·후보 변주 폭이 전부 거기 적혀 있다).",
+    "규칙 전문을 이 지시문에 옮겨 적지 않는다. 베끼면 원본이 바뀔 때 낡는다.",
+]
+
+
+def imager_preamble() -> list[str]:
+    """이미지 담당의 종류에 맞는 지시문 머리말. 종류를 모르면 Codex 쪽(경로 안내)을
+    쓴다 — Claude 도 경로는 읽을 수 있으니 틀려도 덜 해롭다."""
+    return IMAGER_PREAMBLE_CLAUDE if agent_kind(IMAGER) == "claude" else IMAGER_PREAMBLE_CODEX
+
+
 AGENT_TIMEOUT_MS = 1_800_000  # 30분
 
 # 작업을 하나 처리하면 곧바로 다음 것을 본다 (아래 GUARD 만큼만 숨 고른다).
@@ -164,6 +193,17 @@ def agent_status(name: str) -> str | None:
         return None
 
 
+def agent_kind(name: str) -> str | None:
+    """에이전트 종류("claude"/"codex"). 없거나 못 읽으면 None."""
+    code, out = herdr("agent", "get", name)
+    if code != 0:
+        return None
+    try:
+        return json.loads(out)["result"]["agent"]["agent"]
+    except Exception:
+        return None
+
+
 def agent_free(name: str) -> bool:
     status = agent_status(name)
     if status is None:
@@ -227,8 +267,6 @@ def _character_jobs(env: dict, state: dict) -> list[dict]:
         log(f"배치 조회 실패: {e}")
         batches = []
 
-    listing = "\n".join(f"  - {b['batch']} : {b['label']}" for b in batches[:20])
-
     for r in reversed(reqs):  # 오래된 것부터
         theme = r.get("theme") or "it"
         if theme == "free":
@@ -239,27 +277,33 @@ def _character_jobs(env: dict, state: dict) -> list[dict]:
             naming = "이름은 개발 용어에서 고른다 (루트·글리치·노이즈·세션·포크 계열)."
 
         if r.get("kind") == "auto" or not r.get("text", "").strip():
-            concept = ("컨셉은 지정되지 않았다. 네가 직접 잡아라. src/utils/character.ts 의 기존 "
-                       "캐릭터와 아래 '진행 중인 배치' 양쪽 모두와 이름·색·모티프가 겹치지 않게 한다. "
-                       + naming)
+            # 중복 체크는 넣지 않는다 (2026-09-17, 사람 지시). 기존 캐릭터·진행 중인 배치와
+            # 겹치는지는 사람이 후보를 보고 판단한다 — 목록도 지시문에 붙이지 않는다.
+            concept = "컨셉은 지정되지 않았다. 네가 직접 잡아라. " + naming
         else:
             concept = f"요청 내용: {r['text']}"
-        if listing:
-            concept += "\n\n진행 중인 배치 (아직 게임 등록 전):\n" + listing
+
+        # 심사실에서 체크포인트를 고를 수 있다. 고르지 않았으면 아무 말도 하지 않고
+        # 생성 쪽이 bindings.json 의 기본값을 쓰게 둔다.
+        if r.get("model"):
+            concept += ("\n\n체크포인트를 `" + r["model"] + "` 로 지정했다 — "
+                        "`comfyui-generate.py --models " + r["model"] + "` 로 생성해라.")
 
         jobs.append({
-            "agent": BUILDER,
+            "agent": IMAGER,
             "kind": "request",
             "id": r["id"],
             "needs_comfy": True,
             "pre": lambda rid=r["id"]: mark_request(rid, "pick"),
             "text": "\n".join([
-                "심사실에 새 컨셉 요청이 들어왔다. /create-character 스킬을 따라 처리해라.",
+                "심사실에 새 컨셉 요청이 들어왔다. 후보 일러스트를 생성해라.",
+                *imager_preamble(),
                 f"요청 id: {r['id']}",
                 concept,
-                "후보는 4장 생성한다. 업로드 후 PushNotification 으로 심사 링크를 알리고,",
-                f"`python scripts/review-requests.py --done {r['id']} --batch <배치id>` 로 요청을 닫아라.",
-                "판정은 사람에게 맡긴다.",
+                "후보는 4장 생성한다. **심사실에 올리지 않는다** — ComfyUI 출력 디렉터리에 두고,",
+                "출력 경로와 파일 목록(장별 카메라·앵글·시드)을 보고한 뒤 거기서 멈춘다.",
+                f"`python scripts/review-requests.py --done {r['id']}` 로 요청을 닫아라.",
+                "판정은 사람이 직접 보고 말로 준다.",
             ]),
         })
 
@@ -281,14 +325,20 @@ def _character_jobs(env: dict, state: dict) -> list[dict]:
             body = ["  selected 를 creative/<id>/selected.png 로 확정하고 "
                     "production/<id>.yaml 을 SUCCESS 로 갱신해라.",
                     "  능력 제안은 다음 지시에서 따로 시킨다. 여기서는 확정까지만."]
+        # **한 작업이 두 가지 일을 겸한다.** revise 는 이미지를 다시 뽑는 일이고,
+        # accept·reject 는 yaml 을 갱신하는 장부 일이다. 담당이 갈려야 한다.
+        # 조건을 새로 쓰지 않고 needs_comfy 와 **같은 값**을 쓴다 — 따로 쓰면 둘이
+        # 어긋나 'ComfyUI 를 기다리는데 정작 이미지 담당이 아닌' 상태가 난다.
+        regen = t == "revise"
         jobs.append({
-            "agent": BUILDER,
+            "agent": IMAGER if regen else BUILDER,
             "kind": "decision",
             "id": b["batch"],
-            "needs_comfy": t == "revise",
+            "needs_comfy": regen,
             "state_key": "handled_batches",
             "text": "\n".join([
                 f"심사 배치 `{b['batch']}` 의 결정: **{t}**",
+                *(imager_preamble() if regen else []),
                 f"`python scripts/review-status.py --id {b['batch']}` 로 상세와 피드백을 읽어라.",
                 *body,
                 "처리 결과를 PushNotification 으로 한 줄 알려라.",
@@ -513,18 +563,24 @@ def main() -> int:
                    help="고정 주기(초). 생략하면 자동 (처리 직후 즉시 · 유휴 120)")
     p.add_argument("--once", action="store_true", help="한 번만 확인하고 종료")
     p.add_argument("--no-clean", action="store_true", help="로컬 원본 정리 끄기")
+    p.add_argument("--imager", default=DEFAULT_IMAGER, metavar="에이전트",
+                   help=f"이미지(생성·재생성)를 맡을 Herdr 에이전트 이름. 기본 {DEFAULT_IMAGER}. "
+                        "Claude 로 돌리려면 Claude 에이전트 이름을 준다 (예: --imager builder). "
+                        "지시문은 herdr 이 보고하는 종류에 맞춰 자동으로 갈린다")
     p.add_argument("--queues", choices=["all", "character", "music"], default="all",
                    help="맡을 라인. character=컨셉·심사·반영 / music=곡 주문 "
                         "(둘로 나눠 돌리면 서로를 기다리지 않는다)")
     a = p.parse_args()
 
     # 큐를 나눠 돌 때는 처리 표시도 나눠 쓴다
-    global STATE_FILE
+    global STATE_FILE, IMAGER
     STATE_FILE = STATE_FILES[a.queues]
+    IMAGER = a.imager
 
     env = load_env()
-    who = {"all": f"생성={BUILDER} 구현={INTEGRATOR} 음악={COMPOSER}",
-           "character": f"생성={BUILDER} 구현={INTEGRATOR}",
+    kind = agent_kind(IMAGER) or "없음"
+    who = {"all": f"이미지={IMAGER}({kind}) 제작={BUILDER} 구현={INTEGRATOR} 음악={COMPOSER}",
+           "character": f"이미지={IMAGER}({kind}) 제작={BUILDER} 구현={INTEGRATOR}",
            "music": f"음악={COMPOSER}"}[a.queues]
     log(f"워커 시작 [{a.queues}] · {who} · "
         f"주기 {a.interval or f'즉시/{INTERVAL_STUCK}/{INTERVAL_IDLE}'}초")
