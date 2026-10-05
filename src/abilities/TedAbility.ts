@@ -655,6 +655,8 @@ export class TedAbility extends BaseAbility {
   /** ink — 수묵 컷신 오브젝트. 배치·칸·밝기는 매 프레임 layoutInk 가 시각으로 정한다 (트윈 없음) */
   private ink: {
     paper: Phaser.GameObjects.Rectangle; dark: Phaser.GameObjects.Rectangle; flash: Phaser.GameObjects.Rectangle;
+    /** ⑤→① 이음새 — 눈빛 폭발 정점이 번지는 화선지 색 덮개 (눈 세트·얼굴 위) */
+    paperCover: Phaser.GameObjects.Rectangle;
     form: Phaser.GameObjects.Sprite; smoke: Phaser.GameObjects.Sprite; stroke: Phaser.GameObjects.Sprite;
     splash: Phaser.GameObjects.Sprite; swirl: Phaser.GameObjects.Sprite; main: Phaser.GameObjects.Sprite;
     eyes: Phaser.GameObjects.Sprite;
@@ -1681,11 +1683,10 @@ export class TedAbility extends BaseAbility {
   }
 
   // ── 수묵 (ink) ─────────────────────────────────────────────────
-  // 장면 1 화선지 붓질 → 먹 튀김과 함께 형체 → 먹 연기 반복
-  // 장면 2 먹 소용돌이가 삼킴 → 어둠 속 얼굴이 밝아지며 눈을 뜬다 (감은·실눈 칸은 어둠에 묻힌다)
-  // 장면 3 얼굴이 돌며 한 점으로 → 검정      장면 4 흰 눈매가 그려지고 맥동
-  // 장면 5 눈 사이 빛 구슬 팽창 → 섬광 → 먹 튀김과 함께 풀컬러 테드
-  // 장면 6 바람 반복 → 큐브 손동작 → 결과 컷 (확정·효과는 공통 ascentReveal·ascentEffect) → 걷힘
+  // 순서 (대표 지시 2026-10-05) — 박자는 TED_PARAMS.ink 머리 주석
+  // 검정 위 흰 눈 세트 → 얼굴이 켜지며 세트가 녹아듦 → 눈빛 폭발이 화선지로 번짐 (paperCover)
+  // → 화선지 붓질·먹 튀김·형체·연기 → 와이프 → 소용돌이가 삼켜 검정 → 섬광·각성
+  // → 섬광·풀컬러 테드 → 바람 → 큐브 손동작 (확정·효과는 ascentReveal·ascentEffect) → 걷힘
   // 오브젝트 12개를 발동 때 한 번 만들고, 매 프레임 **칸·위치·알파만** 바꾼다 (필터·트윈·생성 없음).
   // 박자를 시각(ta)으로 계산하므로 프레임이 건너뛰어도 박자가 밀리지 않는다
 
@@ -1741,6 +1742,7 @@ export class TedAbility extends BaseAbility {
       irisGlow,
       irisHaze,
       splash: spr(S.splash, D + 0.6),
+      paperCover: rect(S.paper, D + 0.65),
       flash: rect(0xffffff, D + 0.7),
       curtainL: rect(S.paper, D + 0.9).setVisible(false),
       curtainR: rect(S.paper, D + 0.9).setVisible(false),
@@ -1897,16 +1899,21 @@ export class TedAbility extends BaseAbility {
     // 흰 눈매 띠 배율 (fit-width)
     const ek = sw / S.eyesW;
 
-    // ── 바탕 — 화선지(장면 1) → 검정(장면 2~6) → 걷힘. 화면 전체
-    this.inkRect(ink.paper, 0, 0, W, H).setAlpha(ta < fullDark ? span(0, K.paperInMs) : 0);
-    this.inkRect(ink.dark, 0, 0, W, H).setAlpha(span(K.darkAt, fullDark) * outA);
+    // ── 바탕 — 검정(흰 눈·얼굴) → 화선지(장면 1·와이프·소용돌이) → 검정(각성~큐브) → 걷힘. 화면 전체
+    const paperOn = ta >= K.paperAt && ta < fullDark;
+    this.inkRect(ink.paper, 0, 0, W, H).setAlpha(paperOn ? 1 : 0);
+    this.inkRect(ink.dark, 0, 0, W, H).setAlpha(ta < K.paperAt ? span(0, K.blackInMs) : span(K.darkAt, fullDark) * outA);
+    // ⑤→① 이음새 — 눈빛 폭발 정점이 화선지 색으로 번지는 덮개 (눈 세트·얼굴 위, ease-in). 흰 섬광이 아니다
+    const coverU = ta < K.paperAt ? span(K.paperAt - K.glowToPaperMs, K.paperAt) : 0;
+    this.inkRect(ink.paperCover, 0, 0, W, H).setAlpha(coverU * coverU);
     // 커튼 — 무대 양옆. 모든 층 위라 소용돌이·먹·패닝이 무대 밖으로 번지지 않는다
     const side = st.x;
     if (side > 0.5) {
       const p = Phaser.Display.Color.IntegerToColor(S.paper);
-      const k = 1 - span(K.darkAt, fullDark);         // 화선지 → 검정
+      // 검정 → (덮개만큼) 화선지 → 화선지 → (darkAt) 검정
+      const k = ta < K.paperAt ? coverU * coverU : paperOn ? 1 - span(K.darkAt, fullDark) : 0;
       const col = Phaser.Display.Color.GetColor(Math.round(p.red * k), Math.round(p.green * k), Math.round(p.blue * k));
-      const a = ta < fullDark ? Math.max(span(0, K.paperInMs), span(K.darkAt, fullDark)) : outA;
+      const a = ta < K.paperAt ? span(0, K.blackInMs) : paperOn ? 1 : outA;
       this.inkRect(ink.curtainL, 0, 0, side, H).setFillStyle(col, 1).setAlpha(a).setVisible(true);
       this.inkRect(ink.curtainR, W - side, 0, side, H).setFillStyle(col, 1).setAlpha(a).setVisible(true);
     } else {
@@ -1972,9 +1979,9 @@ export class TedAbility extends BaseAbility {
 
     // ── 무대 가득 그림 (main) — 얼굴(장면 2·3) · s4 · s5 · s6 · 결과
     const m = ink.main;
-    // 3 — 얼굴(s2 다 뜬 칸 하나)이 눈동자 둘레로 어둠에서 켜짐 (섬광이 덮을 때까지) · 각성(sC) — 섬광 밑에서 켜져 꺼짐까지
+    // 3 — 얼굴(s2 다 뜬 칸 하나)이 눈동자 둘레로 어둠에서 켜짐 (화선지 덮개가 다 찰 때까지) · 각성(sC) — 섬광 밑에서 켜져 꺼짐까지
     const faceLit = ease01(span(K.faceAt, K.faceLitTo));
-    const faceC = ta >= K.faceAt && ta < K.awakeAt;
+    const faceC = ta >= K.faceAt && ta < K.paperAt;
     const faceB = ta >= K.awakeAt && ta < K.revealAt;     // 각성 — 섬광이 덮어 컬러로 넘어갈 때까지
     if (faceC || faceB) {
       let ff: { key: string; frame: number };
@@ -1985,7 +1992,7 @@ export class TedAbility extends BaseAbility {
         ff = inkFaceFrame(S.faceOpenFrame);
         eye = S.faceEyeMid;
         v = Math.round(255 * faceLit);                // 곱셈 틴트(필터 아님) 검정 → 원래 밝기
-        push = 1 + K.facePush * span(K.faceAt, K.awakeFlashAt);
+        push = 1 + K.facePush * span(K.faceAt, K.paperAt);
       } else {
         // 각성 — 0칸 유지 → 먹 터짐 1~4칸 한 바퀴 → 0칸 → 섬광
         const t = ta - K.awakeAt - K.awakeHoldMs;
@@ -2025,8 +2032,8 @@ export class TedAbility extends BaseAbility {
     // ── 흰 눈 세트 (눈동자 + s3 눈매·눈썹) — 한 세트로 움직인다
     //    2 검정 위 s3 자리에서 눈동자가 켜지고 → 그 둘레로 눈매·눈썹이 그어짐 → 일렁임
     //    3 세트가 통째로(두 점 닮음 변환: 중점 이동·배율·기울기) 얼굴 두 눈 자리로 옮겨 가며 줄고, 얼굴이 켜지는 만큼 녹아듦
-    //    4 눈빛이 확 밝아짐(그동안 각성 얼굴 두 눈 자리로 살짝 맞춤) → 섬광 → 각성
-    const setOn = ta >= K.pupilAt && ta < K.awakeAt;
+    //    4 눈빛이 확 밝아짐(그동안 각성 얼굴 두 눈 자리로 살짝 맞춤) → 그 정점이 화선지로 번짐 (paperAt 에 꺼짐)
+    const setOn = ta >= K.pupilAt && ta < K.paperAt;
     if (setOn) {
       const ef = step(K.eyesAt, K.eyesFrameMs, 8);
       const drawn = K.eyesAt + 8 * K.eyesFrameMs;
@@ -2038,9 +2045,9 @@ export class TedAbility extends BaseAbility {
       // 출발 — s3 두 홍채 (화면) / 도착 — 얼굴 두 눈 (s2 다 뜬 칸 → 4 동안 각성 sC)
       const from = S.iris.map((p) => ({ x: anchorX + (p.x - S.eyesDot.x) * es, y: anchorY + (p.y - S.eyesDot.y) * es }));
       const s2Face = inkFaceFrame(S.faceOpenFrame);
-      const s2Fit = this.inkFit(s2Face.key, s2Face.frame, sw, sh, 1 + K.facePush * span(K.faceAt, K.awakeFlashAt));
+      const s2Fit = this.inkFit(s2Face.key, s2Face.frame, sw, sh, 1 + K.facePush * span(K.faceAt, K.paperAt));
       const sCFit = this.inkFit(S.awake, 0, sw, sh);
-      const shiftU = ease01(span(K.pupilShiftAt, K.awakeFlashAt));
+      const shiftU = ease01(span(K.pupilShiftAt, K.paperAt));
       const to = [0, 1].map((i) => lerp(toScreen(S.faceEyes[i], s2Fit), toScreen(S.awakeEyes[i], sCFit), shiftU));
       // 두 점 닮음 변환 — 세트 전체(눈매 띠·눈동자·발광·아지랑이)에 같은 변환을 건다
       const mu = faceLit;                              // 옮겨 감 = 얼굴 켜짐 박자
@@ -2060,7 +2067,7 @@ export class TedAbility extends BaseAbility {
         return { x: mm.x + k * (dx * cr - dy * sr), y: mm.y + k * (dx * sr + dy * cr) };
       };
       const gin = span(K.pupilAt, K.pupilAt + K.irisOnMs);
-      const surge = span(K.pupilSurgeAt, K.awakeFlashAt) ** 2;   // 4 — 확 밝아짐 (점점 빨라진다)
+      const surge = span(K.pupilSurgeAt, K.paperAt) ** 2;        // 4 — 확 밝아짐 (점점 빨라진다)
       const melt = faceLit;                                      // 3 — 얼굴이 켜지는 만큼 녹아듦
       const setA = Math.min(1, 1 - 0.9 * melt + surge);
       // 눈매·눈썹 (s3 띠) — 기준점(띠 안 eyesDot)을 같은 변환으로
@@ -2072,7 +2079,7 @@ export class TedAbility extends BaseAbility {
       // 구운 눈동자는 s3 홍채가 차오르는 3~6칸 동안 넘겨준다 (같은 그림이라 겹쳐도 튀지 않는다)
       const handoff = 1 - span(K.eyesAt + 3 * K.eyesFrameMs, K.eyesAt + 6 * K.eyesFrameMs);
       // 일렁임 — 사인 두 개를 다른 주기로 더해 밝기·크기가 물결처럼 (±5~8%). 섬광 전까지 점점 세진다
-      const amp = 1 + (K.shimmerAmpMax - 1) * span(K.shimmerRampAt, K.awakeFlashAt);
+      const amp = 1 + (K.shimmerAmpMax - 1) * span(K.shimmerRampAt, K.paperAt);
       const TAU = Math.PI * 2;
       S.iris.forEach((_, i) => {
         const ph = i * 1.7;                           // 두 눈의 위상을 어긋나게 — 같이 흔들리면 통째로 깜빡여 보인다
@@ -2104,7 +2111,7 @@ export class TedAbility extends BaseAbility {
     let fl = 0;
     if (ta >= K.flashAt && ta < flashOut) fl = span(K.flashAt, K.flashAt + 20);
     else if (ta >= flashOut) fl = 1 - span(flashOut, flashOut + K.flashFadeMs);   // 거의 끊듯이 — 회색 막이 남지 않게
-    // 각성 섬광 — 눈 뜬 얼굴 → 각성 표정. 장면 5 와 같은 끊듯이 걷힘
+    // 각성 섬광 — ②→⑥ 이음새: 소용돌이가 만든 완전 검정(= darkAt + 80) 위에서 곧바로 → 각성 표정. 장면 5 와 같은 끊듯이 걷힘
     if (ta >= K.awakeFlashAt && ta < K.awakeAt) fl = Math.max(fl, span(K.awakeFlashAt, K.awakeFlashAt + 20));
     else if (ta >= K.awakeAt && ta < K.awakeAt + K.flashFadeMs) fl = Math.max(fl, 1 - span(K.awakeAt, K.awakeAt + K.flashFadeMs));
     this.inkRect(ink.flash, st.x, st.y, sw, sh).setAlpha(fl);

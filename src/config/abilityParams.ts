@@ -277,67 +277,42 @@ export const TED_PARAMS = {
   ascentPoopPoints:  40,   // 액티브가 지운 똥 하나당 점수 (저장소 기준값)
 
   // ── 컷신 — 수묵 (대표 승인) ─────────────────────────────────────
-  // 화선지 붓질 → 와이프·소용돌이 → 어둠 속 흰 눈 → 얼굴 → 각성 → 섬광·컬러 테드 → 큐브 → 걷힘.
+  // 어둠 속 흰 눈 → 얼굴 → 눈빛 폭발 → 화선지 붓질·전신 → 와이프·소용돌이 → 섬광·각성 → 컬러 테드 → 큐브 → 걷힘.
   // 장면별 박자는 아래 TED_PARAMS.ink, 그림 자리는 TedAbility 의 TED_INK.
   // 이전 연출(corner·approach·kinesis 컷인)은 정리했다 (2026-10 출시 묶음)
   // 큐에 거는 시각 (ms, 발동부터 누적). 무적 = endMs
   ascentTiming: {
-    revealMs:     2670,  // = ink.cubeAt + 4 × cubeFrameMs — 큐브 손동작 마지막 수 (확정·히트스톱·흔들림)
-    effectMs:     2800,  // 마지막 칸에 130ms 머문 뒤, 화면이 아직 가려진 동안 효과 (화면 똥 제거)
-    outMs:        2800,  // 같은 순간 검정·s6 가 걷히기 시작 → 게임 복귀
-    endMs:        3000,  // 다 걷힘 — 여기까지 무적. 소환 큐브(summonMs)는 여기서 시작
+    revealMs:     2640,  // = ink.cubeAt + 4 × cubeFrameMs — 큐브 손동작 마지막 수 (확정·히트스톱·흔들림)
+    effectMs:     2770,  // = revealMs + 130 — 마지막 칸에 머문 뒤, 화면이 아직 가려진 동안 효과 (화면 똥 제거)
+    outMs:        2770,  // = effectMs — 같은 순간 검정·s6 가 걷히기 시작 → 게임 복귀
+    endMs:        2970,  // = outMs + 200 — 다 걷힘. 여기까지 무적. 소환 큐브(summonMs)는 여기서 시작
   },
 
   // 수묵 (ink) — ms 는 발동부터 누적. 그림은 builder 판 (ddong-fx-work/ted-ascent/ink/prod23), 자리는 TedAbility 의 TED_INK.
-  // 순서 (3.0초 — 대표 지시로 3.88 → 3.0, 장면은 그대로·머묾·페이드·이동을 줄임):
-  //   세로 붓질·튀김·전신 0~550 → 와이프 550~700 (걷히며 빈 화선지) → 소용돌이 → 검정 700~850
-  //   → 흰 눈동자 켜짐 850~910 → 그 둘레로 눈매·눈썹 그어짐 910~1150 → 세트 완성·일렁임 ~1250 (완성 모습 100ms)
-  //   → 세트가 통째로 얼굴 두 눈 자리로 옮겨 가며 줄고 얼굴(s2 다 뜬 칸)이 어둠에서 켜짐 1250~1600 (세트는 녹아듦)
-  //   → 눈빛 확 밝아짐 1600~1700 → 섬광·각성(sC)+먹 터짐 1700~2100 (각성 표정 0칸 100ms) → 섬광·컬러 2100~2250
-  //   → 바람·큐브 2250~2800 (마지막 수 2670 · 펑·히트스톱 · 머묾 130ms) → 걷힘 2800~3000 → 게임 (소환 큐브 8초 시작)
-  //   뺀 것 (대표 결정): 결과 컷(s8)·그 앞 섬광, 1-B 자세 변화(sB), 1-A 대각선 붓질(sA_stroke), 3 빨려 듦(둥근 얼굴)
+  // 순서 (2.97초 — 대표 지시 2026-10-05 순서 바꿈. 시안 ddong-fx-work/ted-ascent/ink/reorder/reorder_mock.py):
+  //   발동 즉시 검정(blackInMs) + 흰 눈동자 켜짐 0~60 → 그 둘레로 눈매·눈썹 그어짐 60~300 → 세트 완성·일렁임 ~400
+  //   → 세트가 통째로 얼굴 두 눈 자리로 옮겨 가며 줄고 얼굴(s2 다 뜬 칸)이 어둠에서 켜짐 400~750 (세트는 녹아듦)
+  //   → 눈빛 확 밝아짐 750~850 — 그 정점이 그대로 화선지 색으로 번진다 (paperAt, **흰 섬광 아님**)
+  //   → 세로 붓질·튀김·전신 850~1370 → 와이프 1370~1520 (걷히며 빈 화선지) → 소용돌이 → 검정 1520~1670
+  //   → 검정에서 바로 섬광·각성(sC)+먹 터짐 1670~2070 (각성 표정 0칸 100ms) → 섬광·컬러 2070~2220
+  //   → 바람·큐브 2220~2770 (마지막 수 2640 · 펑·히트스톱 · 머묾 130ms) → 걷힘 2770~2970 → 게임 (소환 큐브 8초 시작)
+  //   뺀 것 (대표 결정): 결과 컷(s8)·그 앞 섬광, 1-B 자세 변화(sB), 1-A 대각선 붓질(sA_stroke), 3 빨려 듦(둥근 얼굴),
+  //   화선지 페이드인(paperInMs — 화선지는 이제 눈빛에서 번져 나온다)
   ink: {
-    paperInMs:       100,  // 게임 위로 화선지가 깔리는 시간 (하드 컷 없이)
-    strokeAt:         30,  // s7 붓질 8칸 — 세로로 돌려 위에서 아래로 내리긋는 한 획 (TedAbility TED_INK.strokeRot)
-    strokeFrameMs:    24,
-    strokeOutMs:     110,  // 형체가 잡히는 동안 붓질이 스며 사라진다
-    splashAt:        200,  // s7 먹 튀김 6칸 — 이 순간 전신이 형체를 잡기 시작
-    splashFrameMs:    36,
-    formAt:  [200, 295, 390] as readonly number[], // s1 형체 3단계가 바뀌는 시각
-    formFadeMs:       65,
-    smokeAt:         480,  // s1 먹 연기 반복 시작 (형체 → 연기 크로스페이드) — 와이프가 덮을 때까지
-    smokeFrameMs:     80,
-    // 1-A — 검은 먹 덩어리가 화면을 가리며 지나감 (sA_wipe, 3·4칸이 화면 97% 를 덮는다 — 그 밑에서 전신이 빠진다).
-    //       150ms 에 8칸이면 칸당 19ms 라 뭉개진다 → 6칸만(1·6칸 건너뜀) 25ms 씩
-    wipeAt:          550,
-    wipeFrameMs:      25,
-    wipeFrames: [0, 2, 3, 4, 5, 7] as readonly number[],
-    wipeCoverFrame:    3,  // 이 시트 칸부터 전신(s1)을 감춘다
-    // 장면 2 — 소용돌이가 빈 화선지를 삼켜 완전 검정. 150ms — 6칸만(1·4칸 건너뜀) 25ms 씩
-    swirlAt:         700,
-    swirlFrameMs:     25,
-    swirlFrames: [0, 2, 3, 5, 6, 7] as readonly number[],
-    swirlGrow:       2.9,  // 소용돌이 마지막 배율 (화면을 덮는다)
-    darkAt:          770,  // 검정이 깔리기 시작 → darkAt + 80 에 완전히 덮는다
+    blackInMs:        80,  // 발동 즉시 게임 위로 검정이 깔리는 시간 (흰 눈동자가 같이 켜진다)
     // 2 — 흰 눈 세트 (눈동자 + s3 눈매·눈썹) — 완전 검정 위, s3 눈매 자리에서. 눈동자가 먼저 켜지고(irisOnMs)
     //     곧바로 그 둘레로 눈매·눈썹이 그어진다(eyesAt, s3 8칸). 구운 눈동자는 s3 홍채가 차는 3~6칸 동안 넘겨준다
-    pupilAt:         850,
+    pupilAt:           0,
     irisOnMs:         60,
-    eyesAt:          910,
+    eyesAt:           60,
     // 3 — 세트가 통째로(같은 변환) 얼굴(s2 다 뜬 칸) 두 눈 자리로 옮겨 가며 줄어들고, 그 둘레로 얼굴이 어둠에서 켜진다
     //     (곱셈 틴트 검정 → 원래 밝기). 세트는 얼굴이 밝아지는 만큼 녹아든다. 옮겨 감 = 켜짐 박자 (Sine.easeInOut)
-    faceAt:         1250,
-    faceLitTo:      1600,
-    facePush:       0.05,  // 얼굴 느린 밀어 들어가기 (faceAt → awakeFlashAt)
-    // 4 — 눈빛이 확 밝아짐 (pupilSurgeAt → awakeFlashAt). 그동안 각성(sC) 두 눈 자리로 살짝 맞춤 (판 차이 3~6px)
-    pupilShiftAt:   1600,
-    pupilSurgeAt:   1600,
-    //     → 흰 섬광(코드) → 각성 표정 (sC_face 0칸) → 먹 터짐 1~4칸 → 0칸. sC_burst 는 섬광 순간 위에
-    awakeFlashAt:   1700,  // 흰 화면 (20ms 에 차오름)
-    awakeAt:        1760,  // 각성 표정 + 끊듯이 걷힘(flashFadeMs)
-    awakeHoldMs:     100,  // 0칸 유지 — 각성 표정이 읽히는 시간
-    awakeLoopMs:      45,  // 1~4칸 한 바퀴 (180ms) 뒤 0칸으로 (섬광까지)
-    awakeBurstMs:     40,  // sC_burst 4칸
+    faceAt:          400,
+    faceLitTo:       750,
+    facePush:       0.05,  // 얼굴 느린 밀어 들어가기 (faceAt → paperAt)
+    // 4 — 눈빛이 확 밝아짐 (pupilSurgeAt → paperAt). 그동안 각성(sC) 두 눈 자리로 살짝 맞춤 (판 차이 3~6px)
+    pupilShiftAt:    750,
+    pupilSurgeAt:    750,
     //   흰 눈 세트 — 눈매 8칸 박자 · 맥동
     eyesFrameMs:      30,  // 8칸 = 240ms, 이후 마지막 칸 맥동 (세트 완성 모습 100ms)
     eyesPulseMs:     160,
@@ -345,14 +320,47 @@ export const TED_PARAMS = {
     irisGlowAlpha:  0.55,  // 평소 발광 알파 (밝아짐 때 1 까지)
     hazeAlpha:      0.30,  // 아지랑이 복제 알파
     hazeShiftPx:     1.5,  // 아지랑이 좌우 떨림 (띠 px)
-    shimmerRampAt:  1150,  // 세트가 완성된 뒤부터 일렁임이 세진다 → awakeFlashAt 에 shimmerAmpMax 배
+    shimmerRampAt:   300,  // 세트가 완성된 뒤부터 일렁임이 세진다 → paperAt 에 shimmerAmpMax 배
     shimmerAmpMax:   2.5,
     surgeScale:      2.6,  // 4 눈빛 밝아짐 끝에 발광 크기 (평소 대비 +배)
+    // ⑤→① 이음새 — 눈빛 폭발의 정점(마지막 glowToPaperMs)이 화선지 색 덮개로 번진다 (ease-in, 눈·얼굴 위).
+    //   paperAt 에 덮개가 다 차고, 그 순간부터 바탕이 화선지 · 눈 세트·얼굴은 꺼진다. 흰 섬광은 ⑥ 에만 남긴다
+    paperAt:         850,
+    glowToPaperMs:   100,
+    // 장면 1 — 화선지 위 붓질 · 먹 튀김 · 형체 · 연기 (화선지는 이미 깔려 있다)
+    strokeAt:        850,  // s7 붓질 8칸 — 세로로 돌려 위에서 아래로 내리긋는 한 획 (TedAbility TED_INK.strokeRot)
+    strokeFrameMs:    24,
+    strokeOutMs:     110,  // 형체가 잡히는 동안 붓질이 스며 사라진다
+    splashAt:       1020,  // s7 먹 튀김 6칸 — 이 순간 전신이 형체를 잡기 시작
+    splashFrameMs:    36,
+    formAt:  [1020, 1115, 1210] as readonly number[], // s1 형체 3단계가 바뀌는 시각
+    formFadeMs:       65,
+    smokeAt:        1300,  // s1 먹 연기 반복 시작 (형체 → 연기 크로스페이드) — 와이프가 덮을 때까지
+    smokeFrameMs:     80,
+    // 1-A — 검은 먹 덩어리가 화면을 가리며 지나감 (sA_wipe, 3·4칸이 화면 97% 를 덮는다 — 그 밑에서 전신이 빠진다).
+    //       150ms 에 8칸이면 칸당 19ms 라 뭉개진다 → 6칸만(1·6칸 건너뜀) 25ms 씩
+    wipeAt:         1370,
+    wipeFrameMs:      25,
+    wipeFrames: [0, 2, 3, 4, 5, 7] as readonly number[],
+    wipeCoverFrame:    3,  // 이 시트 칸부터 전신(s1)을 감춘다
+    // 장면 2 — 소용돌이가 빈 화선지를 삼켜 완전 검정. 150ms — 6칸만(1·4칸 건너뜀) 25ms 씩
+    swirlAt:        1520,
+    swirlFrameMs:     25,
+    swirlFrames: [0, 2, 3, 5, 6, 7] as readonly number[],
+    swirlGrow:       2.9,  // 소용돌이 마지막 배율 (화면을 덮는다)
+    darkAt:         1590,  // 검정이 깔리기 시작 → darkAt + 80 에 완전히 덮는다 (= awakeFlashAt)
+    //   ②→⑥ 이음새 — 완전 검정 위에서 곧바로 흰 섬광(코드, 20ms 에 차오름) → 각성 표정. 그 사이 얼굴은 그리지 않는다
+    //     → 각성 표정 (sC_face 0칸) → 먹 터짐 1~4칸 → 0칸. sC_burst 는 섬광 순간 위에
+    awakeFlashAt:   1670,  // = darkAt + 80. 흰 화면 (20ms 에 차오름)
+    awakeAt:        1730,  // 각성 표정 + 끊듯이 걷힘(flashFadeMs)
+    awakeHoldMs:     100,  // 0칸 유지 — 각성 표정이 읽히는 시간
+    awakeLoopMs:      45,  // 1~4칸 한 바퀴 (180ms) 뒤 0칸으로 (섬광까지)
+    awakeBurstMs:     40,  // sC_burst 4칸
     // 5 — 각성에서 바로 섬광 → 컬러 테드 + 먹 튀김 (중심 = 각성 얼굴 두 눈 중점)
-    flashAt:        2100,
+    flashAt:        2070,
     flashMs:          50,  // 흰 화면 유지
     flashFadeMs:      30,  // 거의 끊듯이 걷힌다 — 컬러 테드 위에 회색 막이 남지 않게
-    revealAt:       2150,  // = flashAt + flashMs. 섬광이 걷히는 순간 컬러 원색 100%
+    revealAt:       2120,  // = flashAt + flashMs. 섬광이 걷히는 순간 컬러 원색 100%
     revealFrameMs:    50,
     // s4 에서 쓰는 칸 — 0(흰 폭발)·1(회색 반쯤)은 탁해서 건너뛰고 컬러 2·3칸만
     revealFrames: [2, 3] as readonly number[],
@@ -360,10 +368,10 @@ export const TED_PARAMS = {
     burstFrom:      1.39,  // 먹 폭 (원본 폭 480 대비) 시작
     burstTo:        4.86,  // 끝 — 가운데 구멍이 화면 대각선 반보다 커진다 (480x720 에서 구멍 반지름 467 > 433)
     // 장면 6 — 살아 있는 컬러 테드 → 큐브 손동작 → 마지막 수
-    windAt:         2250,
+    windAt:         2220,
     windFrameMs:      60,  // s5 4칸 한 바퀴
-    cubeAt:         2490,
-    cubeFrameMs:      45,  // s6 5칸 — 마지막 칸(2670 = ascentTiming.revealMs)에 머문 뒤 걷힌다
+    cubeAt:         2460,
+    cubeFrameMs:      45,  // s6 5칸 — 마지막 칸(2640 = ascentTiming.revealMs)에 머문 뒤 걷힌다
   },
 
   // 어센트 효과 (결과 하나 — 대표 결정, 백/흑 분기·체인 라이트닝 삭제)
