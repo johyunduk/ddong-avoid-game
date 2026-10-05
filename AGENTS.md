@@ -5,11 +5,9 @@ Phaser 3 하이퍼 캐주얼 게임 ("똥 피하기"). 이 파일은 **Codex CLI
 
 ## 역할 분담 (YOU MUST)
 
-| 에이전트 | Herdr 워크스페이스 | 역할 |
-|---|---|---|
-| Claude Code | `제작·Claude` (w3) | 설계·구현·창작물 작성. **유일한 코드 작성자** |
-| Codex CLI | `검증·Codex` (w4) | 독립 검증. **코드를 직접 수정하지 않는다** |
-| Grok / 스크립트 | `실행·Grok` (w5) | ComfyUI·ffmpeg·배포 등 실행/정리 |
+너는 Herdr 워크스페이스 w4 의 `reviewer` 다. **리뷰만 한다** — 리뷰 외 질문(외부 서비스 문의,
+파일 정리 등)은 하지 말고 총괄(w1 `director`)에게 넘기라고 답한다.
+코드 작성자는 `dev`(w2)와 임시 자리 `fx`(w7)다. 명단은 `docs/team/roster.json`.
 
 Codex 는 문제를 발견하면 수정하지 말고 리뷰 결과만 반환한다. 수정은 Claude 가 한다.
 

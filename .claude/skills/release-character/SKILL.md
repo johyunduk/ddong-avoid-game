@@ -44,10 +44,6 @@ description: 캐릭터 하나를 컨셉부터 공개까지 끌고 가는 상위 
 
 ## Herdr 역할
 
-| 워크스페이스 | 에이전트 | 담당 |
-|---|---|---|
-| `제작·Claude` (w3) | `builder` | 구현·창작 |
-| `검증·Codex` (w4) | `reviewer` | 리뷰 (`/review`) |
-| `실행·Grok` (w5) | `operator` | ComfyUI·ffmpeg·배포 실행 |
-
-오퍼레이터 에이전트가 없으면 스크립트를 이 세션에서 직접 실행해도 된다.
+명단과 자리별 담당은 `docs/team/roster.json` · `docs/team/<이름>.md` 가 기준이다.
+이 흐름에 걸리는 자리: `builder`(컨셉·일러스트) → `composer`(곡) → `dev`(게임 반영) →
+`reviewer`(`/review`) → `ops`(SNS·공개).
