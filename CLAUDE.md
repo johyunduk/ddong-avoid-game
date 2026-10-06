@@ -23,7 +23,6 @@ npm run build      # 프로덕션 빌드
 
 `ModeSelectScene` → `DifficultySelectScene` → `GameScene` → (게임 오버) → `ModeSelectScene`
 `LeaderboardScene` / `CharacterSelectScene` / `GachaScene` / `ReleaseNotesScene` 은 독립 진입
-배틀 라인: `BattleMatchScene` → `BattleGameScene` → `BattleResultScene` (`BattleLeaderboardScene` 은 독립 진입)
 
 등록된 씬 전부는 `src/main.ts` 의 `scene: [...]` 가 기준이다.
 
