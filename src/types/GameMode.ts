@@ -2,7 +2,6 @@
 export const GameMode = {
   CLASSIC: 'classic',
   GACHA: 'gacha',
-  BATTLE: 'battle'
 } as const;
 
 export type GameMode = typeof GameMode[keyof typeof GameMode];

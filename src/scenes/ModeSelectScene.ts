@@ -43,9 +43,8 @@ export default class ModeSelectScene extends BaseScene {
       strokeThickness: 4
     }).setOrigin(0.5);
 
-    // 클래식 + 대전 모드 버튼 (같은 줄, 캐릭터/랭킹 버튼과 동일 크기)
-    this.createModeButton(GAME_MODES[0], cx - 80, 250 + yOff);
-    this.createBattleButton(cx + 80, 250 + yOff);
+    // 클래식 모드 버튼 — 뽑기 버튼과 같은 폭 (대전 모드는 2026-10 제거)
+    this.createModeButton(GAME_MODES[0], cx, 250 + yOff);
 
     // 뽑기 버튼 (SKOR 잔액 포함)
     this.createGachaButton(cx, 345 + yOff);
@@ -77,7 +76,7 @@ export default class ModeSelectScene extends BaseScene {
   }
 
   private createModeButton(modeConfig: GameModeConfig, x: number, y: number) {
-    const button = this.add.rectangle(x, y, 140, 70, 0xffffff, 1);
+    const button = this.add.rectangle(x, y, 300, 70, 0xffffff, 1);
     button.setStrokeStyle(3, 0x000000);
 
     const titleText = this.add.text(x, y, modeConfig.name, {
@@ -93,35 +92,6 @@ export default class ModeSelectScene extends BaseScene {
       element.on('pointerover', () => button.setFillStyle(0xffff99));
       element.on('pointerout',  () => button.setFillStyle(0xffffff));
       element.on('pointerdown', () => this.startGame(modeConfig.mode));
-    });
-  }
-
-  private createBattleButton(x: number, y: number) {
-    const button = this.add.rectangle(x, y, 140, 70, 0xe74c3c, 1);
-    button.setStrokeStyle(3, 0xc0392b);
-
-    const titleText = this.add.text(x, y, '⚔️ 대전 모드', {
-      fontSize: '18px',
-      color: '#ffffff',
-      fontStyle: 'bold',
-      padding: { top: 4 },
-    }).setOrigin(0.5);
-
-    button.setInteractive({ useHandCursor: true });
-    titleText.setInteractive({ useHandCursor: true });
-
-    [button, titleText].forEach(el => {
-      el.on('pointerover', () => {
-        button.setFillStyle(0xff6b6b);
-        button.setStrokeStyle(3, 0xff4444);
-      });
-      el.on('pointerout', () => {
-        button.setFillStyle(0xe74c3c);
-        button.setStrokeStyle(3, 0xc0392b);
-      });
-      el.on('pointerdown', () => {
-        this.scene.start('BattleMatchScene');
-      });
     });
   }
 
