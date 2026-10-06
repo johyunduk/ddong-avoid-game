@@ -8,6 +8,7 @@ import CharacterSelectScene from './scenes/CharacterSelectScene';
 import GachaScene from './scenes/GachaScene';
 import { ensureLoggedIn } from './utils/auth';
 import { isBgmMuted } from './utils/settings';
+import { installTextSafety } from './utils/textSafety';
 import './style.css';
 
 const config: Phaser.Types.Core.GameConfig = {
@@ -59,6 +60,9 @@ const config: Phaser.Types.Core.GameConfig = {
 ensureLoggedIn().catch(error => {
   console.error('로그인 초기화 실패:', error);
 });
+
+// 글자 윗부분·그림자가 텍스처 경계에서 잘리지 않게 — 모든 Text 에 글자 크기 비례 여백 (utils/textSafety)
+installTextSafety();
 
 // 게임 인스턴스는 동기적으로 즉시 생성 (키보드 입력 정상 동작 보장)
 const game = new Phaser.Game(config);

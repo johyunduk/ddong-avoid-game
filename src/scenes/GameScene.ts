@@ -31,6 +31,7 @@ import { preloadCharSheets, ensureCharAnims } from '../utils/charAnim';
 import BaseScene from './BaseScene';
 import { ACTIVE_BTN } from '../config/activeButton';
 import { addBackground } from '../utils/background';
+import { textContentWidth } from '../utils/textSafety';
 
 export default class GameScene extends BaseScene {
   protected inputGuardMs = 0; // 게임플레이 씬은 즉시 입력 허용
@@ -782,7 +783,6 @@ export default class GameScene extends BaseScene {
       stroke: '#000',
       strokeThickness: 4,
       align: 'center',
-      padding: { top: 4 },
     }).setOrigin(0.5).setDepth(501);
 
     // SceneManager.prototype.stop 변조 대비: 네이티브 setTimeout으로 강제 새로고침
@@ -909,7 +909,6 @@ export default class GameScene extends BaseScene {
       const t = this.add.text(this.scale.width / 2, 100, `${emoji} +${total}점!${suffix} ${emoji}`, {
         fontSize: '28px', color, fontStyle: 'bold',
         stroke: '#000', strokeThickness: 4,
-        padding: { top: 6 },
       }).setOrigin(0.5);
       this.time.delayedCall(1000, () => t.destroy());
     }
@@ -1366,11 +1365,11 @@ export default class GameScene extends BaseScene {
     }
 
     // 생성된 Text 객체의 width를 합산해 중앙 정렬
-    const totalWidth = this.feverTimeUITexts.reduce((sum, t) => sum + t.width, 0);
+    const totalWidth = this.feverTimeUITexts.reduce((sum, t) => sum + textContentWidth(t), 0);
     let currentX = this.scale.width / 2 - totalWidth / 2;
     for (const charText of this.feverTimeUITexts) {
       charText.setX(currentX);
-      currentX += charText.width;
+      currentX += textContentWidth(charText);
     }
 
     // 레인보우 피버: 글자마다 파도치는 bounce 애니메이션
@@ -1443,12 +1442,12 @@ export default class GameScene extends BaseScene {
     // 보이는 글자들만 폭 합산해 중앙 정렬
     let totalWidth = 0;
     for (let i = 0; i < Math.min(this.feverTimeUITexts.length, newText.length); i++) {
-      totalWidth += this.feverTimeUITexts[i].width;
+      totalWidth += textContentWidth(this.feverTimeUITexts[i]);
     }
     let currentX = this.scale.width / 2 - totalWidth / 2;
     for (let i = 0; i < Math.min(this.feverTimeUITexts.length, newText.length); i++) {
       this.feverTimeUITexts[i].setX(currentX);
-      currentX += this.feverTimeUITexts[i].width;
+      currentX += textContentWidth(this.feverTimeUITexts[i]);
     }
   }
 
@@ -1814,7 +1813,6 @@ export default class GameScene extends BaseScene {
         fontStyle: 'bold',
         stroke: '#000000',
         strokeThickness: 4,
-        padding: { top: 6 },
       }).setOrigin(0.5).setDepth(200);
 
       // 이니셜 입력 UI 표시
@@ -2054,7 +2052,6 @@ export default class GameScene extends BaseScene {
             fontStyle: 'bold',
             stroke: '#000',
             strokeThickness: 3,
-            padding: { top: 4 },
           }).setOrigin(0.5).setDepth(200);
         }
 
@@ -2139,7 +2136,6 @@ export default class GameScene extends BaseScene {
         color: '#88ff88',
         stroke: '#000',
         strokeThickness: 2,
-        padding: { top: 3 },
       }).setOrigin(0.5).setDepth(200);
     }
 
@@ -2174,7 +2170,6 @@ export default class GameScene extends BaseScene {
           color: '#88ff88',
           stroke: '#000',
           strokeThickness: 2,
-          padding: { top: 3 },
         }).setOrigin(0.5).setDepth(200);
       }
     } catch {

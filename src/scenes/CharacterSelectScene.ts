@@ -26,6 +26,7 @@ import { syncOwnedCharacters, syncOwnedWallpapers } from '../utils/gacha';
 import { destroyVideo } from '../utils/video';
 import BaseScene from './BaseScene';
 import { addBackground, coverBackground } from '../utils/background';
+import { textContentHeight } from '../utils/textSafety';
 
 // ── 캐릭터 그리드 설정 ──────────────────────────────────────────────────────
 const COLS = 3;
@@ -861,7 +862,6 @@ export default class CharacterSelectScene extends BaseScene {
     infoBg.on('pointerup',   () => this.showInfoPanel(def));
     const infoLabel = this.add.text(cx - 92, BTN_Y, '📋  정보 보기', {
       fontSize: '14px', color: '#cccccc', fontStyle: 'bold',
-      padding: { top: 3 },
     }).setOrigin(0.5);
     panel.add(infoBg);
     panel.add(infoLabel);
@@ -1004,8 +1004,8 @@ export default class CharacterSelectScene extends BaseScene {
     const abMeasure = awakeBonusText
       ? this.add.text(0, -999, awakeBonusText, { fontSize: '12px', wordWrap: { width: WRAP_W } })
       : null;
-    const abHeight  = abMeasure ? abMeasure.height + 8 : 0;
-    const cardH = HEADER_H + 18 + btMeasure.height + abHeight + 14 + 18 + stMeasure.height + PAD_BOT;
+    const abHeight  = abMeasure ? textContentHeight(abMeasure) + 8 : 0;
+    const cardH = HEADER_H + 18 + textContentHeight(btMeasure) + abHeight + 14 + 18 + textContentHeight(stMeasure) + PAD_BOT;
     btMeasure.destroy();
     stMeasure.destroy();
     abMeasure?.destroy();
@@ -1065,7 +1065,7 @@ export default class CharacterSelectScene extends BaseScene {
       fontSize: '13px', color: '#eeeeee', wordWrap: { width: WRAP_W },
     });
     panel.add(basicText);
-    curY += basicText.height;
+    curY += textContentHeight(basicText);
 
     if (awakeBonusText) {
       curY += 8;

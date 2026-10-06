@@ -106,7 +106,6 @@ export default class DifficultySelectScene extends BaseScene {
       fontStyle: 'bold',
       stroke: '#000',
       strokeThickness: 5,
-      padding: { top: 4 }
     }).setOrigin(0.5);
 
     this.add.text(cx, 92 + yOff, '도전할 난이도를 선택하세요', {
@@ -206,7 +205,6 @@ export default class DifficultySelectScene extends BaseScene {
 
     const emojiText = this.add.text(x, y - 38, config.emoji, {
       fontSize: '30px',
-      padding: { top: 4 }
     }).setOrigin(0.5);
 
     const title = this.add.text(x, y - 8, config.title, {

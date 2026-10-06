@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { RELEASE_NOTES } from '../data/releaseNotes';
 import BaseScene from './BaseScene';
 import { addBackground } from '../utils/background';
+import { textContentHeight } from '../utils/textSafety';
 
 export default class ReleaseNotesScene extends BaseScene {
   private scrollContainer!: Phaser.GameObjects.Container;
@@ -79,7 +80,7 @@ export default class ReleaseNotesScene extends BaseScene {
       // NEW 뱃지 (최신 버전만)
       if (isLatest) {
         const badgeCenterX = versionText.x + versionText.width + 32;
-        const badgeCenterY = currentY + versionText.height / 2;
+        const badgeCenterY = currentY + textContentHeight(versionText) / 2;
         const badgeBg = this.add.rectangle(
           badgeCenterX, badgeCenterY,
           42, 20,
@@ -126,7 +127,7 @@ export default class ReleaseNotesScene extends BaseScene {
           wordWrap: { width: W - 60 },
         });
         this.scrollContainer.add(changeText);
-        currentY += changeText.height + 10;
+        currentY += textContentHeight(changeText) + 10;
       });
 
       // 릴리즈 간 여백
