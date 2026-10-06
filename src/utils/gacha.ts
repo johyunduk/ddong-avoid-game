@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { setOwnedCharacters, getOwnedCharacters, setDuplicateCount } from './character';
+import { CHARACTERS, setOwnedCharacters, getOwnedCharacters, setDuplicateCount, type CharacterDef } from './character';
 import { setOwnedWallpapers, getOwnedWallpapers } from './wallpaper';
 
 export interface PulledCharacter {
@@ -96,4 +96,37 @@ export async function syncOwnedCharacters(): Promise<string[]> {
   console.log('[syncOwnedCharacters] 동기화 완료:', merged);
   setOwnedCharacters(merged);
   return merged;
+}
+
+// ── 확률 표시 ─────────────────────────────────────────────────────────
+// 확률은 서버(gacha-pull)가 정한다. 화면은 같은 가중치로 계산해 **보여주기만** 한다.
+// 아래 값이 서버와 어긋나면 scripts/check-roster.mjs 가 실패시킨다 (verify.ps1)
+
+/** 등급별 **종당** 가중치 — gacha-pull 의 WEIGHT_BY_GRADE 와 같은 값 */
+export const GACHA_GRADE_WEIGHT = { R: 8, SR: 19.3 / 8, UR: 0.7 / 3 } as const;
+/** 슬롯마다 배경화면이 함께 나올 확률 — gacha-pull 의 WP_DROP_CHANCE 와 같은 값 */
+export const GACHA_WP_DROP_CHANCE = 0.035;
+
+type PullGrade = keyof typeof GACHA_GRADE_WEIGHT;
+const weightOf = (grade: string): number => GACHA_GRADE_WEIGHT[grade as PullGrade] ?? 0;
+
+/** 뽑기 풀 = 공개 캐릭터 중 기본 보유(chibi)를 뺀 것 — gacha-pull OBTAINABLE_IDS 와 같은 집합 (check-roster) */
+export function gachaPool(): CharacterDef[] {
+  return CHARACTERS.filter(c => !c.unreleased && c.id !== 'chibi');
+}
+
+/** 등급 전체 확률(%)과 종당 확률(%) */
+export function gachaRates(): { byGrade: Record<PullGrade, number>; perChar: (grade: string) => number } {
+  const pool = gachaPool();
+  const total = pool.reduce((sum, c) => sum + weightOf(c.grade), 0) || 1;
+  const byGrade: Record<PullGrade, number> = { UR: 0, SR: 0, R: 0 };
+  for (const c of pool) {
+    if (c.grade in byGrade) byGrade[c.grade as PullGrade] += (weightOf(c.grade) / total) * 100;
+  }
+  return { byGrade, perChar: (grade: string) => (weightOf(grade) / total) * 100 };
+}
+
+/** 확률 글자 — 10% 미만은 소수 둘째 자리, 그 위는 첫째 자리, 끝의 0 은 뗀다 (0.22 · 3.5 · 24.7) */
+export function formatRate(percent: number): string {
+  return String(parseFloat(percent < 10 ? percent.toFixed(2) : percent.toFixed(1)));
 }

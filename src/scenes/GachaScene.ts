@@ -1,11 +1,15 @@
 import Phaser from 'phaser';
-import { gachaPull, syncOwnedCharacters, syncOwnedWallpapers, type PulledCharacter, type PulledWallpaper } from '../utils/gacha';
+import {
+  gachaPull, syncOwnedCharacters, syncOwnedWallpapers, gachaPool, gachaRates, formatRate, GACHA_WP_DROP_CHANCE,
+  type PulledCharacter, type PulledWallpaper,
+} from '../utils/gacha';
 import { CHARACTERS, getCharacterDef, addOwnedCharacter, getDuplicateCount, setDuplicateCount, getGradeImgKey, getGradeColorInt, type CharacterDef } from '../utils/character';
 import { WALLPAPERS, getWallpaperDef, addOwnedWallpaper, WP_ACCENT_INT, WP_ACCENT_HEX, type BackgroundDef } from '../utils/wallpaper';
 import { getSkorBalance, getCachedSkorBalance, cacheSkorBalance } from '../utils/skor';
 import { destroyVideo } from '../utils/video';
 import BaseScene from './BaseScene';
 import { addBackground } from '../utils/background';
+import { bakeButton, bakeRoundedImage, gradientText, wireButton } from '../utils/buttonSkin';
 
 // 개인 영상이 있는 캐릭터 — **캐릭터 정의에서 그대로 읽는다.** 영상 유무는 이미
 // `videoKey`/`videoPath` 가 말하고 있어서, 목록을 따로 두면 캐릭터를 추가할 때
@@ -14,18 +18,24 @@ const CHARS_WITH_VIDS = new Set(
   CHARACTERS.filter(c => c.videoKey && c.videoPath).map(c => c.id),
 );
 
-// 현재 픽업 배너 설정 — 출시 캐릭터 변경 시 characterId만 수정
+// 신규 출시 캐릭터 — 출시 때 characterId 만 바꾼다. 진열 맨 앞에 오고 NEW 표시가 붙는다
 const CURRENT_BANNER = {
-  characterId: 'mugi',
+  characterId: 'ted',
   label: '신규 출시',
 };
 
-// 로비 슬라이드쇼 순서: 신규 UR 우선(mugi → gumi → sentinel → legacy), 이후 SR 순
-// 뽑기 화면 배너에 도는 일러스트. UR 먼저, 그 뒤로 SR — **새로 나온 것이 앞**이다.
-// 여기 넣으면 preload 가 그 캐릭터 일러스트(768x1344)를 미리 받으므로, 늘릴 때마다
-// 가챠 씬의 텍스처 메모리가 장당 약 4MB 늘어난다. 전 캐릭터를 넣지 않는 이유가 그것이다.
-// 미공개 캐릭터(`unreleased`)는 넣지 않는다.
-const SLIDESHOW_IDS = ['ted', 'mugi', 'gumi', 'sentinel', 'legacy', 'heidi', 'red', 'k', 'knight', 'hacker', 'miner', 'maehwa', 'archieve', 'glitch', 'noise'];
+/** 진열이 넘어가는 간격 (ms) */
+const SLIDE_MS = 3000;
+
+/**
+ * 뽑기 화면에 진열하는 캐릭터 — 신규 출시 하나 + 뽑을 수 있는 UR 전부. **캐릭터 정의에서 유도한다.**
+ * preload 가 진열 캐릭터 일러스트(768x1344, 장당 약 4MB)를 미리 받으므로 진열을 늘리면 텍스처 메모리가 는다.
+ * 그래서 SR 까지 다 넣지 않는다 (예전 슬라이드쇼는 15장이었다)
+ */
+function featuredIds(): string[] {
+  const urs = gachaPool().filter(c => c.grade === 'UR').map(c => c.id);
+  return [CURRENT_BANNER.characterId, ...urs.filter(id => id !== CURRENT_BANNER.characterId)];
+}
 
 export default class GachaScene extends BaseScene {
   private skorBalance = 0;
@@ -42,15 +52,18 @@ export default class GachaScene extends BaseScene {
   private skipToSummary = false;
 
   // ── 로비 슬라이드쇼 상태 ──
+  private featured: CharacterDef[] = [];
   private slideshowIndex = 0;
   private slideshowIsA = true; // true → bgA가 현재 레이어
   private slideshowBgA: Phaser.GameObjects.Image | null = null;
   private slideshowBgB: Phaser.GameObjects.Image | null = null;
   private slideshowGradeImg: Phaser.GameObjects.Image | null = null;
   private slideshowNameText: Phaser.GameObjects.Text | null = null;
-  private slideshowBadgeBox: Phaser.GameObjects.Rectangle | null = null;
-  private slideshowBadgeTxt: Phaser.GameObjects.Text | null = null;
+  private slideshowRateText: Phaser.GameObjects.Text | null = null;
+  private slideshowNewBadge: Phaser.GameObjects.Container | null = null;
   private slideshowActive = false;
+  private slideTimer: Phaser.Time.TimerEvent | null = null;
+  private railChips: { chip: Phaser.GameObjects.Container; ring: Phaser.GameObjects.Graphics; color: number }[] = [];
 
   constructor() {
     super('GachaScene');
@@ -67,11 +80,14 @@ export default class GachaScene extends BaseScene {
         this.load.image(c.imageKey, c.imagePath);
       }
     }
-    // 슬라이드쇼 캐릭터 일러스트 전체 사전 로드
-    for (const id of SLIDESHOW_IDS) {
+    // 진열 캐릭터 일러스트 + 레일 얼굴 (얼굴 파일이 없는 캐릭터는 로드 실패로 넘어가고 스프라이트로 대신한다)
+    for (const id of featuredIds()) {
       const def = CHARACTERS.find(c => c.id === id);
       if (def && !this.textures.exists(def.illustKey)) {
         this.load.image(def.illustKey, def.illustPath);
+      }
+      if (!this.textures.exists(`gacha_facesrc_${id}`)) {
+        this.load.image(`gacha_facesrc_${id}`, `assets/ui/collection/face/${id}.webp`);
       }
     }
     // 리빌 화면 공통 배경
@@ -103,122 +119,235 @@ export default class GachaScene extends BaseScene {
 
     this.slideshowIndex = 0;
     this.slideshowIsA = true;
-
-    const currentDef = getCharacterDef(SLIDESHOW_IDS[0]);
-    const gradeColorInt = parseInt(currentDef.gradeColor.replace('#', ''), 16);
+    this.featured = featuredIds().map(id => getCharacterDef(id));
 
     const W = this.scale.width;
     const H = this.scale.height;
     const cx = W / 2;
-    const yOff = (H - 600) / 2;
+    const first = this.featured[0];
 
-    // ── 일러스트 배경 2레이어 (crossfade용) ──
+    // ── 일러스트 배경 2레이어 (crossfade용) — 늘이지 않고 덮어 채운다 ──
     // bgA: 처음엔 현재 일러스트 (alpha=1), bgB: 다음 일러스트 대기 (alpha=0)
-    this.slideshowBgA = this.add.image(cx, H / 2, currentDef.illustKey).setDisplaySize(W, H);
-    this.slideshowBgB = this.add.image(cx, H / 2, currentDef.illustKey).setDisplaySize(W, H).setAlpha(0);
+    this.slideshowBgA = this.add.image(cx, 0, first.illustKey);
+    this.slideshowBgB = this.add.image(cx, 0, first.illustKey).setAlpha(0);
+    this.coverIllust(this.slideshowBgA);
+    this.coverIllust(this.slideshowBgB);
 
-    // ── 하단 버튼 영역 그라데이션 ──
-    const gradSteps = 14;
-    for (let i = 0; i < gradSteps; i++) {
-      this.add.rectangle(cx, H - i * 22, W, 22, 0x000000, (gradSteps - i) * 0.052);
-    }
+    // ── 위·아래 어둠 — 글자와 버튼이 일러스트 위에서 읽히게 (세로 그라데이션 한 장을 늘려 쓴다) ──
+    const fade = this.bakeVFade();
+    this.add.image(cx, 0, fade).setOrigin(0.5, 0).setDisplaySize(W, 90).setFlipY(true).setAlpha(0.7);
+    this.add.image(cx, H, fade).setOrigin(0.5, 1).setDisplaySize(W, Math.min(340, H * 0.5));
 
-    // ── 상단: 배너 배지 (슬라이드마다 등급 색상 업데이트) ──
-    this.slideshowBadgeBox = this.add.rectangle(cx, 36 + yOff, 140, 30, 0x000000, 0.75)
-      .setStrokeStyle(1.5, gradeColorInt);
-    this.slideshowBadgeTxt = this.add.text(cx, 36 + yOff, `✦  ${CURRENT_BANNER.label}  ✦`, {
-      fontSize: '13px', color: currentDef.gradeColor, fontStyle: 'bold',
-      stroke: '#000000', strokeThickness: 3,
-    }).setOrigin(0.5);
-
-    // ── 캐릭터 등급 + 이름 — SKOR 잔액(y=408) 바로 위, 겹침 없도록 배치 ──
-    // grade(13px ≈ 16px high) y=344 → 336~352
-    // name (28px ≈ 34px high) y=374 → 357~391
-    // SKOR(15px)              y=408 → 399~417  (gap ≈ 8px)
-    const initGradeKey = getGradeImgKey(currentDef.grade);
-    this.slideshowGradeImg = initGradeKey
-      ? this.add.image(cx, 344 + yOff, initGradeKey).setDisplaySize(40, 40).setOrigin(0.5)
-      : null;
-
-    this.slideshowNameText = this.add.text(cx, 374 + yOff, currentDef.name, {
-      fontSize: '28px', color: '#ffffff', fontStyle: 'bold',
-      stroke: '#000000', strokeThickness: 8,
-    }).setOrigin(0.5);
-
-    // ── SKOR 잔액 ──
+    // ── 위: 뒤로 · SKOR ──
+    this.createBackButton(32, 32);
     const cached = getCachedSkorBalance();
-    const initialText = cached !== null ? `💰  ${cached} SKOR` : '💰  -- SKOR';
-    const skorText = this.add.text(cx, 408 + yOff, initialText, {
-      fontSize: '15px', color: '#aaaaaa',
-      stroke: '#000000', strokeThickness: 4,
-    }).setOrigin(0.5);
+    const skorText = this.createSkorPill(W - 80, 32, cached !== null ? Math.floor(cached).toLocaleString() : '--');
     this.skorBalance = -1;
 
-    // ── 뽑기 버튼 ──
-    this.buildPullButtons(true);
+    // ── 오른쪽 얼굴 레일 — 누르면 그 캐릭터로 넘어간다 ──
+    this.createRail(W - 32, 96);
 
-    // ── 슬라이드쇼 타이머 (2초마다 자동 전환) ──
+    // ── 이름 블록 ──
+    const ny = H - 262;
+    this.slideshowNewBadge = this.add.container(70, ny - 34);
+    const nb = this.add.graphics();
+    nb.fillStyle(0xe8261a).fillRoundedRect(-54, -12, 108, 24, 12);
+    nb.lineStyle(1.5, 0x5a0a00).strokeRoundedRect(-54, -12, 108, 24, 12);
+    this.slideshowNewBadge.add([nb, this.add.text(0, 0, CURRENT_BANNER.label, {
+      fontSize: '12px', color: '#ffffff', fontStyle: 'bold',
+    }).setOrigin(0.5)]);
+
+    const gradeKey = getGradeImgKey(first.grade);
+    this.slideshowGradeImg = this.add.image(42, ny + 4, gradeKey ?? 'grade_r').setDisplaySize(48, 48);
+    this.slideshowNameText = this.add.text(70, ny + 4, first.name, {
+      fontSize: '34px', color: '#ffffff', fontStyle: 'bold', stroke: '#000000', strokeThickness: 8,
+    }).setOrigin(0, 0.5);
+    this.slideshowRateText = this.add.text(20, ny + 38, '', {
+      fontSize: '12px', color: '#ffe58a', fontStyle: 'bold', stroke: '#000000', strokeThickness: 4,
+    }).setOrigin(0, 0.5);
+
+    // ── 뽑기 버튼 · 확률 ──
+    this.buildPullButtons();
+    const rates = gachaRates();
+    this.add.text(cx, H - 56,
+      `UR ${formatRate(rates.byGrade.UR)}%  ·  SR ${formatRate(rates.byGrade.SR)}%  ·  R ${formatRate(rates.byGrade.R)}%`, {
+        fontSize: '11px', color: '#d9c6f0', fontStyle: 'bold', stroke: '#000000', strokeThickness: 4,
+      }).setOrigin(0.5);
+    this.add.text(cx, H - 30, `배경화면은 슬롯마다 ${formatRate(GACHA_WP_DROP_CHANCE * 100)}% 확률로 함께 나온다`, {
+      fontSize: '10px', color: '#ffffff', stroke: '#000000', strokeThickness: 3,
+    }).setOrigin(0.5).setAlpha(0.7);
+
+    this.updateSlideshowText(first);
+
+    // ── 슬라이드쇼 타이머 (자동 전환) ──
     this.slideshowActive = true;
-    this.time.addEvent({
-      delay: 2000,
-      loop: true,
-      callback: this.advanceSlide,
-      callbackScope: this,
-    });
+    this.restartSlideTimer();
 
     // 서버에서 최신 잔액 가져와 갱신
     this.skorBalance = await getSkorBalance();
     if (!this.scene.isActive()) return;
     cacheSkorBalance(this.skorBalance);
-    skorText.setText(`💰  ${Math.floor(this.skorBalance)} SKOR`);
+    if (skorText.active) skorText.setText(Math.floor(this.skorBalance).toLocaleString());
+  }
+
+  /** 일러스트를 화면에 덮어 채운다 — 비율 유지, 얼굴이 잘리지 않게 위쪽(15%)을 기준으로 */
+  private coverIllust(img: Phaser.GameObjects.Image) {
+    const W = this.scale.width, H = this.scale.height;
+    const sc = Math.max(W / img.width, H / img.height);
+    img.setScale(sc).setOrigin(0.5, 0).setY(-(img.height * sc - H) * 0.15);
+  }
+
+  /**
+   * 아래로 짙어지는 어둠 한 장 — 늘려 쓴다.
+   * 세로를 2의 거듭제곱(256)으로 두면 WebGL 이 REPEAT 로 감싸서, 늘린 위 가장자리에 아래쪽 짙은 줄이
+   * 비쳐 가로줄이 생긴다 (실기에서 확인). 그래서 250 — 2의 거듭제곱이 아니면 가장자리를 늘려 쓴다
+   */
+  private bakeVFade(): string {
+    const key = 'gacha_vfade';
+    const FH = 250;
+    if (this.textures.exists(key)) return key;
+    const tex = this.textures.createCanvas(key, 4, FH);
+    if (!tex) return key;
+    const ctx = tex.getContext();
+    const g = ctx.createLinearGradient(0, 0, 0, FH);
+    g.addColorStop(0, 'rgba(6,2,16,0)');
+    g.addColorStop(0.45, 'rgba(6,2,16,0.75)');
+    g.addColorStop(1, 'rgba(6,2,16,0.96)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 4, FH);
+    tex.refresh();
+    return key;
+  }
+
+  private createBackButton(x: number, y: number) {
+    const size = 44;
+    const box = this.add.container(x, y);
+    const { originY } = bakeButton(this, 'diff_back', {
+      w: size, h: size, radius: size / 2, top: '#ffffff', bottom: '#dfe6ee', border: '#2a3340', borderW: 3,
+      lip: '#9aa6b5', lipH: 4, gloss: 0,
+    });
+    box.add(this.add.image(0, 0, 'diff_back').setOrigin(0.5, originY));
+    box.add(this.add.text(0, -1, '←', { fontSize: '24px', color: '#2a3340', fontStyle: 'bold' }).setOrigin(0.5));
+    wireButton(this, box, size, size, () => {
+      this.sound.stopAll();
+      this.scene.start('ModeSelectScene');
+    });
+  }
+
+  /** SKOR 알약 — 잔액 글자를 돌려준다 */
+  private createSkorPill(x: number, y: number, value: string): Phaser.GameObjects.Text {
+    const w = 128, h = 30;
+    const g = this.add.graphics();
+    g.fillStyle(0x0a0618, 0.85).fillRoundedRect(x - w / 2, y - h / 2, w, h, h / 2);
+    g.lineStyle(1.5, 0xffd34d).strokeRoundedRect(x - w / 2, y - h / 2, w, h, h / 2);
+    this.add.text(x - 46, y, '💰', { fontSize: '14px' }).setOrigin(0.5);
+    this.add.text(x + w / 2 - 12, y, 'SKOR', { fontSize: '9px', color: '#d9c6f0', fontStyle: 'bold' }).setOrigin(1, 0.5);
+    // 잔액은 'SKOR' 왼쪽에 오른쪽 맞춤 — 자릿수가 늘어도 겹치지 않게
+    return this.add.text(x + w / 2 - 42, y, value, { fontSize: '14px', color: '#fff0c2', fontStyle: 'bold' }).setOrigin(1, 0.5);
+  }
+
+  /** 오른쪽 얼굴 레일 — 진열 캐릭터 얼굴(ui/collection/face)을 원으로 구워 세로로 */
+  private createRail(x: number, top: number) {
+    this.railChips = [];
+    this.featured.forEach((def, i) => {
+      const y = top + i * 58;   // 고른 칩은 1.22배 + NEW 꼬리표 — 54 면 아래 칩에 닿는다
+      const chip = this.add.container(x, y);
+      const src = `gacha_facesrc_${def.id}`;
+      if (this.textures.exists(src)) {
+        chip.add(this.add.image(0, 0, bakeRoundedImage(this, `gacha_face_${def.id}_36`, src, 36, 36, 18)).setDisplaySize(36, 36));
+      } else if (this.textures.exists(def.imageKey)) {
+        // 얼굴 그림이 없는 캐릭터 — 게임 스프라이트로 대신한다
+        const img = this.add.image(0, 0, def.imageKey);
+        chip.add(img.setScale(Math.min(32 / img.width, 32 / img.height)));
+      }
+      const ring = this.add.graphics();
+      chip.add(ring);
+      if (def.id === CURRENT_BANNER.characterId) {
+        const tag = this.add.graphics();
+        tag.fillStyle(0xe8261a).fillRoundedRect(-17, 15, 34, 14, 7);
+        chip.add([tag, this.add.text(0, 22, 'NEW', { fontSize: '8px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5)]);
+      }
+      // 히트 영역은 왼쪽 위 기준 (buttonSkin.wireButton 주석 참고)
+      chip.setSize(44, 44).setInteractive(new Phaser.Geom.Rectangle(0, 0, 44, 44), Phaser.Geom.Rectangle.Contains);
+      if (chip.input) chip.input.cursor = 'pointer';
+      chip.on('pointerdown', () => this.showSlide(i));
+      this.railChips.push({ chip, ring, color: getGradeColorInt(def) });
+    });
+    this.refreshRail();
+  }
+
+  /** 지금 보는 칩만 크게 · 금테 */
+  private refreshRail() {
+    this.railChips.forEach(({ chip, ring, color }, i) => {
+      const on = i === this.slideshowIndex;
+      ring.clear().lineStyle(on ? 3 : 2, on ? 0xffd34d : color).strokeCircle(0, 0, 18);
+      chip.setScale(on ? 44 / 36 : 1);
+    });
+  }
+
+  private restartSlideTimer() {
+    this.slideTimer?.remove();
+    this.slideTimer = this.time.addEvent({
+      delay: SLIDE_MS,
+      loop: true,
+      callback: this.advanceSlide,
+      callbackScope: this,
+    });
   }
 
   private advanceSlide() {
-    if (!this.slideshowActive || !this.scene.isActive()) return;
+    this.showSlide((this.slideshowIndex + 1) % this.featured.length, false);
+  }
 
-    const nextIndex = (this.slideshowIndex + 1) % SLIDESHOW_IDS.length;
-    const nextDef = getCharacterDef(SLIDESHOW_IDS[nextIndex]);
+  /** index 번째 진열 캐릭터로 넘긴다. 사람이 눌렀으면 자동 전환 타이머를 처음부터 다시 */
+  private showSlide(index: number, byUser = true) {
+    if (!this.slideshowActive || !this.scene.isActive()) return;
+    if (index === this.slideshowIndex) return;
+    const nextDef = this.featured[index];
 
     // 현재/다음 레이어 결정
     const current  = this.slideshowIsA ? this.slideshowBgA : this.slideshowBgB;
     const incoming = this.slideshowIsA ? this.slideshowBgB : this.slideshowBgA;
     if (!current || !incoming) return;
 
-    // 다음 일러스트를 incoming 레이어에 세팅
+    // 다음 일러스트를 incoming 레이어에 세팅 (일러스트마다 크기가 다를 수 있어 다시 맞춘다)
+    this.tweens.killTweensOf([current, incoming]);
     incoming.setTexture(nextDef.illustKey).setAlpha(0);
+    this.coverIllust(incoming);
 
     // 상태 + 텍스트를 일러스트 전환 시작과 동시에 즉시 교체
     this.slideshowIsA = !this.slideshowIsA;
-    this.slideshowIndex = nextIndex;
+    this.slideshowIndex = index;
     this.updateSlideshowText(nextDef);
+    this.refreshRail();
+    if (byUser) this.restartSlideTimer();
 
     // crossfade: 현재 fade-out, 다음 fade-in
     this.tweens.add({ targets: current,  alpha: 0, duration: 600, ease: 'Sine.easeInOut' });
     this.tweens.add({ targets: incoming, alpha: 1, duration: 600, ease: 'Sine.easeInOut' });
   }
 
-  private updateSlideshowText(def: ReturnType<typeof getCharacterDef>) {
-    const gradeColorInt = parseInt(def.gradeColor.replace('#', ''), 16);
-
-    // 배지 색상 즉시 교체
-    this.slideshowBadgeBox?.setStrokeStyle(1.5, gradeColorInt);
-    this.slideshowBadgeTxt?.setColor(def.gradeColor);
+  private updateSlideshowText(def: CharacterDef) {
+    const rates = gachaRates();
+    this.slideshowNewBadge?.setVisible(def.id === CURRENT_BANNER.characterId);
 
     // 등급 이미지: 기존 Image 객체를 재사용해 GC 압박 방지 (destroy+recreate 대신 setTexture)
     const gradeKey = getGradeImgKey(def.grade);
-    if (gradeKey && this.slideshowGradeImg?.active) {
-      this.slideshowGradeImg.setTexture(gradeKey).setAlpha(0);
-      this.tweens.add({ targets: this.slideshowGradeImg, alpha: 1, duration: 150 });
-    } else if (gradeKey) {
-      const _yOff = (this.scale.height - 600) / 2;
-      this.slideshowGradeImg = this.add.image(this.scale.width / 2, 344 + _yOff, gradeKey).setDisplaySize(40, 40).setOrigin(0.5).setAlpha(0);
-      this.tweens.add({ targets: this.slideshowGradeImg, alpha: 1, duration: 150 });
-    } else if (this.slideshowGradeImg?.active) {
-      this.slideshowGradeImg.setVisible(false);
+    if (this.slideshowGradeImg?.active) {
+      this.slideshowGradeImg.setVisible(!!gradeKey);
+      if (gradeKey) {
+        this.slideshowGradeImg.setTexture(gradeKey).setDisplaySize(48, 48).setAlpha(0);
+        this.tweens.add({ targets: this.slideshowGradeImg, alpha: 1, duration: 150 });
+      }
     }
     if (this.slideshowNameText?.active) {
       this.slideshowNameText.setText(def.name).setAlpha(0);
       this.tweens.add({ targets: this.slideshowNameText, alpha: 1, duration: 150 });
+    }
+    if (this.slideshowRateText?.active) {
+      const g = def.grade as keyof typeof rates.byGrade;
+      this.slideshowRateText.setText(
+        `이 캐릭터 ${formatRate(rates.perChar(def.grade))}%  ·  ${def.grade} 전체 ${formatRate(rates.byGrade[g] ?? 0)}%`);
     }
   }
 
@@ -240,39 +369,54 @@ export default class GachaScene extends BaseScene {
     }).setOrigin(0.5);
   }
 
-  private buildPullButtons(_fromLobby = false) {
-    const cx = this.scale.width / 2;
-    const yOff = (this.scale.height - 600) / 2;
-    this.addPullButton(cx, 448 + yOff, '1회 소환', '100 SKOR', 'single');
-    this.addPullButton(cx, 516 + yOff, '10회 소환', '900 SKOR  ·  10% 절약', 'multi');
-
-    const back = this.add.text(cx, 572 + yOff, '← 돌아가기', {
-      fontSize: '14px', color: '#ffffff',
-      stroke: '#000000', strokeThickness: 3,
-    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-    back.on('pointerover', () => back.setColor('#cccccc'));
-    back.on('pointerout',  () => back.setColor('#ffffff'));
-    back.on('pointerdown', () => this.scene.start('ModeSelectScene'));
+  /** 1회 = 금 판, 10회 = 보라 판 금테 + 할인 리본 (메뉴의 뽑기 버튼과 같은 결) */
+  private buildPullButtons() {
+    const W = this.scale.width, H = this.scale.height;
+    const gap = 10, h = 86;
+    const w = Math.floor((W - 32 - gap) / 2);
+    const y = H - 128;
+    this.addPullButton(16 + w / 2, y, w, h, 'single');
+    this.addPullButton(W - 16 - w / 2, y, w, h, 'multi');
   }
 
-  private addPullButton(x: number, y: number, label: string, cost: string, type: 'single' | 'multi') {
-    const accentColor = type === 'single' ? 0xddaa00 : 0x7b2fff;
-    const accentHex   = type === 'single' ? '#ddaa00' : '#aa88ff';
+  private addPullButton(x: number, y: number, w: number, h: number, type: 'single' | 'multi') {
+    const multi = type === 'multi';
+    const box = this.add.container(x, y);
+    const skin = bakeButton(this, `gacha_pull_${type}_${w}`, multi
+      ? { w, h, radius: 18, top: '#5a24a8', bottom: '#1e0a40', border: '#ffd34d', borderW: 3, lip: '#5a1e9c', lipH: 6, gloss: 0,
+          glow: 'rgba(255,200,90,0.8)' }
+      : { w, h, radius: 18, top: '#fff3a8', bottom: '#ffb81a', border: '#7a4a00', borderW: 3, lip: '#a8650a', lipH: 6, gloss: 0 });
+    box.add(this.add.image(0, 0, skin.key).setOrigin(0.5, skin.originY));
 
-    const btn = this.add.rectangle(x, y, 310, 52, 0x000000, 0.72)
-      .setStrokeStyle(1.5, accentColor)
-      .setInteractive({ useHandCursor: true });
-
-    this.add.text(x, y - 9, label, {
-      fontSize: '20px', color: '#ffffff', fontStyle: 'bold',
+    const label = this.add.text(0, -14, multi ? '10회 소환' : '1회 소환', {
+      fontSize: '21px', fontStyle: 'bold',
+      color: multi ? '#ffffff' : '#5b2e0e', stroke: multi ? '#2a0a4a' : '#ffffff', strokeThickness: multi ? 6 : 5,
     }).setOrigin(0.5);
-    this.add.text(x, y + 13, cost, {
-      fontSize: '12px', color: accentHex,
-    }).setOrigin(0.5);
+    if (multi) gradientText(label, [[0, '#fff7c2'], [0.5, '#ffd34d'], [1, '#ff9f1a']]);
+    box.add(label);
 
-    btn.on('pointerover', () => btn.setStrokeStyle(2.5, accentColor));
-    btn.on('pointerout',  () => btn.setStrokeStyle(1.5, accentColor));
-    btn.on('pointerdown', () => this.startPull(type));
+    // 값 알약
+    const pg = this.add.graphics();
+    pg.fillStyle(multi ? 0x000000 : 0x5a2e0e, multi ? 0.6 : 0.85).fillRoundedRect(-52, 8, 104, 24, 12);
+    if (multi) pg.lineStyle(1, 0xffd34d).strokeRoundedRect(-52, 8, 104, 24, 12);
+    box.add([
+      pg,
+      this.add.text(6, 20, multi ? '900' : '100', { fontSize: '14px', color: '#fff0c2', fontStyle: 'bold' }).setOrigin(1, 0.5),
+      this.add.text(10, 20, 'SKOR', { fontSize: '10px', color: '#ffd34d', fontStyle: 'bold' }).setOrigin(0, 0.5),
+    ]);
+
+    // 10회 할인 리본
+    if (multi) {
+      const rib = bakeButton(this, 'gacha_sale_ribbon', {
+        w: 64, h: 22, radius: 8, top: '#ff6a5a', bottom: '#e8261a', border: '#5a0a00', borderW: 2, lip: '#5a0a00', lipH: 3, gloss: 0,
+      });
+      box.add([
+        this.add.image(w / 2 - 30, -h / 2 - 2, rib.key).setOrigin(0.5, rib.originY),
+        this.add.text(w / 2 - 30, -h / 2 - 3, '10% 할인', { fontSize: '11px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5),
+      ]);
+    }
+
+    wireButton(this, box, w, h, () => this.startPull(type), true);
   }
 
   // ═══════════════════════════════════════════════════
@@ -282,7 +426,7 @@ export default class GachaScene extends BaseScene {
   private async startPull(type: 'single' | 'multi') {
     const cost = type === 'multi' ? 900 : 100;
     if (this.skorBalance < 0) {
-      const errMsg = this.add.text(this.scale.width / 2, 370 + (this.scale.height - 600) / 2, '잔액 확인 중... 잠시 후 다시 시도하세요', {
+      const errMsg = this.add.text(this.scale.width / 2, this.scale.height - 196, '잔액 확인 중... 잠시 후 다시 시도하세요', {
         fontSize: '13px', color: '#ffaa44',
         stroke: '#000000', strokeThickness: 3,
         backgroundColor: '#00000099',
@@ -292,7 +436,7 @@ export default class GachaScene extends BaseScene {
       return;
     }
     if (this.skorBalance < cost) {
-      const errMsg = this.add.text(this.scale.width / 2, 370 + (this.scale.height - 600) / 2, `SKOR 부족  (보유 ${Math.floor(this.skorBalance)} / 필요 ${cost})`, {
+      const errMsg = this.add.text(this.scale.width / 2, this.scale.height - 196, `SKOR 부족  (보유 ${Math.floor(this.skorBalance)} / 필요 ${cost})`, {
         fontSize: '13px', color: '#ff5555',
         stroke: '#000000', strokeThickness: 3,
         backgroundColor: '#00000099',
@@ -972,8 +1116,10 @@ export default class GachaScene extends BaseScene {
     this.slideshowBgB = null;
     this.slideshowGradeImg = null;
     this.slideshowNameText = null;
-    this.slideshowBadgeBox = null;
-    this.slideshowBadgeTxt = null;
+    this.slideshowRateText = null;
+    this.slideshowNewBadge = null;
+    this.slideTimer = null;
+    this.railChips = [];
     this.tweens.killAll();
     this.time.removeAllEvents();
     this.input.off('pointerdown');

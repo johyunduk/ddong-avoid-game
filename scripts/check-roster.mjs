@@ -129,10 +129,63 @@ function subset(label, list, { allow = [] } = {}) {
   }
 }
 
+{
+  // 뽑기 화면의 확률 표시는 src/utils/gacha.ts 가 계산한다 — 서버와 같은 가중치 · 같은 풀이어야 한다
+  const server = read('supabase', 'functions', 'gacha-pull', 'index.ts');
+  const client = read('src', 'utils', 'gacha.ts');
+  // 숫자 · 사칙연산만 있는 식만 계산한다 (그 밖이면 NaN → 실패)
+  const num = (expr) => (/^[\d.\s/*+-]+$/.test(expr.trim()) ? Function(`return (${expr})`)() : NaN);
+  const constOf = (src, name) => {
+    const m = new RegExp(`const\\s+${name}\\s*(?::[^=]*)?=\\s*([^;]+);`).exec(src);
+    return m ? m[1] : null;
+  };
+  const objOf = (src, name) => {
+    const m = new RegExp(`const\\s+${name}\\b[^=]*=\\s*\\{([^}]*)\\}`).exec(src);
+    if (!m) return null;
+    return Object.fromEntries(m[1].split(',').map(kv => kv.split(':').map(t => t.trim())).filter(kv => kv.length === 2));
+  };
+
+  const label = '뽑기 확률 표시(src/utils/gacha.ts)가 gacha-pull 과 같다';
+  const sw = objOf(server, 'WEIGHT_BY_GRADE');
+  const cw = objOf(client, 'GACHA_GRADE_WEIGHT');
+  if (!sw || !cw) {
+    fail(label, '가중치 선언을 찾지 못했다 — 이름이 바뀌었는지 확인해라 (검사가 헛돌면 안 된다)');
+  } else {
+    // 서버 값은 SR_W 같은 상수 이름일 수 있다 — 한 번 풀어서 계산
+    const sv = (v) => (/^[A-Z_]+$/.test(v) ? num(constOf(server, v) ?? '') : num(v));
+    const grades = [...new Set([...Object.keys(sw), ...Object.keys(cw)])];
+    const bad = grades.filter(g => !(Math.abs(sv(sw[g] ?? '') - num(cw[g] ?? '')) < 1e-12));
+    const swp = num(constOf(server, 'WP_DROP_CHANCE') ?? ''), cwp = num(constOf(client, 'GACHA_WP_DROP_CHANCE') ?? '');
+    if (bad.length) fail(label, `등급 가중치가 다르다: ${bad.join(', ')}`);
+    else if (!(swp === cwp)) fail(label, `배경화면 확률이 다르다: 서버 ${swp} / 화면 ${cwp}`);
+    else pass(label, `등급 ${grades.join('·')} · 배경화면 ${swp}`);
+  }
+
+  const label2 = 'gacha-pull OBTAINABLE_IDS = 공개 명단 − chibi (화면 확률 계산과 같은 풀)';
+  const obt = literalList(server, 'OBTAINABLE_IDS');
+  if (obt === null) {
+    fail(label2, 'OBTAINABLE_IDS 를 찾지 못했다');
+  } else {
+    const want = roster.filter(c => !c.unreleased && c.id !== 'chibi').map(c => c.id);
+    const missing = want.filter(id => !obt.includes(id));
+    const extra = obt.filter(id => !want.includes(id));
+    if (missing.length || extra.length) {
+      fail(label2, `서버에만: ${extra.join(', ') || '-'} / 화면에만: ${missing.join(', ') || '-'} — 다르게 둘 거면 gachaPool() 을 같이 고쳐라`);
+    } else {
+      pass(label2, `${obt.length}종`);
+    }
+  }
+}
+
 // ── 4. 클라이언트 목록들 ──────────────────────────────────────────────
 {
   const gacha = read('src', 'scenes', 'GachaScene.ts');
-  subset('GachaScene SLIDESHOW_IDS ⊆ 명단', literalList(gacha, 'SLIDESHOW_IDS'));
+  {
+    // 진열 목록(신규 출시 + UR)은 캐릭터 정의에서 유도한다 — 손으로 적은 목록은 등급이 바뀌어도 안 따라온다
+    const label = 'GachaScene 진열 캐릭터는 캐릭터 정의에서 유도한다';
+    if (/const\s+SLIDESHOW_IDS/.test(gacha)) fail(label, '손으로 적은 SLIDESHOW_IDS 가 되살아났다 — gachaPool() 에서 유도해라');
+    else pass(label);
+  }
   const label = 'GachaScene CHARS_WITH_VIDS 는 캐릭터 정의에서 유도한다';
   if (/CHARS_WITH_VIDS\s*=\s*new Set\(\[/.test(gacha)) {
     fail(label, '손으로 적은 목록이 되살아났다 — videoKey 로 유도해라');
@@ -183,7 +236,6 @@ function subset(label, list, { allow = [] } = {}) {
     'src/utils/character.ts#CHARACTERS',                        // 정본
     'supabase/functions/_shared/roster.ts#CHARACTER_IDS',       // 생성물
     'supabase/functions/gacha-pull/index.ts#OBTAINABLE_IDS',    // 뽑기 가능 집합
-    'src/scenes/GachaScene.ts#SLIDESHOW_IDS',                   // 배너 편집 순서
     'src/abilities/index.ts#R_IDS',                             // RGradeAbility 사용 집합
     'src/utils/charAnim.ts#CHARS_WITH_ANIM_SHEETS',             // 시트 보유 집합 (비캐릭터 포함)
   ]);
