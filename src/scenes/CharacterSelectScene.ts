@@ -18,87 +18,105 @@ import {
   getOwnedWallpapers,
   getSelectedWallpaper,
   setSelectedWallpaper,
-  WP_ACCENT_INT,
-  WP_ACCENT_HEX,
   type BackgroundDef,
 } from '../utils/wallpaper';
 import { syncOwnedCharacters, syncOwnedWallpapers } from '../utils/gacha';
 import { destroyVideo } from '../utils/video';
 import BaseScene from './BaseScene';
-import { addBackground, coverBackground } from '../utils/background';
-import { textContentHeight } from '../utils/textSafety';
+import { textContentHeight, textContentWidth } from '../utils/textSafety';
+import { bakeButton, hitRect, wireButton, type ButtonSkin } from '../utils/buttonSkin';
 
-// ── 캐릭터 그리드 설정 ──────────────────────────────────────────────────────
-const COLS = 3;
-const CARD_W = 100;
-const CARD_H = 120;
-const GAP_X = 15;
-const GAP_Y = 10;
-// GRID_LEFT는 화면 폭에 따라 create()에서 동적 계산 → this.gridLeft
-const GRID_TOP = 105;
-
-// ── 배경화면 그리드 설정 (세로 카드 3열) ────────────────────────────────────
-const WP_COLS = 3;
-const WP_CARD_W = 110;
-const WP_CARD_H = 165;  // bgKey 비율(400×600) 반영 세로 카드
-const WP_GAP_X = 15;
-const WP_GAP_Y = 15;
-// WP_GRID_LEFT는 화면 폭에 따라 create()에서 동적 계산 → this.wpGridLeft
-const WP_GRID_TOP = 105;
+/**
+ * 수집 화면 — 배치 두 가지를 COLLECTION_LAYOUT 하나로 고른다 (docs/ui-collection.md).
+ *   'A' 가챠 카드 컬렉션 (지금, 대표 지시 2026-10-06) — 히어로 배너 + 진행 막대·등급 필터 + 일러스트 카드 3열
+ *   'C' 쇼케이스 + 미리보기 — 아래 설명
+ * 둘 다 같은 탭·스크롤·장착/적용·상세 패널을 쓴다. 다른 것은 위쪽(배너/쇼케이스)과 격자 모양뿐
+ *
+ * C안:
+ *   위 = 쇼케이스: 캐릭터 탭은 고른 캐릭터의 일러스트를 크게, 배경화면 탭은 게임 화면 미리보기
+ *        (배경 + 장착 캐릭터 + 똥). 이름·등급·별·한 줄 설명과 장착/적용 버튼
+ *   아래 = 격자: 캐릭터는 얼굴 칩 5열, 배경화면은 썸네일 2열. 칩을 누르면 **위 쇼케이스만** 바뀐다 —
+ *        장착·적용은 버튼으로 한다 (잘못 눌러 바뀌지 않게)
+ *
+ * 메모리: 칩·썸네일은 assets/ui/collection/ 의 작은 그림(ddong-fx-work/collection-ui/bake_ingame.py 가 굽는다).
+ * 일러스트(768x1344)·배경(720x1080)은 **지금 보는 것만** 그때그때 올린다. 구운 그림이 없는 캐릭터는
+ * 게임 스프라이트, 배경은 원본으로 대신한다.
+ */
+const COLLECTION_LAYOUT = 'A' as 'A' | 'C';
+type GradeFilter = 'all' | 'UR' | 'SR' | 'R';
 
 // 표시할 전체 배경화면 = 기본 제공 + 가챠 (wallpaper.ts WALLPAPERS 기준 자동 파생)
 const AVAILABLE_WP_SET = new Set([...DEFAULT_WP_IDS, ...GACHA_WP_IDS]);
 
-// ── 스크롤 영역 (헤더 아래 ~ 하단 버튼 위) ─────────────────────────────────
-const SCROLL_TOP = 95;
-const SCROLL_BOTTOM = 548;
+/** 등급별 칩 테두리 (위·아래 그라데이션) — 메인 화면 버튼과 같은 말씨 */
+const GRADE_FRAME: Record<string, [string, string]> = {
+  UR: ['#ffe58a', '#ff9f1a'],
+  SR: ['#9db8ff', '#6a3cff'],
+  R: ['#8ef0c0', '#1f9a64'],
+};
+const OTHER_FRAME: [string, string] = ['#b8b8c8', '#5a5a6a'];
+/** 등급별 바깥 발광 (A안 카드·배너) */
+const GRADE_GLOW: Record<string, string> = {
+  UR: 'rgba(255,190,60,0.85)', SR: 'rgba(130,110,255,0.75)', R: 'rgba(70,220,150,0.7)',
+};
+const LOCK_FRAME: [string, string] = ['#3a3a48', '#22222c'];
+const BG_DARK = 0x0a0a16;
 
-// 각성 코어 비주얼 상수
-const CORE_COUNT        = 5;
-const CORE_GAP          = 10;    // 코어 간 X 간격 (px)
-const CORE_Y_OFFSET     = 28;    // 카드 하단에서 코어까지의 거리 (px)
-const CORE_GLOW_RADIUS  = 5.5;   // 충전된 코어 외곽 글로우 반지름
-const CORE_INNER_RADIUS = 3.5;   // 코어 내부 원 반지름
-const CORE_HIGHLIGHT_R  = 1.2;   // 하이라이트 스팟 반지름
+const CHIP_COLS = 5;
+const CHIP_GAP_Y = 10;
+const WP_COLS = 2;
+const WP_GAP = 12;
+
+// 각성 단계 (별 개수)
+const STAR_COUNT = 5;
+
+/** 한 줄 설명 — 기본 효과 앞부분 (굵게 표시용 ** 는 뺀다) */
+function shortLine(s: string, max = 44): string {
+  const t = s.replace(/\*\*/g, '').replace(/\s+/g, ' ').trim();
+  if (!t || t === '없음') return '기본 캐릭터 · 특수 능력 없음';
+  return t.length > max ? `${t.slice(0, max - 1)}…` : t;
+}
 
 export default class CharacterSelectScene extends BaseScene {
   private returnScene: string = 'ModeSelectScene';
   private selectedId: string = 'chibi';
   private ownedIds: string[] = [];
   private _preSyncDupCounts: Map<string, number> = new Map();
-  private cardHighlights: Map<string, Phaser.GameObjects.Rectangle> = new Map();
 
-  // 탭 시스템
+  // 탭
   private activeTab: 'character' | 'wallpaper' = 'character';
   private ownedWpIds: string[] = [];
   private selectedWpId: string | null = null;
-  private charTabBtnBg!: Phaser.GameObjects.Rectangle;
-  private wpTabBtnBg!: Phaser.GameObjects.Rectangle;
-  private charTabLabel!: Phaser.GameObjects.Text;
-  private wpTabLabel!: Phaser.GameObjects.Text;
+  private tabHi!: Phaser.GameObjects.Image;
+  private tabLabels: Phaser.GameObjects.Text[] = [];
+  private tabX: number[] = [];
 
-  // 배경화면 선택 하이라이트
-  private wpHighlights: Map<string, Phaser.GameObjects.Rectangle> = new Map();
+  // 쇼케이스 (위) — 지금 보고 있는 캐릭터 / 배경화면
+  private focusedId = 'chibi';
+  private focusedWpId = '';
+  private showcase!: Phaser.GameObjects.Container;
+  private sh = 400;                 // 쇼케이스(A: 배너) 아래 끝
+  private bannerTop = 98;           // A안 배너 위 끝
+  private bannerMaskG: Phaser.GameObjects.Graphics | null = null;
+  private gradeFilter: GradeFilter = 'all';
+  private filterBox!: Phaser.GameObjects.Container;
 
-  // 스크롤
+  // 격자 (아래, 스크롤)
   private cardsContainer!: Phaser.GameObjects.Container;
+  private cellPos = new Map<string, { x: number; y: number; w: number; h: number }>();
+  private focusRing!: Phaser.GameObjects.Graphics;
+  private equipBadge!: Phaser.GameObjects.Container;
+  private countText!: Phaser.GameObjects.Text;
+  private gridTop = 0;
+  private gridBottom = 0;
   private scrollOffset = 0;
   private maxScrollOffset = 0;
   private pointerDownY = 0;
   private pointerDownScrollY = 0;
   private hasDragged = false;
   private hasPointerDownInScene = false; // 이 씬에서 pointerdown이 발생했는지 추적 (bleed-through 방지)
-
-  // 동적 갱신용 ref
-  private headerNameText!: Phaser.GameObjects.Text;
-  private bgImage!: Phaser.GameObjects.Image;
-
-  // 카드 그리드 공유 리소스
-  private coresGfx!: Phaser.GameObjects.Graphics;
-  private gridLeft = 0;
-  private wpGridLeft = 0;
-  private yOff = 0;
   private maskGfx!: Phaser.GameObjects.Graphics;
+  private loadingKeys = new Set<string>();
 
   // 상세 정보 패널
   private detailPanel: Phaser.GameObjects.Container | null = null;
@@ -123,19 +141,27 @@ export default class CharacterSelectScene extends BaseScene {
       if (char.videoKey && char.videoPath && !this.cache.video.exists(char.videoKey)) {
         this.load.video(char.videoKey, char.videoPath);
       }
+      // 격자 그림 — C안 얼굴 칩(128px) / A안 카드(216x288). 없는 캐릭터는 로드 실패로 넘어가고 스프라이트로 대신한다
+      const [gk, gf] = COLLECTION_LAYOUT === 'A' ? [`cs_card_${char.id}`, 'card'] : [`cs_face_${char.id}`, 'face'];
+      if (!this.textures.exists(gk)) this.load.image(gk, `assets/ui/collection/${gf}/${char.id}.webp`);
     }
-    // 일러스트(768×1344, 디코드 시 각 4MB+)는 배경으로 쓰이는 "현재 선택 캐릭터"만 사전 로드.
-    // 나머지는 상세 패널을 열 때 온디맨드 로드 (전량 로드 시 텍스처 메모리 ~95MB 상주)
+    // 일러스트(768×1344, 디코드 시 각 4MB+)는 쇼케이스에 처음 뜨는 "현재 선택 캐릭터"만 사전 로드.
+    // 나머지는 칩을 눌러 볼 때 온디맨드 로드 (전량 로드 시 텍스처 메모리 ~95MB 상주)
     const selDef = CHARACTERS.find(c => c.id === getSelectedCharacter()) ?? CHARACTERS[0];
-    if (!this.textures.exists(selDef.illustKey)) {
+    if (COLLECTION_LAYOUT === 'A') {
+      // A안 배너는 일러스트 원본 대신 구운 가로 크롭 (장착 캐릭터 것만 먼저)
+      if (!this.textures.exists(`cs_banner_${selDef.id}`)) this.load.image(`cs_banner_${selDef.id}`, `assets/ui/collection/banner/${selDef.id}.webp`);
+    } else if (!this.textures.exists(selDef.illustKey)) {
       this.load.image(selDef.illustKey, selDef.illustPath);
     }
-    // 배경화면 bgKey(세로 이미지) 사전 로드 — 표시 대상 3종만
+    // 배경화면 — 격자는 작은 썸네일만. 큰 배경(720x1080)은 쇼케이스에서 볼 때 한 장씩
     for (const wp of WALLPAPERS.filter(w => AVAILABLE_WP_SET.has(w.id))) {
-      if (!this.textures.exists(wp.bgKey)) {
-        this.load.image(wp.bgKey, wp.bgPath);
-      }
+      if (!this.textures.exists(`cs_wp_${wp.id}`)) this.load.image(`cs_wp_${wp.id}`, `assets/ui/collection/wp/${wp.id}.webp`);
     }
+    const selWp = WALLPAPERS.find(w => w.id === getSelectedWallpaper());
+    if (selWp && !this.textures.exists(selWp.bgKey)) this.load.image(selWp.bgKey, selWp.bgPath);
+    // 배경화면 미리보기의 똥
+    if (!this.textures.exists('poop_smile')) this.load.image('poop_smile', 'assets/poops/poop_smile.webp');
     // 등급 이미지
     if (!this.textures.exists('grade_r'))  this.load.image('grade_r',  'assets/character_ranks/r.png');
     if (!this.textures.exists('grade_sr')) this.load.image('grade_sr', 'assets/character_ranks/sr.png');
@@ -153,11 +179,17 @@ export default class CharacterSelectScene extends BaseScene {
     this.ownedWpIds = getOwnedWallpapers();
     this.selectedWpId = getSelectedWallpaper();
     this.activeTab = 'character';
+    this.focusedId = this.selectedId;
+    const wps = WALLPAPERS.filter(w => AVAILABLE_WP_SET.has(w.id));
+    this.focusedWpId = this.selectedWpId ?? wps[0]?.id ?? '';
     this.scrollOffset = 0;
+    this.gradeFilter = 'all';
+    this.bannerMaskG = null;
     this.hasDragged = false;
     this.hasPointerDownInScene = false;
-    this.cardHighlights.clear();
-    this.wpHighlights.clear();
+    this.cellPos.clear();
+    this.tabLabels = [];
+    this.loadingKeys.clear();
     // 씬 인스턴스 재사용 대비 stale 참조 리셋 (상세 패널 연 채로 씬 이탈 시 스크롤 가드가 막히는 것 방지)
     this.detailPanel = null;
     this.infoPanel = null;
@@ -191,100 +223,58 @@ export default class CharacterSelectScene extends BaseScene {
         synced.some(id => !this.ownedWpIds.includes(id));
       if (wpChanged) {
         this.ownedWpIds = synced;
-        if (this.activeTab === 'wallpaper') this.rebuildGrid();
+        if (this.activeTab === 'wallpaper') { this.rebuildGrid(); this.renderShowcase(); }
       }
     }).catch(() => { /* 네트워크 오류 시 로컬 상태 유지 */ });
 
     const W = this.scale.width;
     const H = this.scale.height;
     const cx = W / 2;
-    const yOff = (H - 600) / 2;
 
-    this.yOff       = yOff;
-    this.gridLeft   = (W - (COLS   * CARD_W   + (COLS   - 1) * GAP_X))   / 2;
-    this.wpGridLeft = (W - (WP_COLS * WP_CARD_W + (WP_COLS - 1) * WP_GAP_X)) / 2;
+    // C: 쇼케이스는 화면 위 절반 (작은 화면에서도 300 이상) / A: 탭 아래 배너 (130~160)
+    // 격자는 그 아래 진행 줄 다음 ~ 돌아가기 버튼 위
+    this.bannerTop = 98;
+    this.sh = COLLECTION_LAYOUT === 'A'
+      ? this.bannerTop + Math.round(Phaser.Math.Clamp(H * 0.18, 130, 160))
+      : Math.round(Phaser.Math.Clamp(H * 0.5, 300, 460));
+    this.gridTop = this.sh + 34;
+    this.gridBottom = H - 74;
 
-    const selectedDef = CHARACTERS.find(c => c.id === this.selectedId) ?? CHARACTERS[0];
+    this.add.rectangle(cx, H / 2, W, H, BG_DARK).setDepth(-10);
+    if (COLLECTION_LAYOUT === 'A' && this.textures.exists('background2')) {
+      // A안 바탕 — 메인 화면 배경을 어둡게 (카드가 떠 보이게)
+      this.add.image(cx, H, 'background2').setOrigin(0.5, 1).setScale(Math.max(W / 720, H / 1080)).setTint(0x3a3a58).setDepth(-9);
+    }
+    this.showcase = this.add.container(0, 0).setDepth(1);
+    this.filterBox = this.add.container(0, 0).setDepth(6);
 
-    // ── 배경: 선택된 캐릭터 일러스트 ───────────────────────────────────
-    this.bgImage = this.add.image(cx, H / 2, selectedDef.illustKey);
-    this.bgImage.setDisplaySize(W, H);
-
-    // ── 헤더 (고정, depth 10 — 스크롤 카드보다 위) ──────────────────────
-    this.add.text(cx, 30 + yOff, '수집', {
-      fontSize: '22px',
-      color: '#ffffff',
-      fontStyle: 'bold',
-      stroke: '#000',
-      strokeThickness: 4,
+    // 헤더 — C안은 쇼케이스 위라 위쪽을 어둡게 깐다 (글자가 일러스트에 묻히지 않게)
+    if (COLLECTION_LAYOUT === 'C') this.add.image(cx, 0, this.bakeFade('cs_topfade', W, 110, 0.8, 0)).setOrigin(0.5, 0).setDepth(9);
+    this.add.text(cx, 30, '수집', {
+      fontSize: '24px', color: '#ffffff', fontStyle: 'bold', stroke: '#000000', strokeThickness: 4,
     }).setOrigin(0.5).setDepth(10);
+    this.createTabs(cx, 68);
 
-    // ── 탭 버튼 ────────────────────────────────────────────────────────
-    const TAB_Y = 60 + yOff;
-    const TAB_W = 160;
-    const TAB_H = 30;
+    this.countText = this.add.text(16, this.sh + 16, '', {
+      fontSize: '13px', color: '#ffd34d', fontStyle: 'bold',
+    }).setOrigin(0, 0.5).setDepth(5);
 
-    this.charTabBtnBg = this.add.rectangle(cx - 90, TAB_Y, TAB_W, TAB_H, 0x1144bb)
-      .setStrokeStyle(1.5, 0x4488ff)
-      .setDepth(10)
-      .setInteractive({ useHandCursor: true });
-    this.charTabLabel = this.add.text(cx - 90, TAB_Y, '캐릭터', {
-      fontSize: '14px', color: '#ffffff', fontStyle: 'bold',
-    }).setOrigin(0.5).setDepth(10);
-
-    this.wpTabBtnBg = this.add.rectangle(cx + 90, TAB_Y, TAB_W, TAB_H, 0x222222)
-      .setStrokeStyle(1.5, 0x555555)
-      .setDepth(10)
-      .setInteractive({ useHandCursor: true });
-    this.wpTabLabel = this.add.text(cx + 90, TAB_Y, '배경화면', {
-      fontSize: '14px', color: '#888888', fontStyle: 'bold',
-    }).setOrigin(0.5).setDepth(10);
-
-    this.charTabBtnBg.on('pointerup', () => {
-      if (this.detailPanel) return;
-      this.switchTab('character');
-    });
-    this.wpTabBtnBg.on('pointerup', () => {
-      if (this.detailPanel) return;
-      this.switchTab('wallpaper');
-    });
-
-    // 구분선
-    this.add.rectangle(cx, 80 + yOff, W - 20, 1, 0x444444).setDepth(10);
-
-    // 현재 선택 상태 표시
-    this.headerNameText = this.add.text(cx, 88 + yOff, `현재: ${selectedDef.name}`, {
-      fontSize: '13px',
-      color: selectedDef.gradeColor,
-      stroke: '#000',
-      strokeThickness: 3,
-    }).setOrigin(0.5).setDepth(10);
-
-    // ── 스크롤 가능한 카드 컨테이너 ─────────────────────────────────────
-    this.cardsContainer = this.add.container(0, this.yOff);
-
-    this.buildCharacterGrid();
-
-    // 카드 영역 마스크 (스크롤 영역 밖 숨김)
+    // ── 스크롤 격자 ─────────────────────────────────────────────────────
+    this.cardsContainer = this.add.container(0, 0).setDepth(5);
     // this.make: display list에 추가되지 않으므로 shutdown 시 직접 정리 필요
-    const scrollTopActual    = SCROLL_TOP + yOff;          // 상단: 헤더 아래
-    const scrollBottomActual = H - (600 - SCROLL_BOTTOM);  // 하단: 하단 버튼 위 (화면 하단 고정)
-
-    // 스크롤 최대 범위 계산 (buildCharacterGrid 내부에서도 설정되지만 여기서도 초기화)
-    // 미공개 캐릭터는 격자에 안 그려지므로 **보이는 수**로 재야 빈 줄이 안 생긴다
-    const totalRows = Math.ceil(getVisibleCharacters().length / COLS);
-    const contentBottom = GRID_TOP + (totalRows - 1) * (CARD_H + GAP_Y) + CARD_H + 10;
-    this.maxScrollOffset = Math.max(0, yOff + contentBottom - scrollBottomActual);
     this.maskGfx = this.make.graphics({ x: 0, y: 0 });
     this.maskGfx.fillStyle(0xffffff);
-    this.maskGfx.fillRect(0, scrollTopActual, W, scrollBottomActual - scrollTopActual);
+    this.maskGfx.fillRect(0, this.gridTop - 6, W, this.gridBottom - this.gridTop + 6);
     this.cardsContainer.setMask(this.maskGfx.createGeometryMask());
+
+    this.buildCharacterGrid();
+    this.renderShowcase();
 
     // ── 드래그 스크롤 입력 ───────────────────────────────────────────────
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
       this.hasPointerDownInScene = true;
       if (this.detailPanel) return; // 상세 패널 열려있으면 스크롤 무시
-      if (p.y < scrollTopActual || p.y > scrollBottomActual) return;
+      if (p.y < this.gridTop - 6 || p.y > this.gridBottom) return;
       this.pointerDownY = p.y;
       this.pointerDownScrollY = this.scrollOffset;
       this.hasDragged = false;
@@ -293,15 +283,12 @@ export default class CharacterSelectScene extends BaseScene {
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
       if (this.detailPanel) return; // 상세 패널 열려있으면 스크롤 무시
       if (!p.isDown) return;
+      if (this.pointerDownY < this.gridTop - 6 || this.pointerDownY > this.gridBottom) return;
       const dy = this.pointerDownY - p.y;
       if (Math.abs(dy) > 5) {
         this.hasDragged = true;
-        this.scrollOffset = Phaser.Math.Clamp(
-          this.pointerDownScrollY + dy,
-          0,
-          this.maxScrollOffset,
-        );
-        this.cardsContainer.setY(this.yOff - this.scrollOffset);
+        this.scrollOffset = Phaser.Math.Clamp(this.pointerDownScrollY + dy, 0, this.maxScrollOffset);
+        this.cardsContainer.setY(-this.scrollOffset);
       }
     });
 
@@ -319,12 +306,8 @@ export default class CharacterSelectScene extends BaseScene {
       'wheel',
       (_p: Phaser.Input.Pointer, _go: unknown[], _dx: number, deltaY: number) => {
         if (this.detailPanel) return; // 상세 패널 열려있으면 휠 스크롤 무시
-        this.scrollOffset = Phaser.Math.Clamp(
-          this.scrollOffset + deltaY * 0.5,
-          0,
-          this.maxScrollOffset,
-        );
-        this.cardsContainer.setY(this.yOff - this.scrollOffset);
+        this.scrollOffset = Phaser.Math.Clamp(this.scrollOffset + deltaY * 0.5, 0, this.maxScrollOffset);
+        this.cardsContainer.setY(-this.scrollOffset);
       },
     );
 
@@ -332,48 +315,106 @@ export default class CharacterSelectScene extends BaseScene {
     this.createBackButton();
 
     // maskGfx는 display list 외부에 있으므로 씬 종료 시 직접 정리
-    this.events.once('shutdown', () => { this.maskGfx.destroy(); });
+    this.events.once('shutdown', () => {
+      this.maskGfx.destroy();
+      this.bannerMaskG?.destroy();
+      this.bannerMaskG = null;
+    });
   }
 
-  // ── 그리드 빌더 ─────────────────────────────────────────────────────────
+  // ── 공용 그림 굽기 ──────────────────────────────────────────────────────
 
-  private buildCharacterGrid() {
-    this.cardHighlights.clear();
-    this.coresGfx = this.add.graphics();
-    const visible = getVisibleCharacters();
-    visible.forEach((char, index) => {
-      const col = index % COLS;
-      const row = Math.floor(index / COLS);
-      const x = this.gridLeft + col * (CARD_W + GAP_X) + CARD_W / 2;
-      const y = GRID_TOP + row * (CARD_H + GAP_Y) + CARD_H / 2;
-      this.createCharacterCard(char, x, y);
-    });
-    this.cardsContainer.add(this.coresGfx);
-
-    const totalRows = Math.ceil(visible.length / COLS);
-    const contentBottom = GRID_TOP + (totalRows - 1) * (CARD_H + GAP_Y) + CARD_H + 10;
-    const scrollBottomActual = this.scale.height - (600 - SCROLL_BOTTOM);
-    this.maxScrollOffset = Math.max(0, this.yOff + contentBottom - scrollBottomActual);
+  /** 세로 그라데이션 (검정 알파 a0 → a1) — 한 번 굽는다 */
+  private bakeFade(key: string, w: number, h: number, a0: number, a1: number, color = '10,10,22'): string {
+    if (this.textures.exists(key)) return key;
+    const tex = this.textures.createCanvas(key, Math.ceil(w), Math.ceil(h));
+    if (!tex) return key;
+    const ctx = tex.getContext();
+    const g = ctx.createLinearGradient(0, 0, 0, h);
+    g.addColorStop(0, `rgba(${color},${a0})`);
+    g.addColorStop(1, `rgba(${color},${a1})`);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, w, h);
+    tex.refresh();
+    return key;
   }
 
-  private buildWallpaperGrid() {
-    this.wpHighlights.clear();
-    // ownedWpIds: create() 초기화 + sync callback에서 직접 갱신
-    // selectedWpId: applyWallpaper()가 항상 동기 업데이트 → 재조회 불필요
+  /** 정사각·가로 그림을 둥근 모서리로 잘라 굽는다 (칩·썸네일마다 한 번) — 마스크를 칩마다 두지 않으려고 */
+  private bakeRounded(srcKey: string, key: string, w: number, h: number, r: number): string | null {
+    if (this.textures.exists(key)) return key;
+    if (!this.textures.exists(srcKey)) return null;
+    const src = this.textures.get(srcKey).getSourceImage() as CanvasImageSource;
+    const tex = this.textures.createCanvas(key, w, h);
+    if (!tex) return null;
+    const ctx = tex.getContext();
+    ctx.beginPath();
+    ctx.moveTo(r, 0);
+    ctx.arcTo(w, 0, w, h, r);
+    ctx.arcTo(w, h, 0, h, r);
+    ctx.arcTo(0, h, 0, 0, r);
+    ctx.arcTo(0, 0, w, 0, r);
+    ctx.closePath();
+    ctx.clip();
+    ctx.drawImage(src, 0, 0, w, h);
+    tex.refresh();
+    return key;
+  }
 
-    const availableWps = WALLPAPERS.filter(w => AVAILABLE_WP_SET.has(w.id));
-    availableWps.forEach((wp, index) => {
-      const col = index % WP_COLS;
-      const row = Math.floor(index / WP_COLS);
-      const x = this.wpGridLeft + col * (WP_CARD_W + WP_GAP_X) + WP_CARD_W / 2;
-      const y = WP_GRID_TOP + row * (WP_CARD_H + WP_GAP_Y) + WP_CARD_H / 2;
-      this.createWallpaperCard(wp, x, y);
+  /** 텍스처를 그때그때 올린다 — 다 올라오면 onReady (이미 있으면 바로) */
+  private ensureTexture(key: string, path: string, onReady: () => void): void {
+    if (this.textures.exists(key)) { onReady(); return; }
+    if (this.loadingKeys.has(key)) return;
+    this.loadingKeys.add(key);
+    this.load.image(key, path);
+    this.load.once(`${Phaser.Loader.Events.FILE_KEY_COMPLETE}image-${key}`, () => {
+      this.loadingKeys.delete(key);
+      if (this.scene.isActive()) onReady();
     });
+    this.load.start();
+  }
 
-    const totalRows = Math.ceil(availableWps.length / WP_COLS);
-    const contentBottom = WP_GRID_TOP + (totalRows - 1) * (WP_CARD_H + WP_GAP_Y) + WP_CARD_H + 10;
-    const scrollBottomActual = this.scale.height - (600 - SCROLL_BOTTOM);
-    this.maxScrollOffset = Math.max(0, this.yOff + contentBottom - scrollBottomActual);
+  /** 판 버튼 (메인 화면과 같은 판) — 몸통 가운데 (x, y). 씬에 남는 버튼이라 다시 누를 수 있다 */
+  private skinButton(
+    parent: Phaser.GameObjects.Container, x: number, y: number, w: number, h: number,
+    colors: [string, string, string], label: string, labelColor: string, onClick: (() => void) | null,
+  ): void {
+    const key = `cs_btn_${colors.join('')}_${w}x${h}`.replace(/#/g, '');
+    const skin: ButtonSkin = {
+      w, h, radius: h / 2, top: colors[0], bottom: colors[1], border: colors[2], borderW: 1.5,
+      lip: '', lipH: 0, gloss: 0.5,
+    };
+    const { originY } = bakeButton(this, key, skin);
+    const box = this.add.container(x, y);
+    box.add(this.add.image(0, 0, key).setOrigin(0.5, originY));
+    box.add(this.add.text(0, 0, label, { fontSize: `${Math.round(h * 0.42)}px`, color: labelColor, fontStyle: 'bold' }).setOrigin(0.5));
+    if (onClick) wireButton(this, box, w, h, onClick, true);
+    parent.add(box);
+  }
+
+  // ── 탭 ─────────────────────────────────────────────────────────────────
+
+  private createTabs(cx: number, y: number) {
+    const w = 280, h = 38, half = (w - 8) / 2;
+    const track = bakeButton(this, 'cs_tab_track', {
+      w, h, radius: 19, top: '#141428', bottom: '#0b0b18', border: '#3a3a66', borderW: 1.5, lip: '', lipH: 0, gloss: 0,
+    });
+    this.add.image(cx, y, track.key).setOrigin(0.5, track.originY).setDepth(10);
+    const hi = bakeButton(this, 'cs_tab_hi', {
+      w: half, h: 30, radius: 15, top: '#ffe58a', bottom: '#ffb02e', border: '#fff1b8', borderW: 1, lip: '', lipH: 0, gloss: 0.5,
+    });
+    this.tabX = [cx - half / 2, cx + half / 2];
+    this.tabHi = this.add.image(this.tabX[0], y, hi.key).setOrigin(0.5, hi.originY).setDepth(10);
+    (['character', 'wallpaper'] as const).forEach((tab, i) => {
+      const label = this.add.text(this.tabX[i], y, i === 0 ? '캐릭터' : '배경화면', {
+        fontSize: '15px', color: i === 0 ? '#3a1d00' : '#9a9ac0', fontStyle: 'bold',
+      }).setOrigin(0.5).setDepth(11);
+      this.tabLabels.push(label);
+      const zone = this.add.zone(this.tabX[i], y, half, h).setInteractive({ useHandCursor: true }).setDepth(12);
+      zone.on('pointerup', () => {
+        if (this.detailPanel) return;
+        this.switchTab(tab);
+      });
+    });
   }
 
   private switchTab(tab: 'character' | 'wallpaper') {
@@ -381,383 +422,600 @@ export default class CharacterSelectScene extends BaseScene {
     this.activeTab = tab;
     this.scrollOffset = 0;
     this.hasDragged = false;
-    this.cardsContainer.setY(this.yOff);
-    this.updateBgForTab();
-
-    // 컨테이너 내 카드 오브젝트 전부 제거
-    this.cardsContainer.removeAll(true);
-    this.cardHighlights.clear();
-    this.wpHighlights.clear();
-
-    // 탭 버튼 스타일 갱신
-    if (tab === 'character') {
-      this.charTabBtnBg.setFillStyle(0x1144bb).setStrokeStyle(1.5, 0x4488ff);
-      this.charTabLabel.setColor('#ffffff');
-      this.wpTabBtnBg.setFillStyle(0x222222).setStrokeStyle(1.5, 0x555555);
-      this.wpTabLabel.setColor('#888888');
-
-      this.buildCharacterGrid();
-
-      // 헤더 텍스트 갱신
-      const def = CHARACTERS.find(c => c.id === this.selectedId) ?? CHARACTERS[0];
-      this.headerNameText.setText(`현재: ${def.name}`).setColor(def.gradeColor);
-    } else {
-      this.wpTabBtnBg.setFillStyle(0x1144bb).setStrokeStyle(1.5, 0x4488ff);
-      this.wpTabLabel.setColor('#ffffff');
-      this.charTabBtnBg.setFillStyle(0x222222).setStrokeStyle(1.5, 0x555555);
-      this.charTabLabel.setColor('#888888');
-
-      this.buildWallpaperGrid();
-
-      // 헤더 텍스트 갱신
-      const selWpDef = this.selectedWpId
-        ? WALLPAPERS.find(w => w.id === this.selectedWpId)
-        : null;
-      this.headerNameText
-        .setText(`배경: ${selWpDef?.name ?? '기본'}`)
-        .setColor(this.selectedWpId ? WP_ACCENT_HEX : '#888888');
-    }
+    this.cardsContainer.setY(0);
+    const i = tab === 'character' ? 0 : 1;
+    this.tweens.add({ targets: this.tabHi, x: this.tabX[i], duration: 140, ease: 'Quad.easeOut' });
+    this.tabLabels.forEach((t, k) => t.setColor(k === i ? '#3a1d00' : '#9a9ac0'));
+    this.rebuildGrid();
+    this.renderShowcase();
   }
 
-  /** 현재 탭에 맞게 배경 이미지 업데이트 */
-  private updateBgForTab() {
-    const W = this.scale.width;
-    const H = this.scale.height;
-    if (this.activeTab === 'character') {
-      const def = CHARACTERS.find(c => c.id === this.selectedId) ?? CHARACTERS[0];
-      this.bgImage.setTexture(def.illustKey).setOrigin(0.5).setPosition(W / 2, H / 2)
-        .setDisplaySize(W, H).setAlpha(1).clearTint();
-    } else {
-      const wpDef = this.selectedWpId
-        ? WALLPAPERS.find(w => w.id === this.selectedWpId)
-        : null;
-      if (wpDef && this.textures.exists(wpDef.bgKey)) {
-        coverBackground(this.bgImage.setTexture(wpDef.bgKey), W, H).setAlpha(1).clearTint();
-      } else {
-        // 선택 배경 없음 → 캐릭터 일러스트를 어둡게 처리
-        const def = CHARACTERS.find(c => c.id === this.selectedId) ?? CHARACTERS[0];
-        this.bgImage.setTexture(def.illustKey).setOrigin(0.5).setPosition(W / 2, H / 2)
-          .setDisplaySize(W, H).setAlpha(0.2);
-      }
-    }
-  }
-
-  /** 서버 동기화 후 현재 탭을 내용 갱신 */
+  /** 서버 동기화·장착·적용 뒤 — 지금 탭의 격자를 다시 그린다 (스크롤 자리는 그대로) */
   private rebuildGrid() {
     this.cardsContainer.removeAll(true);
-    this.cardHighlights.clear();
-    this.wpHighlights.clear();
-    if (this.activeTab === 'character') {
-      this.buildCharacterGrid();
-    } else {
-      this.buildWallpaperGrid();
-    }
+    this.cellPos.clear();
+    if (this.activeTab === 'character') this.buildCharacterGrid();
+    else this.buildWallpaperGrid();
+    this.scrollOffset = Math.min(this.scrollOffset, this.maxScrollOffset);
+    this.cardsContainer.setY(-this.scrollOffset);
   }
 
-  // ── 배경화면 카드 ────────────────────────────────────────────────────────
+  // ── 격자 ───────────────────────────────────────────────────────────────
 
-  private createWallpaperCard(wp: BackgroundDef, x: number, y: number) {
-    const isOwned = this.ownedWpIds.includes(wp.id);
-    const isSelected = this.selectedWpId === wp.id;
-
-    // 카드 배경
-    const cardBg = this.add.rectangle(x, y, WP_CARD_W, WP_CARD_H, 0x1a1a2e);
-    cardBg.setStrokeStyle(2, isOwned ? WP_ACCENT_INT : 0x333333);
-    this.cardsContainer.add(cardBg);
-
-    // 선택 하이라이트 (흰 테두리)
-    const highlight = this.add.rectangle(x, y, WP_CARD_W, WP_CARD_H, 0, 0);
-    highlight.setStrokeStyle(3, 0xffffff);
-    highlight.setVisible(isSelected);
-    this.wpHighlights.set(wp.id, highlight);
-    this.cardsContainer.add(highlight);
-
-    // 세로 이미지 (bgKey) — 카드 상단을 채우는 portrait 썸네일
-    if (this.textures.exists(wp.bgKey)) {
-      const thumb = this.add.image(x, y - 11, wp.bgKey)
-        .setDisplaySize(WP_CARD_W - 4, WP_CARD_H - 22);
-      if (!isOwned) { thumb.setTint(0x000000); thumb.setAlpha(0.5); }
-      this.cardsContainer.add(thumb);
-    }
-
-    // 미보유 자물쇠
-    if (!isOwned) {
-      const lock = this.add.text(x, y - 8, '🔒', { fontSize: '20px' }).setOrigin(0.5);
-      this.cardsContainer.add(lock);
-    }
-
-    // WP 배지 (우상단) — 기본 배경은 '기본', 가챠 배경은 'WP'
-    const isDefault = (DEFAULT_WP_IDS as readonly string[]).includes(wp.id);
-    const badgeText  = isDefault ? '기본' : 'WP';
-    const badgeColor = isDefault ? '#aaaaaa' : WP_ACCENT_HEX;
-    const badge = this.add.text(x + WP_CARD_W / 2 - 2, y - WP_CARD_H / 2 + 2, badgeText, {
-      fontSize: '9px', color: badgeColor, fontStyle: 'bold',
-      backgroundColor: '#000000cc', padding: { x: 3, y: 1 },
-    }).setOrigin(1, 0);
+  /** 공용 — 고른 칸 흰 테두리 · 장착(사용 중) 금 배지. 격자를 그린 뒤 위에 얹는다 */
+  private addGridMarks() {
+    this.focusRing = this.add.graphics();
+    this.cardsContainer.add(this.focusRing);
+    const badge = this.add.container(0, 0);
+    badge.add(this.add.circle(0, 0, 10, 0xffc94a).setStrokeStyle(2, 0x3a1d00));
+    badge.add(this.add.text(0, 0, '✓', { fontSize: '12px', color: '#3a1d00', fontStyle: 'bold' }).setOrigin(0.5));
+    this.equipBadge = badge;
     this.cardsContainer.add(badge);
-
-    // 하단 반투명 바 + 이름
-    const barY = y + WP_CARD_H / 2 - 11;
-    const bar = this.add.rectangle(x, barY, WP_CARD_W, 22, 0x000000, 0.75);
-    this.cardsContainer.add(bar);
-    const nameText = this.add.text(x, barY, wp.name, {
-      fontSize: '11px',
-      color: isOwned ? WP_ACCENT_HEX : '#444444',
-      fontStyle: 'bold',
-    }).setOrigin(0.5);
-    this.cardsContainer.add(nameText);
-
-    // 클릭 이벤트
-    cardBg.setInteractive({ useHandCursor: isOwned });
-    if (isOwned) {
-      cardBg.on('pointerover', () => cardBg.setFillStyle(0x252540));
-      cardBg.on('pointerout',  () => cardBg.setFillStyle(0x1a1a2e));
-    }
-    cardBg.on('pointerup', () => {
-      if (!this.hasDragged && this.hasPointerDownInScene) this.showWallpaperDetail(wp);
-    });
+    this.updateGridMarks();
   }
 
-  // ── 배경화면 상세 오버레이 ──────────────────────────────────────────────
+  private updateGridMarks() {
+    const focusId = this.activeTab === 'character' ? this.focusedId : this.focusedWpId;
+    const equipId = this.activeTab === 'character' ? this.selectedId : this.selectedWpId;
+    this.focusRing.clear();
+    const f = this.cellPos.get(focusId);
+    if (f) {
+      this.focusRing.lineStyle(3, 0xffffff, 1);
+      this.focusRing.strokeRoundedRect(f.x - f.w / 2 - 2, f.y - f.h / 2 - 2, f.w + 4, f.h + 4, 16);
+    }
+    const e = equipId ? this.cellPos.get(equipId) : undefined;
+    this.equipBadge.setVisible(!!e);
+    if (e) this.equipBadge.setPosition(e.x + e.w / 2 - 6, e.y - e.h / 2 + 6);
+  }
 
-  private showWallpaperDetail(def: BackgroundDef): void {
-    this.hideCharacterDetail();
+  /** 칸 누름 — 드래그였거나 스크롤 영역 밖(마스크로 가려진 칸)이면 무시 */
+  private onCellTap(p: Phaser.Input.Pointer, fn: () => void) {
+    if (this.hasDragged || !this.hasPointerDownInScene || this.detailPanel) return;
+    if (p.y < this.gridTop - 6 || p.y > this.gridBottom) return;
+    fn();
+  }
 
+  private buildCharacterGrid() {
+    if (COLLECTION_LAYOUT === 'A') { this.buildCharacterCardsA(); return; }
     const W = this.scale.width;
-    const H = this.scale.height;
-    const cx = W / 2;
-    const isOwned = this.ownedWpIds.includes(def.id);
-    const isSelected = this.selectedWpId === def.id;
+    // 보유한 캐릭터를 앞으로 (명단 순서는 유지)
+    const visible = getVisibleCharacters();
+    const order = [...visible.filter(c => this.ownedIds.includes(c.id)), ...visible.filter(c => !this.ownedIds.includes(c.id))];
+    const sz = Math.floor(Math.min(64, (W - 32 - (CHIP_COLS - 1) * 9) / CHIP_COLS));
+    const gapX = (W - 32 - CHIP_COLS * sz) / (CHIP_COLS - 1);
+    order.forEach((def, i) => {
+      const col = i % CHIP_COLS, row = Math.floor(i / CHIP_COLS);
+      this.createChip(def, 16 + col * (sz + gapX) + sz / 2, this.gridTop + row * (sz + CHIP_GAP_Y) + sz / 2, sz);
+    });
+    this.addGridMarks();
+    const owned = order.filter(c => this.ownedIds.includes(c.id)).length;
+    this.countText.setText(`수집 ${owned}/${order.length}`);
+    const rows = Math.ceil(order.length / CHIP_COLS);
+    const contentBottom = this.gridTop + rows * (sz + CHIP_GAP_Y) + 8;
+    this.maxScrollOffset = Math.max(0, contentBottom - this.gridBottom);
+  }
 
-    const panel = this.add.container(0, 0).setDepth(300);
-    this.detailPanel = panel;
+  private createChip(def: CharacterDef, x: number, y: number, sz: number) {
+    const owned = this.ownedIds.includes(def.id);
+    const [top, bottom] = owned ? (GRADE_FRAME[def.grade] ?? OTHER_FRAME) : LOCK_FRAME;
+    const frameKey = `cs_chip_${top}${bottom}_${sz}`.replace(/#/g, '');
+    const { originY, pad } = bakeButton(this, frameKey, {
+      w: sz, h: sz, radius: 14, top, bottom, border: bottom, borderW: 1, lip: '', lipH: 0, gloss: 0.4,
+    });
+    const frame = this.add.image(x, y, frameKey).setOrigin(0.5, originY);
+    this.cardsContainer.add(frame);
 
-    // 클릭 차단
-    const blocker = this.add.rectangle(cx, H / 2, W, H, 0x000000, 0).setInteractive();
-    panel.add(blocker);
-
-    // 배경화면 전체화면 미리보기
-    if (this.textures.exists(def.bgKey)) {
-      const bg = addBackground(this, def.bgKey, W, H);
-      panel.add(bg);
-    } else {
-      const fallback = this.add.rectangle(cx, H / 2, W, H, 0x050515);
-      const hint = this.add.text(cx, H / 2, '이미지 없음\n(에셋 추가 필요)', {
-        fontSize: '16px', color: '#666666', align: 'center',
-      }).setOrigin(0.5);
-      panel.add(fallback);
-      panel.add(hint);
+    const face = this.bakeRounded(`cs_face_${def.id}`, `cs_rface_${def.id}`, 128, 128, 26);
+    if (face) {
+      const img = this.add.image(x, y, face).setDisplaySize(sz - 6, sz - 6);
+      if (!owned) img.setTint(0x5a5a70);   // 누군지는 보이게 — 흐리게만
+      this.cardsContainer.add(img);
+    } else if (this.textures.exists(def.imageKey)) {
+      // 얼굴 칩이 아직 없는 캐릭터 — 게임 스프라이트
+      const img = this.add.image(x, y + 2, def.imageKey);
+      img.setScale((sz - 10) / img.height);
+      if (!owned) img.setTint(0x000000).setAlpha(0.6);
+      this.cardsContainer.add(img);
+    }
+    if (!owned) this.cardsContainer.add(this.add.text(x, y, '🔒', { fontSize: '16px' }).setOrigin(0.5));
+    const gradeKey = getGradeImgKey(def.grade);
+    if (gradeKey && this.textures.exists(gradeKey)) {
+      this.cardsContainer.add(this.add.image(x - sz / 2 + 10, y - sz / 2 + 10, gradeKey).setDisplaySize(20, 20));
     }
 
-    const yOff = (H - 600) / 2;
+    this.cellPos.set(def.id, { x, y, w: sz, h: sz });
+    // 몸통만 누르게 — 이미지째로 하면 그림자 여백까지 눌려 옆 칩과 겹친다
+    frame.setInteractive({ hitArea: hitRect(pad, sz, sz), hitAreaCallback: Phaser.Geom.Rectangle.Contains, useHandCursor: true });
+    frame.on('pointerup', (p: Phaser.Input.Pointer) => this.onCellTap(p, () => this.focusCharacter(def.id)));
+  }
 
-    // 하단 그라디언트 오버레이
-    const grad = this.add.graphics();
-    grad.fillGradientStyle(0x000000, 0x000000, 0x000000, 0x000000, 0, 0, 0.8, 0.8);
-    grad.fillRect(0, H - 220, W, 220);
-    panel.add(grad);
+  private buildWallpaperGrid() {
+    if (COLLECTION_LAYOUT === 'A') { this.buildWallpaperCardsA(); return; }
+    const W = this.scale.width;
+    const wps = WALLPAPERS.filter(w => AVAILABLE_WP_SET.has(w.id));
+    const tw = Math.floor((W - 32 - WP_GAP) / WP_COLS);
+    const th = Math.round(tw * 220 / 340);
+    wps.forEach((wp, i) => {
+      const col = i % WP_COLS, row = Math.floor(i / WP_COLS);
+      this.createWallpaperCard(wp, 16 + col * (tw + WP_GAP) + tw / 2, this.gridTop + row * (th + WP_GAP) + th / 2, tw, th);
+    });
+    this.addGridMarks();
+    const owned = wps.filter(w => this.ownedWpIds.includes(w.id)).length;
+    this.countText.setText(`배경 ${owned}/${wps.length}`);
+    const rows = Math.ceil(wps.length / WP_COLS);
+    const contentBottom = this.gridTop + rows * (th + WP_GAP) + 8;
+    this.maxScrollOffset = Math.max(0, contentBottom - this.gridBottom);
+  }
 
-    // ✕ 닫기 버튼
-    const closeBg = this.add.circle(W - 28, 38 + yOff, 22, 0x000000, 0.55)
-      .setInteractive({ useHandCursor: true });
-    const closeBtn = this.add.text(W - 28, 38 + yOff, '✕', { fontSize: '18px', color: '#cccccc' }).setOrigin(0.5);
-    closeBg.on('pointerover', () => { closeBg.setFillStyle(0x333333, 0.8); closeBtn.setColor('#ffffff'); });
-    closeBg.on('pointerout',  () => { closeBg.setFillStyle(0x000000, 0.55); closeBtn.setColor('#cccccc'); });
-    closeBg.on('pointerup',   () => this.hideCharacterDetail());
-    panel.add(closeBg);
-    panel.add(closeBtn);
+  private createWallpaperCard(wp: BackgroundDef, x: number, y: number, tw: number, th: number) {
+    const owned = this.ownedWpIds.includes(wp.id);
+    const used = this.selectedWpId === wp.id;
+    const [top, bottom] = used ? GRADE_FRAME.UR : owned ? ['#e6c8ff', '#8a4fe0'] as [string, string] : LOCK_FRAME;
+    const frameKey = `cs_wpf_${top}${bottom}_${tw}x${th}`.replace(/#/g, '');
+    const { originY, pad } = bakeButton(this, frameKey, {
+      w: tw, h: th, radius: 14, top, bottom, border: bottom, borderW: 1, lip: '', lipH: 0, gloss: 0.3,
+    });
+    const frame = this.add.image(x, y, frameKey).setOrigin(0.5, originY);
+    this.cardsContainer.add(frame);
 
-    // 이름
-    panel.add(this.add.text(24, H - 150, def.name, {
-      fontSize: '26px', color: '#ffffff', fontStyle: 'bold',
-      stroke: '#000000', strokeThickness: 5,
-    }));
-    panel.add(this.add.text(24, H - 106, def.description, {
-      fontSize: '12px', color: '#aaaaaa',
-      stroke: '#000000', strokeThickness: 3,
-      wordWrap: { width: W - 50 },
-    }));
+    const thumb = this.bakeRounded(`cs_wp_${wp.id}`, `cs_rwp_${wp.id}`, 340, 220, 26);
+    if (thumb) {
+      const img = this.add.image(x, y, thumb).setDisplaySize(tw - 6, th - 6);
+      if (!owned) img.setTint(0x30303c);
+      this.cardsContainer.add(img);
+    }
+    this.cardsContainer.add(this.add.text(x - tw / 2 + 10, y + th / 2 - 14, wp.name, {
+      fontSize: '13px', color: owned ? '#ffffff' : '#9a9aaa', fontStyle: 'bold', stroke: '#000000', strokeThickness: 4,
+    }).setOrigin(0, 0.5));
+    if (!owned) this.cardsContainer.add(this.add.text(x, y - 6, '🔒', { fontSize: '18px' }).setOrigin(0.5));
 
-    // ── 버튼 2개 ──
-    const BTN_Y = H - 38;
-    const BTN_W = 168;
-    const BTN_H = 42;
+    this.cellPos.set(wp.id, { x, y, w: tw, h: th });
+    frame.setInteractive({ hitArea: hitRect(pad, tw, th), hitAreaCallback: Phaser.Geom.Rectangle.Contains, useHandCursor: true });
+    frame.on('pointerup', (p: Phaser.Input.Pointer) => this.onCellTap(p, () => this.focusWallpaper(wp.id)));
+  }
 
-    if (isOwned) {
-      if (!isSelected) {
-        // [적용하기]
-        const applyBg = this.add.rectangle(cx - 92, BTN_Y, BTN_W, BTN_H, 0x115511)
-          .setStrokeStyle(2, WP_ACCENT_INT)
-          .setInteractive({ useHandCursor: true });
-        applyBg.on('pointerover', () => applyBg.setFillStyle(0x226622));
-        applyBg.on('pointerout',  () => applyBg.setFillStyle(0x115511));
-        applyBg.on('pointerup',   () => this.applyWallpaper(def.id));
-        panel.add(applyBg);
-        panel.add(this.add.text(cx - 92, BTN_Y, '✔  적용하기', {
-          fontSize: '14px', color: '#88ff88', fontStyle: 'bold',
-        }).setOrigin(0.5));
-      } else {
-        // [해제]
-        const removeBg = this.add.rectangle(cx - 92, BTN_Y, BTN_W, BTN_H, 0x331111)
-          .setStrokeStyle(2, 0x884444)
-          .setInteractive({ useHandCursor: true });
-        removeBg.on('pointerover', () => removeBg.setFillStyle(0x442222));
-        removeBg.on('pointerout',  () => removeBg.setFillStyle(0x331111));
-        removeBg.on('pointerup',   () => this.applyWallpaper(null));
-        panel.add(removeBg);
-        panel.add(this.add.text(cx - 92, BTN_Y, '✕  해제', {
-          fontSize: '14px', color: '#ff8888', fontStyle: 'bold',
+  // ── 쇼케이스 ───────────────────────────────────────────────────────────
+
+  private focusCharacter(id: string) {
+    this.focusedId = id;
+    this.updateGridMarks();
+    this.renderShowcase();
+  }
+
+  private focusWallpaper(id: string) {
+    this.focusedWpId = id;
+    this.updateGridMarks();
+    this.renderShowcase();
+  }
+
+  private renderShowcase() {
+    this.showcase.removeAll(true);
+    this.bannerMaskG?.destroy();
+    this.bannerMaskG = null;
+    if (COLLECTION_LAYOUT === 'A') {
+      if (this.activeTab === 'character') this.renderCharacterBannerA();
+      else this.renderWallpaperBannerA();
+      return;
+    }
+    if (this.activeTab === 'character') this.renderCharacterShowcase();
+    else this.renderWallpaperShowcase();
+  }
+
+  private renderCharacterShowcase() {
+    const W = this.scale.width, sh = this.sh;
+    const def = CHARACTERS.find(c => c.id === this.focusedId) ?? CHARACTERS[0];
+    const owned = this.ownedIds.includes(def.id);
+
+    // 일러스트 — 화면 폭에 맞춰 위에서부터, 쇼케이스 아래로는 잘라 낸다
+    if (this.textures.exists(def.illustKey)) {
+      const img = this.add.image(W / 2, 0, def.illustKey).setOrigin(0.5, 0);
+      const s = W / img.width;
+      img.setScale(s).setY(-img.displayHeight * 0.03);
+      img.setCrop(0, 0, img.width, (sh - img.y) / s);
+      if (!owned) img.setTint(0x34344a);
+      this.showcase.add(img);
+    } else {
+      // 처음 보는 캐릭터 — 올라오는 동안 스프라이트를 크게
+      if (this.textures.exists(def.imageKey)) {
+        const sp = this.add.image(W / 2, sh - 90, def.imageKey).setOrigin(0.5, 1);
+        sp.setScale((sh * 0.55) / sp.height);
+        if (!owned) sp.setTint(0x000000).setAlpha(0.6);
+        this.showcase.add(sp);
+      }
+      this.ensureTexture(def.illustKey, def.illustPath, () => {
+        if (this.activeTab === 'character' && this.focusedId === def.id) this.renderShowcase();
+      });
+    }
+    this.showcase.add(this.add.image(W / 2, sh, this.bakeFade('cs_fade_char', W, 190, 0, 1)).setOrigin(0.5, 1));
+
+    // 이름 · 등급 · 별 · 한 줄 설명
+    const gradeKey = getGradeImgKey(def.grade);
+    let nx = 20;
+    if (gradeKey && this.textures.exists(gradeKey)) {
+      this.showcase.add(this.add.image(36, sh - 104, gradeKey).setDisplaySize(34, 34));
+      nx = 58;
+    }
+    this.showcase.add(this.add.text(nx, sh - 104, owned ? def.name : def.name, {
+      fontSize: '30px', color: owned ? '#ffffff' : '#c8c8d8', fontStyle: 'bold', stroke: '#1a0d40', strokeThickness: 5,
+    }).setOrigin(0, 0.5));
+    if (owned && def.grade !== '등급외') {
+      const lv = getAwakeningLevel(def.grade, getDuplicateCount(def.id));
+      for (let i = 0; i < STAR_COUNT; i++) {
+        this.showcase.add(this.add.text(22 + i * 16, sh - 72, '★', {
+          fontSize: '15px', color: i < lv ? '#ffd34d' : '#3a3a50', stroke: '#1a1000', strokeThickness: i < lv ? 2 : 0,
         }).setOrigin(0.5));
       }
+    }
+    this.showcase.add(this.add.text(20, sh - 46, owned ? shortLine(def.basicEffect) : '뽑기에서 얻을 수 있는 캐릭터', {
+      fontSize: '12px', color: owned ? '#d0d0ec' : '#a99fd0', wordWrap: { width: W - 160 }, lineSpacing: 2,
+    }).setOrigin(0, 0.5));
+
+    // 버튼 — 장착(장착 중) / 뽑기 · 상세 보기
+    const bx = W - 20 - 54;
+    if (!owned) {
+      this.skinButton(this.showcase, bx, sh - 98, 108, 36, ['#d8c8ff', '#7a4dff', '#efe6ff'], '🔒 뽑기', '#ffffff',
+        () => this.scene.start('GachaScene'));
+    } else if (this.selectedId === def.id) {
+      this.skinButton(this.showcase, bx, sh - 98, 108, 36, ['#ffe58a', '#ffb02e', '#fff1b8'], '✓ 장착 중', '#3a1d00', null);
     } else {
-      const lockBg = this.add.rectangle(cx - 92, BTN_Y, BTN_W, BTN_H, 0x1a1a1a)
-        .setStrokeStyle(1.5, 0x444444);
-      panel.add(lockBg);
-      panel.add(this.add.text(cx - 92, BTN_Y, '🔒  미보유', {
-        fontSize: '14px', color: '#555555',
-      }).setOrigin(0.5));
+      this.skinButton(this.showcase, bx, sh - 98, 108, 36, ['#4f8dff', '#1b3a9e', '#9dc0ff'], '장착', '#ffffff',
+        () => this.selectCharacter(def.id));
     }
-
-    // [닫기] 버튼 (우측)
-    const closeBtnBg = this.add.rectangle(cx + 92, BTN_Y, BTN_W, BTN_H, 0x1a1a1a)
-      .setStrokeStyle(1.5, 0x555555)
-      .setInteractive({ useHandCursor: true });
-    closeBtnBg.on('pointerover', () => closeBtnBg.setFillStyle(0x2e2e2e));
-    closeBtnBg.on('pointerout',  () => closeBtnBg.setFillStyle(0x1a1a1a));
-    closeBtnBg.on('pointerup',   () => this.hideCharacterDetail());
-    panel.add(closeBtnBg);
-    panel.add(this.add.text(cx + 92, BTN_Y, '닫기', {
-      fontSize: '14px', color: '#cccccc', fontStyle: 'bold',
-    }).setOrigin(0.5));
+    this.skinButton(this.showcase, bx, sh - 56, 108, 30, ['#2c2c50', '#161630', '#6a6aa0'], '상세 보기', '#ffffff',
+      () => this.showCharacterDetail(def.id));
   }
 
-  private applyWallpaper(id: string | null) {
-    setSelectedWallpaper(id);
-    this.selectedWpId = id;
+  private renderWallpaperShowcase() {
+    const W = this.scale.width, sh = this.sh;
+    const wp = WALLPAPERS.find(w => w.id === this.focusedWpId);
+    if (!wp) return;
+    const owned = this.ownedWpIds.includes(wp.id);
+    const used = this.selectedWpId === wp.id;
+    const picBottom = sh - 64;          // 그림 아래 — 그 밑은 이름·설명
 
-    // 하이라이트 갱신
-    this.wpHighlights.forEach((rect, wpId) => {
-      rect.setVisible(wpId === id);
+    if (this.textures.exists(wp.bgKey)) {
+      // 게임 화면처럼 — 폭에 맞추고 아래(땅)를 그림 바닥에 붙인다
+      const img = this.add.image(W / 2, picBottom, wp.bgKey).setOrigin(0.5, 1);
+      const s = W / img.width;
+      img.setScale(s);
+      if (!owned) img.setTint(0x30303c);
+      this.showcase.add(img);
+      // 장착 캐릭터가 땅에 선다 — 배경은 화면 아래 40px(480x720 기준)에 땅이 오게 그려져 있다
+      const ground = picBottom - img.height * s * (40 / 720);
+      const me = CHARACTERS.find(c => c.id === this.selectedId) ?? CHARACTERS[0];
+      if (owned && this.textures.exists(me.imageKey)) {
+        const [pw, ph] = me.playerDisplaySize ?? [50, 80];
+        const k = (img.height * s) / 720;
+        this.showcase.add(this.add.image(W / 2, ground, me.imageKey).setOrigin(0.5, 1).setDisplaySize(pw * k, ph * k));
+      }
+      if (owned && this.textures.exists('poop_smile')) {
+        for (const [px, py] of [[0.18, 0.34], [0.78, 0.46], [0.5, 0.26]]) {
+          this.showcase.add(this.add.image(W * px, picBottom * py, 'poop_smile').setDisplaySize(34, 34));
+        }
+      }
+      if (!owned) {
+        this.showcase.add(this.add.text(W / 2, picBottom * 0.55, '🔒', { fontSize: '40px' }).setOrigin(0.5));
+      }
+    } else {
+      this.ensureTexture(wp.bgKey, wp.bgPath, () => {
+        if (this.activeTab === 'wallpaper' && this.focusedWpId === wp.id) this.renderShowcase();
+      });
+    }
+    this.showcase.add(this.add.image(W / 2, picBottom + 2, this.bakeFade('cs_fade_wp', W, 90, 0, 1)).setOrigin(0.5, 1));
+    this.showcase.add(this.add.rectangle(W / 2, picBottom + 2, W, 66, BG_DARK).setOrigin(0.5, 0));
+
+    // 미리보기 표시
+    const tag = this.add.text(16, 104, '게임 화면 미리보기', {
+      fontSize: '11px', color: '#ffe9a8', backgroundColor: '#00000099', padding: { x: 8, y: 4 },
+    }).setOrigin(0, 0.5);
+    this.showcase.add(tag);
+
+    this.showcase.add(this.add.text(20, sh - 44, wp.name, {
+      fontSize: '26px', color: owned ? '#ffffff' : '#c8c8d8', fontStyle: 'bold', stroke: '#000000', strokeThickness: 4,
+    }).setOrigin(0, 0.5));
+    this.showcase.add(this.add.text(20, sh - 18, owned ? wp.description : '뽑기에서 얻을 수 있는 배경화면', {
+      fontSize: '12px', color: owned ? '#d0d0ec' : '#a99fd0', wordWrap: { width: W - 160 },
+    }).setOrigin(0, 0.5));
+
+    const bx = W - 20 - 54;
+    if (!owned) {
+      this.skinButton(this.showcase, bx, sh - 40, 108, 36, ['#d8c8ff', '#7a4dff', '#efe6ff'], '🔒 뽑기', '#ffffff',
+        () => this.scene.start('GachaScene'));
+    } else if (used) {
+      this.skinButton(this.showcase, bx, sh - 46, 108, 32, ['#ffe58a', '#ffb02e', '#fff1b8'], '✓ 사용 중', '#3a1d00', null);
+      this.skinButton(this.showcase, bx, sh - 12, 108, 24, ['#2c2c50', '#161630', '#6a6aa0'], '기본으로', '#ffffff',
+        () => this.applyWallpaper(null));
+    } else {
+      this.skinButton(this.showcase, bx, sh - 40, 108, 36, ['#e6c8ff', '#8a4fe0', '#f2e6ff'], '적용', '#ffffff',
+        () => this.applyWallpaper(wp.id));
+    }
+  }
+
+  // ══ A안 — 가챠 카드 컬렉션 ═══════════════════════════════════════════════
+  // 위 = 히어로 배너 (캐릭터: 일러스트 + 이름·장착 상태·별·버튼 / 배경: 게임 화면 미리보기)
+  // 가운데 = 수집 진행 막대 + 등급 필터 / 아래 = 일러스트 카드 3열 · 배경 카드 2열
+
+  /** 진행 막대 · 등급 필터 (캐릭터 탭만 필터) — 탭·필터가 바뀔 때마다 다시 그린다 */
+  private renderFilterRowA(owned: number, total: number) {
+    this.filterBox.removeAll(true);
+    const W = this.scale.width, y = this.sh + 16;
+    const label = this.activeTab === 'character' ? `수집 ${owned}/${total}` : `배경 ${owned}/${total}`;
+    this.countText.setText(label).setPosition(16, y);
+    const bx = 16 + textContentWidth(this.countText) + 10;
+    const bw = this.activeTab === 'character' ? Math.max(40, W - 16 - 166 - bx) : Math.max(60, W - 16 - bx);
+    this.filterBox.add(this.add.rectangle(bx, y, bw, 8, 0x1a1a30).setOrigin(0, 0.5).setStrokeStyle(1, 0x3a3a66));
+    this.filterBox.add(this.add.rectangle(bx, y, Math.max(4, bw * owned / Math.max(1, total)), 8, 0xffc94a).setOrigin(0, 0.5));
+    if (this.activeTab !== 'character') return;
+    const chips: [GradeFilter, string, number][] = [['all', '전체', 44], ['UR', 'UR', 36], ['SR', 'SR', 36], ['R', 'R', 30]];
+    let x = W - 16;
+    for (let i = chips.length - 1; i >= 0; i--) {
+      const [f, text, w] = chips[i];
+      x -= w;
+      const on = this.gradeFilter === f;
+      this.skinButton(this.filterBox, x + w / 2, y, w, 22,
+        on ? ['#ffe58a', '#ffb02e', '#fff1b8'] : ['#22223a', '#16162a', '#44446a'], text, on ? '#3a1d00' : '#a0a0c8',
+        on ? null : () => { this.gradeFilter = f; this.scrollOffset = 0; this.rebuildGrid(); });
+      x -= 6;
+    }
+  }
+
+  /** 캐릭터 히어로 배너 — 고른 캐릭터 (처음엔 장착 캐릭터) */
+  private renderCharacterBannerA() {
+    const W = this.scale.width, x0 = 16, y0 = this.bannerTop, w = W - 32, h = this.sh - this.bannerTop;
+    const def = CHARACTERS.find(c => c.id === this.focusedId) ?? CHARACTERS[0];
+    const owned = this.ownedIds.includes(def.id);
+    const equipped = this.selectedId === def.id;
+    const frame = owned ? (GRADE_FRAME[def.grade] ?? OTHER_FRAME) : LOCK_FRAME;
+    const fkey = `cs_bannerA_${frame[0]}_${w}x${h}`.replace(/#/g, '');
+    const { originY } = bakeButton(this, fkey, {
+      w, h, radius: 18, top: '#2a1a5e', bottom: '#120b2e', border: frame[0], borderW: 2, lip: '', lipH: 0, gloss: 0,
+      glow: owned ? GRADE_GLOW[def.grade] : undefined,
     });
+    this.showcase.add(this.add.image(W / 2, y0 + h / 2, fkey).setOrigin(0.5, originY));
 
-    // 헤더 텍스트 갱신
-    const def = id ? WALLPAPERS.find(w => w.id === id) : null;
-    this.headerNameText
-      .setText(`배경: ${def?.name ?? '기본'}`)
-      .setColor(id ? WP_ACCENT_HEX : '#888888');
+    // 오른쪽 일러스트 (왼쪽으로 풀리는 크롭, 둥근 모서리로 굽는다)
+    const art = this.bakeRounded(`cs_banner_${def.id}`, `cs_rbanner_${def.id}`, 440, 292, 36);
+    if (art) {
+      const ah = h - 6, aw = ah * 440 / 292;
+      const img = this.add.image(x0 + w - 3, y0 + h / 2, art).setOrigin(1, 0.5).setDisplaySize(aw, ah);
+      if (!owned) img.setTint(0x55556a);
+      this.showcase.add(img);
+    } else {
+      this.ensureTexture(`cs_banner_${def.id}`, `assets/ui/collection/banner/${def.id}.webp`, () => {
+        if (this.activeTab === 'character' && this.focusedId === def.id) this.renderShowcase();
+      });
+    }
 
-    // 배경 이미지 즉시 반영
-    this.updateBgForTab();
-
-    this.hideCharacterDetail();
+    const gradeKey = getGradeImgKey(def.grade);
+    if (gradeKey && this.textures.exists(gradeKey)) this.showcase.add(this.add.image(x0 + 24, y0 + 24, gradeKey).setDisplaySize(30, 30));
+    this.showcase.add(this.add.text(x0 + 14, y0 + 60, def.name, {
+      fontSize: '28px', color: owned ? '#ffffff' : '#c8c8d8', fontStyle: 'bold', stroke: '#1a0d40', strokeThickness: 5,
+    }).setOrigin(0, 0.5));
+    this.showcase.add(this.add.text(x0 + 16, y0 + 88,
+      equipped ? '장착 중' : owned ? '보유' : '미보유 · 뽑기에서 획득', {
+        fontSize: '12px', color: equipped ? '#ffd34d' : owned ? '#bfe9ff' : '#a99fd0', fontStyle: 'bold',
+      }).setOrigin(0, 0.5));
+    if (owned && def.grade !== '등급외') {
+      const lv = getAwakeningLevel(def.grade, getDuplicateCount(def.id));
+      for (let i = 0; i < STAR_COUNT; i++) {
+        this.showcase.add(this.add.text(x0 + 22 + i * 15, y0 + 108, '★', {
+          fontSize: '13px', color: i < lv ? '#ffd34d' : '#3a3a50', stroke: '#1a1000', strokeThickness: i < lv ? 2 : 0,
+        }).setOrigin(0.5));
+      }
+    }
+    // 버튼 — [장착 | 🔒 뽑기] [능력 보기]
+    const by = y0 + h - 22;
+    let bx = x0 + 14;
+    if (owned && !equipped) {
+      this.skinButton(this.showcase, bx + 30, by, 60, 26, ['#4f8dff', '#1b3a9e', '#9dc0ff'], '장착', '#ffffff',
+        () => this.selectCharacter(def.id));
+      bx += 66;
+    } else if (!owned) {
+      this.skinButton(this.showcase, bx + 36, by, 72, 26, ['#d8c8ff', '#7a4dff', '#efe6ff'], '🔒 뽑기', '#ffffff',
+        () => this.scene.start('GachaScene'));
+      bx += 78;
+    }
+    this.skinButton(this.showcase, bx + 42, by, 84, 26, ['#ffe58a', '#ffb02e', '#fff1b8'], '능력 보기', '#3a1d00',
+      () => this.showCharacterDetail(def.id));
   }
 
-  private createCharacterCard(char: CharacterDef, x: number, y: number) {
-    const isOwned = this.ownedIds.includes(char.id);
-    const isSelected = this.selectedId === char.id;
-    const gradeColorInt = parseInt(char.gradeColor.replace('#', ''), 16);
+  /** 배경화면 배너 — 고른 배경으로 게임 화면 미리보기 (배경 + 장착 캐릭터) */
+  private renderWallpaperBannerA() {
+    const W = this.scale.width, x0 = 16, y0 = this.bannerTop, w = W - 32, h = this.sh - this.bannerTop;
+    const wp = WALLPAPERS.find(v => v.id === this.focusedWpId);
+    if (!wp) return;
+    const owned = this.ownedWpIds.includes(wp.id);
+    const used = this.selectedWpId === wp.id;
+    const fkey = `cs_bannerA_wp_${used ? 'used' : 'idle'}_${w}x${h}`;
+    const { originY } = bakeButton(this, fkey, {
+      w, h, radius: 18, top: '#1a1a30', bottom: '#1a1a30', border: used ? '#ffd34d' : '#cc88ff', borderW: 2,
+      lip: '', lipH: 0, gloss: 0, glow: used ? 'rgba(255,190,60,0.85)' : undefined,
+    });
+    this.showcase.add(this.add.image(W / 2, y0 + h / 2, fkey).setOrigin(0.5, originY));
 
-    // 카드 배경
-    const cardBg = this.add.rectangle(x, y, CARD_W, CARD_H, 0x222222, 0.8);
-    cardBg.setStrokeStyle(2, isOwned ? gradeColorInt : 0x444444);
-    this.cardsContainer.add(cardBg);
-
-    // 선택 하이라이트
-    const highlight = this.add.rectangle(x, y, CARD_W, CARD_H, 0, 0);
-    highlight.setStrokeStyle(3, 0xffffff);
-    highlight.setVisible(isSelected);
-    this.cardHighlights.set(char.id, highlight);
-    this.cardsContainer.add(highlight);
-
-    // 캐릭터 이미지
-    const img = this.add.image(x, y - 12, char.imageKey);
-    const [cw, ch] = char.cardDisplaySize ?? [58, 85];
-    img.setDisplaySize(cw, ch);
-    this.cardsContainer.add(img);
-
-    if (!isOwned) {
-      img.setTint(0x000000);
-      img.setAlpha(0.6);
-      const lock = this.add.text(x, y - 12, '🔒', { fontSize: '22px' }).setOrigin(0.5);
-      this.cardsContainer.add(lock);
+    if (this.textures.exists(wp.bgKey)) {
+      // 폭에 맞추고 아래(땅)를 배너 바닥보다 조금 내려 풍경을 더 보인다 (발은 배너 안) — 마스크는 이것 하나
+      const sink = 18;
+      const img = this.add.image(W / 2, y0 + h - 3 + sink, wp.bgKey).setOrigin(0.5, 1);
+      const s = (w - 6) / img.width;
+      img.setScale(s);
+      if (!owned) img.setTint(0x30303c);
+      this.bannerMaskG?.destroy();
+      this.bannerMaskG = this.make.graphics({}, false);
+      this.bannerMaskG.fillStyle(0xffffff).fillRoundedRect(x0 + 3, y0 + 3, w - 6, h - 6, 15);
+      img.setMask(this.bannerMaskG.createGeometryMask());
+      this.showcase.add(img);
+      const me = CHARACTERS.find(c => c.id === this.selectedId) ?? CHARACTERS[0];
+      if (owned && this.textures.exists(me.imageKey)) {
+        const k = (img.height * s) / 720;
+        const [pw, ph] = me.playerDisplaySize ?? [50, 80];
+        this.showcase.add(this.add.image(W / 2, y0 + h - 3 + sink - img.height * s * (40 / 720), me.imageKey)
+          .setOrigin(0.5, 1).setDisplaySize(pw * k, ph * k));
+      }
+      if (!owned) this.showcase.add(this.add.text(W / 2, y0 + h / 2, '🔒', { fontSize: '30px' }).setOrigin(0.5));
+    } else {
+      this.ensureTexture(wp.bgKey, wp.bgPath, () => {
+        if (this.activeTab === 'wallpaper' && this.focusedWpId === wp.id) this.renderShowcase();
+      });
     }
-
-    // 등급 배지
-    const gradeImgKey = getGradeImgKey(char.grade);
-    if (gradeImgKey) {
-      const badge = this.add.image(x - CARD_W / 2 + 2, y - CARD_H / 2 + 2, gradeImgKey)
-        .setDisplaySize(26, 26).setOrigin(0, 0).setDepth(5);
-      this.cardsContainer.add(badge);
+    this.showcase.add(this.add.text(x0 + 12, y0 + 18, `${used ? '사용 중' : '미리보기'} · ${wp.name}`, {
+      fontSize: '12px', color: '#ffe9a8', fontStyle: 'bold', backgroundColor: '#00000099', padding: { x: 8, y: 4 },
+    }).setOrigin(0, 0.5));
+    const bx = x0 + w - 12 - 40;
+    if (!owned) {
+      this.skinButton(this.showcase, bx, y0 + 20, 80, 26, ['#d8c8ff', '#7a4dff', '#efe6ff'], '🔒 뽑기', '#ffffff',
+        () => this.scene.start('GachaScene'));
+    } else if (used) {
+      this.skinButton(this.showcase, bx, y0 + 20, 80, 26, ['#2c2c50', '#161630', '#6a6aa0'], '기본으로', '#ffffff',
+        () => this.applyWallpaper(null));
+    } else {
+      this.skinButton(this.showcase, bx, y0 + 20, 80, 26, ['#e6c8ff', '#8a4fe0', '#f2e6ff'], '적용', '#ffffff',
+        () => this.applyWallpaper(wp.id));
     }
+  }
 
-    // 각성 코어 (등급외 제외, 보유 캐릭터만) — 공유 coresGfx에 직접 그림
-    if (isOwned && char.grade !== '등급외') {
-      const dupCount   = getDuplicateCount(char.id);
-      const awakeLevel = getAwakeningLevel(char.grade, dupCount);
-      const coreY      = y + CARD_H / 2 - CORE_Y_OFFSET;
+  private buildCharacterCardsA() {
+    const W = this.scale.width;
+    const visible = getVisibleCharacters().filter(c => this.gradeFilter === 'all' || c.grade === this.gradeFilter);
+    const order = [...visible.filter(c => this.ownedIds.includes(c.id)), ...visible.filter(c => !this.ownedIds.includes(c.id))];
+    const gap = 9;
+    const cw = Math.floor((W - 32 - gap * 2) / 3);
+    const artH = Math.round((cw - 6) * 4 / 3);
+    const ch = artH + 30;
+    const cores = this.add.graphics();
+    order.forEach((def, i) => {
+      const col = i % 3, row = Math.floor(i / 3);
+      this.createCardA(def, 16 + col * (cw + gap) + cw / 2, this.gridTop + row * (ch + gap) + ch / 2, cw, ch, artH, cores);
+    });
+    this.cardsContainer.add(cores);
+    this.addGridMarks();
+    const all = getVisibleCharacters();
+    this.renderFilterRowA(all.filter(c => this.ownedIds.includes(c.id)).length, all.length);
+    const rows = Math.ceil(order.length / 3);
+    this.maxScrollOffset = Math.max(0, this.gridTop + rows * (ch + gap) + 8 - this.gridBottom);
+  }
 
-      for (let i = 0; i < CORE_COUNT; i++) {
-        const cx = x + (i - 2) * CORE_GAP;
-        if (i < awakeLevel) {
-          // 충전된 코어: 외곽 글로우 + 내부 밝은 원
-          this.coresGfx.fillStyle(gradeColorInt, 0.25);
-          this.coresGfx.fillCircle(cx, coreY, CORE_GLOW_RADIUS);
-          this.coresGfx.fillStyle(gradeColorInt, 1);
-          this.coresGfx.fillCircle(cx, coreY, CORE_INNER_RADIUS);
-          this.coresGfx.fillStyle(0xffffff, 0.55);
-          this.coresGfx.fillCircle(cx - 1, coreY - 1, CORE_HIGHLIGHT_R);
+  private createCardA(def: CharacterDef, x: number, y: number, cw: number, ch: number, artH: number, cores: Phaser.GameObjects.Graphics) {
+    const owned = this.ownedIds.includes(def.id);
+    const [top, bottom] = owned ? (GRADE_FRAME[def.grade] ?? OTHER_FRAME) : LOCK_FRAME;
+    const key = `cs_cardA_${top}${bottom}_${cw}x${ch}`.replace(/#/g, '');
+    const { originY, pad } = bakeButton(this, key, {
+      w: cw, h: ch, radius: 12, top, bottom, border: owned ? top : '#4a4a5a', borderW: 2, lip: '', lipH: 0, gloss: 0.3,
+      glow: owned && def.grade === 'UR' ? GRADE_GLOW.UR : undefined,
+    });
+    const frame = this.add.image(x, y, key).setOrigin(0.5, originY);
+    this.cardsContainer.add(frame);
+
+    const artTop = y - ch / 2 + 3;
+    const art = this.bakeRounded(`cs_card_${def.id}`, `cs_rcard_${def.id}`, 216, 288, 22);
+    if (art) {
+      const img = this.add.image(x, artTop, art).setOrigin(0.5, 0).setDisplaySize(cw - 6, artH);
+      if (!owned) img.setTint(0x5a5a70);
+      this.cardsContainer.add(img);
+    } else if (this.textures.exists(def.imageKey)) {
+      const img = this.add.image(x, artTop + artH - 4, def.imageKey).setOrigin(0.5, 1);
+      img.setScale((artH - 10) / img.height);
+      if (!owned) img.setTint(0x000000).setAlpha(0.6);
+      this.cardsContainer.add(img);
+    }
+    if (!owned) this.cardsContainer.add(this.add.text(x, artTop + artH / 2, '🔒', { fontSize: '22px' }).setOrigin(0.5));
+    const gradeKey = getGradeImgKey(def.grade);
+    if (gradeKey && this.textures.exists(gradeKey)) {
+      this.cardsContainer.add(this.add.image(x - cw / 2 + 14, artTop + 11, gradeKey).setDisplaySize(22, 22));
+    }
+    this.cardsContainer.add(this.add.text(x, y + ch / 2 - (owned ? 18 : 14), def.name, {
+      fontSize: '13px', color: owned ? '#1a1030' : '#8a8a9a', fontStyle: 'bold',
+    }).setOrigin(0.5));
+    // 각성 코어 — 보유 캐릭터만 (등급외 제외)
+    if (owned && def.grade !== '등급외') {
+      const lv = getAwakeningLevel(def.grade, getDuplicateCount(def.id));
+      const cy = y + ch / 2 - 6;
+      const col = Phaser.Display.Color.HexStringToColor(bottom).color;
+      for (let i = 0; i < STAR_COUNT; i++) {
+        const cx = x + (i - 2) * 8;
+        if (i < lv) {
+          cores.fillStyle(col, 1).fillCircle(cx, cy, 2.6);
         } else {
-          // 빈 코어: 어두운 원 + 얇은 테두리
-          this.coresGfx.fillStyle(0x111111, 1);
-          this.coresGfx.fillCircle(cx, coreY, CORE_INNER_RADIUS);
-          this.coresGfx.lineStyle(1, gradeColorInt, 0.35);
-          this.coresGfx.strokeCircle(cx, coreY, CORE_INNER_RADIUS);
+          cores.fillStyle(0x141420, 1).fillCircle(cx, cy, 2.6);
+          cores.lineStyle(1, col, 0.5).strokeCircle(cx, cy, 2.6);
         }
       }
     }
 
-    // 캐릭터 이름
-    const nameText = this.add.text(x, y + CARD_H / 2 - 16, char.name, {
-      fontSize: '12px',
-      color: isOwned ? '#ffffff' : '#555555',
-      fontStyle: 'bold',
-    }).setOrigin(0.5);
-    this.cardsContainer.add(nameText);
+    this.cellPos.set(def.id, { x, y, w: cw, h: ch });
+    frame.setInteractive({ hitArea: hitRect(pad, cw, ch), hitAreaCallback: Phaser.Geom.Rectangle.Contains, useHandCursor: true });
+    frame.on('pointerup', (p: Phaser.Input.Pointer) => this.onCellTap(p, () => this.focusCharacter(def.id)));
+  }
 
-    // 모든 카드 클릭 가능 (탭 → 상세 패널 열기)
-    cardBg.setInteractive({ useHandCursor: isOwned });
-
-    if (isOwned) {
-      cardBg.on('pointerover', () => {
-        if (this.selectedId !== char.id) cardBg.setFillStyle(0x333333, 0.8);
-      });
-      cardBg.on('pointerout', () => {
-        if (this.selectedId !== char.id) cardBg.setFillStyle(0x222222, 0.8);
-      });
-    }
-    // pointerup으로 상세 패널 열기 (드래그 스크롤과 구분, 이전 씬 bleed-through 방지)
-    cardBg.on('pointerup', () => {
-      if (!this.hasDragged && this.hasPointerDownInScene) this.showCharacterDetail(char.id);
+  private buildWallpaperCardsA() {
+    const W = this.scale.width;
+    const wps = WALLPAPERS.filter(w => AVAILABLE_WP_SET.has(w.id));
+    const cw = Math.floor((W - 32 - WP_GAP) / 2);
+    const thumbH = Math.round((cw - 6) * 220 / 340);
+    const ch = thumbH + 30;
+    wps.forEach((wp, i) => {
+      const col = i % 2, row = Math.floor(i / 2);
+      this.createWallpaperCardA(wp, 16 + col * (cw + WP_GAP) + cw / 2, this.gridTop + row * (ch + WP_GAP) + ch / 2, cw, ch, thumbH);
     });
+    this.addGridMarks();
+    this.renderFilterRowA(wps.filter(w => this.ownedWpIds.includes(w.id)).length, wps.length);
+    const rows = Math.ceil(wps.length / 2);
+    this.maxScrollOffset = Math.max(0, this.gridTop + rows * (ch + WP_GAP) + 8 - this.gridBottom);
+  }
+
+  private createWallpaperCardA(wp: BackgroundDef, x: number, y: number, cw: number, ch: number, thumbH: number) {
+    const owned = this.ownedWpIds.includes(wp.id);
+    const used = this.selectedWpId === wp.id;
+    const border = used ? '#ffd34d' : owned ? '#cc88ff' : '#4a4a5a';
+    const key = `cs_wpA_${border}_${cw}x${ch}`.replace(/#/g, '');
+    const { originY, pad } = bakeButton(this, key, {
+      w: cw, h: ch, radius: 14, top: '#2a2a40', bottom: '#14141f', border, borderW: used ? 2.5 : 1.5, lip: '', lipH: 0, gloss: 0,
+      glow: used ? 'rgba(255,190,60,0.85)' : undefined,
+    });
+    const frame = this.add.image(x, y, key).setOrigin(0.5, originY);
+    this.cardsContainer.add(frame);
+    const thumb = this.bakeRounded(`cs_wp_${wp.id}`, `cs_rwp_${wp.id}`, 340, 220, 26);
+    if (thumb) {
+      const img = this.add.image(x, y - ch / 2 + 3, thumb).setOrigin(0.5, 0).setDisplaySize(cw - 6, thumbH);
+      if (!owned) img.setTint(0x30303c);
+      this.cardsContainer.add(img);
+    }
+    if (!owned) {
+      this.cardsContainer.add(this.add.text(x, y - ch / 2 + 3 + thumbH / 2 - 6, '🔒', { fontSize: '18px' }).setOrigin(0.5));
+      this.cardsContainer.add(this.add.text(x, y - ch / 2 + 3 + thumbH / 2 + 16, '뽑기에서 획득', {
+        fontSize: '10px', color: '#c9b6ff', fontStyle: 'bold',
+      }).setOrigin(0.5));
+    }
+    const ny = y + ch / 2 - 14;
+    this.cardsContainer.add(this.add.text(x - cw / 2 + 12, ny, wp.name, {
+      fontSize: '13px', color: owned ? '#ffffff' : '#7a7a8a', fontStyle: 'bold',
+    }).setOrigin(0, 0.5));
+    if (owned && !used) {
+      this.cardsContainer.add(this.add.text(x + cw / 2 - 12, ny, '적용', { fontSize: '11px', color: '#cc88ff', fontStyle: 'bold' }).setOrigin(1, 0.5));
+    }
+    this.cellPos.set(wp.id, { x, y, w: cw, h: ch });
+    frame.setInteractive({ hitArea: hitRect(pad, cw, ch), hitAreaCallback: Phaser.Geom.Rectangle.Contains, useHandCursor: true });
+    frame.on('pointerup', (p: Phaser.Input.Pointer) => this.onCellTap(p, () => this.focusWallpaper(wp.id)));
+  }
+
+  // ── 장착 · 적용 ────────────────────────────────────────────────────────
+
+  private applyWallpaper(id: string | null) {
+    setSelectedWallpaper(id);
+    this.selectedWpId = id;
+    if (this.activeTab === 'wallpaper') {
+      this.rebuildGrid();
+      this.renderShowcase();
+    }
   }
 
   private selectCharacter(id: string) {
-    // 이전 선택 하이라이트 제거
-    const prev = this.cardHighlights.get(this.selectedId);
-    if (prev) prev.setVisible(false);
-
     this.selectedId = id;
     setSelectedCharacter(id);
-
-    const next = this.cardHighlights.get(id);
-    if (next) next.setVisible(true);
-
-    // 헤더 직접 갱신 (씬 재시작 없이)
-    const def = CHARACTERS.find(c => c.id === id) ?? CHARACTERS[0];
-    this.headerNameText.setText(`현재: ${def.name}`);
-    this.headerNameText.setColor(def.gradeColor);
-    const { width: W, height: H } = this.scale;
-    this.bgImage.setTexture(def.illustKey).setOrigin(0.5).setPosition(W / 2, H / 2).setDisplaySize(W, H);
+    if (this.activeTab === 'character') {
+      this.updateGridMarks();
+      this.renderShowcase();
+    }
   }
 
   private showCharacterDetail(id: string): void {
@@ -1095,21 +1353,16 @@ export default class CharacterSelectScene extends BaseScene {
     this.infoPanel = null;
   }
 
+  /** 돌아가기 — 메인 화면 버튼과 같은 판 */
   private createBackButton() {
-    const cx = this.scale.width / 2;
-    const btnY = this.scale.height - 27;
-    const btn = this.add.rectangle(cx, btnY, 200, 50, 0x333333).setDepth(10);
-    btn.setStrokeStyle(2, 0x888888);
-
-    this.add.text(cx, btnY, '← 돌아가기', {
-      fontSize: '18px',
-      color: '#ffffff',
-      fontStyle: 'bold',
-    }).setOrigin(0.5).setDepth(10);
-
-    btn.setInteractive({ useHandCursor: true });
-    btn.on('pointerover', () => btn.setFillStyle(0x555555));
-    btn.on('pointerout',  () => btn.setFillStyle(0x333333));
-    btn.on('pointerdown', () => this.scene.start(this.returnScene));
+    const W = this.scale.width, H = this.scale.height;
+    const { originY } = bakeButton(this, 'cs_back', {
+      w: 200, h: 44, radius: 22, top: '#4a4a70', bottom: '#24243c', border: '#8a8ab8', borderW: 2,
+      lip: '#16162a', lipH: 4, gloss: 0.5,
+    });
+    const box = this.add.container(W / 2, H - 40).setDepth(10);
+    box.add(this.add.image(0, 0, 'cs_back').setOrigin(0.5, originY));
+    box.add(this.add.text(0, 0, '← 돌아가기', { fontSize: '17px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5));
+    wireButton(this, box, 200, 44, () => this.scene.start(this.returnScene));
   }
 }
