@@ -105,6 +105,52 @@ export function hitRect(pad: number, w: number, h: number): Phaser.Geom.Rectangl
   return new Phaser.Geom.Rectangle(pad, pad, w, h);
 }
 
+// ── 눌리는 영역 규칙 ─────────────────────────────────────────────────────
+// 아래 둘은 버튼마다 덧대지 말고 여기서 막는다. 점검 하네스(ddong-fx-work/button-audit)가
+// 화면마다 버튼의 가운데·네 모서리를 실제로 눌러 확인한다.
+
+/** 손가락으로 누르는 최소 크기 (px). 보이는 버튼이 이보다 작아도 눌리는 영역은 이만큼 */
+export const MIN_TOUCH = 44;
+
+/**
+ * 보이는 크기 w×h 인 버튼의 눌리는 영역 — 모자라는 쪽만 가운데를 맞춰 MIN_TOUCH 까지 넓힌다.
+ * 좌표는 **오브젝트 왼쪽 위 기준** (Phaser 가 포인터에 displayOrigin 을 더해 잰다)
+ */
+export function touchArea(w: number, h: number, min = MIN_TOUCH): Phaser.Geom.Rectangle {
+  const tw = Math.max(w, min), th = Math.max(h, min);
+  return new Phaser.Geom.Rectangle((w - tw) / 2, (h - th) / 2, tw, th);
+}
+
+/** Rectangle · Text · Zone 처럼 크기를 가진 오브젝트를 MIN_TOUCH 이상으로 눌리게 한다 */
+export function setTouchInteractive<T extends Phaser.GameObjects.GameObject & { width: number; height: number }>(go: T): T {
+  go.setInteractive({ hitArea: touchArea(go.width, go.height), hitAreaCallback: Phaser.Geom.Rectangle.Contains, useHandCursor: true });
+  return go;
+}
+
+type Placed = Phaser.GameObjects.GameObject & Phaser.GameObjects.Components.Transform
+  & { displayOriginX: number; displayOriginY: number };
+
+/**
+ * 스크롤 목록 칸의 입력 설정 — area 중 **보이는 창(viewport, 화면 좌표) 안에 있는 부분만** 눌린다.
+ *
+ * Phaser 마스크는 그리기만 자르고 입력은 자르지 않는다. 그래서 목록을 내리면 창 밖으로 밀려나
+ * 안 보이는 칸이 그 자리의 다른 버튼 위를 덮고 입력을 가로챈다 — 수집 화면 배너의
+ * [장착] 버튼이 목록을 스크롤한 뒤로 안 눌리던 원인이다 (2026-10-07).
+ */
+export function clipToViewport(area: Phaser.Geom.Rectangle, viewport: Phaser.Geom.Rectangle): Phaser.Types.Input.InputConfiguration {
+  const p = new Phaser.Math.Vector2();
+  return {
+    hitArea: area,
+    useHandCursor: true,
+    hitAreaCallback: (a: Phaser.Geom.Rectangle, x: number, y: number, go: Phaser.GameObjects.GameObject) => {
+      if (!Phaser.Geom.Rectangle.Contains(a, x, y)) return false;
+      const g = go as Placed;
+      g.getWorldTransformMatrix().transformPoint(x - g.displayOriginX, y - g.displayOriginY, p);
+      return Phaser.Geom.Rectangle.Contains(viewport, p.x, p.y);
+    },
+  };
+}
+
 /** 부드러운 원형 빛 (무대 조명·후광) — 흰색으로 굽고 tint 로 색을 준다 */
 export function bakeRadialGlow(scene: Phaser.Scene, key: string, size: number): string {
   if (scene.textures.exists(key)) return key;
@@ -186,7 +232,8 @@ export function wireButton(
   box.setSize(w, h);
   // 히트 영역은 **왼쪽 위 기준**이다 — Phaser 가 포인터 좌표에 displayOrigin(= 크기의 절반)을 더해서 잰다.
   // (-w/2, -h/2) 로 주면 눌리는 자리가 보이는 버튼보다 반 칸 왼쪽 위로 밀린다 (실기에서 짚인 버그)
-  box.setInteractive(new Phaser.Geom.Rectangle(0, 0, w, h), Phaser.Geom.Rectangle.Contains);
+  // 작은 버튼(필터 칩 · 배너의 장착 버튼 등)도 손가락 크기만큼은 눌리게 넓힌다 (touchArea)
+  box.setInteractive(touchArea(w, h), Phaser.Geom.Rectangle.Contains);
   if (box.input) box.input.cursor = 'pointer';
   let busy = false;
   const to = (s: number, d = 90) => scene.tweens.add({ targets: box, scale: s, duration: d, ease: 'Quad.easeOut' });

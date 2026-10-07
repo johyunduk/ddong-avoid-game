@@ -13,7 +13,7 @@ import {
 import { CHARACTERS, getVisibleCharacters, getGradeColorInt, type CharacterDef } from '../utils/character';
 import BaseScene from './BaseScene';
 import { addBackground } from '../utils/background';
-import { bakeButton, bakeRoundedImage, gradientText, wireButton } from '../utils/buttonSkin';
+import { bakeButton, bakeRoundedImage, clipToViewport, gradientText, setTouchInteractive, wireButton } from '../utils/buttonSkin';
 import { DIFFICULTY_TIER, type Tier } from '../utils/difficultyTheme';
 
 // ── 배치 (A안 — 시상대 + 목록 + 아래 고정 내 순위) ─────────────────────────
@@ -25,9 +25,10 @@ const TAB_LABEL: Record<Difficulty, string> = {
 };
 const SEASON_Y = 104;
 const TAB_Y = 146;
-const FILTER_Y = 182;
+// 탭 아래 — 탭과 칩의 눌리는 영역(각 MIN_TOUCH 44)이 겹치지 않는 자리 (탭 146 + 22 = 168 ≤ 칩 190 - 22)
+const FILTER_Y = 190;
 /** 시상대 · 목록이 시작하는 y */
-const CONTENT_TOP = 204;
+const CONTENT_TOP = 214;
 /** 아래 내 순위 판 높이 · 판 가운데가 화면 아래에서 얼마나 위인지 */
 const BAR_H = 66;
 const BAR_FROM_BOTTOM = 46;
@@ -170,12 +171,10 @@ export default class LeaderboardScene extends BaseScene {
     const arrowStyle = { fontSize: '24px', color: '#ffd34d', fontStyle: 'bold' };
     // 화살표: 글자 + 투명 히트박스
     this.leftArrowBtn = this.add.text(x - w / 2 + 18, y - 2, '‹', arrowStyle).setOrigin(0.5);
-    this.add.rectangle(x - w / 2 + 18, y, 44, 36, 0xffffff, 0)
-      .setInteractive({ useHandCursor: true })
+    setTouchInteractive(this.add.rectangle(x - w / 2 + 18, y, 44, 36, 0xffffff, 0))
       .on('pointerdown', () => this.navigateSeason(-1));
     this.rightArrowBtn = this.add.text(x + w / 2 - 18, y - 2, '›', arrowStyle).setOrigin(0.5);
-    this.add.rectangle(x + w / 2 - 18, y, 44, 36, 0xffffff, 0)
-      .setInteractive({ useHandCursor: true })
+    setTouchInteractive(this.add.rectangle(x + w / 2 - 18, y, 44, 36, 0xffffff, 0))
       .on('pointerdown', () => this.navigateSeason(1));
 
     this.seasonText = this.add.text(x + 2, y, '', {
@@ -662,7 +661,7 @@ export default class LeaderboardScene extends BaseScene {
     const allTxt = this.add.text(cx, 68 + yOff, '전체 랭킹', {
       fontSize: '13px', color: allSel ? '#ffffff' : '#8899bb', fontStyle: 'bold',
     }).setOrigin(0.5).setDepth(DEPTH + 2);
-    allBg.setInteractive({ useHandCursor: true });
+    setTouchInteractive(allBg);
     allBg.on('pointerup', () => {
       if (Date.now() - openedAt < OPEN_DEBOUNCE || scroll.hasDragged) return;
       this.hideCharSelectOverlay();
@@ -680,7 +679,7 @@ export default class LeaderboardScene extends BaseScene {
     const closeTxt = this.add.text(cx, closeY, '✕ 닫기', {
       fontSize: '13px', color: '#cccccc', fontStyle: 'bold',
     }).setOrigin(0.5).setDepth(DEPTH + 4);
-    closeBg.setInteractive({ useHandCursor: true });
+    setTouchInteractive(closeBg);
     closeBg.on('pointerup', () => {
       if (Date.now() - openedAt < OPEN_DEBOUNCE) return;
       this.hideCharSelectOverlay();
@@ -705,6 +704,7 @@ export default class LeaderboardScene extends BaseScene {
     const ROWS = Math.ceil(charList.length / COLS);
     const totalGridH = ROWS * CELL_H;
     const maxScroll = Math.max(0, totalGridH - scrollAreaH);
+    const scrollView = new Phaser.Geom.Rectangle(0, SCROLL_TOP, W, scrollAreaH);
 
     // GeometryMask — 스크롤 뷰포트 클리핑
     const maskGfx = this.add.graphics();
@@ -759,7 +759,8 @@ export default class LeaderboardScene extends BaseScene {
 
       cardContainer.add([cardBg, illust, grad, nameTxt, dot]);
 
-      cardBg.setInteractive({ useHandCursor: true });
+      // 스크롤 창 밖으로 밀려난 카드는 눌리지 않게 — 마스크는 입력을 자르지 않아 '전체 랭킹' 위를 덮었다
+      cardBg.setInteractive(clipToViewport(new Phaser.Geom.Rectangle(0, 0, CARD_W, CARD_H), scrollView));
       cardBg.on('pointerup', (ptr: Phaser.Input.Pointer) => {
         if (Date.now() - openedAt < OPEN_DEBOUNCE || scroll.hasDragged) return;
         if (ptr.y < SCROLL_TOP || ptr.y > SCROLL_BOTTOM) return;

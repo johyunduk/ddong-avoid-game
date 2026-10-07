@@ -5,7 +5,7 @@ import { setBgmMuted } from '../utils/settings';
 import BaseScene from './BaseScene';
 import { addBackground } from '../utils/background';
 import { getCharacterDef, getSafeSelectedCharacter } from '../utils/character';
-import { bakeButton, bakeRadialGlow, bakeShine, gradientText, wireButton, type ButtonSkin } from '../utils/buttonSkin';
+import { bakeButton, bakeRadialGlow, bakeShine, gradientText, setTouchInteractive, wireButton, type ButtonSkin } from '../utils/buttonSkin';
 
 export default class ModeSelectScene extends BaseScene {
   private skorText!: Phaser.GameObjects.Text;
@@ -284,7 +284,7 @@ export default class ModeSelectScene extends BaseScene {
       this.settingsPanel = null;
     };
 
-    toggleBg.setInteractive({ useHandCursor: true });
+    setTouchInteractive(toggleBg);
     toggleBg.on('pointerdown', () => {
       const nowMuted = !this.sound.mute;
       this.sound.mute = nowMuted;
@@ -295,7 +295,8 @@ export default class ModeSelectScene extends BaseScene {
     // ✕ 닫기 버튼
     const closeBtn = this.add.text(W / 2 - 14, -H / 2 + 14, '✕', {
       fontSize: '16px', color: '#888888',
-    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+    }).setOrigin(0.5);
+    setTouchInteractive(closeBtn);
 
     closeBtn.on('pointerover', () => closeBtn.setColor('#ffffff'));
     closeBtn.on('pointerout',  () => closeBtn.setColor('#888888'));

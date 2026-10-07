@@ -3,6 +3,7 @@ import { RELEASE_NOTES } from '../data/releaseNotes';
 import BaseScene from './BaseScene';
 import { addBackground } from '../utils/background';
 import { textContentHeight } from '../utils/textSafety';
+import { setTouchInteractive } from '../utils/buttonSkin';
 
 export default class ReleaseNotesScene extends BaseScene {
   private scrollContainer!: Phaser.GameObjects.Container;
@@ -195,8 +196,9 @@ export default class ReleaseNotesScene extends BaseScene {
       fontStyle: 'bold',
     }).setOrigin(0.5).setDepth(10);
 
-    button.setInteractive({ useHandCursor: true });
-    text.setInteractive({ useHandCursor: true });
+    // 판 하나만 눌리게 (높이 40 → 손가락 크기 44 로 넓힌다). 글자는 판 위에 얹힌 그림일 뿐 —
+    // 글자에도 입력을 걸면 글자 크기(88×27)짜리 작은 버튼이 하나 더 생긴다
+    setTouchInteractive(button);
 
     [button, text].forEach((element) => {
       element.on('pointerover', () => {

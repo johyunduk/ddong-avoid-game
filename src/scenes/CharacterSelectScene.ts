@@ -24,7 +24,7 @@ import { syncOwnedCharacters, syncOwnedWallpapers } from '../utils/gacha';
 import { destroyVideo } from '../utils/video';
 import BaseScene from './BaseScene';
 import { textContentHeight, textContentWidth } from '../utils/textSafety';
-import { bakeButton, hitRect, wireButton, type ButtonSkin } from '../utils/buttonSkin';
+import { bakeButton, clipToViewport, hitRect, MIN_TOUCH, setTouchInteractive, wireButton, type ButtonSkin } from '../utils/buttonSkin';
 
 /**
  * 수집 화면 — 배치 두 가지를 COLLECTION_LAYOUT 하나로 고른다 (docs/ui-collection.md).
@@ -77,6 +77,9 @@ function shortLine(s: string, max = 44): string {
   return t.length > max ? `${t.slice(0, max - 1)}…` : t;
 }
 
+/** 배너 아래 필터 줄(수집 진행 · 등급 칩)의 세로 가운데 — 배너 아래끝(sh)에서 */
+const FILTER_ROW_DY = MIN_TOUCH / 2;
+
 export default class CharacterSelectScene extends BaseScene {
   private returnScene: string = 'ModeSelectScene';
   private selectedId: string = 'chibi';
@@ -110,6 +113,8 @@ export default class CharacterSelectScene extends BaseScene {
   private gridTop = 0;
   private gridBottom = 0;
   private scrollOffset = 0;
+  /** 격자 창 (화면 좌표) — 칸이 이 밖에서는 눌리지 않는다 */
+  private gridViewport = new Phaser.Geom.Rectangle();
   private maxScrollOffset = 0;
   private pointerDownY = 0;
   private pointerDownScrollY = 0;
@@ -237,7 +242,9 @@ export default class CharacterSelectScene extends BaseScene {
     this.sh = COLLECTION_LAYOUT === 'A'
       ? this.bannerTop + Math.round(Phaser.Math.Clamp(H * 0.18, 130, 160))
       : Math.round(Phaser.Math.Clamp(H * 0.5, 300, 460));
-    this.gridTop = this.sh + 34;
+    // 배너(sh) 와 격자 사이 = 필터 줄. 칩의 눌리는 영역(가운데 ± MIN_TOUCH/2)이 배너 버튼과도,
+    // 격자 창(gridTop - 6)과도 겹치지 않게 띄운다 — 겹치면 위에 그린 쪽이 입력을 가로챈다
+    this.gridTop = this.sh + FILTER_ROW_DY + MIN_TOUCH / 2 + 6;
     this.gridBottom = H - 74;
 
     this.add.rectangle(cx, H / 2, W, H, BG_DARK).setDepth(-10);
@@ -255,7 +262,7 @@ export default class CharacterSelectScene extends BaseScene {
     }).setOrigin(0.5).setDepth(10);
     this.createTabs(cx, 68);
 
-    this.countText = this.add.text(16, this.sh + 16, '', {
+    this.countText = this.add.text(16, this.sh + FILTER_ROW_DY, '', {
       fontSize: '13px', color: '#ffd34d', fontStyle: 'bold',
     }).setOrigin(0, 0.5).setDepth(5);
 
@@ -266,6 +273,8 @@ export default class CharacterSelectScene extends BaseScene {
     this.maskGfx.fillStyle(0xffffff);
     this.maskGfx.fillRect(0, this.gridTop - 6, W, this.gridBottom - this.gridTop + 6);
     this.cardsContainer.setMask(this.maskGfx.createGeometryMask());
+    // 마스크와 같은 창 — 칸의 입력도 이 안에서만 받는다 (마스크는 입력을 자르지 않는다 · clipToViewport)
+    this.gridViewport = new Phaser.Geom.Rectangle(0, this.gridTop - 6, W, this.gridBottom - this.gridTop + 6);
 
     this.buildCharacterGrid();
     this.renderShowcase();
@@ -409,7 +418,7 @@ export default class CharacterSelectScene extends BaseScene {
         fontSize: '15px', color: i === 0 ? '#3a1d00' : '#9a9ac0', fontStyle: 'bold',
       }).setOrigin(0.5).setDepth(11);
       this.tabLabels.push(label);
-      const zone = this.add.zone(this.tabX[i], y, half, h).setInteractive({ useHandCursor: true }).setDepth(12);
+      const zone = setTouchInteractive(this.add.zone(this.tabX[i], y, half, h)).setDepth(12);
       zone.on('pointerup', () => {
         if (this.detailPanel) return;
         this.switchTab(tab);
@@ -525,7 +534,7 @@ export default class CharacterSelectScene extends BaseScene {
 
     this.cellPos.set(def.id, { x, y, w: sz, h: sz });
     // 몸통만 누르게 — 이미지째로 하면 그림자 여백까지 눌려 옆 칩과 겹친다
-    frame.setInteractive({ hitArea: hitRect(pad, sz, sz), hitAreaCallback: Phaser.Geom.Rectangle.Contains, useHandCursor: true });
+    frame.setInteractive(clipToViewport(hitRect(pad, sz, sz), this.gridViewport));
     frame.on('pointerup', (p: Phaser.Input.Pointer) => this.onCellTap(p, () => this.focusCharacter(def.id)));
   }
 
@@ -570,7 +579,7 @@ export default class CharacterSelectScene extends BaseScene {
     if (!owned) this.cardsContainer.add(this.add.text(x, y - 6, '🔒', { fontSize: '18px' }).setOrigin(0.5));
 
     this.cellPos.set(wp.id, { x, y, w: tw, h: th });
-    frame.setInteractive({ hitArea: hitRect(pad, tw, th), hitAreaCallback: Phaser.Geom.Rectangle.Contains, useHandCursor: true });
+    frame.setInteractive(clipToViewport(hitRect(pad, tw, th), this.gridViewport));
     frame.on('pointerup', (p: Phaser.Input.Pointer) => this.onCellTap(p, () => this.focusWallpaper(wp.id)));
   }
 
@@ -738,15 +747,16 @@ export default class CharacterSelectScene extends BaseScene {
   /** 진행 막대 · 등급 필터 (캐릭터 탭만 필터) — 탭·필터가 바뀔 때마다 다시 그린다 */
   private renderFilterRowA(owned: number, total: number) {
     this.filterBox.removeAll(true);
-    const W = this.scale.width, y = this.sh + 16;
+    const W = this.scale.width, y = this.sh + FILTER_ROW_DY;
     const label = this.activeTab === 'character' ? `수집 ${owned}/${total}` : `배경 ${owned}/${total}`;
     this.countText.setText(label).setPosition(16, y);
     const bx = 16 + textContentWidth(this.countText) + 10;
-    const bw = this.activeTab === 'character' ? Math.max(40, W - 16 - 166 - bx) : Math.max(60, W - 16 - bx);
+    const bw = this.activeTab === 'character' ? Math.max(40, W - 16 - 196 - bx) : Math.max(60, W - 16 - bx);
     this.filterBox.add(this.add.rectangle(bx, y, bw, 8, 0x1a1a30).setOrigin(0, 0.5).setStrokeStyle(1, 0x3a3a66));
     this.filterBox.add(this.add.rectangle(bx, y, Math.max(4, bw * owned / Math.max(1, total)), 8, 0xffc94a).setOrigin(0, 0.5));
     if (this.activeTab !== 'character') return;
-    const chips: [GradeFilter, string, number][] = [['all', '전체', 44], ['UR', 'UR', 36], ['SR', 'SR', 36], ['R', 'R', 30]];
+    // 칩 폭은 모두 MIN_TOUCH(44) — 더 좁으면 넓힌 눌리는 영역이 옆 칩을 덮는다
+    const chips: [GradeFilter, string, number][] = [['all', '전체', 44], ['UR', 'UR', 44], ['SR', 'SR', 44], ['R', 'R', 44]];
     let x = W - 16;
     for (let i = chips.length - 1; i >= 0; i--) {
       const [f, text, w] = chips[i];
@@ -943,7 +953,7 @@ export default class CharacterSelectScene extends BaseScene {
     }
 
     this.cellPos.set(def.id, { x, y, w: cw, h: ch });
-    frame.setInteractive({ hitArea: hitRect(pad, cw, ch), hitAreaCallback: Phaser.Geom.Rectangle.Contains, useHandCursor: true });
+    frame.setInteractive(clipToViewport(hitRect(pad, cw, ch), this.gridViewport));
     frame.on('pointerup', (p: Phaser.Input.Pointer) => this.onCellTap(p, () => this.focusCharacter(def.id)));
   }
 
@@ -994,7 +1004,7 @@ export default class CharacterSelectScene extends BaseScene {
       this.cardsContainer.add(this.add.text(x + cw / 2 - 12, ny, '적용', { fontSize: '11px', color: '#cc88ff', fontStyle: 'bold' }).setOrigin(1, 0.5));
     }
     this.cellPos.set(wp.id, { x, y, w: cw, h: ch });
-    frame.setInteractive({ hitArea: hitRect(pad, cw, ch), hitAreaCallback: Phaser.Geom.Rectangle.Contains, useHandCursor: true });
+    frame.setInteractive(clipToViewport(hitRect(pad, cw, ch), this.gridViewport));
     frame.on('pointerup', (p: Phaser.Input.Pointer) => this.onCellTap(p, () => this.focusWallpaper(wp.id)));
   }
 
@@ -1109,7 +1119,7 @@ export default class CharacterSelectScene extends BaseScene {
     // ── 하단 버튼 2개 (나란히) ──────────────────────────────────────
     const BTN_Y = H - 32;
     const BTN_W = 168;
-    const BTN_H = 42;
+    const BTN_H = 44;   // 손가락 크기 (MIN_TOUCH)
 
     // 📋 정보 보기 (좌)
     const infoBg = this.add.rectangle(cx - 92, BTN_Y, BTN_W, BTN_H, 0x1a1a1a)
@@ -1296,7 +1306,7 @@ export default class CharacterSelectScene extends BaseScene {
     // ✕ 닫기 (헤더 우측)
     const closeX = _cx + CARD_W / 2 - 14;
     const closeY = cardTop + 16;
-    const infoBtnBg = this.add.circle(closeX, closeY, 18, 0x000000, 0)
+    const infoBtnBg = this.add.circle(closeX, closeY, 22, 0x000000, 0)   // 투명 — 반지름 22 = 지름 44 (MIN_TOUCH)
       .setInteractive({ useHandCursor: true });
     const closeTxt = this.add.text(closeX, closeY, '✕', {
       fontSize: '16px', color: '#999999',
