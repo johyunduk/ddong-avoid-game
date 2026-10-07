@@ -28,34 +28,39 @@ const POP_Y = 146;
 
 /**
  * 피버 로고 시트 (A안 간판형, 2026-10-07 대표 채택) — 칸 2열 10칸, 표시는 칸의 1/2.
- * 0~5 등장(20fps, 처음 두 칸 흰 글로우) → 6~9 반복(8fps). 남은 초는 게임 글자로 판 안 숫자 자리(slot)에 얹는다
+ * 0~5 등장(20fps, 처음 두 칸 흰 글로우) → 6~9 반복(8fps). 남은 초는 간판 오른쪽 바깥에 따로 세운다 (B안, 2026-10-08)
+ * right · base = 반복 칸에서 간판이 그려진 오른끝 · 판 아랫변 (칸 원본 px, 알파 > 128). 간판은 좌우 대칭이다
  * (시트 원본·좌표: ddong-fx-work/fever-logo/sheets.json)
  */
 const FEVER_LOGO = {
-  fever:   { key: 'feverlogo_fever',   path: 'assets/fx/sheets/feverlogo_fever_500x180.png',   fw: 500, fh: 180, stroke: '#3a0a00' },
-  rainbow: { key: 'feverlogo_rainbow', path: 'assets/fx/sheets/feverlogo_rainbow_500x148.png', fw: 500, fh: 148, stroke: '#2a0a4a' },
+  fever:   { key: 'feverlogo_fever',   path: 'assets/fx/sheets/feverlogo_fever_500x180.png',   fw: 500, fh: 180, right: 466, base: 163, stroke: '#3a0a00' },
+  rainbow: { key: 'feverlogo_rainbow', path: 'assets/fx/sheets/feverlogo_rainbow_500x148.png', fw: 500, fh: 148, right: 465, base: 134, stroke: '#2a0a4a' },
 } as const;
 const LOGO_SCALE = 0.5;
-const LOGO_SLOT = { x: 0.835, y: 0.62 };
+/** 간판 오른끝 ↔ 숫자 왼끝 간격 · 숫자 아랫변을 판 아랫변보다 올리는 양 (화면 px) */
+const DIGIT_GAP = 8;
+const DIGIT_LIFT = 4;
 
 /**
  * 남은 초 숫자 시트 (v2 — 로고 결에 맞춘 불타는 숫자 · 무지개 숫자, 2026-10-08 대표 지시). 열 = 숫자 0~9, 행 = 반복 칸.
  * origin = 숫자 몸통 아래 가운데. advance = 칸 원본 기준 글자 간격 (두 자리일 때)
+ * gl = origin 에서 글자 왼끝까지 · gw = 글자 폭 (칸 원본 px, 알파 > 100 — 숫자마다 조금씩 달라 대표값)
  * (원본 · 기준점: ddong-fx-work/fever-logo/v2/sheets.json)
  */
 const FEVER_DIGITS = {
-  fever:   { key: 'feverdigits_fever',   path: 'assets/fx/sheets/feverdigits_fever_88x94.png',    fw: 88,  fh: 94, rows: 2, fps: 6,  ox: 0.4545, oy: 0.9362, adv: 71.4 },
-  rainbow: { key: 'feverdigits_rainbow', path: 'assets/fx/sheets/feverdigits_rainbow_108x90.png', fw: 108, fh: 90, rows: 6, fps: 10, ox: 0.4907, oy: 0.9333, adv: 84.4 },
+  fever:   { key: 'feverdigits_fever',   path: 'assets/fx/sheets/feverdigits_fever_88x94.png',    fw: 88,  fh: 94, rows: 2, fps: 6,  ox: 0.4545, oy: 0.9362, adv: 71.4, gl: 36, gw: 75 },
+  rainbow: { key: 'feverdigits_rainbow', path: 'assets/fx/sheets/feverdigits_rainbow_108x90.png', fw: 108, fh: 90, rows: 6, fps: 10, ox: 0.4907, oy: 0.9333, adv: 84.4, gl: 45, gw: 94 },
 } as const;
+/** 숫자 배율 — 칸 원본 대비. 0.55 면 글자 높이 약 45px (불꽃) · 44px (무지개) — 시트 표시 크기(44x47 · 54x45) 근처 */
+const DIGIT_SCALE = 0.55;
 /**
- * 숫자 배율 — 칸 원본 대비. 0.36 이면 높이 약 34px (불꽃) · 32px (무지개) — A 판의 숫자 칸에 들어가는 크기.
- * 3·2·1 에 2.1 배로 튀면 잠깐 판 위로 솟지만 아래 획득 글자(POP_Y)와는 멀다
+ * 숫자가 바뀔 때 튀기 (sheets.json countdown_pop) — 3·2·1 은 더 크게 + 흰 번쩍 + 숫자만 2px 흔들림.
+ * 숫자는 글자 왼쪽 아래를 축으로 커진다 — 간판 쪽(왼쪽)으로는 안 번지고 위·오른쪽으로만 큰다.
+ * 3·2·1 은 sheets.json 의 2.1 대신 1.8 — 무지개 숫자가 2.1 이면 폭 360 화면에서 오른쪽 끝을 15px 넘는다
  */
-const DIGIT_SCALE = 0.36;
-/** 숫자가 바뀔 때 튀기 (sheets.json countdown_pop) — 3·2·1 은 더 크게 + 흰 번쩍 + 숫자만 2px 흔들림 */
 const POP = {
   normal: { from: 1.5, ms: 180 },
-  last3:  { from: 2.1, ms: 260, flashMs: 90, shakePx: 2 },
+  last3:  { from: 1.8, ms: 260, flashMs: 90, shakePx: 2 },
 } as const;
 
 export interface HudOptions {
@@ -88,7 +93,8 @@ export class HudView {
     lastSecs: number;
     sprite?: Phaser.GameObjects.Sprite;
     digits?: (typeof FEVER_DIGITS)['fever' | 'rainbow'];
-    slot?: { x: number; y: number };
+    /** 숫자 묶음의 제자리 x (흔들림 뒤 되돌릴 곳) */
+    numX?: number;
   };
 
   /**
@@ -202,27 +208,33 @@ export class HudView {
     if (!scene.anims.exists(loop)) {
       scene.anims.create({ key: loop, frames: scene.anims.generateFrameNumbers(L.key, { start: 6, end: 9 }), frameRate: 8, repeat: -1 });
     }
-    const cx = scene.scale.width / 2;
-    const dw = L.fw * LOGO_SCALE, dh = L.fh * LOGO_SCALE;
-    const box = scene.add.container(cx, FEVER_Y).setDepth(DEPTH + 2);
+    // 간판 + 숫자를 한 묶음으로 화면 가운데에 — 숫자 폭만큼 간판을 왼쪽으로 민다
+    const D = FEVER_DIGITS[rainbow ? 'rainbow' : 'fever'];
+    const hasDigits = scene.textures.exists(D.key);
+    const logoHalf = (L.right - L.fw / 2) * LOGO_SCALE;
+    const numW = DIGIT_GAP + D.gw * DIGIT_SCALE;
+    const box = scene.add.container(scene.scale.width / 2 - numW / 2, FEVER_Y).setDepth(DEPTH + 2);
     const sprite = scene.add.sprite(0, 0, L.key, 0).setScale(LOGO_SCALE);
     sprite.play(intro);
     sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => { if (sprite.active) sprite.play(loop); });
     box.add(sprite);
-    // 남은 초 — 판 안 숫자 자리. 숫자 시트가 있으면 로고 결 숫자 스프라이트, 없으면 게임 글자
-    const slot = { x: -dw / 2 + LOGO_SLOT.x * dw, y: -dh / 2 + LOGO_SLOT.y * dh };
-    const D = FEVER_DIGITS[rainbow ? 'rainbow' : 'fever'];
+    // 남은 초 — 간판 오른끝에서 DIGIT_GAP 띄운 곳이 글자 왼끝, 판 아랫변에 발을 맞춘다.
+    // 간판 안 숫자 자리는 비워 둔다 — 그 자리는 판에 숫자 칸으로 그려진 게 아니라 불꽃 꼬리 · 구름 판 끝이라 비어도 간판 끝으로 읽힌다
+    const numX = logoHalf + DIGIT_GAP;
+    const numY = (L.base - L.fh / 2) * LOGO_SCALE - DIGIT_LIFT;
     let secs: Phaser.GameObjects.Container | Phaser.GameObjects.Text;
-    if (scene.textures.exists(D.key)) {
+    if (hasDigits) {
       this.ensureDigitAnims(D);
-      secs = this.makeDigits(D, slot, seconds);
+      secs = scene.add.container(numX, numY);
+      this.fillDigits(secs, D, seconds);
     } else {
-      secs = scene.add.text(slot.x, slot.y, String(seconds), {
-        fontSize: '20px', color: '#ffffff', fontStyle: 'bold', stroke: L.stroke, strokeThickness: 6,
-      }).setOrigin(0.5);
+      // 시트를 못 받았으면 게임 글자로 같은 자리에 (왼쪽 아래 기준)
+      secs = scene.add.text(numX, numY + 6, String(seconds), {
+        fontSize: '40px', color: '#ffffff', fontStyle: 'bold', stroke: L.stroke, strokeThickness: 7,
+      }).setOrigin(0, 1);
     }
     box.add(secs);
-    this.fever = { box, secs, lastSecs: seconds, sprite, digits: scene.textures.exists(D.key) ? D : undefined, slot };
+    this.fever = { box, secs, lastSecs: seconds, sprite, digits: hasDigits ? D : undefined, numX };
   }
 
   /** 숫자마다 반복 애니메이션 (그 숫자 열의 행들) — 처음 한 번 만들어 두고 다음 피버도 쓴다 */
@@ -236,22 +248,12 @@ export class HudView {
     }
   }
 
-  /**
-   * 숫자 묶음 — 묶음의 원점이 숫자 몸통 아래 가운데라서, 튈 때 숫자 자리에 발을 붙인 채 위로 커진다.
-   * 묶음을 숫자 칸 가운데보다 몸통 높이의 절반만큼 아래에 놓는다
-   */
-  private makeDigits(D: (typeof FEVER_DIGITS)['fever' | 'rainbow'], slot: { x: number; y: number }, n: number) {
-    const bodyH = D.fh * D.oy * DIGIT_SCALE;
-    const box = this.scene.add.container(slot.x, slot.y + bodyH / 2);
-    this.fillDigits(box, D, n);
-    return box;
-  }
-
+  /** 숫자 묶음을 다시 채운다 — 묶음 원점 = 첫 글자 왼쪽 아래 (튀기의 축) */
   private fillDigits(box: Phaser.GameObjects.Container, D: (typeof FEVER_DIGITS)['fever' | 'rainbow'], n: number) {
     box.removeAll(true);
     const str = String(n), step = D.adv * DIGIT_SCALE;
     [...str].forEach((ch, i) => {
-      const x = (i - (str.length - 1) / 2) * step;
+      const x = D.gl * DIGIT_SCALE + i * step;
       const sp = this.scene.add.sprite(x, 0, D.key, Number(ch)).setOrigin(D.ox, D.oy).setScale(DIGIT_SCALE);
       sp.play(`${D.key}_${ch}`);
       box.add(sp);
@@ -278,7 +280,7 @@ export class HudView {
 
   /**
    * 남은 초 — 바뀔 때만. 1.5 → 1.0 (180ms) 으로 튄다.
-   * 3·2·1 은 2.1 → 1.0 (260ms) + 흰 번쩍(90ms) + 숫자만 좌우 2px 흔들림 — 화면은 흔들지 않는다
+   * 3·2·1 은 1.8 → 1.0 (260ms) + 흰 번쩍(90ms) + 숫자만 좌우 2px 흔들림 — 화면은 흔들지 않는다
    */
   setFeverSeconds(seconds: number) {
     const f = this.fever;
@@ -292,7 +294,7 @@ export class HudView {
     const pop = last3 ? POP.last3 : POP.normal;
     t.setScale(pop.from);
     this.scene.tweens.add({ targets: t, scale: 1, duration: pop.ms, ease: 'Back.easeOut' });
-    if (last3 && t instanceof Phaser.GameObjects.Container && f.slot) {
+    if (last3 && t instanceof Phaser.GameObjects.Container && f.numX !== undefined) {
       // 흰 번쩍 — 숫자를 통째로 흰색으로 칠하면 불꽃 번짐까지 흰 덩어리가 돼 숫자가 안 읽힌다.
       // 같은 칸을 흰색으로 더해(ADD) 얹고 90ms 동안 걷어 낸다
       for (const sp of [...t.list] as Phaser.GameObjects.Sprite[]) {
@@ -301,7 +303,7 @@ export class HudView {
         t.add(fl);
         this.scene.tweens.add({ targets: fl, alpha: 0, duration: POP.last3.flashMs, onComplete: () => fl.destroy() });
       }
-      const x0 = f.slot.x;
+      const x0 = f.numX;
       t.setX(x0);
       this.scene.tweens.add({ targets: t, x: { from: x0 - POP.last3.shakePx, to: x0 + POP.last3.shakePx }, duration: 35, yoyo: true, repeat: 2,
         onComplete: () => { if (t.active) t.setX(x0); } });
