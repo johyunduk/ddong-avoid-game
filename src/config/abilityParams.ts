@@ -841,6 +841,34 @@ export const HEIDI_SHEETS: string[] = [
   ...HEIDI_CLONE_CHARS.flatMap(c => Object.values(HEIDI_CLONE_SHEETS[c] ?? {})),
 ];
 
+// ── 나눠 올리기 (렉 조사 — 하이디 판 첫 1초 16fps) ─────────────────────────
+// 판 시작(preload)에는 배회에 필요한 두 장만 올리고, 나머지는 판이 시작된 뒤 HeidiAbility 가
+// 묶음 단위로 한 장씩 올린다. 묶음 순서 = 처음 필요한 순서:
+//   base — 1·2번째 발동(60점 기본 뿌요 분신술 · 120점 아랑아)에 쓰는 뿌요 시트
+//   닌자 8명 — 3번째 발동(180점)부터 무작위 변신. 다 올라간 닌자 중에서만 뽑는다
+/** preload 에 남기는 시트 — 판 시작부터 걸어 다녀야 한다 */
+export const HEIDI_PRELOAD_SHEETS: string[] = [HEIDI_PUYO_SHEETS.walk, HEIDI_PUYO_SHEETS.idle];
+/** 첫 묶음 — 기본 뿌요의 도약·아랑아·인·분신술·컷인 */
+export const HEIDI_BASE_SHEETS: string[] = [
+  ...Object.values(HEIDI_PUYO_SHEETS).filter(f => !HEIDI_PRELOAD_SHEETS.includes(f)),
+  HEIDI_WEAPON_SHEET,
+  HEIDI_FX_CLONEPOSE,
+  ...Object.values(HEIDI_CLONE_SHEETS.puyo ?? {}),
+];
+/** 닌자마다 그 기술이 쓰는 이펙트 — 칸을 골라 쓰는 시트 · 재생용 fx 키 (vfx FxKey) */
+export const HEIDI_CLONE_FX: Record<string, { sheets: string[]; anims: string[] }> = {
+  neji: { sheets: [HEIDI_FX_TRIGRAM, HEIDI_FX_PALM], anims: ['kaiten'] },
+  kakashi: { sheets: [], anims: ['boltBlue', 'chidori'] },
+  itachi: { sheets: [HEIDI_FX_CROW, HEIDI_FX_AMATERASU, HEIDI_FX_SUSANOO, HEIDI_FX_SWORDWAVE], anims: [] },
+  minato: { sheets: [HEIDI_FX_RASENGAN, HEIDI_FX_RASENBLAST], anims: [] },
+  shikamaru: { sheets: [HEIDI_FX_BOMBTAG, HEIDI_FX_TAGBLAST], anims: [] },
+  choji: { sheets: [HEIDI_FX_CHOJIBALL, HEIDI_FX_CHOJISLAM], anims: [] },
+  orochimaru: { sheets: [HEIDI_FX_GATE], anims: [] },
+  jiraiya: { sheets: [HEIDI_FX_TOAD, HEIDI_FX_FIREJET, HEIDI_FX_OILJET], anims: [] },
+};
+/** 판 시작 뒤 나눠 올리는 시트 전부 (character.ts 의 deferredFxSheets) */
+export const HEIDI_DEFERRED_SHEETS: string[] = HEIDI_SHEETS.filter(f => !HEIDI_PRELOAD_SHEETS.includes(f));
+
 // 뿌요는 땅에서 혼자 좌우로 돌아다니다가 일정 점수마다 **먼 쪽 화면 끝까지 도약해
 // 벽을 짚고, 내려오면서 반대편까지 날라차기로 가로지른다.** 지나간 길의 일반 똥이
 // 부서진다. 자세한 설계는 docs/fx-heidi-puyo.md.

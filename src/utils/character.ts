@@ -2,7 +2,7 @@ import {
   HACKER_DESC, MINER_DESC, MAEHWA_DESC,
   ARCHIEVE_DESC, GLITCH_DESC, NOISE_DESC,
   SENTINEL_DESC, LEGACY_DESC, KNIGHT_DESC,
-  GUMI_DESC, MUGI_DESC, K_DESC, TED_DESC, RED_DESC, RED_SHEETS, HEIDI_DESC, HEIDI_SHEETS,
+  GUMI_DESC, MUGI_DESC, K_DESC, TED_DESC, RED_DESC, RED_SHEETS, HEIDI_DESC, HEIDI_PRELOAD_SHEETS, HEIDI_DEFERRED_SHEETS,
 } from '../config/abilityParams';
 import { type FxKey } from './vfx';
 
@@ -54,6 +54,10 @@ export interface CharacterDef {
    * 다 올라가기 전에는 능력이 그 그림을 쓰는 기술을 막는다 (테드: 액티브 버튼이 흐림)
    */
   deferredSpriteSheets?: Record<string, string>;
+  /** {@link extraFxSheets} 처럼 칸을 골라 쓰는 시트지만 **판이 시작된 뒤 능력이 나눠 올린다** (GameScene 은 안 읽는다) */
+  deferredFxSheets?: string[];
+  /** {@link extraFxAnims} 처럼 재생용 fx 지만 **판이 시작된 뒤 능력이 나눠 올린다** (GameScene 은 안 읽는다) */
+  deferredFxAnims?: FxKey[];
   /**
    * **아직 공개하지 않은 캐릭터.** 사람에게 보이는 목록(캐릭터 선택 격자·도감)에서 감춘다.
    *
@@ -284,9 +288,11 @@ export const CHARACTERS: CharacterDef[] = [
     specialAbility: HEIDI_DESC.specialAbility,
     // 강아지 뿌요 + 변신 캐릭터 여덟의 시트. 재생용이 아니라 텍스처만 올리고 애니메이션은
     // HeidiAbility 가 직접 등록한다 (레드 참새와 같은 길). 하이디를 골랐을 때만 올라간다 —
-    // 목록은 HEIDI_SHEETS
-    extraFxSheets: HEIDI_SHEETS,
-    extraFxAnims: ['boltBlue', 'chidori', 'kaiten'],   // 카카시 치도리. 1.88MB 라 전원에게 올리지 않는다
+    // 목록은 HEIDI_SHEETS. 판 시작(preload)에는 배회 두 장만, 나머지 116장과 재생 fx 3장은
+    // 판이 시작된 뒤 HeidiAbility 가 묶음별로 한 장씩 올린다 (렉 조사 — 판 첫 1초 16fps)
+    extraFxSheets: HEIDI_PRELOAD_SHEETS,
+    deferredFxSheets: HEIDI_DEFERRED_SHEETS,
+    deferredFxAnims: ['boltBlue', 'chidori', 'kaiten'],   // 카카시 치도리 · 네지 회천 (1.88MB)
     // 긴 머리가 뒤로 날려 캔버스가 236x312 다 — 표시 비율을 캔버스에 맞춘다.
     // 좌우가 반전이 아니라 각각 그린 그림이다 (모자 리본·해골 장식이 비대칭).
     playerDisplaySize: [45, 80],

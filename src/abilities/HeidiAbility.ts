@@ -8,9 +8,18 @@ import {
   HEIDI_FX_CROW, HEIDI_FX_CLONEPOSE, HEIDI_FX_AMATERASU, HEIDI_FX_RASENGAN, HEIDI_FX_RASENBLAST,
   HEIDI_FX_SUSANOO, HEIDI_FX_SWORDWAVE, HEIDI_FX_TRIGRAM, HEIDI_FX_PALM, HEIDI_FX_CHOJISLAM, HEIDI_FX_BOMBTAG, HEIDI_FX_TAGBLAST, HEIDI_FX_CHOJIBALL, HEIDI_FX_GATE,
   HEIDI_FX_TOAD, HEIDI_FX_FIREJET, HEIDI_FX_OILJET, HEIDI_SHEET_FIX,
+  HEIDI_BASE_SHEETS, HEIDI_CLONE_FX, HEIDI_DEFERRED_SHEETS,
   type CloneFinForm,
 } from '../config/abilityParams';
-import { fxPickSheetKey, burst, impact as vfxImpact, fxSprite, playFx } from '../utils/vfx';
+import {
+  fxPickSheetKey, burst, impact as vfxImpact, fxSprite, playFx,
+  loadFxPickSheet, preloadFxSheet, fxTextureKeysOf, type FxKey,
+} from '../utils/vfx';
+import { StagedLoader, type StagedItem } from './stagedLoader';
+
+/** 시트 나눠 올리기 — 판 시작 뒤 쉬는 시간 · 한 장 올린 뒤 다음 장까지 (렉 조사 — 하이디 판 첫 1초) */
+const SHEET_LOAD_START_MS = 300;
+const SHEET_LOAD_GAP_MS = 60;
 
 /**
  * 하이디의 타격감 — 히트스톱·섬광·펀치는 그대로, **화면 흔들림만 뺀다** (사람 판정: "화면 흔들리는 거
@@ -483,6 +492,13 @@ export class HeidiAbility extends BaseAbility {
   /** 발동 판단 — 개별 뿌요가 아니라 **능력 전체**의 상태다 */
   private lastWallRight?: boolean;  // 지난번에 짚은 쪽. 없으면 아직 한 번도 안 뛰었다
   private pending = false;       // 점수는 찼는데 **거리가 모자라** 아직 안 뛴 상태
+  /**
+   * 시트 나눠 올리기 — 묶음(base · 닌자 8명) 순서로 한 장씩. 묶음마다 텍스처 키 목록을 들고 있다가
+   * 다 올라왔는지 본다 (변신 뽑기 · 첫 발동 가드). 다 올라온 묶음은 readyGroups 에 남긴다
+   */
+  private sheetLoader: StagedLoader | null = null;
+  private sheetGroups = new Map<string, string[]>();
+  private readyGroups = new Set<string>();
 
   /** 같은 점수로 두 번 발동하지 않게 하는 기준선 */
   private lastFireScore = 0;
@@ -500,6 +516,7 @@ export class HeidiAbility extends BaseAbility {
     this.deflectLeft = 0;
     this.transforming = false;
     this.registerAnims(scene);
+    this.startSheetLoad(scene);
 
     const key = fxPickSheetKey(HEIDI_PUYO_SHEETS.walk);
     if (!scene.textures.exists(key)) return;   // 시트가 안 올라왔으면 조용히 없던 일로
@@ -545,6 +562,10 @@ export class HeidiAbility extends BaseAbility {
 
   override onDestroy(_api: GameSceneAPI): void {
     this.dead = true;
+    // 시트 나눠 올리기 — 판이 끝나면 멈춘다. 받는 중이던 장은 도착하면 지운다
+    // (다음 판의 캐릭터 해제 GameScene.releasePreviousCharacter 와 엇갈리지 않게)
+    this.sheetLoader?.stop();
+    this.sheetLoader = null;
     for (const ob of this.tracked) ob.destroy();
     this.tracked.clear();
     this.puyos = [];
@@ -587,6 +608,10 @@ export class HeidiAbility extends BaseAbility {
     if (this.dead) return;
     const { scene, player } = api;
     const now = scene.time.now;
+    if (this.sheetLoader) {
+      this.sheetLoader.step();
+      if (this.sheetLoader.done) this.sheetLoader = null;
+    }
     this.groundY = player.y + player.displayHeight / 2;
 
     for (const p of this.puyos) {
@@ -655,7 +680,13 @@ export class HeidiAbility extends BaseAbility {
 
     // 웅크림 → 점프. 예비 동작이 있어야 도약이 무겁게 읽힌다
     if (p.state === 'crouch') {
-      if (now >= p.stateUntil) {
+      if (now >= p.stateUntil && !this.groupReady(p.ob.scene, 'base')) {
+        // 첫 묶음(도약·아랑아·분신술)이 아직이면 이번 발동은 미룬다 — 그림 없이 뛰면 기본 뿌요 걷기 그림으로 난다.
+        // 실측상 첫 묶음은 판 시작 약 1.5초에 끝나고 첫 발동은 60점(약 5초)이라 실제로는 안 걸린다
+        this.fireCount--;
+        this.pending = true;
+        this.play(p, 'walk');
+      } else if (now >= p.stateUntil) {
         // 번갈아 쓴다 — summonEvery 번째 발동은 변신, 나머지는 평소 도약·날라차기.
         // **첫 발동부터 변신이다** (60 · 180 · 300 …). fireCount 는 여기 오기 전에
         // 이미 1 이 되어 있다 — `% 2 === 0` 으로 두면 첫 변신이 120점에야 나왔다
@@ -1015,14 +1046,15 @@ export class HeidiAbility extends BaseAbility {
     const forced = P.debugCloneChar;
     // 랜덤 — 단 **방금 변신했던 캐릭터는 빼고** 뽑는다. 8명 중 1/8 로 같은 게 연달아 나오면
     // 기술이 안 바뀐 것처럼 보인다
-    const pool = HEIDI_CLONE_CHARS.filter(c => c !== p.char);
+    // **다 올라온 닌자만** — 덜 올라온 닌자로 변신하면 그 시트 대신 기본 뿌요 그림이 나온다
+    const pool = HEIDI_CLONE_CHARS.filter(c => c !== p.char && this.groupReady(scene, c));
     // **첫 변신은 기본 뿌요 고정** (사람 지시) — 판의 첫 기술로 그림자 분신술을 보여 준다.
     // 그다음부터 무작위 (방금 캐릭터는 빼고)
     const first = this.transformCount === 0;
     this.transformCount++;
-    const who = (forced && (HEIDI_CLONE_CHARS as readonly string[]).includes(forced))
+    const who = (forced && (HEIDI_CLONE_CHARS as readonly string[]).includes(forced) && this.groupReady(scene, forced))
       ? forced
-      : first ? 'puyo'
+      : first || pool.length === 0 ? 'puyo'
       : pool[Math.floor(Math.random() * pool.length)];
 
     // **펑 — 흰 연기가 티 나게.** 공용 smoke 는 하늘색 에셋이라 아무리 짙게 해도 희지 않아서
@@ -3844,6 +3876,60 @@ export class HeidiAbility extends BaseAbility {
    * `loadFxPickSheet` 는 텍스처만 올리고 애니메이션은 만들지 않는다.
    * 루프가 필요한 쪽은 여기서 직접 등록한다 (레드와 같은 길).
    */
+  /**
+   * 시트 나눠 올리기 시작 — preload 에는 배회 두 장(walk · idle)만 있다.
+   * 묶음 순서 = 처음 필요한 순서: base(60점 분신술 · 120점 아랑아) → 닌자 8명(180점부터 무작위 변신).
+   * 한 장 올라올 때마다 애니메이션을 다시 등록한다 (registerAnims 는 이미 있는 건 건너뛴다)
+   */
+  private startSheetLoad(scene: Phaser.Scene): void {
+    this.sheetLoader?.stop();
+    this.sheetGroups.clear();
+    this.readyGroups.clear();
+    const items: StagedItem[] = [];
+    const seen = new Set<string>();
+    const sheet = (f: string): string | null => {
+      const key = fxPickSheetKey(f);
+      if (seen.has(key)) return null;
+      seen.add(key);
+      items.push({ key, enqueue: (sc) => loadFxPickSheet(sc, f) });
+      return key;
+    };
+    const anim = (k: string): string | null => {
+      const key = fxTextureKeysOf(k as FxKey)[0];
+      if (!key || seen.has(key)) return null;
+      seen.add(key);
+      items.push({ key, enqueue: (sc) => preloadFxSheet(sc, k as FxKey) });
+      return key;
+    };
+    const group = (id: string, files: string[], anims: string[] = []) => {
+      const keys = [...files.map(sheet), ...anims.map(anim)].filter((k): k is string => k !== null);
+      this.sheetGroups.set(id, keys);
+    };
+    group('base', HEIDI_BASE_SHEETS);
+    group('puyo', []);                                   // 기본 뿌요 변신 = base 와 같은 묶음
+    for (const c of HEIDI_CLONE_CHARS) {
+      if (c === 'puyo') continue;
+      const fx = HEIDI_CLONE_FX[c] ?? { sheets: [], anims: [] };
+      group(c, [...Object.values(HEIDI_CLONE_SHEETS[c] ?? {}), ...fx.sheets], fx.anims);
+    }
+    // 안전망 — 어느 묶음에도 안 든 시트 (목록이 어긋나도 빠지지 않게 맨 뒤에)
+    group('rest', HEIDI_DEFERRED_SHEETS);
+    this.sheetLoader = new StagedLoader(scene, items, SHEET_LOAD_GAP_MS, SHEET_LOAD_START_MS,
+      () => this.registerAnims(scene));
+    if (this.sheetLoader.done) this.sheetLoader = null;
+  }
+
+  /** 그 묶음의 텍스처가 다 올라왔나 (base · puyo · 닌자 id). 한 번 다 올라오면 기억한다 */
+  private groupReady(scene: Phaser.Scene, id: string): boolean {
+    if (id === 'puyo') id = 'base';
+    if (this.readyGroups.has(id)) return true;
+    const keys = this.sheetGroups.get(id);
+    if (!keys) return true;                              // 묶음 목록에 없는 것은 막지 않는다
+    if (!keys.every(k => scene.textures.exists(k))) return false;
+    this.readyGroups.add(id);
+    return true;
+  }
+
   private registerAnims(scene: Phaser.Scene): void {
     const def = (
       sheet: string,

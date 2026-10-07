@@ -47,8 +47,8 @@ function rawKeys(id: string): string[] {
     for (const dir of CHAR_ANIM_DIRS) keys.push(sheetTextureKey(sid, dir));
   }
   // 능력 시트 — 칸을 골라 쓰는 fxpick · 재생용 fx 시트(코드로 굽는 것 포함) · 한 장 그림 · 큰 그림 시트
-  for (const f of def.extraFxSheets ?? []) keys.push(fxPickSheetKey(f));
-  for (const k of def.extraFxAnims ?? []) keys.push(...fxTextureKeysOf(k));
+  for (const f of [...(def.extraFxSheets ?? []), ...(def.deferredFxSheets ?? [])]) keys.push(fxPickSheetKey(f));
+  for (const k of [...(def.extraFxAnims ?? []), ...(def.deferredFxAnims ?? [])]) keys.push(...fxTextureKeysOf(k));
   keys.push(...Object.keys(def.extraImages ?? {}), ...Object.keys(def.extraSpriteSheets ?? {}),
     ...Object.keys(def.deferredSpriteSheets ?? {}));   // 판 시작 뒤 능력이 나눠 올리는 것도 같은 몫
   // 액티브 버튼 얼굴 칩 — 원본 + 굽는 둥근 판 (GameScene: hud_facesrc_<id> → hud_face_<id>_22)

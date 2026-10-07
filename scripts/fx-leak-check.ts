@@ -1533,6 +1533,10 @@ async function main() {
     }
     const ms = nowMs() - t0;
     const leftFx = fxLeft(ab);
+    // 남은 스프라이트는 **이펙트가 재생을 마칠 시간**을 준 뒤 센다 — 카카시 마지막 돌진의 번개 4줄
+    // (boltBlue 8칸 22fps = 364ms)은 기술이 끝나는 순간에도 재생 중이고, 끝나면 vfx 가 스스로 지운다.
+    // 하이디 시트 나눠 올리기 이후 스텁에서도 그 시트가 올라와 실제로 그려지면서 드러났다
+    await sleep(500);
     const leftSprites = live.sprites;
     ab.onDestroy(tApi);
     tPoops = [];

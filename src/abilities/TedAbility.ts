@@ -6,6 +6,7 @@ import type PoolablePoopBase from '../objects/PoolablePoopBase';
 import { TED_PARAMS } from '../config/abilityParams';
 import { TED_CHARGE_CUBE } from '../config/tedChargeCube.gen';
 import { getCharacterDef } from '../utils/character';
+import { StagedLoader } from './stagedLoader';
 import { fxPickSheetKey, burst, fxSprite, playFx, impact } from '../utils/vfx';
 
 
@@ -637,9 +638,7 @@ export class TedAbility extends BaseAbility {
   /** 컷신 큐. 비어 있지 않으면 연출이 도는 중이다 */
   private ascentCues: { at: number; fn: (api: GameSceneAPI) => void }[] = [];
   /** 수묵 시트 나눠 올리기 — 남은 [키, 경로] · 받는 중 · 다음 장을 걸 시각 · 다 올리고 구웠다 */
-  private inkQueue: [string, string][] = [];
-  private inkLoading = false;
-  private inkNextAt = 0;
+  private inkLoader: StagedLoader | null = null;
   private inkReady = false;
   /** 이 시각까지 무적 (컷신 동안) */
   private ascentInvincibleUntil = 0;
@@ -1534,32 +1533,25 @@ export class TedAbility extends BaseAbility {
 
   private startInkLoad(scene: Phaser.Scene): void {
     const sheets = getCharacterDef('ted').deferredSpriteSheets ?? {};
-    this.inkQueue = Object.entries(sheets).filter(([k]) => !scene.textures.exists(k));
-    this.inkLoading = false;
     this.inkReady = false;
-    this.inkNextAt = scene.time.now + INK_LOAD_START_MS;
+    this.inkLoader = new StagedLoader(scene, Object.entries(sheets).map(([key, path]) => ({
+      key,
+      enqueue: (sc: Phaser.Scene) => {
+        const m = /_(\d+)x(\d+)\.\w+$/.exec(path);
+        if (m) sc.load.spritesheet(key, path, { frameWidth: Number(m[1]), frameHeight: Number(m[2]) });
+      },
+    })), INK_LOAD_GAP_MS, INK_LOAD_START_MS);
     this.stepInkLoad(scene);
   }
 
   private stepInkLoad(scene: Phaser.Scene): void {
-    if (this.inkLoading || scene.time.now < this.inkNextAt) return;
-    const next = this.inkQueue.shift();
-    if (!next) {
-      this.bakeInkTextures(scene);                    // 진한 먹·흰 눈동자·아지랑이 — s3·s7 이 있어야 굽는다
-      this.inkReady = true;
-      return;
-    }
-    const [key, path] = next;
-    const m = /_(\d+)x(\d+)\.\w+$/.exec(path);
-    if (!m || scene.textures.exists(key)) return;   // 다음 프레임에 다음 장
-    this.inkLoading = true;
-    scene.load.spritesheet(key, path, { frameWidth: Number(m[1]), frameHeight: Number(m[2]) });
-    // 실패(404 등)해도 COMPLETE 는 온다 — 그 장만 빠지고 나머지는 계속 (layoutInk 는 없는 텍스처를 건너뛴다)
-    scene.load.once(Phaser.Loader.Events.COMPLETE, () => {
-      this.inkLoading = false;
-      this.inkNextAt = scene.time.now + INK_LOAD_GAP_MS;
-    });
-    scene.load.start();
+    const L = this.inkLoader;
+    if (!L) return;
+    L.step();
+    if (!L.done) return;
+    this.bakeInkTextures(scene);                      // 진한 먹·흰 눈동자·아지랑이 — s3·s7 이 있어야 굽는다
+    this.inkReady = true;
+    this.inkLoader = null;
   }
 
   override onActiveSkill(api: GameSceneAPI): void {
@@ -2280,6 +2272,10 @@ export class TedAbility extends BaseAbility {
     this.cancelled = true;
     this.stage = null;
     this.cues = [];
+    // 수묵 나눠 올리기 — 판이 끝나면 멈춘다 (받는 중이던 장은 도착하면 지운다 — 다음 판의 캐릭터 해제와 엇갈리지 않게)
+    this.inkLoader?.stop();
+    this.inkLoader = null;
+    this.inkReady = false;
     // 액티브 — 큐를 비우지 않으면 씬이 내려간 뒤에도 컷신이 이어진다
     this.ascentCues = [];
     this.ascentInvincibleUntil = 0;
