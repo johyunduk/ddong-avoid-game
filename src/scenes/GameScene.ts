@@ -205,6 +205,8 @@ export default class GameScene extends BaseScene {
     // 피버 타임 초기화
     this.isFeverTime = false;
     this.feverTimeRemaining = 0;
+    // 지난 판 시계에 붙어 있던 타이머 — 씬이 끝나며 시계째 사라졌다. 참조를 들고 있지 않는다
+    this.feverTimeTimer = undefined;
     this.feverCount = 0;
     this.isRainbowFever = false;
     this.lastClearPoopsScore = 0;
