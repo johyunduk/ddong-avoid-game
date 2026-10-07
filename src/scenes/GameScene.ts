@@ -283,6 +283,8 @@ export default class GameScene extends BaseScene {
     if (!this.textures.exists('diamond_poop')) this.load.image('diamond_poop', 'assets/poops/diamond_poop.webp');
     if (!this.textures.exists('topaz_poop')) this.load.image('topaz_poop', 'assets/poops/topaz.webp');
     if (!this.textures.exists('rainbow_poop')) this.load.image('rainbow_poop', 'assets/poops/rainbow_poop.webp');
+    // 피버 로고 시트 (공통 — 판마다 쓴다). 레인보우는 그 시너지가 있는 판에만
+    HudView.preload(this, this.activeSynergy?.rainbowFever === true);
     // 게임오버 캐릭터 칩의 등급 글자 (작은 png 한 장)
     {
       const g = getCharacterDef(getSafeSelectedCharacter()).grade;

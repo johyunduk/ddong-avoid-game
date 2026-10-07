@@ -20,7 +20,23 @@ export const HUD_BOTTOM = 62;
 const PILL_Y = 30, PILL_H = 40;
 const BAR_Y = 58, BAR_H = 4;
 const FEVER_Y = 88;
-const POP_Y = 124;
+/**
+ * 획득 글자 — 피버 로고 아래. FEVER 간판은 불꽃까지 높이 90 (43~133)이라 예전 자리(124)면 '+40' 을 덮는다.
+ * 로고를 줄이면 간판 글자가 작아져서, 로고는 시안 크기 그대로 두고 획득 글자를 22px 내렸다
+ */
+const POP_Y = 146;
+
+/**
+ * 피버 로고 시트 (A안 간판형, 2026-10-07 대표 채택) — 칸 2열 10칸, 표시는 칸의 1/2.
+ * 0~5 등장(20fps, 처음 두 칸 흰 글로우) → 6~9 반복(8fps). 남은 초는 게임 글자로 판 안 숫자 자리(slot)에 얹는다
+ * (시트 원본·좌표: ddong-fx-work/fever-logo/sheets.json)
+ */
+const FEVER_LOGO = {
+  fever:   { key: 'feverlogo_fever',   path: 'assets/fx/sheets/feverlogo_fever_500x180.png',   fw: 500, fh: 180, stroke: '#3a0a00' },
+  rainbow: { key: 'feverlogo_rainbow', path: 'assets/fx/sheets/feverlogo_rainbow_500x148.png', fw: 500, fh: 148, stroke: '#2a0a4a' },
+} as const;
+const LOGO_SCALE = 0.5;
+const LOGO_SLOT = { x: 0.835, y: 0.62 };
 
 export interface HudOptions {
   /** 이번 판 시작 때 최고 (이번 시즌) */
@@ -45,7 +61,18 @@ export class HudView {
   private lastBarScale = -1;
   private charName = '';
   private charBest = 0;
-  private fever?: { box: Phaser.GameObjects.Container; secs: Phaser.GameObjects.Text; lastSecs: number };
+  private fever?: { box: Phaser.GameObjects.Container; secs: Phaser.GameObjects.Text; lastSecs: number; sprite?: Phaser.GameObjects.Sprite };
+
+  /**
+   * 피버 로고 시트 올리기 — GameScene.preload 에서. 판마다 쓰는 공통 텍스처라 한 번 올리면 둔다 (캐릭터 몫이 아니다).
+   * 레인보우 피버가 없는 판(시너지 없음)에는 레인보우 시트를 올리지 않는다
+   */
+  static preload(scene: Phaser.Scene, withRainbow: boolean) {
+    for (const k of withRainbow ? ['fever', 'rainbow'] as const : ['fever'] as const) {
+      const L = FEVER_LOGO[k];
+      if (!scene.textures.exists(L.key)) scene.load.spritesheet(L.key, L.path, { frameWidth: L.fw, frameHeight: L.fh });
+    }
+  }
 
   constructor(scene: Phaser.Scene, opts: HudOptions) {
     this.scene = scene;
@@ -129,9 +156,39 @@ export class HudView {
 
   // ── 피버 ────────────────────────────────────────────────────────────
 
-  /** 피버 알약 — 주황(FEVER TIME) / 분홍-보라(RAINBOW FEVER), 오른쪽에 남은 초 */
+  /**
+   * 피버 로고 — 간판 시트가 등장(0~5) 뒤 반복(6~9)하고, 남은 초를 판 안 숫자 자리에 얹는다.
+   * 애니메이션은 처음 한 번 만들어 두고(전역) 피버마다 스프라이트만 새로 만든다 — 텍스처는 판 내내 한 장
+   */
   showFever(rainbow: boolean, seconds: number) {
     this.hideFever();
+    const { scene } = this;
+    const L = FEVER_LOGO[rainbow ? 'rainbow' : 'fever'];
+    if (!scene.textures.exists(L.key)) { this.showFeverPill(rainbow, seconds); return; }   // 시트를 못 받았으면 알약으로
+    const intro = `${L.key}_intro`, loop = `${L.key}_loop`;
+    if (!scene.anims.exists(intro)) {
+      scene.anims.create({ key: intro, frames: scene.anims.generateFrameNumbers(L.key, { start: 0, end: 5 }), frameRate: 20, repeat: 0 });
+    }
+    if (!scene.anims.exists(loop)) {
+      scene.anims.create({ key: loop, frames: scene.anims.generateFrameNumbers(L.key, { start: 6, end: 9 }), frameRate: 8, repeat: -1 });
+    }
+    const cx = scene.scale.width / 2;
+    const dw = L.fw * LOGO_SCALE, dh = L.fh * LOGO_SCALE;
+    const box = scene.add.container(cx, FEVER_Y).setDepth(DEPTH + 2);
+    const sprite = scene.add.sprite(0, 0, L.key, 0).setScale(LOGO_SCALE);
+    sprite.play(intro);
+    sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => { if (sprite.active) sprite.play(loop); });
+    box.add(sprite);
+    // 남은 초 — 게임 글자(기본 글꼴)로 판 안 숫자 자리에 가운데 정렬
+    const secs = scene.add.text(-dw / 2 + LOGO_SLOT.x * dw, -dh / 2 + LOGO_SLOT.y * dh, String(seconds), {
+      fontSize: '20px', color: '#ffffff', fontStyle: 'bold', stroke: L.stroke, strokeThickness: 6,
+    }).setOrigin(0.5);
+    box.add(secs);
+    this.fever = { box, secs, lastSecs: seconds, sprite };
+  }
+
+  /** 시트가 없을 때 대신 — 예전 알약 (주황 / 분홍-보라) */
+  private showFeverPill(rainbow: boolean, seconds: number) {
     const { scene } = this;
     const cx = scene.scale.width / 2;
     const w = rainbow ? 236 : 200, h = 38;
@@ -143,28 +200,27 @@ export class HudView {
     box.add(scene.add.text(-22, 0, rainbow ? 'RAINBOW FEVER' : 'FEVER TIME', {
       fontSize: '18px', color: '#fff6c8', fontStyle: 'bold', stroke: rainbow ? '#3a1a7a' : '#5a1a00', strokeThickness: 5,
     }).setOrigin(0.5));
-    const badge = scene.add.graphics();
-    badge.fillStyle(0x140a04, 0.85).fillRoundedRect(w / 2 - 54, -12, 44, 24, 12);
-    box.add(badge);
-    const secs = scene.add.text(w / 2 - 32, 0, `${seconds}초`, { fontSize: '14px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5);
+    const secs = scene.add.text(w / 2 - 32, 0, String(seconds), { fontSize: '14px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5);
     box.add(secs);
-    box.setScale(0.7);
-    scene.tweens.add({ targets: box, scale: 1, duration: 220, ease: 'Back.easeOut' });
-    // 레인보우는 숨 쉬듯 커졌다 작아진다 — 같은 자리라도 한눈에 갈린다
-    if (rainbow) scene.tweens.add({ targets: box, scale: 1.06, duration: 320, yoyo: true, repeat: -1, delay: 240, ease: 'Sine.easeInOut' });
     this.fever = { box, secs, lastSecs: seconds };
   }
 
-  /** 남은 초 — 바뀔 때만 */
+  /** 남은 초 — 바뀔 때만. 숫자가 1.5 → 1.0 으로 180ms 동안 작게 튄다 */
   setFeverSeconds(seconds: number) {
     if (!this.fever || seconds === this.fever.lastSecs) return;
     this.fever.lastSecs = seconds;
-    this.fever.secs.setText(`${seconds}초`);
+    const t = this.fever.secs;
+    t.setText(String(seconds));
+    this.scene.tweens.killTweensOf(t);
+    t.setScale(1.5);
+    this.scene.tweens.add({ targets: t, scale: 1, duration: 180, ease: 'Quad.easeOut' });
   }
 
+  /** 피버 끝 — 스프라이트 · 글자 · 트윈 정리 (텍스처와 전역 애니메이션은 다음 피버가 다시 쓴다) */
   hideFever() {
     if (!this.fever) return;
-    this.scene.tweens.killTweensOf(this.fever.box);
+    this.scene.tweens.killTweensOf(this.fever.secs);
+    this.fever.sprite?.stop();
     this.fever.box.destroy();
     this.fever = undefined;
   }
