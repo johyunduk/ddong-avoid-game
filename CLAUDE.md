@@ -21,7 +21,7 @@ npm run build      # 프로덕션 빌드
 
 ## 씬 흐름
 
-`ModeSelectScene` → `DifficultySelectScene` → `GameScene` → (게임 오버) → `ModeSelectScene`
+`BootScene`(글꼴 로드) → `ModeSelectScene` → `DifficultySelectScene` → `GameScene` → (게임 오버) → `ModeSelectScene`
 `LeaderboardScene` / `CharacterSelectScene` / `GachaScene` / `ReleaseNotesScene` 은 독립 진입
 
 등록된 씬 전부는 `src/main.ts` 의 `scene: [...]` 가 기준이다.
