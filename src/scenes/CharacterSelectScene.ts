@@ -124,6 +124,8 @@ export default class CharacterSelectScene extends BaseScene {
   private loadingKeys = new Set<string>();
   /** 이 씬이 직접 올린 큰 그림 (일러스트 · 배경화면 큰 그림) — 나갈 때 내린다. 원래 있던 키는 남긴다 */
   private ownKeys = new Set<string>();
+  /** 이번 방문에서 서버 동기화 뒤 이미 한 번 재시작했다 — 다시 동기화하지 않는다 (재시작 루프 안전망) */
+  private syncedThisVisit = false;
 
   // 상세 정보 패널
   private detailPanel: Phaser.GameObjects.Container | null = null;
@@ -136,8 +138,9 @@ export default class CharacterSelectScene extends BaseScene {
     super('CharacterSelectScene');
   }
 
-  init(data: { returnScene?: string }) {
+  init(data: { returnScene?: string; synced?: boolean }) {
     this.returnScene = data.returnScene ?? 'ModeSelectScene';
+    this.syncedThisVisit = data.synced === true;
     this.ownKeys = new Set();   // preload 가 채운다 — create 에서 비우면 안 된다
   }
 
@@ -213,8 +216,10 @@ export default class CharacterSelectScene extends BaseScene {
         .map(c => [c.id, getDuplicateCount(c.id)])
     );
 
-    // 서버 DB와 동기화 — 소유 목록 or 각성 수치가 바뀐 경우 씬 재시작해서 카드 갱신
-    syncOwnedCharacters().then(synced => {
+    // 서버 DB와 동기화 — 소유 목록 or 각성 수치가 바뀐 경우 씬 재시작해서 카드 갱신.
+    // 재시작은 방문당 한 번만 — 재시작한 판(synced)에서는 다시 동기화하지 않는다.
+    // 동기화가 매번 '바뀜'을 내면 재시작이 끝없이 돌고 그동안 BaseScene 입력 가드가 계속 다시 걸려 버튼이 안 눌린다
+    if (!this.syncedThisVisit) syncOwnedCharacters().then(synced => {
       if (!this.scene.isActive()) return;
       const ownedChanged = synced.length !== this.ownedIds.length ||
         synced.some(id => !this.ownedIds.includes(id));
@@ -222,7 +227,7 @@ export default class CharacterSelectScene extends BaseScene {
         synced.includes(c.id) && c.grade !== '등급외' &&
         getDuplicateCount(c.id) !== this._preSyncDupCounts.get(c.id)
       );
-      if (ownedChanged || awakeChanged) this.scene.restart();
+      if (ownedChanged || awakeChanged) this.scene.restart({ returnScene: this.returnScene, synced: true });
     }).catch(() => { /* 네트워크 오류 시 로컬 상태 유지 */ });
 
     // 배경화면 동기화 (비동기, UI 갱신 없이 진행 — 다음 방문 시 반영)

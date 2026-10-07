@@ -74,8 +74,10 @@ export async function syncOwnedCharacters(): Promise<string[]> {
     .select('character_id, duplicate_count');
 
   if (error || !data) {
+    // 실패하면 로컬 보유 목록 그대로 — 예전에는 ['chibi'] 를 돌려줘서 수집 화면이 '보유 목록이 바뀌었다'고 보고
+    // 재시작 → 다시 동기화 → 다시 실패를 끝없이 되풀이했다 (오프라인에서 4초에 236번, 버튼이 안 눌림. 2026-10-07)
     console.error('[syncOwnedCharacters] 조회 실패:', error);
-    return ['chibi'];
+    return getOwnedCharacters();
   }
 
   const rows = data as { character_id: string; duplicate_count: number }[];
