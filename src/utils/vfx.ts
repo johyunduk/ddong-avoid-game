@@ -246,6 +246,16 @@ export function fxPickSheetKey(file: string): string {
   return `fxpick_${file.replace(/_\d+x\d+\.png$/, '')}`;
 }
 
+/**
+ * 재생용 이펙트 키가 쓰는 **텍스처 키** — 시트면 `fxsheet_<키>`(preloadFxSheet 와 같은 규칙),
+ * 코드로 굽는 것이면 레지스트리의 textureKey (예: cubeWave → fx_cubewave). 모르는 키면 빈 배열
+ */
+export function fxTextureKeysOf(key: FxKey): string[] {
+  if (FX_SHEETS.some(s => s.fxKey === key)) return [`fxsheet_${key}`];
+  const def = FX_REGISTRY[key];
+  return def ? [def.textureKey] : [];
+}
+
 export function loadFxPickSheet(scene: Phaser.Scene, file: string): void {
   const size = parseFrameSize(file);
   if (!size) return;
