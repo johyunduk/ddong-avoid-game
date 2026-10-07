@@ -1,12 +1,13 @@
 {
-  "w1": { "name": "director", "kind": "claude", "label": "총괄·디렉터", "role": "docs/team/director.md", "managed": false },
-  "w2": { "name": "dev",      "kind": "claude", "label": "개발·Claude", "role": "docs/team/dev.md" },
-  "w3": { "name": "builder",  "kind": "claude", "label": "제작·Claude", "role": "docs/team/builder.md" },
-  "w4": { "name": "reviewer", "kind": "codex",  "label": "검증·Codex",  "role": "AGENTS.md" },
-  "w5": { "name": null,       "kind": null,     "label": "실행·워커",   "role": null, "managed": false },
-  "w6": { "name": "ops",      "kind": "claude", "label": "운영·Claude", "role": "docs/team/ops.md" },
-  "w7": { "name": "fx",       "kind": "claude", "label": "연출·Claude(임시)", "role": "docs/team/fx.md" },
+  "w1": { "name": "director", "kind": "claude", "label": "총괄·디렉터", "role": "docs/team/director.md", "managed": false},
+  "w2": { "name": "dev", "kind": "claude", "label": "개발·Claude", "role": "docs/team/dev.md" },
+  "w3": { "name": "builder", "kind": "claude", "label": "제작·Claude", "role": "docs/team/builder.md" },
+  "w4": { "name": "reviewer", "kind": "codex", "label": "검증·Codex", "role": "AGENTS.md" },
+  "w5": { "name": null, "kind": null, "label": "실행·워커", "role": null, "managed": false},
+  "w6": { "name": "ops", "kind": "claude", "label": "운영·Claude", "role": "docs/team/ops.md" },
+  "w7": { "name": "fx", "kind": "claude", "label": "연출·Claude(임시)", "role": "docs/team/fx.md" },
   "w8": { "name": "composer", "kind": "claude", "label": "음악·Claude", "role": "docs/team/composer.md" },
-  "w9": { "name": "planner",  "kind": "claude", "label": "기획·Claude", "role": "docs/team/planner.md" },
-  "wB": { "name": "lore",     "kind": "claude", "label": "세계관·Claude", "role": "docs/team/lore.md" }
+  "w9": { "name": "planner", "kind": "claude", "label": "기획·Claude", "role": "docs/team/planner.md" },
+  "wB": { "name": "lore", "kind": "claude", "label": "세계관·Claude", "role": "docs/team/lore.md" },
+  "wC": { "name": "dev2", "kind": "claude", "label": "개발2·Claude(임시)", "role": "docs/team/dev2.md" }
 }
