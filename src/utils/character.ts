@@ -239,7 +239,8 @@ export const CHARACTERS: CharacterDef[] = [
       // 소닉붐 충격파 (1.57MB) — builder chess-fx
       'sonicboom_256x256.png'],
     // 어센트 수묵 컷신 (TedAbility 의 TED_INK). builder 원본: ddong-fx-work/ted-ascent/ink/prod23/ (2:3 판, 칸 480x720)
-    // + prod/s7 먹 이펙트. 텍스처 합계 약 76.6MB (GPU RGBA, 시트 75.5 + 다 올린 뒤 굽는 진한 먹·흰 눈동자·아지랑이 1.05) — 테드를 고른 판에서만.
+    // + prod/s7 먹 이펙트. 텍스처 합계 약 68.5MB (GPU RGBA, 시트 67.4 + 다 올린 뒤 굽는 진한 먹·흰 눈동자·아지랑이 1.05) — 테드를 고른 판에서만.
+    // 와이프·소용돌이·s4·얼굴은 쓰는 칸만 다시 묶었다 (그림은 원본 디코드 그대로 무손실, 렉 조사 #5 ①).
     // 발동 때 올리면 디코드·GPU 업로드(큰 시트 장당 수십 ms)가 컷신 첫 장면과 겹쳐 끊긴다.
     // 판 시작 한 프레임에 전부 올리면 그 순간이 끊긴다 (렉 조사 #5 — CPU 4배에서 85~134ms 프레임 1.5초) →
     // **판이 시작된 뒤 TedAbility 가 한 장씩 나눠 올린다** (deferredSpriteSheets). 다 올라갈 때까지 액티브는 잠긴다.
@@ -249,17 +250,17 @@ export const CHARACTERS: CharacterDef[] = [
       ted_ink_s1_form: 'assets/illustrations/ink/ted_ink_s1_form_480x720.webp',
       ted_ink_s1_smoke: 'assets/illustrations/ink/ted_ink_s1_smoke_480x720.webp',
       // 1-A 와이프 · 2-C 각성 (레전즈 ULTRA 에서 빠졌던 장면, 합 약 24MB). 1-B 자세 변화(sB)·1-A 대각선 붓질(sA_stroke)은 뺐다
-      ted_ink_sA_wipe: 'assets/illustrations/ink/ted_ink_sA_wipe_480x720.webp',
+      ted_ink_sA_wipe: 'assets/illustrations/ink/ted_ink_sA_wipe6_480x720.webp',   // 쓰는 6칸만 (렉 조사 #5 ①)
       ted_ink_sC_face: 'assets/illustrations/ink/ted_ink_sC_face_480x720.webp',
       ted_ink_sC_burst: 'assets/illustrations/ink/ted_ink_sC_burst_480x720.webp',
-      ted_ink_s2_face_1: 'assets/illustrations/ink/ted_ink_s2_face_1_480x720.webp',   // 8~9칸
+      ted_ink_s2_face: 'assets/illustrations/ink/ted_ink_s2_face_open_480x720.webp',   // 다 뜬 얼굴 한 칸
       ted_ink_s3_eyes: 'assets/illustrations/ink/ted_ink_s3_eyes_480x234.webp',
-      ted_ink_s4_reveal: 'assets/illustrations/ink/ted_ink_s4_reveal_480x720.webp',
+      ted_ink_s4_reveal: 'assets/illustrations/ink/ted_ink_s4_reveal2_480x720.webp',   // 컬러 2칸만
       ted_ink_s5_wind: 'assets/illustrations/ink/ted_ink_s5_wind_480x720.webp',
       ted_ink_s6_cube: 'assets/illustrations/ink/ted_ink_s6_cube_480x720.webp',
       ted_ink_s7_stroke: 'assets/illustrations/ink/ted_ink_s7_stroke_384x512.webp',
       ted_ink_s7_splash: 'assets/illustrations/ink/ted_ink_s7_splash_512x512.webp',
-      ted_ink_s7_swirl: 'assets/illustrations/ink/ted_ink_s7_swirl_384x512.webp',
+      ted_ink_s7_swirl: 'assets/illustrations/ink/ted_ink_s7_swirl6_384x512.webp',   // 쓰는 6칸만
       // 결과 컷 s8 은 뺐다 (대표 결정) — 컷신은 큐브 손동작(s6)에서 걷힌다
     },
     extraFxAnims: [

@@ -274,25 +274,23 @@ type InkRect = { x: number; y: number; w: number; h: number };
 const TED_INK = {
   form: 'ted_ink_s1_form',      // 3칸 RGBA — 형체가 잡히는 단계
   smoke: 'ted_ink_s1_smoke',    // 4칸 RGBA — 먹 연기 꿈틀 반복
-  /** 10칸 RGB — 덮개가 올라가며 눈을 뜬다 (open.json). 한 변 2048 때문에 두 장: 0~7칸 face_0 (4x2) · 8~9칸 face_1 (2x1) */
-  // s2_face_0(0~7칸)은 올리지 않는다 — 쓰는 칸은 faceOpenFrame(9) 하나라 s2_face_1 만 있으면 된다
-  face: ['ted_ink_s2_face_0', 'ted_ink_s2_face_1'] as readonly string[],
-  facePerSheet: 8,
   /**
-   * 쓰는 칸은 다 뜬 칸(9) 하나뿐 — 감았다 뜨는 동작(0~8칸·open.json)은 대표 결정으로 뺐다.
-   * 시트에서 빼면 face_0 통째(10.55MB) + face_1 의 8칸(1.32MB) 절약 — 빼는 건 대표 결정 후 (정리 목록)
+   * 1칸 RGB — 어둠 속 얼굴 (다 뜬 칸). 원래 10칸(감았다 뜨는 동작, open.json)이었는데 쓰는 건 다 뜬 칸(9) 하나라
+   * 그 칸만 묶었다 (렉 조사 #5 ① — face_0 10.55MB · face_1 나머지 칸 1.32MB 절약)
    */
-  faceOpenFrame: 9,
-  wipe: 'ted_ink_sA_wipe',      // 8칸 RGBA — 1-A 검은 먹 덩어리가 화면을 가리며 지나감 (3·4칸 = 화면 97%)
+  face: ['ted_ink_s2_face'] as readonly string[],
+  facePerSheet: 1,
+  faceOpenFrame: 0,
+  wipe: 'ted_ink_sA_wipe',      // 6칸 RGBA — 1-A 검은 먹 덩어리가 화면을 가리며 지나감 (원본 8칸 중 쓰는 6칸만, 2·3칸 = 화면 97%)
   awake: 'ted_ink_sC_face',     // 5칸 RGB — 2-C 0 = 각성 표정, 1~4 = 먹 터짐 (s2 와 같은 바탕)
   awakeBurst: 'ted_ink_sC_burst', // 4칸 RGBA — 2-C 섬광 순간 퍼지는 먹 터짐
   eyes: 'ted_ink_s3_eyes',      // 8칸 RGB 480x234 — 검정 위 흰 눈매 (더하기 합성, **화면 폭에 맞춘다**)
-  reveal: 'ted_ink_s4_reveal',  // 4칸 RGB — 흰 폭발 → 풀컬러
+  reveal: 'ted_ink_s4_reveal',  // 2칸 RGB — 풀컬러 (원본 4칸 중 컬러 2·3칸만. 흰 폭발·회색 칸은 뺐다)
   wind: 'ted_ink_s5_wind',      // 4칸 RGB (검정 배경) — 바람 반복
   cube: 'ted_ink_s6_cube',      // 5칸 RGB (검정 배경) — 큐브 손동작
   stroke: 'ted_ink_s7_stroke',  // 8칸 RGBA 384x512 — 붓질 (가로로 그려진 시트를 세로로 돌려 쓴다)
   splash: 'ted_ink_s7_splash',  // 6칸 RGBA 512x512 — 먹 튀김
-  swirl: 'ted_ink_s7_swirl',    // 8칸 RGBA 384x512 — 먹 소용돌이
+  swirl: 'ted_ink_s7_swirl',    // 6칸 RGBA 384x512 — 먹 소용돌이 (원본 8칸 중 쓰는 6칸만)
   /**
    * 안전 영역 — 칸마다 **반드시 보여야 할 곳** (원본 480x720 좌표). 화면을 덮게(cover) 늘렸을 때 이 영역이
    * 화면 밖으로 나가면, 들어올 때까지만 배율을 줄인다 (남는 곳은 그림 바탕색 — 검정 / 화선지).
@@ -303,8 +301,7 @@ const TED_INK = {
     ted_ink_s1_form: { x: 90, y: 25, w: 300, h: 665 },     // 전신 (머리~발, 큐브 든 손)
     ted_ink_s1_smoke: { x: 90, y: 25, w: 300, h: 665 },
     ted_ink_sC_face: { x: 160, y: 210, w: 200, h: 210 },   // 두 눈 + 입
-    ted_ink_s2_face_0: { x: 160, y: 150, w: 230, h: 320 }, // 두 눈 + 얼굴
-    ted_ink_s2_face_1: { x: 160, y: 150, w: 230, h: 320 },
+    ted_ink_s2_face: { x: 160, y: 150, w: 230, h: 320 },   // 두 눈 + 얼굴
     ted_ink_s4_reveal: { x: 100, y: 30, w: 280, h: 270 },  // 큐브·손·머리
     ted_ink_s5_wind: { x: 100, y: 30, w: 280, h: 270 },
     ted_ink_s6_cube: { x: 100, y: 30, w: 280, h: 270 },

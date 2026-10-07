@@ -338,15 +338,16 @@ export const TED_PARAMS = {
     smokeAt:        1300,  // s1 먹 연기 반복 시작 (형체 → 연기 크로스페이드) — 와이프가 덮을 때까지
     smokeFrameMs:     80,
     // 1-A — 검은 먹 덩어리가 화면을 가리며 지나감 (sA_wipe, 3·4칸이 화면 97% 를 덮는다 — 그 밑에서 전신이 빠진다).
-    //       150ms 에 8칸이면 칸당 19ms 라 뭉개진다 → 6칸만(1·6칸 건너뜀) 25ms 씩
+    //       150ms 에 8칸이면 칸당 19ms 라 뭉개진다 → 6칸만(원본 1·6칸 건너뜀) 25ms 씩.
+    //       시트에는 쓰는 6칸만 묶어 두었다 (렉 조사 #5 ①) — 원본 0·2·3·4·5·7 = 새 0~5
     wipeAt:         1370,
     wipeFrameMs:      25,
-    wipeFrames: [0, 2, 3, 4, 5, 7] as readonly number[],
-    wipeCoverFrame:    3,  // 이 시트 칸부터 전신(s1)을 감춘다
+    wipeFrames: [0, 1, 2, 3, 4, 5] as readonly number[],
+    wipeCoverFrame:    2,  // 이 시트 칸(원본 3칸)부터 전신(s1)을 감춘다
     // 장면 2 — 소용돌이가 빈 화선지를 삼켜 완전 검정. 150ms — 6칸만(1·4칸 건너뜀) 25ms 씩
     swirlAt:        1520,
     swirlFrameMs:     25,
-    swirlFrames: [0, 2, 3, 5, 6, 7] as readonly number[],
+    swirlFrames: [0, 1, 2, 3, 4, 5] as readonly number[],   // 쓰는 6칸만 묶은 시트 — 원본 0·2·3·5·6·7
     swirlGrow:       2.9,  // 소용돌이 마지막 배율 (화면을 덮는다)
     darkAt:         1590,  // 검정이 깔리기 시작 → darkAt + 80 에 완전히 덮는다 (= awakeFlashAt)
     //   ②→⑥ 이음새 — 완전 검정 위에서 곧바로 흰 섬광(코드, 20ms 에 차오름) → 각성 표정. 그 사이 얼굴은 그리지 않는다
@@ -362,8 +363,8 @@ export const TED_PARAMS = {
     flashFadeMs:      30,  // 거의 끊듯이 걷힌다 — 컬러 테드 위에 회색 막이 남지 않게
     revealAt:       2120,  // = flashAt + flashMs. 섬광이 걷히는 순간 컬러 원색 100%
     revealFrameMs:    50,
-    // s4 에서 쓰는 칸 — 0(흰 폭발)·1(회색 반쯤)은 탁해서 건너뛰고 컬러 2·3칸만
-    revealFrames: [2, 3] as readonly number[],
+    // s4 에서 쓰는 칸 — 원본 0(흰 폭발)·1(회색 반쯤)은 탁해서 뺐고 컬러 2·3칸만 묶었다 (새 0·1)
+    revealFrames: [0, 1] as readonly number[],
     burstMs:         200,  // 진한 먹이 바깥으로 날아가 화면 밖으로 빠지는 시간 (Cubic.Out)
     burstFrom:      1.39,  // 먹 폭 (원본 폭 480 대비) 시작
     burstTo:        4.86,  // 끝 — 가운데 구멍이 화면 대각선 반보다 커진다 (480x720 에서 구멍 반지름 467 > 433)
