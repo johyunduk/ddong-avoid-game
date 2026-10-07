@@ -99,3 +99,23 @@ export function loadCharacterAssets(scene: Phaser.Scene, charId: string, opts: {
   // 액티브 버튼 얼굴 칩 (ui/collection/face 128px — 얼굴 파일이 없는 캐릭터는 로드 실패로 넘어간다)
   if (!scene.textures.exists(`hud_facesrc_${charId}`)) scene.load.image(`hud_facesrc_${charId}`, `assets/ui/collection/face/${charId}.webp`);
 }
+
+/**
+ * 뒤에서 받던 것을 버린다 — **씬을 떠나기 직전에** 부른다 (난이도 화면의 미리 받기).
+ *
+ * Phaser 로더는 씬이 끝나도 이미 나간 요청을 거두지 않는다. 그 장이 늦게 도착하면 텍스처로 들어간다.
+ * 그사이 판의 StagedLoader 가 같은 키를 받다가 게임오버로 멈추며 지웠다면, 늦게 온 이쪽 장이 그 키를
+ * **되살린다** ('Texture key already in use' + 해제 뒤 남는 텍스처 — 느린 네트워크 흐름 테스트에서 재현).
+ * 그래서 아직 끝나지 않은 파일은 캐시에 넣지 않게 하고(addToCache 를 비운다) 요청도 끊는다.
+ * 씬 shutdown 때는 로더가 먼저 목록을 비워 버리므로 그 전에 — scene.start 바로 앞에서 — 불러야 한다
+ */
+export function discardPendingLoads(scene: Phaser.Scene): void {
+  type Pending = { addToCache: () => void; xhrLoader?: XMLHttpRequest };
+  const load = scene.load as unknown as Record<'list' | 'inflight' | 'queue', { entries: Pending[] } | undefined>;
+  for (const set of [load.list, load.inflight, load.queue]) {
+    for (const f of set?.entries ?? []) {
+      f.addToCache = () => {};
+      try { f.xhrLoader?.abort(); } catch { /* 이미 끝났으면 그만 */ }
+    }
+  }
+}

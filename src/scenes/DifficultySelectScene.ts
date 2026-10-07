@@ -7,7 +7,7 @@ import { addBackground } from '../utils/background';
 import { getHighScore } from '../utils/localStorage';
 import { bakeButton, gradientText, wireButton, type ButtonSkin } from '../utils/buttonSkin';
 import { DIFFICULTY_TIER, type Tier } from '../utils/difficultyTheme';
-import { loadCharacterAssets } from '../utils/characterAssets';
+import { discardPendingLoads, loadCharacterAssets } from '../utils/characterAssets';
 import { getSafeSelectedCharacter } from '../utils/character';
 
 /** 카드 한 장 (C안 — 위 반은 그 난이도의 게임 맵, 아래는 똥 개수 · 속도 · 이번 달 최고) */
@@ -167,6 +167,7 @@ export default class DifficultySelectScene extends BaseScene {
       bgKey: MAP_BG[Difficulty.PHYSICAL], tier: DIFFICULTY_TIER[Difficulty.PHYSICAL],
       onClick: () => {
         this.sound.stopAll();
+        discardPendingLoads(this);   // 뒤에서 받던 캐릭터 에셋 — 늦게 와서 되살아나지 않게
         this.scene.start('GameScene', { gameMode: this.gameMode, difficulty: Difficulty.EXTREME, purePhysical: true });
       },
     };
@@ -312,6 +313,7 @@ export default class DifficultySelectScene extends BaseScene {
     box.add(this.add.text(0, -1, '←', { fontSize: '24px', color: '#2a3340', fontStyle: 'bold' }).setOrigin(0.5));
     wireButton(this, box, size, size, () => {
       this.sound.stopAll();
+      discardPendingLoads(this);
       this.scene.start('ModeSelectScene');
     });
   }
@@ -326,6 +328,7 @@ export default class DifficultySelectScene extends BaseScene {
 
   private startGame(difficulty: Difficulty) {
     this.sound.stopAll();
+    discardPendingLoads(this);
     this.scene.start('GameScene', {
       gameMode: this.gameMode,
       difficulty: difficulty
