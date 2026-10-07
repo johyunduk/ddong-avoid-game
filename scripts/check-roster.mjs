@@ -238,6 +238,7 @@ function subset(label, list, { allow = [] } = {}) {
     'supabase/functions/gacha-pull/index.ts#OBTAINABLE_IDS',    // 뽑기 가능 집합
     'src/abilities/index.ts#R_IDS',                             // RGradeAbility 사용 집합
     'src/utils/charAnim.ts#CHARS_WITH_ANIM_SHEETS',             // 시트 보유 집합 (비캐릭터 포함)
+    'src/data/releaseNotes.ts#RELEASE_NOTES',                   // 버전별 발표 기록 (값을 박아 둔다)
   ]);
 
   /**
