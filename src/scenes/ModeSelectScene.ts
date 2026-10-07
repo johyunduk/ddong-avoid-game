@@ -1,15 +1,20 @@
 import Phaser from 'phaser';
 import { GameMode, GAME_MODES, type GameModeConfig } from '../types/GameMode';
 import { getSkorBalance, getCachedSkorBalance, cacheSkorBalance } from '../utils/skor';
-import { setBgmMuted } from '../utils/settings';
+import { setBgmMuted, isFxBloomEnabled } from '../utils/settings';
+import { setBloomEnabled } from '../utils/vfx';
+import { getUserInitials, setUserInitials } from '../utils/leaderboard';
+import { RELEASE_NOTES } from '../data/releaseNotes';
 import BaseScene from './BaseScene';
 import { addBackground } from '../utils/background';
 import { getCharacterDef, getSafeSelectedCharacter } from '../utils/character';
-import { bakeButton, bakeRadialGlow, bakeShine, gradientText, setTouchInteractive, wireButton, type ButtonSkin } from '../utils/buttonSkin';
+import { bakeButton, bakeRadialGlow, bakeShine, gradientText, wireButton, type ButtonSkin } from '../utils/buttonSkin';
 
 export default class ModeSelectScene extends BaseScene {
   private skorText!: Phaser.GameObjects.Text;
   private settingsPanel: Phaser.GameObjects.Container | null = null;
+  /** 메뉴 버튼들 — 설정 팝업이 떠 있는 동안 입력을 꺼 둔다 */
+  private menuButtons: Phaser.GameObjects.Container[] = [];
 
   constructor() {
     super('ModeSelectScene');
@@ -32,6 +37,10 @@ export default class ModeSelectScene extends BaseScene {
     for (const [k, f] of ui) {
       if (!this.textures.exists(k)) this.load.image(k, `assets/ui/menu/${f}.webp`);
     }
+    // 설정 팝업 아이콘
+    for (const n of ['sound', 'sound_off', 'fx', 'nametag', 'info']) {
+      if (!this.textures.exists(`set_icon_${n}`)) this.load.image(`set_icon_${n}`, `assets/ui/settings/icon_${n}.webp`);
+    }
     // 면 그림이 아직 없는 캐릭터의 대신 그림 — 게임 스프라이트
     if (!this.textures.exists(sel.imageKey)) this.load.image(sel.imageKey, sel.imagePath);
     // 면 그림 파일이 없는 캐릭터(새로 들어온 캐릭터)는 로드 실패로 넘어가고 스프라이트로 대신한다
@@ -39,6 +48,8 @@ export default class ModeSelectScene extends BaseScene {
 
   create() {
     super.create();
+    this.settingsPanel = null;   // 클래스 프로퍼티는 씬 재시작 후에도 남는다
+    this.menuButtons = [];
 
     const W = this.scale.width;
     const H = this.scale.height;
@@ -104,6 +115,7 @@ export default class ModeSelectScene extends BaseScene {
     const box = this.add.container(x, y);
     box.add(this.add.image(0, 0, key).setOrigin(0.5, originY));
     wireButton(this, box, skin.w, skin.h, onClick);
+    this.menuButtons.push(box);
     return box;
   }
 
@@ -233,80 +245,220 @@ export default class ModeSelectScene extends BaseScene {
       box.add(this.add.text(0, 0, '⚙️', { fontSize: '34px' }).setOrigin(0.5));
     }
     wireButton(this, box, size, size, () => this.showSettingsPanel(), true);
+    this.menuButtons.push(box);
   }
+
+  // ── 설정 팝업 (A안) ─────────────────────────────────────────────────────
+  // 나무 제목판 + 보라 판. 줄은 셋(소리 · 화면 효과 · 랭킹 이니셜)이고 줄 전체가 눌린다. 맨 아래 버전 정보 한 줄.
+  // 시안: ddong-fx-work/settings/A_*.png · 아이콘은 assets/ui/settings/ (256 원본을 2배 크기로 줄인 것)
 
   private showSettingsPanel() {
     if (this.settingsPanel) return;
 
-    const W = 280, H = 140;
-    const cx = this.scale.width / 2, cy = this.scale.height / 2;
+    const SW = this.scale.width, SH = this.scale.height;
+    const cx = SW / 2;
+    const pw = Math.min(400, SW - 24);
+    const rowH = 70, rowGap = 8;
+    const ph = 44 + 3 * (rowH + rowGap) + 56;
+    const top = Math.round((SH - ph) / 2 + 10);      // 판 위 가장자리 (제목판이 반쯤 걸친다)
+    const panelRect = new Phaser.Geom.Rectangle(cx - pw / 2, top - 26, pw, ph + 26);
 
-    // 반투명 배경 (터치 차단)
-    const overlay = this.add.rectangle(cx, cy, this.scale.width, this.scale.height, 0x000000, 0.5)
-      .setDepth(50).setInteractive();
+    // 덮개 — 판 밖을 누르면 닫힌다. 판 안 빈자리는 덮개로 새지 않게 여기서 거른다
+    const overlay = this.add.rectangle(cx, SH / 2, SW, SH, 0x000000, 0.55).setDepth(50).setInteractive();
+    const panel = this.add.container(0, 0).setDepth(51);
+    this.settingsPanel = panel;
+    // 뒤 메뉴 버튼은 팝업이 떠 있는 동안 꺼 둔다 — 판 위를 누른 손가락이 뒤로 새지 않게
+    this.menuButtons.forEach(b => b.disableInteractive());
 
-    // 패널 카드
-    const card = this.add.rectangle(0, 0, W, H, 0x1e1e2e, 1);
-    card.setStrokeStyle(2, 0x888888);
-
-    // 제목
-    const title = this.add.text(0, -H / 2 + 22, '설정', {
-      fontSize: '18px', color: '#ffffff', fontStyle: 'bold',
-    }).setOrigin(0.5);
-
-    // 구분선
-    const line = this.add.rectangle(0, -H / 2 + 38, W - 20, 1, 0x555555);
-
-    // BGM 행 레이블
-    const label = this.add.text(-W / 2 + 20, 10, '🔊 BGM', {
-      fontSize: '16px', color: '#cccccc',
-    }).setOrigin(0, 0.5);
-
-    // 토글 버튼 — 런타임 상태를 단일 진실 원천으로 사용
-    const muted = this.sound.mute;
-    const toggleBg = this.add.rectangle(W / 2 - 36, 10, 54, 28, muted ? 0x555555 : 0x4caf50);
-    toggleBg.setStrokeStyle(1, 0x888888);
-    const toggleKnob = this.add.circle(muted ? W / 2 - 50 : W / 2 - 22, 10, 11, 0xffffff);
-    const toggleLabel = this.add.text(W / 2 - 36, 10, muted ? 'OFF' : 'ON', {
-      fontSize: '11px', color: muted ? '#aaaaaa' : '#ffffff', fontStyle: 'bold',
-    }).setOrigin(0.5);
-
-    const applyToggleVisual = (isMuted: boolean) => {
-      toggleBg.setFillStyle(isMuted ? 0x555555 : 0x4caf50);
-      toggleKnob.setX(isMuted ? W / 2 - 50 : W / 2 - 22);
-      toggleLabel.setText(isMuted ? 'OFF' : 'ON');
-      toggleLabel.setColor(isMuted ? '#aaaaaa' : '#ffffff');
-    };
-
+    let initialsInput: HTMLInputElement | null = null;
     const closePanel = () => {
+      initialsInput?.remove();
+      initialsInput = null;
       overlay.destroy();
-      this.settingsPanel?.destroy();
+      panel.destroy();
       this.settingsPanel = null;
+      this.menuButtons.forEach(b => { if (b.active) b.setInteractive().setScale(1); });
+      this.events.off('shutdown', closePanel);
     };
-
-    setTouchInteractive(toggleBg);
-    toggleBg.on('pointerdown', () => {
-      const nowMuted = !this.sound.mute;
-      this.sound.mute = nowMuted;
-      setBgmMuted(nowMuted);
-      applyToggleVisual(nowMuted);
+    this.events.once('shutdown', closePanel);
+    overlay.on('pointerdown', (p: Phaser.Input.Pointer) => {
+      if (!panelRect.contains(p.x, p.y)) closePanel();
     });
 
-    // ✕ 닫기 버튼
-    const closeBtn = this.add.text(W / 2 - 14, -H / 2 + 14, '✕', {
-      fontSize: '16px', color: '#888888',
+    // 보라 판
+    const { originY } = bakeButton(this, `set_panel_${pw}x${ph}`, {
+      w: pw, h: ph, radius: 22, top: '#2a1460', bottom: '#120626', border: '#d38bff', borderW: 3,
+      lip: '#3a1478', lipH: 6, gloss: 0, glow: 'rgba(190,110,255,0.67)',
+    });
+    panel.add(this.add.image(cx, top + ph / 2, `set_panel_${pw}x${ph}`).setOrigin(0.5, originY));
+
+    // 나무 제목판
+    const plank = bakeButton(this, 'set_title_plank', {
+      w: 200, h: 52, radius: 16, top: '#c98a4a', bottom: '#8a5226', border: '#3a1f0a', borderW: 3,
+      lip: '#5b3416', lipH: 5, gloss: 0,
+    });
+    panel.add(this.add.image(cx, top, 'set_title_plank').setOrigin(0.5, plank.originY));
+    const title = this.add.text(cx, top - 1, '설정', {
+      fontSize: '24px', fontStyle: 'bold', stroke: '#3a1f0a', strokeThickness: 4,
     }).setOrigin(0.5);
-    setTouchInteractive(closeBtn);
+    gradientText(title, [[0, '#fff7c2'], [0.5, '#ffd34d'], [1, '#ff9f1a']]);
+    panel.add(title);
 
-    closeBtn.on('pointerover', () => closeBtn.setColor('#ffffff'));
-    closeBtn.on('pointerout',  () => closeBtn.setColor('#888888'));
-    closeBtn.on('pointerdown', closePanel);
+    // 닫기 — 44x44 둥근 버튼, 판 오른쪽 위 모서리에 걸친다
+    const close = this.add.container(cx + pw / 2 - 16, top + 6);
+    const closeSkin = bakeButton(this, 'set_close', {
+      w: 44, h: 44, radius: 22, top: '#f4f7fb', bottom: '#b8c2cf', border: '#2a3340', borderW: 2.5,
+      lip: '#7a8594', lipH: 3, gloss: 0,
+    });
+    close.add(this.add.image(0, 0, 'set_close').setOrigin(0.5, closeSkin.originY));
+    close.add(this.add.graphics().lineStyle(3, 0x2a3340).lineBetween(-7, -7, 7, 7).lineBetween(-7, 7, 7, -7));
+    wireButton(this, close, 44, 44, closePanel);
+    panel.add(close);
 
-    overlay.on('pointerdown', closePanel);
+    const x0 = cx - pw / 2 + 16, x1 = cx + pw / 2 - 16, rw = x1 - x0;
 
-    this.settingsPanel = this.add.container(cx, cy, [
-      card, title, line, label, toggleBg, toggleKnob, toggleLabel, closeBtn,
-    ]).setDepth(51);
+    /** 줄 하나 — 반투명 바탕 · 아이콘 · 제목 · 설명. 줄 전체가 버튼이다. 오른쪽 조작부는 호출하는 쪽이 붙인다 */
+    const makeRow = (i: number, icon: string, label: string, sub: string, onTap: () => void) => {
+      const y = top + 44 + i * (rowH + rowGap) + rowH / 2;
+      const row = this.add.container(cx, y);
+      row.add(this.add.graphics().fillStyle(0xffffff, 0.08).fillRoundedRect(-rw / 2, -rowH / 2, rw, rowH, 14));
+      const iconImg = this.add.image(-rw / 2 + 30, 0, icon).setDisplaySize(40, 40);
+      row.add(iconImg);
+      const t = this.add.text(-rw / 2 + 58, -10, label, { fontSize: '17px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0, 0.5);
+      const s = this.add.text(-rw / 2 + 58, 12, sub, { fontSize: '11px', color: '#b9a3d6' }).setOrigin(0, 0.5);
+      row.add([t, s]);
+      wireButton(this, row, rw, rowH, onTap, true);
+      panel.add(row);
+      return { row, iconImg, title: t, sub: s };
+    };
+
+    /** 토글 — buttonSkin 판 (ON 초록 · OFF 회색) + 흰 손잡이. 줄 안 오른쪽에 둔다 */
+    const makeToggle = (row: Phaser.GameObjects.Container, on: boolean) => {
+      const tw = 64, th = 36;
+      const keyOf = (v: boolean) => (v ? 'set_toggle_on' : 'set_toggle_off');
+      let oy = 0.5;
+      for (const v of [true, false]) {
+        oy = bakeButton(this, keyOf(v), {
+          w: tw, h: th, radius: th / 2, top: v ? '#8dff7a' : '#5a5d68', bottom: v ? '#16a83a' : '#2a2d36',
+          border: v ? '#0a3a14' : '#15161c', borderW: 2, lip: v ? '#0d6a24' : '#0d0e12', lipH: 3, gloss: 0,
+        }).originY;
+      }
+      const tx = rw / 2 - 44;
+      const bg = this.add.image(tx, 0, keyOf(on)).setOrigin(0.5, oy);
+      const knob = this.add.circle(0, 0, th / 2 - 4, 0xffffff).setStrokeStyle(1.5, 0x2a2d36);
+      const txt = this.add.text(0, 0, '', { fontSize: '11px', fontStyle: 'bold' }).setOrigin(0.5);
+      row.add([bg, knob, txt]);
+      const set = (v: boolean) => {
+        bg.setTexture(keyOf(v));
+        knob.setX(tx + (v ? 1 : -1) * (tw / 2 - th / 2));
+        txt.setX(tx + (v ? -10 : 10)).setText(v ? 'ON' : 'OFF').setColor(v ? '#0a3a14' : '#d0d3dc');
+      };
+      set(on);
+      return set;
+    };
+
+    // 소리 — 런타임 상태(this.sound.mute)가 단일 진실. 저장은 setBgmMuted
+    const soundIcon = (muted: boolean) => (muted ? 'set_icon_sound_off' : 'set_icon_sound');
+    const sound = makeRow(0, soundIcon(this.sound.mute), '소리', '배경음악 (끄면 모든 소리 꺼짐)', () => {
+      const muted = !this.sound.mute;
+      this.sound.mute = muted;
+      setBgmMuted(muted);
+      setSound(!muted);
+      sound.iconImg.setTexture(soundIcon(muted)).setDisplaySize(40, 40);
+    });
+    const setSound = makeToggle(sound.row, !this.sound.mute);
+
+    // 화면 효과 — 빛 번짐(블룸). setBloomEnabled 가 저장하고 떠 있는 씬에도 바로 반영한다
+    const fx = makeRow(1, 'set_icon_fx', '화면 효과', '빛 번짐 — 느린 기기면 꺼 두세요', () => {
+      const on = !isFxBloomEnabled();
+      setBloomEnabled(on);
+      setFx(on);
+    });
+    const setFx = makeToggle(fx.row, isFxBloomEnabled());
+
+    // 랭킹 이니셜 — 게임오버 입력과 같은 규칙 (영어 대문자 3자, setUserInitials 가 검증)
+    let editing = false;
+    const ini = makeRow(2, 'set_icon_nametag', '랭킹 이니셜', '랭킹에 표시되는 3글자', () => {
+      if (editing) commitInitials(); else startInitials();
+    });
+    const subDefault = ini.sub.text;
+    const bw = 60, bx = rw / 2 - 6 - bw / 2;
+    const btnSkin = bakeButton(this, 'set_ini_btn', {
+      w: bw, h: 44, radius: 14, top: '#fff3a8', bottom: '#ffb81a', border: '#7a4a00', borderW: 2,
+      lip: '#a8650a', lipH: 4, gloss: 0,
+    });
+    const btnLabel = this.add.text(bx, 0, '변경', { fontSize: '15px', color: '#5b2e0e', fontStyle: 'bold' }).setOrigin(0.5);
+    ini.row.add([this.add.image(bx, 0, 'set_ini_btn').setOrigin(0.5, btnSkin.originY), btnLabel]);
+    // 글자 칸 — 제목·설명 오른쪽에 붙는다. 폭이 좁으면 칸을 줄인다
+    const textRight = -rw / 2 + 58 + Math.max(ini.title.width, ini.sub.width) + 8;
+    const tilesRight = bx - bw / 2 - 8;
+    const tile = Math.max(20, Math.min(28, Math.floor((tilesRight - textRight - 8) / 3)));
+    const tilesW = tile * 3 + 8;
+    const tilesX = tilesRight - tilesW;
+    const tileTexts: Phaser.GameObjects.Text[] = [];
+    for (let k = 0; k < 3; k++) {
+      const tx = tilesX + k * (tile + 4) + tile / 2;
+      ini.row.add(this.add.rectangle(tx, 0, tile, tile, 0x000000, 0.86).setStrokeStyle(2, 0xffd700));
+      const ch = this.add.text(tx, 0, '', { fontSize: `${Math.round(tile * 0.6)}px`, color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5);
+      tileTexts.push(ch);
+      ini.row.add(ch);
+    }
+    const showInitials = () => {
+      const s = getUserInitials() ?? '';
+      tileTexts.forEach((t, k) => t.setText(s[k] ?? '-').setColor(s[k] ? '#ffffff' : '#6a6f80'));
+    };
+    showInitials();
+    const setSub = (msg: string, err: boolean) => ini.sub.setText(msg).setColor(err ? '#ff6b6b' : '#b9a3d6');
+
+    // 입력은 게임오버처럼 HTML input — 글자 칸 위에 겹쳐 띄운다 (캔버스 위치·스케일에 맞춘다)
+    const startInitials = () => {
+      editing = true;
+      btnLabel.setText('저장');
+      const rect = this.game.canvas.getBoundingClientRect();
+      const kx = rect.width / SW, ky = rect.height / SH;
+      const m = ini.row.getWorldTransformMatrix();
+      const left = rect.left + (m.tx + tilesX - 2) * kx;
+      const h = Math.max(44, tile + 8);
+      const topPx = rect.top + (m.ty - h / 2) * ky;
+      const el = document.createElement('input');
+      el.type = 'text';
+      el.maxLength = 3;
+      el.placeholder = 'ABC';
+      el.value = getUserInitials() ?? '';
+      el.autocapitalize = 'characters';
+      el.style.cssText = `
+        position: fixed; left: ${left}px; top: ${topPx}px;
+        width: ${Math.round((tilesW + 4) * kx)}px; height: ${Math.round(h * ky)}px;
+        font-size: ${Math.round(tile * 0.7 * ky)}px; text-align: center; text-transform: uppercase;
+        border: ${Math.max(2, Math.round(2 * ky))}px solid #FFD700; border-radius: 6px;
+        background: #000; color: #fff; font-weight: bold; letter-spacing: ${Math.round(4 * kx)}px;
+        outline: none; box-sizing: border-box; padding: 0; z-index: 9999;
+      `;
+      el.addEventListener('input', () => { el.value = el.value.toUpperCase().replace(/[^A-Z]/g, ''); });
+      el.addEventListener('keydown', (e) => { if (e.key === 'Enter') commitInitials(); });
+      document.body.appendChild(el);
+      el.focus();
+      initialsInput = el;
+      setSub('영어 대문자 3자', false);
+    };
+    const commitInitials = () => {
+      if (!initialsInput) return;
+      const v = initialsInput.value.trim().toUpperCase();
+      if (v.length !== 3) { setSub('정확히 3글자를 입력하세요', true); initialsInput.focus(); return; }
+      if (!setUserInitials(v)) { setSub('영어 대문자만 입력하세요', true); initialsInput.focus(); return; }
+      initialsInput.remove();
+      initialsInput = null;
+      editing = false;
+      btnLabel.setText('변경');
+      setSub(subDefault, false);
+      showInitials();
+    };
+
+    // 버전 정보 — 릴리스 노트 최신 버전
+    const vy = top + 44 + 3 * (rowH + rowGap) + 20;
+    panel.add(this.add.image(x0 + 26, vy, 'set_icon_info').setDisplaySize(28, 28));
+    panel.add(this.add.text(x0 + 50, vy, '버전 정보', { fontSize: '14px', color: '#e6e8ee', fontStyle: 'bold' }).setOrigin(0, 0.5));
+    panel.add(this.add.text(x1 - 20, vy, RELEASE_NOTES[0]?.version ?? '', { fontSize: '13px', color: '#c9cdd8', fontStyle: 'bold' }).setOrigin(1, 0.5));
   }
 
   private startGame(mode: GameMode) {
