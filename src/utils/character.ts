@@ -49,6 +49,12 @@ export interface CharacterDef {
    */
   extraSpriteSheets?: Record<string, string>;
   /**
+   * {@link extraSpriteSheets} 와 같은 형식이지만 **GameScene.preload 가 올리지 않는다** —
+   * 판이 시작된 뒤 능력이 **한 장씩 나눠** 올린다 (판 시작 한 프레임에 몰면 GPU 업로드로 끊긴다).
+   * 다 올라가기 전에는 능력이 그 그림을 쓰는 기술을 막는다 (테드: 액티브 버튼이 흐림)
+   */
+  deferredSpriteSheets?: Record<string, string>;
+  /**
    * **아직 공개하지 않은 캐릭터.** 사람에게 보이는 목록(캐릭터 선택 격자·도감)에서 감춘다.
    *
    * `CHARACTERS` 에서 지우지 **않는** 이유: 우리가 계속 테스트해야 하고, 지우면
@@ -233,17 +239,19 @@ export const CHARACTERS: CharacterDef[] = [
       // 소닉붐 충격파 (1.57MB) — builder chess-fx
       'sonicboom_256x256.png'],
     // 어센트 수묵 컷신 (TedAbility 의 TED_INK). builder 원본: ddong-fx-work/ted-ascent/ink/prod23/ (2:3 판, 칸 480x720)
-    // + prod/s7 먹 이펙트. 텍스처 합계 약 87.1MB (GPU RGBA, 시트 86.0 + 판 시작에 굽는 진한 먹·흰 눈동자·아지랑이 1.05) — 테드를 고른 판에서만, **판 시작 때 전부** 올린다.
+    // + prod/s7 먹 이펙트. 텍스처 합계 약 76.6MB (GPU RGBA, 시트 75.5 + 다 올린 뒤 굽는 진한 먹·흰 눈동자·아지랑이 1.05) — 테드를 고른 판에서만.
     // 발동 때 올리면 디코드·GPU 업로드(큰 시트 장당 수십 ms)가 컷신 첫 장면과 겹쳐 끊긴다.
+    // 판 시작 한 프레임에 전부 올리면 그 순간이 끊긴다 (렉 조사 #5 — CPU 4배에서 85~134ms 프레임 1.5초) →
+    // **판이 시작된 뒤 TedAbility 가 한 장씩 나눠 올린다** (deferredSpriteSheets). 다 올라갈 때까지 액티브는 잠긴다.
+    // s2_face_0 (얼굴 0~7칸, 10.5MB) 은 뺐다 — 컷신이 쓰는 얼굴은 9칸(s2_face_1) 한 칸뿐이다.
     // 모든 시트 한 변 ≤2048 (저사양 MAX_TEXTURE_SIZE). 화선지(s1_paper)는 한 색이라 텍스처 대신 사각형
-    extraSpriteSheets: {
+    deferredSpriteSheets: {
       ted_ink_s1_form: 'assets/illustrations/ink/ted_ink_s1_form_480x720.webp',
       ted_ink_s1_smoke: 'assets/illustrations/ink/ted_ink_s1_smoke_480x720.webp',
       // 1-A 와이프 · 2-C 각성 (레전즈 ULTRA 에서 빠졌던 장면, 합 약 24MB). 1-B 자세 변화(sB)·1-A 대각선 붓질(sA_stroke)은 뺐다
       ted_ink_sA_wipe: 'assets/illustrations/ink/ted_ink_sA_wipe_480x720.webp',
       ted_ink_sC_face: 'assets/illustrations/ink/ted_ink_sC_face_480x720.webp',
       ted_ink_sC_burst: 'assets/illustrations/ink/ted_ink_sC_burst_480x720.webp',
-      ted_ink_s2_face_0: 'assets/illustrations/ink/ted_ink_s2_face_0_480x720.webp',   // 0~7칸
       ted_ink_s2_face_1: 'assets/illustrations/ink/ted_ink_s2_face_1_480x720.webp',   // 8~9칸
       ted_ink_s3_eyes: 'assets/illustrations/ink/ted_ink_s3_eyes_480x234.webp',
       ted_ink_s4_reveal: 'assets/illustrations/ink/ted_ink_s4_reveal_480x720.webp',

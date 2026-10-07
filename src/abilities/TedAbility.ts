@@ -5,11 +5,15 @@ import { getGroundFx, type GroundFx } from '../utils/background';
 import type PoolablePoopBase from '../objects/PoolablePoopBase';
 import { TED_PARAMS } from '../config/abilityParams';
 import { TED_CHARGE_CUBE } from '../config/tedChargeCube.gen';
+import { getCharacterDef } from '../utils/character';
 import { fxPickSheetKey, burst, fxSprite, playFx, impact } from '../utils/vfx';
 
 
 /** 액티브 연출 레이어 — 말(5)·똥(0) 위, 화면 섬광(320) 아래 */
 const ASCENT_DEPTH = 212;
+/** 수묵 시트 나눠 올리기 — 판 시작 뒤 쉬는 시간 · 한 장 올린 뒤 다음 장까지 (렉 조사 #5) */
+const INK_LOAD_START_MS = 600;
+const INK_LOAD_GAP_MS = 120;
 /** `proc-ring.png` 에서 밝은 선이 있는 **지름**(px). 링 배율을 이걸로 나눠야
  *  보이는 링과 지워지는 범위가 맞는다 (레드 포효에서 짚은 함정) */
 const RING_ART_D = 174.8;
@@ -271,6 +275,7 @@ const TED_INK = {
   form: 'ted_ink_s1_form',      // 3칸 RGBA — 형체가 잡히는 단계
   smoke: 'ted_ink_s1_smoke',    // 4칸 RGBA — 먹 연기 꿈틀 반복
   /** 10칸 RGB — 덮개가 올라가며 눈을 뜬다 (open.json). 한 변 2048 때문에 두 장: 0~7칸 face_0 (4x2) · 8~9칸 face_1 (2x1) */
+  // s2_face_0(0~7칸)은 올리지 않는다 — 쓰는 칸은 faceOpenFrame(9) 하나라 s2_face_1 만 있으면 된다
   face: ['ted_ink_s2_face_0', 'ted_ink_s2_face_1'] as readonly string[],
   facePerSheet: 8,
   /**
@@ -634,6 +639,11 @@ export class TedAbility extends BaseAbility {
   private ascentT0 = 0;
   /** 컷신 큐. 비어 있지 않으면 연출이 도는 중이다 */
   private ascentCues: { at: number; fn: (api: GameSceneAPI) => void }[] = [];
+  /** 수묵 시트 나눠 올리기 — 남은 [키, 경로] · 받는 중 · 다음 장을 걸 시각 · 다 올리고 구웠다 */
+  private inkQueue: [string, string][] = [];
+  private inkLoading = false;
+  private inkNextAt = 0;
+  private inkReady = false;
   /** 이 시각까지 무적 (컷신 동안) */
   private ascentInvincibleUntil = 0;
   /** 소환 큐브가 머리 옆을 도는 끝 시각 (0 = 없음). 도는 동안 떨어지는 말이 소닉붐을 일으킨다 */
@@ -676,6 +686,7 @@ export class TedAbility extends BaseAbility {
   /** 모임 → 퍼짐 연출 + 액티브 컷신·소환을 진행한다 */
   override onUpdate(api: GameSceneAPI): void {
     const nowAll = api.scene.time.now;
+    if (!this.inkReady && !this.cancelled) this.stepInkLoad(api.scene);
     if (this.cv.big && (this.cv.animT0 >= 0 || this.cv.maxed || this.cv.ringsBusy)) this.stepChargeCube(nowAll);
 
     // ── 액티브 컷신 큐 (모임/퍼짐과 독립적으로 돈다) ────────────────
@@ -1515,7 +1526,43 @@ export class TedAbility extends BaseAbility {
 
   /** 컷신 큐가 남아 있거나 소환(summonMs) 중이면 다시 누를 수 없다 (대표 결정 — 소환 중 재발동 금지) */
   override canUseActive(api: GameSceneAPI): boolean {
-    return !this.cancelled && this.ascentCues.length === 0 && !(this.summonUntil > api.scene.time.now);
+    // 수묵 시트가 다 올라가기 전에는 막는다 — 덜 올라간 채 발동하면 빈 장면이 나오거나 그 자리에서 올려 끊긴다
+    return this.inkReady && !this.cancelled && this.ascentCues.length === 0 && !(this.summonUntil > api.scene.time.now);
+  }
+
+  // ── 수묵 시트 나눠 올리기 (렉 조사 #5) ─────────────────────────────
+  // 판 시작 한 프레임에 87MB 를 올리면 CPU 4배 기준 85~134ms 프레임이 1.5초 이어졌다.
+  // 판이 시작된 뒤 INK_LOAD_START_MS 를 쉬고, 한 장 받아 올리면 INK_LOAD_GAP_MS 쉬고 다음 장.
+  // 이미 있는 키(다시 하기 · 다른 화면에서 미리 받아 둠)는 건너뛴다
+
+  private startInkLoad(scene: Phaser.Scene): void {
+    const sheets = getCharacterDef('ted').deferredSpriteSheets ?? {};
+    this.inkQueue = Object.entries(sheets).filter(([k]) => !scene.textures.exists(k));
+    this.inkLoading = false;
+    this.inkReady = false;
+    this.inkNextAt = scene.time.now + INK_LOAD_START_MS;
+    this.stepInkLoad(scene);
+  }
+
+  private stepInkLoad(scene: Phaser.Scene): void {
+    if (this.inkLoading || scene.time.now < this.inkNextAt) return;
+    const next = this.inkQueue.shift();
+    if (!next) {
+      this.bakeInkTextures(scene);                    // 진한 먹·흰 눈동자·아지랑이 — s3·s7 이 있어야 굽는다
+      this.inkReady = true;
+      return;
+    }
+    const [key, path] = next;
+    const m = /_(\d+)x(\d+)\.\w+$/.exec(path);
+    if (!m || scene.textures.exists(key)) return;   // 다음 프레임에 다음 장
+    this.inkLoading = true;
+    scene.load.spritesheet(key, path, { frameWidth: Number(m[1]), frameHeight: Number(m[2]) });
+    // 실패(404 등)해도 COMPLETE 는 온다 — 그 장만 빠지고 나머지는 계속 (layoutInk 는 없는 텍스처를 건너뛴다)
+    scene.load.once(Phaser.Loader.Events.COMPLETE, () => {
+      this.inkLoading = false;
+      this.inkNextAt = scene.time.now + INK_LOAD_GAP_MS;
+    });
+    scene.load.start();
   }
 
   override onActiveSkill(api: GameSceneAPI): void {
@@ -1679,7 +1726,7 @@ export class TedAbility extends BaseAbility {
     super.onCreate(api);
     this.landFx = bakeLandDecoTextures(api.scene, api.backgroundKey);
     bakeSonicRimTexture(api.scene);
-    this.bakeInkTextures(api.scene);
+    this.startInkLoad(api.scene);   // 수묵 시트는 판이 시작된 뒤 한 장씩 (굽기는 다 올린 뒤)
   }
 
   // ── 수묵 (ink) ─────────────────────────────────────────────────
