@@ -28,39 +28,48 @@ const POP_Y = 146;
 
 /**
  * 피버 로고 시트 (A안 간판형, 2026-10-07 대표 채택) — 칸 2열 10칸, 표시는 칸의 1/2.
- * 0~5 등장(20fps, 처음 두 칸 흰 글로우) → 6~9 반복(8fps). 남은 초는 간판 오른쪽 바깥에 따로 세운다 (B안, 2026-10-08)
- * right · base = 반복 칸에서 간판이 그려진 오른끝 · 판 아랫변 (칸 원본 px, 알파 > 128). 간판은 좌우 대칭이다
+ * 0~5 등장(20fps, 처음 두 칸 흰 글로우) → 6~9 반복(8fps). 남은 초는 판 안 숫자 자리(글자 오른쪽 · 불꽃 꼬리 / 구름 끝)에 얹는다
+ * textRight · textBase = 반복 칸에서 로고 글자(FEVER TIME 의 E · RAINBOW FEVER 의 R)의 오른끝 · 아랫변 (칸 원본 px, 눈으로 잰 값)
  * (시트 원본·좌표: ddong-fx-work/fever-logo/sheets.json)
  */
 const FEVER_LOGO = {
-  fever:   { key: 'feverlogo_fever',   path: 'assets/fx/sheets/feverlogo_fever_500x180.png',   fw: 500, fh: 180, right: 466, base: 163, stroke: '#3a0a00' },
-  rainbow: { key: 'feverlogo_rainbow', path: 'assets/fx/sheets/feverlogo_rainbow_500x148.png', fw: 500, fh: 148, right: 465, base: 134, stroke: '#2a0a4a' },
+  fever:   { key: 'feverlogo_fever',   path: 'assets/fx/sheets/feverlogo_fever_500x180.png',   fw: 500, fh: 180, textRight: 395, textBase: 150, stroke: '#3a0a00' },
+  rainbow: { key: 'feverlogo_rainbow', path: 'assets/fx/sheets/feverlogo_rainbow_500x148.png', fw: 500, fh: 148, textRight: 400, textBase: 122, stroke: '#2a0a4a' },
 } as const;
 const LOGO_SCALE = 0.5;
-/** 간판 오른끝 ↔ 숫자 왼끝 간격 · 숫자 아랫변을 판 아랫변보다 올리는 양 (화면 px) */
-const DIGIT_GAP = 8;
-const DIGIT_LIFT = 4;
+/**
+ * 로고 글자 오른끝 ↔ 숫자 외곽선 왼끝 간격 (화면 px). 숫자 칸 가운데(sheets.json number_slot x 0.835)에
+ * 0.46 배 숫자를 가운데 맞추면 글자 끝을 6px 덮어서, 숫자 왼끝을 글자 끝에 붙이는 쪽으로 잡았다
+ */
+const DIGIT_GAP = 2;
 
 /**
  * 남은 초 숫자 시트 (v2 — 로고 결에 맞춘 불타는 숫자 · 무지개 숫자, 2026-10-08 대표 지시). 열 = 숫자 0~9, 행 = 반복 칸.
  * origin = 숫자 몸통 아래 가운데. advance = 칸 원본 기준 글자 간격 (두 자리일 때)
- * gl = origin 에서 글자 왼끝까지 · gw = 글자 폭 (칸 원본 px, 알파 > 100 — 숫자마다 조금씩 달라 대표값)
+ * gl = origin 에서 글자 왼끝까지 (칸 원본 px, 알파 > 100 — 숫자마다 조금씩 달라 대표값)
+ * outline = 숫자 둘레 진한 외곽선 색 — 불꽃 · 무지개 판 위에서 숫자 형태를 떼어 낸다
  * (원본 · 기준점: ddong-fx-work/fever-logo/v2/sheets.json)
  */
 const FEVER_DIGITS = {
-  fever:   { key: 'feverdigits_fever',   path: 'assets/fx/sheets/feverdigits_fever_88x94.png',    fw: 88,  fh: 94, rows: 2, fps: 6,  ox: 0.4545, oy: 0.9362, adv: 71.4, gl: 36, gw: 75 },
-  rainbow: { key: 'feverdigits_rainbow', path: 'assets/fx/sheets/feverdigits_rainbow_108x90.png', fw: 108, fh: 90, rows: 6, fps: 10, ox: 0.4907, oy: 0.9333, adv: 84.4, gl: 45, gw: 94 },
+  fever:   { key: 'feverdigits_fever',   path: 'assets/fx/sheets/feverdigits_fever_88x94.png',    fw: 88,  fh: 94, rows: 2, fps: 6,  ox: 0.4545, oy: 0.9362, adv: 71.4, gl: 36, outline: '#2a0600' },
+  rainbow: { key: 'feverdigits_rainbow', path: 'assets/fx/sheets/feverdigits_rainbow_108x90.png', fw: 108, fh: 90, rows: 6, fps: 10, ox: 0.4907, oy: 0.9333, adv: 84.4, gl: 45, outline: '#1c0632' },
 } as const;
-/** 숫자 배율 — 칸 원본 대비. 0.55 면 글자 높이 약 45px (불꽃) · 44px (무지개) — 시트 표시 크기(44x47 · 54x45) 근처 */
-const DIGIT_SCALE = 0.55;
+type DigitSheet = (typeof FEVER_DIGITS)['fever' | 'rainbow'];
+/**
+ * 숫자 배율 — 칸 원본 대비. 0.46 이면 글자 높이 약 38px (불꽃) · 37px (무지개).
+ * 글자 끝 ~ 판 끝이 화면 31~33px 뿐이라, 불꽃은 판 끝에 닿고 무지개는 구름 끝을 10px 남짓 넘는다
+ */
+const DIGIT_SCALE = 0.46;
+/** 외곽선 두께 — 칸 원본 px. 0.46 배면 화면 약 2.3px */
+const OUTLINE_PX = 5;
 /**
  * 숫자가 바뀔 때 튀기 (sheets.json countdown_pop) — 3·2·1 은 더 크게 + 흰 번쩍 + 숫자만 2px 흔들림.
- * 숫자는 글자 왼쪽 아래를 축으로 커진다 — 간판 쪽(왼쪽)으로는 안 번지고 위·오른쪽으로만 큰다.
- * 3·2·1 은 sheets.json 의 2.1 대신 1.8 — 무지개 숫자가 2.1 이면 폭 360 화면에서 오른쪽 끝을 15px 넘는다
+ * 숫자는 글자 왼쪽 아래를 축으로 커진다 — 로고 글자 쪽(왼쪽)으로는 안 번지고 위·오른쪽으로만 큰다.
+ * 2.1 배여도 무지개 숫자 오른끝이 화면 가운데 + 약 166px — 폭 360 화면(반폭 180) 안이다
  */
 const POP = {
   normal: { from: 1.5, ms: 180 },
-  last3:  { from: 1.8, ms: 260, flashMs: 90, shakePx: 2 },
+  last3:  { from: 2.1, ms: 260, flashMs: 90, shakePx: 2 },
 } as const;
 
 export interface HudOptions {
@@ -92,7 +101,7 @@ export class HudView {
     secs: Phaser.GameObjects.Container | Phaser.GameObjects.Text;
     lastSecs: number;
     sprite?: Phaser.GameObjects.Sprite;
-    digits?: (typeof FEVER_DIGITS)['fever' | 'rainbow'];
+    digits?: DigitSheet;
     /** 숫자 묶음의 제자리 x (흔들림 뒤 되돌릴 곳) */
     numX?: number;
   };
@@ -115,6 +124,48 @@ export class HudView {
     this.bestAtStart = opts.best;
     if (opts.char) { this.charName = opts.char.name; this.charBest = opts.char.best; }
     this.build(!!opts.char);
+    // 숫자 외곽선 시트는 판 시작 때 한 번 굽는다 — 피버가 시작되는 순간에 굽느라 멈칫하지 않게
+    for (const D of Object.values(FEVER_DIGITS)) HudView.bakeDigitOutline(scene, D);
+  }
+
+  /**
+   * 숫자 외곽선 시트 — 숫자 시트의 불투명 부분(알파 > 100)을 칸마다 OUTLINE_PX 만큼 부풀려 진한 색 한 가지로 칠한 캔버스 텍스처.
+   * 숫자 아래에 같은 칸으로 한 장 깔면 외곽선이 된다. 셰이더(preFX)가 아니라 매 프레임 비용은 스프라이트 한 장뿐.
+   * 칸 밖으로는 안 번지게 칸마다 잘라 그린다. 텍스처는 전역이라 한 번 구우면 다음 판도 쓴다
+   */
+  private static bakeDigitOutline(scene: Phaser.Scene, D: DigitSheet) {
+    const key = `${D.key}_ol`;
+    if (!scene.textures.exists(D.key) || scene.textures.exists(key)) return;
+    const src = scene.textures.get(D.key).getSourceImage() as HTMLImageElement | HTMLCanvasElement;
+    const w = src.width, h = src.height;
+    const mask = document.createElement('canvas');
+    mask.width = w; mask.height = h;
+    const mctx = mask.getContext('2d', { willReadFrequently: true });
+    if (!mctx) return;
+    mctx.drawImage(src, 0, 0);
+    const img = mctx.getImageData(0, 0, w, h), px = img.data;
+    for (let i = 3; i < px.length; i += 4) px[i] = px[i] > 100 ? 255 : 0;
+    mctx.putImageData(img, 0, 0);
+    const tex = scene.textures.createCanvas(key, w, h);
+    if (!tex) return;
+    const ctx = tex.context;
+    const cols = Math.floor(w / D.fw), rows = Math.floor(h / D.fh);
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+      const x = c * D.fw, y = r * D.fh;
+      ctx.save();
+      ctx.beginPath(); ctx.rect(x, y, D.fw, D.fh); ctx.clip();
+      for (let k = 0; k < 16; k++) {
+        const a = (k / 16) * Math.PI * 2;
+        ctx.drawImage(mask, x, y, D.fw, D.fh, x + Math.cos(a) * OUTLINE_PX, y + Math.sin(a) * OUTLINE_PX, D.fw, D.fh);
+      }
+      ctx.restore();
+      tex.add(r * cols + c, 0, x, y, D.fw, D.fh);
+    }
+    ctx.globalCompositeOperation = 'source-in';
+    ctx.fillStyle = D.outline;
+    ctx.fillRect(0, 0, w, h);
+    ctx.globalCompositeOperation = 'source-over';
+    tex.refresh();
   }
 
   private build(withChar: boolean) {
@@ -208,29 +259,26 @@ export class HudView {
     if (!scene.anims.exists(loop)) {
       scene.anims.create({ key: loop, frames: scene.anims.generateFrameNumbers(L.key, { start: 6, end: 9 }), frameRate: 8, repeat: -1 });
     }
-    // 간판 + 숫자를 한 묶음으로 화면 가운데에 — 숫자 폭만큼 간판을 왼쪽으로 민다
     const D = FEVER_DIGITS[rainbow ? 'rainbow' : 'fever'];
     const hasDigits = scene.textures.exists(D.key);
-    const logoHalf = (L.right - L.fw / 2) * LOGO_SCALE;
-    const numW = DIGIT_GAP + D.gw * DIGIT_SCALE;
-    const box = scene.add.container(scene.scale.width / 2 - numW / 2, FEVER_Y).setDepth(DEPTH + 2);
+    const box = scene.add.container(scene.scale.width / 2, FEVER_Y).setDepth(DEPTH + 2);
     const sprite = scene.add.sprite(0, 0, L.key, 0).setScale(LOGO_SCALE);
     sprite.play(intro);
     sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => { if (sprite.active) sprite.play(loop); });
     box.add(sprite);
-    // 남은 초 — 간판 오른끝에서 DIGIT_GAP 띄운 곳이 글자 왼끝, 판 아랫변에 발을 맞춘다.
-    // 간판 안 숫자 자리는 비워 둔다 — 그 자리는 판에 숫자 칸으로 그려진 게 아니라 불꽃 꼬리 · 구름 판 끝이라 비어도 간판 끝으로 읽힌다
-    const numX = logoHalf + DIGIT_GAP;
-    const numY = (L.base - L.fh / 2) * LOGO_SCALE - DIGIT_LIFT;
+    // 남은 초 — 판 안 숫자 자리. 로고 글자 오른끝에서 DIGIT_GAP + 외곽선 두께만큼 띄운 곳이 숫자 왼끝, 로고 글자 아랫변에 발을 맞춘다
+    const numX = (L.textRight - L.fw / 2) * LOGO_SCALE + DIGIT_GAP + OUTLINE_PX * DIGIT_SCALE;
+    const numY = (L.textBase - L.fh / 2) * LOGO_SCALE;
     let secs: Phaser.GameObjects.Container | Phaser.GameObjects.Text;
     if (hasDigits) {
+      HudView.bakeDigitOutline(scene, D);   // 판 시작 뒤에 시트가 늦게 왔을 때만 여기서 굽는다 (보통은 이미 있음)
       this.ensureDigitAnims(D);
       secs = scene.add.container(numX, numY);
       this.fillDigits(secs, D, seconds);
     } else {
       // 시트를 못 받았으면 게임 글자로 같은 자리에 (왼쪽 아래 기준)
-      secs = scene.add.text(numX, numY + 6, String(seconds), {
-        fontSize: '40px', color: '#ffffff', fontStyle: 'bold', stroke: L.stroke, strokeThickness: 7,
+      secs = scene.add.text(numX, numY + 5, String(seconds), {
+        fontSize: '32px', color: '#ffffff', fontStyle: 'bold', stroke: L.stroke, strokeThickness: 6,
       }).setOrigin(0, 1);
     }
     box.add(secs);
@@ -238,26 +286,33 @@ export class HudView {
   }
 
   /** 숫자마다 반복 애니메이션 (그 숫자 열의 행들) — 처음 한 번 만들어 두고 다음 피버도 쓴다 */
-  private ensureDigitAnims(D: (typeof FEVER_DIGITS)['fever' | 'rainbow']) {
-    const { anims } = this.scene;
-    for (let d = 0; d <= 9; d++) {
-      const key = `${D.key}_${d}`;
-      if (anims.exists(key)) continue;
-      const frames = Array.from({ length: D.rows }, (_, r) => ({ key: D.key, frame: r * 10 + d }));
-      anims.create({ key, frames, frameRate: D.fps, repeat: -1 });
+  private ensureDigitAnims(D: DigitSheet) {
+    const { anims, textures } = this.scene;
+    for (const tex of [D.key, `${D.key}_ol`]) {
+      if (!textures.exists(tex)) continue;
+      for (let d = 0; d <= 9; d++) {
+        const key = `${tex}_${d}`;
+        if (anims.exists(key)) continue;
+        const frames = Array.from({ length: D.rows }, (_, r) => ({ key: tex, frame: r * 10 + d }));
+        anims.create({ key, frames, frameRate: D.fps, repeat: -1 });
+      }
     }
   }
 
   /** 숫자 묶음을 다시 채운다 — 묶음 원점 = 첫 글자 왼쪽 아래 (튀기의 축) */
-  private fillDigits(box: Phaser.GameObjects.Container, D: (typeof FEVER_DIGITS)['fever' | 'rainbow'], n: number) {
+  private fillDigits(box: Phaser.GameObjects.Container, D: DigitSheet, n: number) {
     box.removeAll(true);
     const str = String(n), step = D.adv * DIGIT_SCALE;
-    [...str].forEach((ch, i) => {
-      const x = D.gl * DIGIT_SCALE + i * step;
-      const sp = this.scene.add.sprite(x, 0, D.key, Number(ch)).setOrigin(D.ox, D.oy).setScale(DIGIT_SCALE);
-      sp.play(`${D.key}_${ch}`);
-      box.add(sp);
-    });
+    const ol = `${D.key}_ol`;
+    // 외곽선을 먼저 전부 깔고 숫자를 위에 — 두 자리일 때 옆 숫자의 외곽선이 숫자를 덮지 않게
+    for (const tex of this.scene.textures.exists(ol) ? [ol, D.key] : [D.key]) {
+      [...str].forEach((ch, i) => {
+        const x = D.gl * DIGIT_SCALE + i * step;
+        const sp = this.scene.add.sprite(x, 0, tex, Number(ch)).setOrigin(D.ox, D.oy).setScale(DIGIT_SCALE);
+        sp.play(`${tex}_${ch}`);
+        box.add(sp);
+      });
+    }
   }
 
   /** 시트가 없을 때 대신 — 예전 알약 (주황 / 분홍-보라) */
@@ -280,7 +335,7 @@ export class HudView {
 
   /**
    * 남은 초 — 바뀔 때만. 1.5 → 1.0 (180ms) 으로 튄다.
-   * 3·2·1 은 1.8 → 1.0 (260ms) + 흰 번쩍(90ms) + 숫자만 좌우 2px 흔들림 — 화면은 흔들지 않는다
+   * 3·2·1 은 2.1 → 1.0 (260ms) + 흰 번쩍(90ms) + 숫자만 좌우 2px 흔들림 — 화면은 흔들지 않는다
    */
   setFeverSeconds(seconds: number) {
     const f = this.fever;
@@ -297,7 +352,7 @@ export class HudView {
     if (last3 && t instanceof Phaser.GameObjects.Container && f.numX !== undefined) {
       // 흰 번쩍 — 숫자를 통째로 흰색으로 칠하면 불꽃 번짐까지 흰 덩어리가 돼 숫자가 안 읽힌다.
       // 같은 칸을 흰색으로 더해(ADD) 얹고 90ms 동안 걷어 낸다
-      for (const sp of [...t.list] as Phaser.GameObjects.Sprite[]) {
+      for (const sp of (t.list as Phaser.GameObjects.Sprite[]).filter(o => o.texture.key === f.digits?.key)) {
         const fl = this.scene.add.image(sp.x, sp.y, sp.texture.key, sp.frame.name).setOrigin(sp.originX, sp.originY)
           .setScale(sp.scaleX).setTintFill(0xffffff).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.6);
         t.add(fl);
