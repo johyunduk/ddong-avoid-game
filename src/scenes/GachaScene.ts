@@ -51,6 +51,8 @@ export default class GachaScene extends BaseScene {
   private wpResults: PulledWallpaper[] = [];
   /** pullResults 와 같은 순서 */
   private pullMeta: PullMeta[] = [];
+  /** 이 씬이 직접 올린 큰 그림 (진열 일러스트 · 배경화면 큰 그림) — 나갈 때 내린다. 원래 있던 키는 남긴다 */
+  private ownKeys = new Set<string>();
   private revealItems: Array<{ kind: 'character'; data: PulledCharacter } | { kind: 'wallpaper'; data: PulledWallpaper }> = [];
   private revealItemIndex = 0;
   private terminalTexts: Phaser.GameObjects.Text[] = [];
@@ -78,6 +80,10 @@ export default class GachaScene extends BaseScene {
     super('GachaScene');
   }
 
+  init() {
+    this.ownKeys = new Set();   // preload 가 채운다
+  }
+
   preload() {
     // 공통 연출 영상
     if (!this.cache.video.exists('gacha')) {
@@ -93,6 +99,7 @@ export default class GachaScene extends BaseScene {
     for (const id of featuredIds()) {
       const def = CHARACTERS.find(c => c.id === id);
       if (def && !this.textures.exists(def.illustKey)) {
+        this.ownKeys.add(def.illustKey);
         this.load.image(def.illustKey, def.illustPath);
       }
       if (!this.textures.exists(`gacha_facesrc_${id}`)) {
@@ -117,6 +124,7 @@ export default class GachaScene extends BaseScene {
     this.pullMeta = [];
     this.revealItems = [];
     this.revealItemIndex = 0;
+    this.events.once('shutdown', () => this.releaseTextures());
     this.buildLobby();
   }
 
@@ -627,7 +635,7 @@ export default class GachaScene extends BaseScene {
     return new Promise(resolve => {
       toLoad.forEach(id => {
         const def = WALLPAPERS.find(w => w.id === id);
-        if (def) this.load.image(def.bgKey, def.bgPath);
+        if (def) { this.ownKeys.add(def.bgKey); this.load.image(def.bgKey, def.bgPath); }
       });
       this.load.once(Phaser.Loader.Events.COMPLETE, resolve);
       this.load.once(Phaser.Loader.Events.FILE_LOAD_ERROR, resolve);
@@ -861,6 +869,21 @@ export default class GachaScene extends BaseScene {
   // 강조는 테두리 글로우 · 반짝이 파티클 · 확대·흔들림 · 배경 어둡게 누르기로만 한다.
   // 방사형 빛살(바퀴살처럼 뻗는 빛줄기)은 쓰지 않는다 — 욱일기처럼 보인다 (대표 지시 2026-10-07)
   // ═══════════════════════════════════════════════════
+
+  /**
+   * 나갈 때 이 씬의 그림을 내린다 — 진열 일러스트(768x1344, 장당 약 4MB) 6장 + 배경 등 GPU 약 27MB 가
+   * 씬을 나가도 남았다 (2026-10-07 측정). 진열은 풀스크린 배경이라 썸네일로 바꾸면 화질이 떨어져 내리는 쪽을 골랐다.
+   * 내리는 것: 이 씬 전용 접두사 gacha_* 전부 + 이 씬이 직접 올린 일러스트(illust_*) · 배경화면 큰 그림(wp_*_bg).
+   * 남기는 것: 게임 스프라이트 · 등급 그림(다른 씬과 같이 쓴다), 원래 있던 키.
+   * 순서: DisplayList 의 SHUTDOWN 리스너가 부팅 때 걸려 먼저 돈다 — 여기 올 때는 이 그림을 쓰던 이미지가 이미 다 부서져 있다
+   */
+  private releaseTextures() {
+    for (const key of this.textures.getTextureKeys()) {
+      const own = this.ownKeys.has(key) && (key.startsWith('illust_') || /^wp_.+_bg$/.test(key));
+      if (key.startsWith('gacha_') || own) this.textures.remove(key);
+    }
+    this.ownKeys.clear();
+  }
 
   /** 1회 뽑기(배경화면 없음)면 리빌 카드가 곧 결과 화면이다 */
   private isSingleOnly(): boolean {
