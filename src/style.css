@@ -1,5 +1,6 @@
 :root {
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  /* 게임 글꼴(utils/gameFont · BootScene 이 불러온다)을 먼저 — DOM 입력칸도 같은 글꼴 */
+  font-family: DdongSans, Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
 

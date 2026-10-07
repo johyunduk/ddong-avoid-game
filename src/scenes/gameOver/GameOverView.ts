@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { getCharacterDef, getGradeImgKey } from '../../utils/character';
 import { bakeButton, gradientText, wireButton } from '../../utils/buttonSkin';
+import { GAME_FONT } from '../../utils/gameFont';
 
 /**
  * 게임오버 화면 (B안 — 2026-10-07 대표 채택). 그리기만 맡는다 — 점수 등록 · SKOR 정산 · 순위 조회는 GameScene 이 하고
@@ -350,6 +351,7 @@ export class GameOverView {
       letter-spacing: ${Math.round(14 * sx)}px; padding-left: ${Math.round(14 * sx)}px;
       border: ${Math.max(2, Math.round(2.5 * sy))}px solid #FFD700; border-radius: 8px;
       background: #000; color: #fff; font-weight: bold; outline: none; box-sizing: border-box; z-index: 9999;
+      font-family: ${GAME_FONT};
     `;
     input.addEventListener('input', () => { input.value = input.value.toUpperCase().replace(/[^A-Z]/g, ''); });
     input.addEventListener('keypress', (e) => { if (e.key === 'Enter') this.trySubmit(); });

@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import BootScene from './scenes/BootScene';
 import ModeSelectScene from './scenes/ModeSelectScene';
 import DifficultySelectScene from './scenes/DifficultySelectScene';
 import GameScene from './scenes/GameScene';
@@ -9,6 +10,7 @@ import GachaScene from './scenes/GachaScene';
 import { ensureLoggedIn } from './utils/auth';
 import { isBgmMuted } from './utils/settings';
 import { installTextSafety } from './utils/textSafety';
+import { installGameFont } from './utils/gameFont';
 import './style.css';
 
 const config: Phaser.Types.Core.GameConfig = {
@@ -33,7 +35,8 @@ const config: Phaser.Types.Core.GameConfig = {
       capture: false // CSS touch-action: none이 스크롤 방지 → preventDefault 불필요, 컴포지터 블로킹 제거
     }
   },
-  scene: [ModeSelectScene, DifficultySelectScene, GameScene, LeaderboardScene, ReleaseNotesScene, CharacterSelectScene, GachaScene],
+  // BootScene 이 맨 앞 — 게임 글꼴을 기다렸다가 ModeSelectScene 을 연다
+  scene: [BootScene, ModeSelectScene, DifficultySelectScene, GameScene, LeaderboardScene, ReleaseNotesScene, CharacterSelectScene, GachaScene],
   scale: {
     mode: Phaser.Scale.RESIZE,
     autoCenter: Phaser.Scale.CENTER_BOTH
@@ -63,6 +66,8 @@ ensureLoggedIn().catch(error => {
 
 // 글자 윗부분·그림자가 텍스처 경계에서 잘리지 않게 — 모든 Text 에 글자 크기 비례 여백 (utils/textSafety)
 installTextSafety();
+// 모든 Text 의 기본 글꼴 = 게임 글꼴 (utils/gameFont). 불러오기는 BootScene 이 기다린다
+installGameFont();
 
 // 게임 인스턴스는 동기적으로 즉시 생성 (키보드 입력 정상 동작 보장)
 const game = new Phaser.Game(config);

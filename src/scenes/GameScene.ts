@@ -1114,7 +1114,7 @@ export default class GameScene extends BaseScene {
     // 눌리는 원 — 판과 같은 크기 (투명). 링·진행 표시는 이 원의 중심·반지름을 기준으로 그린다
     this.activeBtn = this.add.circle(cx, cy, R, 0x000000, 0).setDepth(11.2).setScrollFactor(0);
     this.activeBtnLabel = this.add.text(cx, cy, '0', {
-      fontSize: '24px', color: '#ffd166', fontStyle: 'bold', fontFamily: 'monospace',
+      fontSize: '24px', color: '#ffd166', fontStyle: 'bold',
     }).setOrigin(0.5).setDepth(12).setScrollFactor(0);
 
     this.activeRing = this.add.graphics().setDepth(12).setScrollFactor(0);
