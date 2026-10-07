@@ -122,6 +122,8 @@ export default class CharacterSelectScene extends BaseScene {
   private hasPointerDownInScene = false; // 이 씬에서 pointerdown이 발생했는지 추적 (bleed-through 방지)
   private maskGfx!: Phaser.GameObjects.Graphics;
   private loadingKeys = new Set<string>();
+  /** 이 씬이 직접 올린 큰 그림 (일러스트 · 배경화면 큰 그림) — 나갈 때 내린다. 원래 있던 키는 남긴다 */
+  private ownKeys = new Set<string>();
 
   // 상세 정보 패널
   private detailPanel: Phaser.GameObjects.Container | null = null;
@@ -136,6 +138,7 @@ export default class CharacterSelectScene extends BaseScene {
 
   init(data: { returnScene?: string }) {
     this.returnScene = data.returnScene ?? 'ModeSelectScene';
+    this.ownKeys = new Set();   // preload 가 채운다 — create 에서 비우면 안 된다
   }
 
   preload() {
@@ -157,6 +160,7 @@ export default class CharacterSelectScene extends BaseScene {
       // A안 배너는 일러스트 원본 대신 구운 가로 크롭 (장착 캐릭터 것만 먼저)
       if (!this.textures.exists(`cs_banner_${selDef.id}`)) this.load.image(`cs_banner_${selDef.id}`, `assets/ui/collection/banner/${selDef.id}.webp`);
     } else if (!this.textures.exists(selDef.illustKey)) {
+      this.ownKeys.add(selDef.illustKey);
       this.load.image(selDef.illustKey, selDef.illustPath);
     }
     // 배경화면 — 격자는 작은 썸네일만. 큰 배경(720x1080)은 쇼케이스에서 볼 때 한 장씩
@@ -164,7 +168,7 @@ export default class CharacterSelectScene extends BaseScene {
       if (!this.textures.exists(`cs_wp_${wp.id}`)) this.load.image(`cs_wp_${wp.id}`, `assets/ui/collection/wp/${wp.id}.webp`);
     }
     const selWp = WALLPAPERS.find(w => w.id === getSelectedWallpaper());
-    if (selWp && !this.textures.exists(selWp.bgKey)) this.load.image(selWp.bgKey, selWp.bgPath);
+    if (selWp && !this.textures.exists(selWp.bgKey)) { this.ownKeys.add(selWp.bgKey); this.load.image(selWp.bgKey, selWp.bgPath); }
     // 배경화면 미리보기의 똥
     if (!this.textures.exists('poop_smile')) this.load.image('poop_smile', 'assets/poops/poop_smile.webp');
     // 등급 이미지
@@ -328,7 +332,24 @@ export default class CharacterSelectScene extends BaseScene {
       this.maskGfx.destroy();
       this.bannerMaskG?.destroy();
       this.bannerMaskG = null;
+      this.releaseTextures();
     });
+  }
+
+  /**
+   * 나갈 때 이 씬의 그림을 내린다 — 첫 방문에 GPU 약 32MB 가 올라가 씬을 나가도 남았다 (2026-10-07 측정).
+   * 내리는 것: 이 씬 전용 접두사 cs_* 전부(카드 · 얼굴 · 배너 · 배경화면 썸네일과 그걸 구운 것 · 판)
+   *          + 이 씬이 직접 올린 일러스트(illust_*) · 배경화면 큰 그림(wp_*_bg).
+   * 남기는 것: 게임 스프라이트(*_front 등 — 메뉴 · 게임 · 뽑기와 같이 쓴다), 맵 배경(background*), 원래 있던 키.
+   * 순서: DisplayList 의 SHUTDOWN 리스너는 부팅 때 걸려 create 에서 건 이 리스너보다 먼저 돈다 — 여기 올 때는
+   * 이 그림들을 쓰던 이미지가 이미 다 부서져 있다 (지운 텍스처를 쓰는 오브젝트가 남으면 glTexture null 로 터진다)
+   */
+  private releaseTextures(): void {
+    for (const key of this.textures.getTextureKeys()) {
+      const own = this.ownKeys.has(key) && (key.startsWith('illust_') || /^wp_.+_bg$/.test(key));
+      if (key.startsWith('cs_') || own) this.textures.remove(key);
+    }
+    this.ownKeys.clear();
   }
 
   // ── 공용 그림 굽기 ──────────────────────────────────────────────────────
@@ -374,6 +395,7 @@ export default class CharacterSelectScene extends BaseScene {
     if (this.textures.exists(key)) { onReady(); return; }
     if (this.loadingKeys.has(key)) return;
     this.loadingKeys.add(key);
+    this.ownKeys.add(key);
     this.load.image(key, path);
     this.load.once(`${Phaser.Loader.Events.FILE_KEY_COMPLETE}image-${key}`, () => {
       this.loadingKeys.delete(key);
@@ -1034,6 +1056,7 @@ export default class CharacterSelectScene extends BaseScene {
     if (!this.textures.exists(def.illustKey)) {
       if (this.illustLoadingId) return; // 이미 로딩 중이면 중복 요청 무시
       this.illustLoadingId = id;
+      this.ownKeys.add(def.illustKey);
       this.load.image(def.illustKey, def.illustPath);
       this.load.once(Phaser.Loader.Events.COMPLETE, () => {
         this.illustLoadingId = null;
