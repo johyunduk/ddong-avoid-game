@@ -105,8 +105,7 @@ export default class LeaderboardScene extends BaseScene {
     }
     // 캐릭터 스프라이트 — 카드·얼굴 그림이 없는 캐릭터의 대신 그림
     // 시상대 카드(ui/collection/card)와 목록 얼굴(ui/collection/face)은 랭킹이 오면 보이는 캐릭터 것만 받는다.
-    // 일러스트(768×1344, 전량 로드 시 ~95MB)는 EXTREME 캐릭터 필터 오버레이에서만 쓰이므로
-    // showCharSelectOverlay()에서 온디맨드 로드
+    // EXTREME 캐릭터 필터 오버레이는 시상대와 같은 카드 썸네일(rank_cardsrc_*)을 showCharSelectOverlay()에서 온디맨드 로드
     CHARACTERS.forEach(char => {
       if (!this.textures.exists(char.imageKey)) {
         this.load.image(char.imageKey, char.imagePath);
@@ -117,7 +116,14 @@ export default class LeaderboardScene extends BaseScene {
   create() {
     super.create();
 
-    this.events.once('shutdown', () => this.overlayCleanup?.());
+    this.events.once('shutdown', () => {
+      this.overlayCleanup?.();
+      // 카드 썸네일(시상대 · 캐릭터 고르기)은 이 씬에서만 쓴다 — 나갈 때 내린다.
+      // DisplayList 의 SHUTDOWN 리스너가 부팅 때 걸려 먼저 돌아서, 여기 올 때는 이 그림을 쓰던 이미지가 이미 다 부서져 있다
+      for (const key of this.textures.getTextureKeys()) {
+        if (key.startsWith('rank_cardsrc_') || key.startsWith('rank_card_')) this.textures.remove(key);
+      }
+    });
 
     const { W, H, cx } = this.getScaleInfo();
 
@@ -604,14 +610,17 @@ export default class LeaderboardScene extends BaseScene {
     this.charFilterObjects.push(chip);
   }
 
-  /** 캐릭터 선택 오버레이 표시 — 일러스트는 이 시점에 온디맨드 로드 */
+  /**
+   * 캐릭터 선택 오버레이 표시 — 카드 썸네일(ui/collection/card, 216x288)은 이 시점에 온디맨드 로드.
+   * 예전에는 일러스트 원본(768x1344) 26장을 올려 GPU 79MB 가 씬을 나가도 남았다 (2026-10-07 측정)
+   */
   private showCharSelectOverlay() {
     if (this.charOverlayObjects.length > 0 || this.charOverlayLoading) return;
 
-    const missing = CHARACTERS.filter(c => !this.textures.exists(c.illustKey));
+    const missing = getVisibleCharacters().filter(c => !this.textures.exists(`rank_cardsrc_${c.id}`) && !this.triedTextures.has(`rank_cardsrc_${c.id}`));
     if (missing.length > 0) {
       this.charOverlayLoading = true;
-      missing.forEach(c => this.load.image(c.illustKey, c.illustPath));
+      missing.forEach(c => { this.triedTextures.add(`rank_cardsrc_${c.id}`); this.load.image(`rank_cardsrc_${c.id}`, `assets/ui/collection/card/${c.id}.webp`); });
       this.load.once(Phaser.Loader.Events.COMPLETE, () => {
         this.charOverlayLoading = false;
         if (this.scene.isActive()) this.buildCharSelectOverlay();
@@ -729,9 +738,19 @@ export default class LeaderboardScene extends BaseScene {
       const cardBg = this.add.rectangle(lx, ly, CARD_W, CARD_H, 0x0a0a18, 1);
       cardBg.setStrokeStyle(isSel ? 3 : 1, isSel ? 0xaaccff : 0x222240);
 
-      // 일러스트 이미지 (카드 꽉 채움)
-      const illust = this.add.image(lx, ly, char.illustKey)
-        .setDisplaySize(CARD_W, CARD_H).setOrigin(0.5);
+      // 카드 썸네일 (216x288 = 3:4 → 카드 84x106 에 맞게 위아래를 조금 잘라 꽉 채운다). 없으면 게임 스프라이트
+      const src = `rank_cardsrc_${char.id}`;
+      let illust: Phaser.GameObjects.Image;
+      if (this.textures.exists(src)) {
+        const fr = this.textures.getFrame(src);
+        const k = CARD_W / fr.width;
+        const cropH = Math.min(fr.height, CARD_H / k);
+        illust = this.add.image(lx, ly, src).setScale(k).setOrigin(0.5)
+          .setCrop(0, (fr.height - cropH) / 2, fr.width, cropH);
+      } else {
+        illust = this.add.image(lx, ly - 8, char.imageKey).setOrigin(0.5);
+        illust.setScale(Math.min((CARD_W - 16) / illust.width, (CARD_H - 30) / illust.height));
+      }
       if (!isSel) illust.setAlpha(0.75);
 
       // 하단 그라디언트 (이름 가독성)
