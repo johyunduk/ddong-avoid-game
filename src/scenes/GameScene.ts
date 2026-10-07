@@ -15,10 +15,13 @@ import { FEVER_TIME_CONFIG } from '../config/feverTime';
 import { MAEHWA_PARAMS } from '../config/abilityParams';
 import { POOP_CONFIG } from '../config/poop';
 import { getHighScore, updateHighScore } from '../utils/localStorage';
-import { submitScore, getUserInitials, setUserInitials, startGameSession } from '../utils/leaderboard';
+import {
+  submitScore, getUserInitials, setUserInitials, startGameSession, getLeaderboard, invalidateLeaderboardCache,
+  type LeaderboardResponse,
+} from '../utils/leaderboard';
 import { getExtremeCharBest, updateExtremeCharBest } from '../utils/extremeCharBest';
-import { submitSkor, type SkorSubmitResponse, getQuestProgressCache, setQuestProgressCache, estimateQuestRewards, formatQuestRewardText } from '../utils/skor';
-import { CHARACTERS, getSafeSelectedCharacter, getCharacterDef, getDuplicateCount, getAwakeningLevel } from '../utils/character';
+import { submitSkor, type SkorSubmitResponse, getQuestProgressCache, setQuestProgressCache, estimateQuestRewards } from '../utils/skor';
+import { CHARACTERS, getSafeSelectedCharacter, getCharacterDef, getDuplicateCount, getAwakeningLevel, getGradeImgKey } from '../utils/character';
 import { getSafeSelectedWallpaper, getWallpaperDef } from '../utils/wallpaper';
 import { getSynergy, type WallpaperSynergy } from '../config/synergyMap';
 import { isChristmasSeason } from '../utils/seasonChecker';
@@ -32,6 +35,7 @@ import BaseScene from './BaseScene';
 import { ACTIVE_BTN } from '../config/activeButton';
 import { addBackground } from '../utils/background';
 import { textContentWidth } from '../utils/textSafety';
+import { GameOverView, type RankValue } from './gameOver/GameOverView';
 
 export default class GameScene extends BaseScene {
   protected inputGuardMs = 0; // 게임플레이 씬은 즉시 입력 허용
@@ -45,6 +49,12 @@ export default class GameScene extends BaseScene {
   protected score: number = 0;
   protected scoreText!: Phaser.GameObjects.Text;
   private highScore: number = 0;
+  /** 이번 판 시작 때 개인 최고 — 게임오버의 '이전 최고' (highScore 는 플레이 중 따라 오른다) */
+  private highScoreAtStart: number = 0;
+  /** 게임 시작 때 받아 둔 내 순위 (게임오버에서 ▲N 비교) */
+  private rankBefore: Promise<{ all: RankValue; char: RankValue }> | null = null;
+  private ranksAtStart: { all: RankValue; char: RankValue } | null = null;
+  private gameOverView: GameOverView | null = null;
   protected highScoreText!: Phaser.GameObjects.Text;
   private charHighScore: number = 0;       // HUD 표시용 (실시간 갱신)
   private charHighScoreAtStart: number = 0; // 신기록 판정용 (게임 시작 시 고정)
@@ -178,6 +188,9 @@ export default class GameScene extends BaseScene {
     this.activeRing = undefined;
     this.lastRingPct = -1;
     this.sessionPromise = null; // 재시작 시 이전 세션 프로미스 해제
+    this.rankBefore = null;
+    this.ranksAtStart = null;
+    this.gameOverView = null;
     // 디버그 Graphics 참조 초기화 (씬 재시작 시 이전 객체는 Phaser가 파괴하므로 참조만 해제)
     this.manualHitboxDebug = undefined;
     // 피버 타임 초기화
@@ -299,6 +312,12 @@ export default class GameScene extends BaseScene {
     if (!this.textures.exists('diamond_poop')) this.load.image('diamond_poop', 'assets/poops/diamond_poop.webp');
     if (!this.textures.exists('topaz_poop')) this.load.image('topaz_poop', 'assets/poops/topaz.webp');
     if (!this.textures.exists('rainbow_poop')) this.load.image('rainbow_poop', 'assets/poops/rainbow_poop.webp');
+    // 게임오버 캐릭터 칩의 등급 글자 (작은 png 한 장)
+    {
+      const g = getCharacterDef(getSafeSelectedCharacter()).grade;
+      const gk = getGradeImgKey(g);
+      if (gk && !this.textures.exists(gk)) this.load.image(gk, `assets/character_ranks/${g.toLowerCase()}.png`);
+    }
 
     if (this.difficulty === Difficulty.EXTREME && isChristmasSeason()) {
       if (!this.textures.exists('xmas_poop_ribbon')) this.load.image('xmas_poop_ribbon', 'assets/poops/xmas_present_poop.webp');
@@ -345,6 +364,7 @@ export default class GameScene extends BaseScene {
     this.resetCheatCheckpoints();
 
     this.highScore = getHighScore(this.scoreDifficulty);
+    this.highScoreAtStart = this.highScore;
     this.charHighScore = this.scoreDifficulty === Difficulty.EXTREME
       ? getExtremeCharBest(this.selectedCharId)
       : 0;
@@ -596,6 +616,8 @@ export default class GameScene extends BaseScene {
 
     // 서버 세션 비동기 시작 — 게임과 병렬 실행, 점수 제출 시 await
     this.sessionPromise = startGameSession(this.scoreDifficulty);
+    // 내 순위 (게임오버 순위 변화용) — 게임과 병렬, 실패해도 무시
+    this.rankBefore = this.fetchMyRanks();
 
     // 탭 전환 시 기준점 리셋 — 숨김/복귀 양방향으로 처리
     // 숨김 시: 기준점만 리셋 (lastScoreTime 보존 → 숨기기 직전 이월분 유지)
@@ -1767,94 +1789,116 @@ export default class GameScene extends BaseScene {
   /**
    * 게임 오버 UI 표시 및 랭킹 시스템 연동
    */
+  /**
+   * 게임 시작 때 내 순위를 받아 둔다 — 게임오버에서 등록 뒤 순위와 비교해 ▲N 을 보인다.
+   * 서버를 고치지 않고 지금 있는 leaderboard-top 조회의 currentUserRank 를 쓴다.
+   * 결과: number = 순위, null = 이번 시즌 기록 없음, undefined = 조회 실패 (칩에 '-')
+   */
+  private fetchMyRanks(): Promise<{ all: RankValue; char: RankValue }> {
+    const diff = this.scoreDifficulty;
+    const mine = (p: Promise<LeaderboardResponse>): Promise<RankValue> =>
+      p.then(r => r.currentUserRank?.rank ?? null).catch(() => undefined);
+    return Promise.all([
+      mine(getLeaderboard(diff, 1)),
+      // 캐릭터 순위는 EXTREME 에만 있다 (leaderboard-top 의 characterType 조회)
+      diff === Difficulty.EXTREME ? mine(getLeaderboard(diff, 1, this.selectedCharId)) : Promise.resolve(undefined),
+    ]).then(([all, char]) => ({ all, char }));
+  }
+
+  /** 늦으면 기다리지 않는다 — 화면을 막지 않고 칩에 '-' */
+  private withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
+    return Promise.race([p, new Promise<T>(res => this.time.delayedCall(ms, () => res(fallback)))]);
+  }
+
   protected async showGameOverUI(isNewRecord: boolean, isCharNewRecord: boolean = false) {
-    const W = this.scale.width;
-    const H = this.scale.height;
-    const cx = W / 2;
-    // 반투명 검정 배경 추가 (가독성 향상)
-    this.add.rectangle(cx, H / 2, W, H, 0x000000, 0.7).setDepth(200);
+    const view = new GameOverView(this, {
+      score: this.score,
+      isNewRecord,
+      prevBest: this.highScoreAtStart,
+      charId: this.selectedCharId,
+      charBest: this.scoreDifficulty === Difficulty.EXTREME ? this.charHighScoreAtStart : null,
+      collected: { gold: this.goldCollected, diamond: this.diamondCollected, topaz: this.topazCollected, rainbow: this.rainbowCollected },
+      desktop: this.sys.game.device.os.desktop,
+    }, {
+      onRetry: () => this.restartGame(),
+      onMenu: () => this.goToMenu(),
+      onSubmitInitials: (initials) => this.registerScore(view, initials),
+    });
+    this.gameOverView = view;
+    this.armRestartKey();
 
-    // SKOR 제출 (백그라운드, 모든 모드에서 실행)
-    // 새 기록 시: 이니셜 입력 영역(y≈380) 아래에 배치 / 일반 시: 개인최고(y≈320) 아래에 배치
-    const skorStatusY = isNewRecord ? H / 2 + 118 : H / 2 + 80;
-    const skorStatusText = this.add.text(cx, skorStatusY, '💰 SKOR 정제 중...', {
-      fontSize: '16px',
-      color: '#aaaaaa',
-      stroke: '#000',
-      strokeThickness: 2,
-    }).setOrigin(0.5).setDepth(200);
+    // SKOR 정산 (백그라운드, 모든 모드)
+    this.submitSkorOnGameOver(view);
 
-    this.submitSkorOnGameOver(skorStatusText);
+    // 순위 칩 — 게임 시작 때 받아 둔 순위
+    const before = await this.withTimeout(this.rankBefore ?? Promise.resolve({ all: undefined, char: undefined }), 3000,
+      { all: undefined, char: undefined } as { all: RankValue; char: RankValue });
+    if (!this.scene.isActive() || this.gameOverView !== view) return;
+    this.ranksAtStart = before;
 
     if (isNewRecord) {
-      // === 새 기록 달성 시: 상단에 배치 ===
-      // 게임 오버 타이틀
-      this.add.text(cx, H / 2 - 220, 'GAME OVER', {
-        fontSize: '48px',
-        color: '#ff0000',
-        fontStyle: 'bold',
-        stroke: '#000000',
-        strokeThickness: 6
-      }).setOrigin(0.5).setDepth(200);
+      // 신기록 — 등록해야 순위가 바뀐다. 그 전까지는 지금 순위
+      view.setRank('all', before.all, undefined, '등록하면 갱신');
+      if (this.scoreDifficulty === Difficulty.EXTREME) view.setRank('char', before.char, undefined, isCharNewRecord ? '등록하면 갱신' : undefined);
+      view.prefillInitials(getUserInitials());
+      return;
+    }
 
-      // 최종 점수
-      this.add.text(cx, H / 2 - 150, `점수: ${this.score}`, {
-        fontSize: '32px',
-        color: '#ffffff',
-        fontStyle: 'bold',
-        stroke: '#000000',
-        strokeThickness: 4
-      }).setOrigin(0.5).setDepth(200);
-
-      // 새 기록 메시지
-      this.add.text(cx, H / 2 - 100, '🎉 개인 신기록 🎉', {
-        fontSize: '28px',
-        color: '#FFD700',
-        fontStyle: 'bold',
-        stroke: '#000000',
-        strokeThickness: 4,
-      }).setOrigin(0.5).setDepth(200);
-
-      // 이니셜 입력 UI 표시
-      this.showInitialInputUI();
-    } else {
-      // === 새 기록 미달성 시: 중앙에 배치 ===
-      // 게임 오버 타이틀
-      this.add.text(cx, H / 2 - 120, 'GAME OVER', {
-        fontSize: '48px',
-        color: '#ff0000',
-        fontStyle: 'bold',
-        stroke: '#000000',
-        strokeThickness: 6
-      }).setOrigin(0.5).setDepth(200);
-
-      // 최종 점수
-      this.add.text(cx, H / 2 - 40, `점수: ${this.score}`, {
-        fontSize: '32px',
-        color: '#ffffff',
-        fontStyle: 'bold',
-        stroke: '#000000',
-        strokeThickness: 4
-      }).setOrigin(0.5).setDepth(200);
-
-      // 로컬 최고 점수
-      this.add.text(cx, H / 2 + 20, `개인 최고: ${this.highScore}`, {
-        fontSize: '24px',
-        color: '#FFD700',
-        stroke: '#000000',
-        strokeThickness: 3
-      }).setOrigin(0.5).setDepth(200);
-
-      // EXTREME 비신기록: 캐릭터 최고 갱신 시 저장된 이니셜로 조용히 제출
-      if (isCharNewRecord) {
-        const savedInitials = getUserInitials();
-        if (savedInitials) {
-          this.submitScoreForCharRanking(savedInitials);
-        }
+    // 개인 최고를 못 넘었으면 전체 순위는 그대로 (서버는 이번 시즌 최고만 둔다)
+    view.setRank('all', before.all, before.all);
+    if (this.scoreDifficulty !== Difficulty.EXTREME) return;
+    view.setRank('char', before.char, before.char);
+    // EXTREME 비신기록: 캐릭터 최고 갱신 시 저장된 이니셜로 조용히 제출하고 캐릭터 순위만 다시 받는다
+    if (isCharNewRecord) {
+      const savedInitials = getUserInitials();
+      if (savedInitials) {
+        await this.submitScoreForCharRanking(savedInitials);
+        await this.refreshCharRank(view);
       }
+    }
+  }
 
-      // 재시작 안내
-      this.showRestartButton(false);
+  /** 등록 뒤 캐릭터 순위 다시 받기 (캐시를 비우고) */
+  private async refreshCharRank(view: GameOverView) {
+    if (this.scoreDifficulty !== Difficulty.EXTREME) return;
+    invalidateLeaderboardCache();
+    const after = await this.withTimeout(
+      getLeaderboard(this.scoreDifficulty, 1, this.selectedCharId).then(r => r.currentUserRank?.rank ?? null).catch(() => undefined as RankValue),
+      4000, undefined as RankValue);
+    if (!this.scene.isActive() || this.gameOverView !== view) return;
+    view.setRank('char', after, this.ranksAtStart?.char);
+  }
+
+  /** 신기록 — 이니셜로 랭킹 등록 (검증은 GameOverView 가 마쳤다) */
+  private async registerScore(view: GameOverView, initials: string) {
+    setUserInitials(initials);
+    try {
+      const sessionId = await this.sessionPromise;
+      const result = await submitScore(
+        this.score,
+        this.scoreDifficulty,
+        initials,
+        {
+          gameStartTime: this.gameStartTime,
+          gameEndTime: realNow(),
+          goldCollected: this.goldCollected,
+          diamondCollected: this.diamondCollected,
+          topazCollected: this.topazCollected,
+          rainbowCollected: this.rainbowCollected,
+          collectBonusTotal: this.collectBonusTotal,
+          abilityBonusTotal: this.abilityBonusTotal,
+        },
+        this.selectedCharId,
+        sessionId
+      );
+      if (this.scoreDifficulty === Difficulty.EXTREME) updateExtremeCharBest(this.selectedCharId, this.score);
+      if (!this.scene.isActive() || this.gameOverView !== view) return;
+      view.setRank('all', result.rank ?? undefined, this.ranksAtStart?.all);
+      view.showRegistered(result.rank !== null ? `${initials} · 전체 ${result.rank}위 등록` : `${initials} 등록 완료`, true);
+      await this.refreshCharRank(view);
+    } catch (error) {
+      console.error('Failed to submit score:', error);
+      if (this.scene.isActive() && this.gameOverView === view) view.showRegistered('랭킹 등록 실패', false);
     }
   }
 
@@ -1884,205 +1928,6 @@ export default class GameScene extends BaseScene {
     }
   }
 
-  /**
-   * 이니셜 입력 UI 표시
-   */
-  private showInitialInputUI() {
-    const W = this.scale.width;
-    const H = this.scale.height;
-    const cx = W / 2;
-    // 안내 텍스트
-    this.add.text(cx, H / 2 - 50, '이니셜 입력 (영어 대문자 3자)', {
-      fontSize: '18px',
-      color: '#ffffff',
-      fontStyle: 'bold',
-      stroke: '#000000',
-      strokeThickness: 3
-    }).setOrigin(0.5).setDepth(200);
-
-    // HTML input 엘리먼트 생성
-    const inputElement = document.createElement('input');
-    inputElement.type = 'text';
-    inputElement.maxLength = 3;
-    inputElement.placeholder = 'ABC';
-
-    // 캔버스 실제 위치·스케일에 맞춰 input 좌표 계산
-    // (Phaser FIT 스케일 모드에서 캔버스가 이동/축소될 수 있으므로 DOM 좌표계와 동기화)
-    const canvas = this.game.canvas;
-    const rect = canvas.getBoundingClientRect();
-    const gameW = this.scale.width;
-    const gameH = this.scale.height;
-    const scaleX = rect.width / gameW;
-    const scaleY = rect.height / gameH;
-    // 게임 좌표 (cx, H/2-15) → viewport 픽셀 좌표로 변환
-    const screenLeft = rect.left + (gameW / 2) * scaleX;
-    const screenTop  = rect.top  + (gameH / 2 - 15) * scaleY;
-
-    inputElement.style.cssText = `
-      position: fixed;
-      left: ${screenLeft}px;
-      top: ${screenTop}px;
-      transform: translateX(-50%);
-      width: ${Math.round(130 * scaleX)}px;
-      height: ${Math.round(44 * scaleY)}px;
-      font-size: ${Math.round(22 * scaleY)}px;
-      text-align: center;
-      text-transform: uppercase;
-      border: ${Math.max(2, Math.round(3 * scaleY))}px solid #FFD700;
-      border-radius: 8px;
-      background: #000;
-      color: #fff;
-      font-weight: bold;
-      letter-spacing: ${Math.round(6 * scaleX)}px;
-      outline: none;
-      box-sizing: border-box;
-      z-index: 9999;
-    `;
-
-    // 기존 이니셜이 있으면 미리 채우기
-    const existingInitials = getUserInitials();
-    if (existingInitials) {
-      inputElement.value = existingInitials;
-    }
-
-    document.body.appendChild(inputElement);
-    inputElement.focus();
-
-    // 대문자만 입력되도록
-    inputElement.addEventListener('input', (e) => {
-      const target = e.target as HTMLInputElement;
-      target.value = target.value.toUpperCase().replace(/[^A-Z]/g, '');
-    });
-
-    // 제출 버튼 텍스트
-    const submitButtonText = this.add.text(cx, H / 2 + 75, '랭킹 등록', {
-      fontSize: '24px',
-      color: '#00ff00',
-      fontStyle: 'bold',
-      stroke: '#000',
-      strokeThickness: 4,
-      padding: { x: 20, y: 10 }
-    }).setOrigin(0.5).setInteractive().setDepth(200);
-
-    // 에러 메시지 영역
-    let errorText: Phaser.GameObjects.Text | null = null;
-
-    // 제출 버튼 클릭
-    submitButtonText.on('pointerdown', async () => {
-      const initials = inputElement.value.trim().toUpperCase();
-
-      // 검증
-      if (initials.length !== 3) {
-        if (errorText) errorText.destroy();
-        errorText = this.add.text(cx, H / 2 + 120, '정확히 3글자를 입력하세요', {
-          fontSize: '16px',
-          color: '#ff0000',
-          fontStyle: 'bold',
-          stroke: '#000',
-          strokeThickness: 3
-        }).setOrigin(0.5).setDepth(200);
-        return;
-      }
-
-      if (!/^[A-Z]{3}$/.test(initials)) {
-        if (errorText) errorText.destroy();
-        errorText = this.add.text(cx, H / 2 + 120, '영어 대문자만 입력하세요', {
-          fontSize: '16px',
-          color: '#ff0000',
-          fontStyle: 'bold',
-          stroke: '#000',
-          strokeThickness: 3
-        }).setOrigin(0.5).setDepth(200);
-        return;
-      }
-
-      // 이니셜 저장
-      setUserInitials(initials);
-
-      // input 제거
-      document.body.removeChild(inputElement);
-      submitButtonText.destroy();
-      if (errorText) errorText.destroy();
-
-      // 랭킹 제출
-      const submittingText = this.add.text(cx, H / 2, '랭킹 제출 중...', {
-        fontSize: '18px',
-        color: '#ffff00',
-        fontStyle: 'bold',
-        stroke: '#000',
-        strokeThickness: 3
-      }).setOrigin(0.5).setDepth(200);
-
-      try {
-        // 캐릭터 타입 결정 (이미 init()에서 검증된 값 사용)
-        const characterType = this.selectedCharId;
-
-        // 세션이 완료될 때까지 대기 (대부분 이미 완료되어 있음)
-        const sessionId = await this.sessionPromise;
-
-        const result = await submitScore(
-          this.score,
-          this.scoreDifficulty,
-          initials,
-          {
-            gameStartTime: this.gameStartTime,
-            gameEndTime: realNow(),
-            goldCollected: this.goldCollected,
-            diamondCollected: this.diamondCollected,
-            topazCollected: this.topazCollected,
-            rainbowCollected: this.rainbowCollected,
-            collectBonusTotal: this.collectBonusTotal,
-            abilityBonusTotal: this.abilityBonusTotal,
-          },
-          characterType,
-          sessionId
-        );
-
-        submittingText.destroy();
-
-        if (this.scoreDifficulty === Difficulty.EXTREME) {
-          updateExtremeCharBest(this.selectedCharId, this.score);
-        }
-
-        // 순위 표시
-        if (result.rank !== null) {
-          this.add.text(cx, H / 2 + 40, `🏆 전체 ${result.rank}위! 🏆`, {
-            fontSize: '24px',
-            color: '#FFD700',
-            fontStyle: 'bold',
-            stroke: '#000',
-            strokeThickness: 3,
-          }).setOrigin(0.5).setDepth(200);
-        }
-
-        // 이니셜 표시
-        this.add.text(cx, H / 2 + 80, `${initials}`, {
-          fontSize: '20px',
-          color: '#00ff00',
-          fontStyle: 'bold',
-          stroke: '#000',
-          strokeThickness: 3,
-          letterSpacing: 4
-        }).setOrigin(0.5).setDepth(200);
-
-      } catch (error) {
-        console.error('Failed to submit score:', error);
-        submittingText.setText('❌ 랭킹 제출 실패');
-        submittingText.setColor('#ff0000');
-      }
-
-      // 재시작 버튼 표시
-      this.showRestartButton(true);
-    });
-
-    // Enter 키로도 제출 가능
-    inputElement.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') {
-        submitButtonText.emit('pointerdown');
-      }
-    });
-  }
-
   // 서버 getBracketCap과 동일 — 낙관적 UI 계산용 (서버 응답 전 예상값 표시)
   private getSkorBracketCap(score: number): number {
     if (score < 500)  return 20;
@@ -2095,15 +1940,16 @@ export default class GameScene extends BaseScene {
   }
 
   /**
-   * 게임오버 시 SKOR 정제 수익 제출 및 화면 표시
+   * 게임오버 시 SKOR 정제 수익 제출 — 결과는 SKOR 칩 한 자리에서 '정산 중' → 낙관 값 → 서버 값 순서로 바뀐다
    */
-  private async submitSkorOnGameOver(statusText: Phaser.GameObjects.Text) {
+  private async submitSkorOnGameOver(view: GameOverView) {
     const sessionData = {
       goldCollected: this.goldCollected,
       diamondCollected: this.diamondCollected,
       topazCollected: this.topazCollected,
       rainbowCollected: this.rainbowCollected,
     };
+    view.setSkor('…', '정산 중', '#c9c9d6');
 
     // ── 낙관적 UI: 서버 응답 전에 예상 SKOR 즉시 계산 ──
     const rawSkor =
@@ -2115,8 +1961,7 @@ export default class GameScene extends BaseScene {
 
     // floor 후 0이면 API 호출 없이 즉시 종료 (퀘스트 진행도도 없음)
     if (estimatedSkor <= 0) {
-      statusText.setText('💰 +0 SKOR (아이템 없음)');
-      statusText.setColor('#888888');
+      view.setSkor('+0', '아이템 없음', '#888888');
       return;
     }
 
@@ -2125,19 +1970,7 @@ export default class GameScene extends BaseScene {
     const estimatedQuests = questCache ? estimateQuestRewards(questCache, sessionData) : [];
     const estimatedQuestSkor = estimatedQuests.reduce((s, r) => s + r.reward, 0);
     const optimisticTotal = estimatedSkor + estimatedQuestSkor;
-    let questTextObj: Phaser.GameObjects.Text | null = null;
-
-    statusText.setText(`💰 +${optimisticTotal} SKOR 획득!`);
-    statusText.setColor('#FFD700');
-
-    if (estimatedQuests.length > 0) {
-      questTextObj = this.add.text(this.scale.width / 2, statusText.y + 23, `🎯 ${formatQuestRewardText(estimatedQuests)}`, {
-        fontSize: '13px',
-        color: '#88ff88',
-        stroke: '#000',
-        strokeThickness: 2,
-      }).setOrigin(0.5).setDepth(200);
-    }
+    view.setSkor(`+${optimisticTotal}`, estimatedQuestSkor > 0 ? `퀘스트 +${estimatedQuestSkor} 포함` : '');
 
     // ── 백그라운드 API 호출: 실제 결과로 보정 ──
     try {
@@ -2153,116 +1986,41 @@ export default class GameScene extends BaseScene {
       }
 
       if (result.weeklyCapRemaining <= 0 && result.totalSkorAdded === 0) {
-        statusText.setText(`💰 주간 한도 도달 (SKOR 없음)`);
-        statusText.setColor('#888888');
-        questTextObj?.destroy();
+        view.setSkor('0', '주간 한도 도달', '#888888');
         return;
       }
 
-      if (result.totalSkorAdded !== optimisticTotal) {
-        statusText.setText(`💰 +${result.totalSkorAdded} SKOR 획득!`);
-      }
-
-      // 캐시 없었던 경우에만 퀘스트 텍스트 새로 표시
-      if (!questCache && result.questRewards.length > 0) {
-        this.add.text(this.scale.width / 2, statusText.y + 23, `🎯 ${formatQuestRewardText(result.questRewards)}`, {
-          fontSize: '13px',
-          color: '#88ff88',
-          stroke: '#000',
-          strokeThickness: 2,
-        }).setOrigin(0.5).setDepth(200);
-      }
+      const questSkor = result.questRewards.reduce((s, r) => s + r.reward, 0);
+      view.setSkor(`+${result.totalSkorAdded}`, questSkor > 0 ? `퀘스트 +${questSkor} 포함` : '');
     } catch {
       // 실패해도 낙관적으로 보여준 숫자 유지 (정제 결과는 서버에서 처리됨)
     }
   }
 
-  /**
-   * 재시작 버튼 표시 (다시 하기 + 메인 메뉴) - 버튼 스타일
-   * @param isNewRecord 새 기록 달성 여부 (SKOR 텍스트 위치에 따라 버튼 y 조정)
-   */
-  /** 게임 오버 뒤 스페이스가 재시작으로 받아지기까지의 유예 (ms) — 버튼이 나타난 시점부터 */
+  /** 게임 오버 뒤 스페이스가 재시작으로 받아지기까지의 유예 (ms) — 게임오버 화면이 뜬 시점부터 */
   private static readonly RESTART_KEY_ARM_MS = 400;
 
   /** 다시 하기 — 버튼·스페이스가 같이 쓴다 */
   private restartGame(): void {
-    const existingInput = document.querySelector('input');
-    if (existingInput) document.body.removeChild(existingInput);
+    this.gameOverView?.destroy();
     this.sound.stopAll();
     if (this.player) this.player.cleanupEffects();
     this.scene.restart({ gameMode: this.gameMode, difficulty: this.difficulty, purePhysical: this.purePhysical });
   }
 
-  private showRestartButton(isNewRecord = false) {
-    const W = this.scale.width;
-    const H = this.scale.height;
-    const cx = W / 2;
-    // 새 기록 시: SKOR 텍스트(H/2+118) + 퀘스트(+23) 아래 배치
-    // 일반 시: SKOR 텍스트(H/2+80) + 퀘스트(+23) 아래 배치
-    const retryY = isNewRecord ? H / 2 + 170 : H / 2 + 155;
-    const menuY  = isNewRecord ? H / 2 + 248 : H / 2 + 235;
+  private goToMenu(): void {
+    this.gameOverView?.destroy();
+    this.sound.stopAll();
+    if (this.player) this.player.cleanupEffects();
+    this.scene.start('ModeSelectScene');
+  }
 
-    // 다시 하기 버튼 배경
-    const retryButtonBg = this.add.rectangle(cx, retryY, 250, 70, 0x00aa00)
-      .setOrigin(0.5)
-      .setDepth(199)
-      .setStrokeStyle(3, 0xffffff);
-
-    // 다시 하기 버튼 텍스트
-    const retryButtonText = this.add.text(cx, retryY, '다시 하기', {
-      fontSize: '22px',
-      color: '#ffffff',
-      fontStyle: 'bold'
-    }).setOrigin(0.5).setDepth(200);
-
-    // 다시 하기 버튼 인터랙티브 영역 (배경을 클릭 가능하게)
-    retryButtonBg.setInteractive({ useHandCursor: true });
-
-    // 메인 메뉴 버튼 배경
-    const menuButtonBg = this.add.rectangle(cx, menuY, 250, 70, 0x555555)
-      .setOrigin(0.5)
-      .setDepth(199)
-      .setStrokeStyle(3, 0xffffff);
-
-    // 메인 메뉴 버튼 텍스트
-    const menuButtonText = this.add.text(cx, menuY, '메인 메뉴', {
-      fontSize: '22px',
-      color: '#ffffff',
-      fontStyle: 'bold'
-    }).setOrigin(0.5).setDepth(200);
-
-    // 메인 메뉴 버튼 인터랙티브 영역
-    menuButtonBg.setInteractive({ useHandCursor: true });
-
-    // 호버 효과 - 다시 하기 버튼
-    retryButtonBg.on('pointerover', () => {
-      retryButtonBg.setFillStyle(0x00ff00);
-      retryButtonBg.setScale(1.05);
-      retryButtonText.setScale(1.05);
-    });
-    retryButtonBg.on('pointerout', () => {
-      retryButtonBg.setFillStyle(0x00aa00);
-      retryButtonBg.setScale(1);
-      retryButtonText.setScale(1);
-    });
-
-    // 호버 효과 - 메인 메뉴 버튼
-    menuButtonBg.on('pointerover', () => {
-      menuButtonBg.setFillStyle(0x777777);
-      menuButtonBg.setScale(1.05);
-      menuButtonText.setScale(1.05);
-    });
-    menuButtonBg.on('pointerout', () => {
-      menuButtonBg.setFillStyle(0x555555);
-      menuButtonBg.setScale(1);
-      menuButtonText.setScale(1);
-    });
-
-    retryButtonBg.on('pointerdown', () => this.restartGame());
-
-    // PC — 스페이스로도 다시 하기. 액티브 스페이스와 같은 방식(창 레벨 · 캡처 단계)으로 받는다.
-    // **이 버튼이 나타난 뒤에만** 리스너가 생기고, 그래도 RESTART_KEY_ARM_MS 동안은 무시한다 —
-    // 죽기 직전 액티브를 쓰려고 연타하던 스페이스가 그대로 재시작이 되지 않게
+  /**
+   * PC — 스페이스로도 다시 하기. 액티브 스페이스와 같은 방식(창 레벨 · 캡처 단계)으로 받는다.
+   * **게임오버 화면이 뜬 뒤에만** 리스너가 생기고, 그래도 RESTART_KEY_ARM_MS 동안은 무시한다 —
+   * 죽기 직전 액티브를 쓰려고 연타하던 스페이스가 그대로 재시작이 되지 않게
+   */
+  private armRestartKey(): void {
     const armedAt = realNow() + GameScene.RESTART_KEY_ARM_MS;
     const onRestartKey = (e: KeyboardEvent) => {
       if (e.code !== 'Space' || e.repeat) return;
@@ -2276,19 +2034,5 @@ export default class GameScene extends BaseScene {
     window.addEventListener('keydown', onRestartKey, { capture: true });
     // 재시작·메인 메뉴로 나갈 때 떼야 한다 — 남으면 다음 판 진행 중 스페이스가 재시작이 된다
     this.events.once('shutdown', () => window.removeEventListener('keydown', onRestartKey, { capture: true }));
-    // 키보드가 있는 환경(PC)에서만 작은 안내
-    if (this.sys.game.device.os.desktop) {
-      this.add.text(cx + 92, retryY, 'Space', {
-        fontSize: '12px', color: '#d8ffd8', fontStyle: 'bold',
-      }).setOrigin(0.5).setDepth(200).setAlpha(0.85);
-    }
-
-    menuButtonBg.on('pointerdown', () => {
-      const existingInput = document.querySelector('input');
-      if (existingInput) document.body.removeChild(existingInput);
-      this.sound.stopAll();
-      if (this.player) this.player.cleanupEffects();
-      this.scene.start('ModeSelectScene');
-    });
   }
 }

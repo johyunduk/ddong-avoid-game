@@ -152,6 +152,11 @@ export async function submitScore(
 const _lbCache = new Map<string, { data: LeaderboardResponse; ts: number }>();
 const _LB_TTL = 30_000;
 
+/** 랭킹 조회 캐시 비우기 — 점수를 등록한 직후 바뀐 순위를 다시 받을 때 (30초 캐시가 옛 순위를 돌려준다) */
+export function invalidateLeaderboardCache(): void {
+  _lbCache.clear();
+}
+
 /**
  * 리더보드 조회
  */
