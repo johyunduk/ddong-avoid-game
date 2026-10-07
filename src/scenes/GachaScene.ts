@@ -3,13 +3,13 @@ import {
   gachaPull, syncOwnedCharacters, syncOwnedWallpapers, gachaPool, gachaRates, formatRate, GACHA_WP_DROP_CHANCE,
   type PulledCharacter, type PulledWallpaper,
 } from '../utils/gacha';
-import { CHARACTERS, getCharacterDef, addOwnedCharacter, getDuplicateCount, setDuplicateCount, getGradeImgKey, getGradeColorInt, type CharacterDef } from '../utils/character';
+import { CHARACTERS, getCharacterDef, addOwnedCharacter, getDuplicateCount, setDuplicateCount, getGradeImgKey, getGradeColorInt, getAwakeningLevel, type CharacterDef } from '../utils/character';
 import { WALLPAPERS, getWallpaperDef, addOwnedWallpaper, WP_ACCENT_INT, WP_ACCENT_HEX, type BackgroundDef } from '../utils/wallpaper';
 import { getSkorBalance, getCachedSkorBalance, cacheSkorBalance } from '../utils/skor';
 import { destroyVideo } from '../utils/video';
 import BaseScene from './BaseScene';
 import { addBackground } from '../utils/background';
-import { bakeButton, bakeRoundedImage, gradientText, wireButton } from '../utils/buttonSkin';
+import { bakeButton, bakeRadialGlow, bakeRoundedImage, gradientText, setTouchInteractive, wireButton } from '../utils/buttonSkin';
 
 // 개인 영상이 있는 캐릭터 — **캐릭터 정의에서 그대로 읽는다.** 영상 유무는 이미
 // `videoKey`/`videoPath` 가 말하고 있어서, 목록을 따로 두면 캐릭터를 추가할 때
@@ -23,6 +23,13 @@ const CURRENT_BANNER = {
   characterId: 'ted',
   label: '신규 출시',
 };
+
+/** 뽑은 캐릭터 하나의 결과 표시 정보 — 각성 달성은 뽑기 전후 getAwakeningLevel 을 비교해 정한다 */
+interface PullMeta {
+  awakenUp: boolean;
+  /** 뽑은 뒤 각성 단계 */
+  level: number;
+}
 
 /** 진열이 넘어가는 간격 (ms) */
 const SLIDE_MS = 3000;
@@ -42,6 +49,8 @@ export default class GachaScene extends BaseScene {
   private remainingSkor = 0;
   private pullResults: PulledCharacter[] = [];
   private wpResults: PulledWallpaper[] = [];
+  /** pullResults 와 같은 순서 */
+  private pullMeta: PullMeta[] = [];
   private revealItems: Array<{ kind: 'character'; data: PulledCharacter } | { kind: 'wallpaper'; data: PulledWallpaper }> = [];
   private revealItemIndex = 0;
   private terminalTexts: Phaser.GameObjects.Text[] = [];
@@ -104,6 +113,8 @@ export default class GachaScene extends BaseScene {
     super.create();
 
     this.pullResults = [];
+    this.wpResults = [];
+    this.pullMeta = [];
     this.revealItems = [];
     this.revealItemIndex = 0;
     this.buildLobby();
@@ -485,10 +496,16 @@ export default class GachaScene extends BaseScene {
 
       // ① 결과의 신규 캐릭터 즉시 저장 (sync 실패 대비 fallback)
       result.characters.filter(c => c.isNew).forEach(c => addOwnedCharacter(c.id));
-      // ① 중복 캐릭터 각성 카운트 업데이트
-      result.characters.filter(c => !c.isNew).forEach(c => {
-        setDuplicateCount(c.id, getDuplicateCount(c.id) + 1);
+      // ① 중복 캐릭터 각성 카운트 업데이트 — 올리기 전후 각성 단계를 비교해 '각성 달성' 을 적어 둔다
+      this.pullMeta = result.characters.map(c => {
+        if (c.isNew) return { awakenUp: false, level: 0 };
+        const before = getDuplicateCount(c.id);
+        setDuplicateCount(c.id, before + 1);
+        const lv0 = getAwakeningLevel(c.grade, before), lv1 = getAwakeningLevel(c.grade, before + 1);
+        return { awakenUp: lv1 > lv0, level: lv1 };
       });
+      this.skorBalance = result.remainingSkor;
+      cacheSkorBalance(result.remainingSkor);
       // ① 신규 배경화면 즉시 저장 (sync 실패 대비 fallback)
       this.wpResults.filter(w => w.isNew).forEach(w => addOwnedWallpaper(w.id));
       // ② 서버 DB 전체 동기화 (비동기, 에러 로그만)
@@ -498,7 +515,7 @@ export default class GachaScene extends BaseScene {
       // ② 영상 스킵 시 결과 화면으로 직행
       if (this.skipToSummary) {
         this.skipToSummary = false;
-        await this.loadWallpaperBgs(this.wpResults.map(w => w.id));
+        await Promise.all([this.loadWallpaperBgs(this.wpResults.map(w => w.id)), this.loadResultThumbs()]);
         this.showSummary();
         return;
       }
@@ -517,6 +534,7 @@ export default class GachaScene extends BaseScene {
       await Promise.all([
         this.loadCharVideos(result.characters.map(c => c.id)),
         this.loadWallpaperBgs(this.wpResults.map(w => w.id)),
+        this.loadResultThumbs(),
       ]);
 
       this.showNextReveal();
@@ -808,7 +826,7 @@ export default class GachaScene extends BaseScene {
         proceeded = true;
         this.input.off('pointerdown', proceed);
         destroyVideo(vid);
-        this.showRevealCard(pulled, def);
+        this.revealOrFinish(pulled, def);
       };
 
       this.addSkipButton(() => {
@@ -820,97 +838,218 @@ export default class GachaScene extends BaseScene {
         if (this.revealItems.length > 1) {
           this.showSummary();
         } else {
-          this.showRevealCard(pulled, def);
+          this.revealOrFinish(pulled, def);
         }
       });
       vid.on('complete', proceed);
       this.time.delayedCall(10000, proceed); // failsafe
       this.input.once('pointerdown', proceed); // 탭으로 스킵
     } else {
-      this.showRevealCard(pulled, def);
+      this.revealOrFinish(pulled, def);
     }
   }
 
+  /** 1회 뽑기면 리빌 카드가 곧 결과 화면(버튼 포함), 아니면 슬롯 리빌 */
+  private revealOrFinish(pulled: PulledCharacter, def: CharacterDef) {
+    if (this.isSingleOnly()) this.showSummary();
+    else this.showRevealCard(pulled, def);
+  }
+
+  // ═══════════════════════════════════════════════════
+  // RESULT CARD (A안) — 수집 카드를 그대로 크게 / 10회는 등급순 5x2 + 배경화면 줄
+  // 시안: ddong-fx-work/gacha-result/A_*.png
+  // 강조는 테두리 글로우 · 반짝이 파티클 · 확대·흔들림 · 배경 어둡게 누르기로만 한다.
+  // 방사형 빛살(바퀴살처럼 뻗는 빛줄기)은 쓰지 않는다 — 욱일기처럼 보인다 (대표 지시 2026-10-07)
+  // ═══════════════════════════════════════════════════
+
+  /** 1회 뽑기(배경화면 없음)면 리빌 카드가 곧 결과 화면이다 */
+  private isSingleOnly(): boolean {
+    return this.pullResults.length === 1 && this.wpResults.length === 0;
+  }
+
+  /** 결과에 쓰는 썸네일 — ui/collection 의 card · wp 만 (일러스트 원본은 올리지 않는다) */
+  private loadResultThumbs(): Promise<void> {
+    const want: [string, string][] = [
+      ...this.pullResults.map(c => [`gacha_card_${c.id}`, `assets/ui/collection/card/${c.id}.webp`] as [string, string]),
+      ...this.wpResults.map(w => [`gacha_wp_${w.id}`, `assets/ui/collection/wp/${w.id}.webp`] as [string, string]),
+    ].filter(([k]) => !this.textures.exists(k));
+    if (want.length === 0) return Promise.resolve();
+    return new Promise(resolve => {
+      for (const [k, p] of want) this.load.image(k, p);
+      this.load.once(Phaser.Loader.Events.COMPLETE, resolve);
+      this.load.start();
+    });
+  }
+
+  /** 등급색 판 — 색은 CharacterDef.gradeColor 하나에서 밝게·어둡게 뽑는다 */
+  private gradeFrame(def: CharacterDef, w: number, h: number, radius: number, glow: boolean): { key: string; originY: number } {
+    const base = Phaser.Display.Color.HexStringToColor(def.gradeColor);
+    const hex = (c: Phaser.Display.Color) => `#${c.color.toString(16).padStart(6, '0')}`;
+    const top = hex(base.clone().lighten(30));
+    const border = hex(base.clone().darken(55));
+    const key = `gacha_frame_${def.grade}_${w}x${h}${glow ? '_g' : ''}`;
+    const r = bakeButton(this, key, {
+      w, h, radius, top, bottom: def.gradeColor, border, borderW: def.grade === 'R' ? 2 : 3,
+      lip: border, lipH: w > 120 ? 6 : 3, gloss: 0,
+      glow: glow ? `rgba(${base.red},${base.green},${base.blue},0.86)` : undefined,
+    });
+    return { key: r.key, originY: r.originY };
+  }
+
+  private newTag(x: number, y: number, w: number): Phaser.GameObjects.GameObject[] {
+    return [
+      this.add.graphics().fillStyle(0xff3b2f).fillRoundedRect(x - w / 2, y - 10, w, 20, 10)
+        .lineStyle(1.5, 0x5a0a00).strokeRoundedRect(x - w / 2, y - 10, w, 20, 10),
+      this.add.text(x, y, 'NEW', { fontSize: '11px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5),
+    ];
+  }
+
+  /** 중복 꼬리표 — 각성이 올랐으면 금색 '각성 ★N 달성!', 아니면 '중복 +1' */
+  private dupTag(x: number, y: number, w: number, meta: PullMeta, px: number): Phaser.GameObjects.GameObject[] {
+    const up = meta.awakenUp;
+    const label = this.add.text(x, y, up ? `각성 ★${meta.level} 달성!` : '중복 +1', {
+      fontSize: `${px}px`, color: up ? '#5a2a00' : '#d9c6f0', fontStyle: 'bold',
+    }).setOrigin(0.5);
+    const tw = Math.max(w, label.width + 14), th = px + 10;
+    const g = this.add.graphics().fillStyle(up ? 0xffd34d : 0x140e28, up ? 1 : 0.86).fillRoundedRect(x - tw / 2, y - th / 2, tw, th, th / 2)
+      .lineStyle(1.2, up ? 0x5a2a00 : 0x8a7ab8).strokeRoundedRect(x - tw / 2, y - th / 2, tw, th, th / 2);
+    this.children.bringToTop(label);   // 폭을 재려고 글자를 먼저 만들었다 — 판 위로 올린다
+    return [g, label];
+  }
+
+  /** 반짝이 — 카드 테두리를 따라 작은 빛 점이 떠오른다. UR 은 촘촘하게, SR 은 드문드문, R 은 없음 */
+  private sparkles(cx: number, cy: number, w: number, h: number, grade: string, color: number, depth = 0) {
+    if (grade !== 'UR' && grade !== 'SR') return;
+    const key = bakeRadialGlow(this, 'gacha_spark', 32);
+    const ur = grade === 'UR';
+    const e = this.add.particles(0, 0, key, {
+      emitZone: { type: 'edge', source: new Phaser.Geom.Rectangle(cx - w / 2, cy - h / 2, w, h), quantity: 48 },
+      lifespan: { min: 700, max: 1300 },
+      speedY: { min: -40, max: -10 },
+      speedX: { min: -12, max: 12 },
+      scale: { start: ur ? 0.42 : 0.3, end: 0 },
+      alpha: { start: 1, end: 0 },
+      tint: [0xffffff, color],
+      blendMode: Phaser.BlendModes.ADD,
+      frequency: ur ? 70 : 160,
+      maxAliveParticles: ur ? 28 : 12,
+    }).setDepth(depth);
+    e.explode(ur ? 24 : 10);
+    e.start();
+  }
+
+  /** 배경 — 뽑기 배경 + 어둡게 누르기 (높은 등급일수록 더 어둡게 눌러 카드를 띄운다) */
+  private resultBackdrop(dim: number) {
+    const { width: W, height: H } = this.cameras.main;
+    if (this.textures.exists('gacha_background')) addBackground(this, 'gacha_background', W, H);
+    else this.add.rectangle(W / 2, H / 2, W, H, 0x050510);
+    this.add.rectangle(W / 2, H / 2, W, H, 0x000000, dim);
+  }
+
+  /**
+   * 큰 수집 카드 (230x306 기준, k 배) — 등급색 판 + 카드 + 등급 + NEW, 아래 금빛 이름과 한 줄.
+   * 확대되며 나타나고, UR 은 화면이 짧게 흔들린다
+   */
+  private drawBigCard(pulled: PulledCharacter, def: CharacterDef, meta: PullMeta, cx: number, cy: number, k: number) {
+    const kw = Math.round(230 * k), kh = Math.round(306 * k);
+    const ur = def.grade === 'UR';
+    const card = this.add.container(cx, cy);
+    const frame = this.gradeFrame(def, kw + 10, kh + 10, 16, ur || def.grade === 'SR');
+    card.add(this.add.image(0, 0, frame.key).setOrigin(0.5, frame.originY));
+    const src = `gacha_card_${pulled.id}`;
+    if (this.textures.exists(src)) {
+      const key = bakeRoundedImage(this, `gacha_cardR_${pulled.id}_${kw}`, src, kw, kh, 10, 0.15);
+      card.add(this.add.image(0, 0, key).setDisplaySize(kw, kh));
+    } else if (this.textures.exists(def.imageKey)) {
+      card.add(this.add.rectangle(0, 0, kw, kh, 0x111122));
+      card.add(this.add.image(0, 0, def.imageKey).setDisplaySize(kh * 0.4, kh * 0.63));
+    }
+    const gk = getGradeImgKey(def.grade);
+    if (gk) card.add(this.add.image(-kw / 2 + 30 * k, -kh / 2 + 30 * k, gk).setDisplaySize(56 * k, 56 * k));
+    if (pulled.isNew) card.add(this.newTag(kw / 2 - 32 * k, -kh / 2 + 22 * k, 52));
+
+    card.setScale(0.6).setAlpha(0);
+    this.tweens.add({
+      targets: card, scale: 1, alpha: 1, duration: 450, ease: 'Back.easeOut',
+      onComplete: () => {
+        if (ur) this.cameras.main.shake(220, 0.006);
+        this.sparkles(cx, cy, kw + 10, kh + 10, def.grade, getGradeColorInt(def));
+      },
+    });
+
+    const name = this.add.text(cx, cy + kh / 2 + 36, def.name, {
+      fontSize: '40px', fontStyle: 'bold', stroke: '#2a0a00', strokeThickness: 5,
+    }).setOrigin(0.5).setAlpha(0);
+    gradientText(name, [[0, '#fff7c2'], [0.5, '#ffd34d'], [1, '#ff9f1a']]);
+    const subY = cy + kh / 2 + 72;
+    const parts: Phaser.GameObjects.GameObject[] = [name];
+    if (pulled.isNew) {
+      parts.push(this.add.text(cx, subY, `${def.grade} 새로운 캐릭터를 얻었어요!`, {
+        fontSize: '15px', color: '#ffe9a8', fontStyle: 'bold', stroke: '#000000', strokeThickness: 3,
+      }).setOrigin(0.5));
+    } else {
+      parts.push(...this.dupTag(cx, subY, 90, meta, 13));
+    }
+    parts.forEach(p => (p as Phaser.GameObjects.Text).setAlpha?.(0));
+    this.tweens.add({ targets: parts, alpha: 1, duration: 300, delay: 350 });
+  }
+
+  /** 아래 줄 — SKOR 알약 + 1회 더 · 10회 더 · 닫기. 폭이 모자라면 두 뽑기 버튼만 줄인다 */
+  private resultButtons(y: number) {
+    const W = this.scale.width, cx = W / 2;
+    const gap = 8, closeW = 56, h = 56;
+    const fit = Math.min(1, (W - 24 - 2 * gap - closeW) / (150 + 170));
+    const w1 = Math.floor(150 * fit), w10 = Math.floor(170 * fit);
+    const x0 = cx - (w1 + w10 + closeW + 2 * gap) / 2;
+
+    // SKOR 알약
+    const pw = 150;
+    this.add.graphics().fillStyle(0x0a0618, 0.84).fillRoundedRect(cx - pw / 2, y - 46 - 13, pw, 26, 13)
+      .lineStyle(1.5, 0xffd34d).strokeRoundedRect(cx - pw / 2, y - 46 - 13, pw, 26, 13);
+    this.add.text(cx, y - 46, `💰 ${Math.floor(this.remainingSkor).toLocaleString()} SKOR`, {
+      fontSize: '13px', color: '#fff0c2', fontStyle: 'bold',
+    }).setOrigin(0.5);
+
+    const make = (x: number, w: number, kind: 'gold' | 'purple' | 'white', label: string, sub: string | null, onClick: () => void) => {
+      const box = this.add.container(x, y);
+      const skin = bakeButton(this, `gacha_res_${kind}_${w}`, kind === 'gold'
+        ? { w, h, radius: 16, top: '#fff3a8', bottom: '#ffb81a', border: '#7a4a00', borderW: 3, lip: '#a8650a', lipH: 5, gloss: 0 }
+        : kind === 'purple'
+          ? { w, h, radius: 16, top: '#5a24a8', bottom: '#1e0a40', border: '#ffd34d', borderW: 3, lip: '#5a1e9c', lipH: 5, gloss: 0, glow: 'rgba(255,200,90,0.6)' }
+          : { w, h, radius: 16, top: '#f4f7fb', bottom: '#b8c2cf', border: '#2a3340', borderW: 2.5, lip: '#7a8594', lipH: 4, gloss: 0 });
+      box.add(this.add.image(0, 0, skin.key).setOrigin(0.5, skin.originY));
+      const tc = kind === 'gold' ? '#5b2e0e' : kind === 'purple' ? '#ffe08a' : '#2a3340';
+      const st = kind === 'gold' ? '#ffffff' : '#2a0a4a';
+      if (sub) {
+        box.add(this.add.text(0, -9, label, { fontSize: '17px', color: tc, fontStyle: 'bold', stroke: st, strokeThickness: 3 }).setOrigin(0.5));
+        box.add(this.add.text(0, 12, sub, { fontSize: '11px', color: tc, fontStyle: 'bold' }).setOrigin(0.5));
+      } else {
+        box.add(this.add.text(0, 0, label, { fontSize: '16px', color: tc, fontStyle: 'bold' }).setOrigin(0.5));
+      }
+      wireButton(this, box, w, h, onClick, true);
+    };
+    make(x0 + w1 / 2, w1, 'gold', '1회 더', '100 SKOR', () => this.startPull('single'));
+    make(x0 + w1 + gap + w10 / 2, w10, 'purple', '10회 더', '900 SKOR', () => this.startPull('multi'));
+    make(x0 + w1 + w10 + 2 * gap + closeW / 2, closeW, 'white', '닫기', null, () => this.buildLobby());
+  }
+
+  /** 슬롯 하나의 리빌 (10회 · 배경화면 섞인 뽑기) — 큰 카드 + 탭 안내. 1회 뽑기는 곧장 결과(showSummary)로 */
   private showRevealCard(pulled: PulledCharacter, def: CharacterDef) {
-    // 영상 페이즈의 스킵 버튼 등 잔여 오브젝트 제거
     this.clearUI();
-
-    const gColor = getGradeColorInt(def);
-
     const { width: W, height: H } = this.cameras.main;
     const cx = W / 2;
-    const yOff = (H - 600) / 2;
+    this.resultBackdrop(def.grade === 'UR' ? 0.68 : 0.58);
 
-    // ── 배경: 사이버 우주 이미지 + 등급 컬러 헤이즈 ──
-    if (this.textures.exists('gacha_background')) {
-      addBackground(this, 'gacha_background', W, H);
-    } else {
-      this.add.rectangle(cx, H / 2, W, H, 0x050510);
-    }
-    // 어두운 오버레이 (가독성 확보)
-    this.add.rectangle(cx, H / 2, W, H, 0x000000, 0.5);
-    // 등급 컬러 헤이즈 (중앙 중심 방사)
-    this.add.circle(cx, 260 + yOff, 200, gColor, 0.08);
-    this.add.circle(cx, 260 + yOff, 120, gColor, 0.06);
+    const meta = this.pullMeta[this.pullResults.indexOf(pulled)] ?? { awakenUp: false, level: 0 };
+    const k = Math.min(1, (H - 260) / 306);
+    this.drawBigCard(pulled, def, meta, cx, 48 + 306 * k / 2 + (H - 600) / 4, k);
 
-    // 배경 글로우 (캐릭터 뒤 빛)
-    const glow = this.add.circle(cx, 255 + yOff, 150, gColor, 0.0).setAlpha(0);
-    this.tweens.add({
-      targets: glow, alpha: 1,
-      scaleX: { from: 0.3, to: 1.3 }, scaleY: { from: 0.3, to: 1.3 },
-      duration: 600, ease: 'Back.easeOut',
-    });
-
-    // 캐릭터 이미지
-    const img = this.add.image(cx, 240 + yOff, def.imageKey).setAlpha(0);
-    img.setDisplaySize(130, 205);
-    this.tweens.add({
-      targets: img, alpha: 1, y: { from: 268 + yOff, to: 240 + yOff },
-      duration: 500, ease: 'Back.easeOut', delay: 150,
-    });
-
-    // 등급 라벨
-    const revealGradeKey = getGradeImgKey(pulled.grade);
-    if (revealGradeKey) {
-      const gradeImg = this.add.image(cx, 388 + yOff, revealGradeKey).setDisplaySize(52, 52).setOrigin(0.5).setAlpha(0);
-      this.tweens.add({ targets: gradeImg, alpha: 1, duration: 300, delay: 400 });
-    }
-
-    // 캐릭터 이름
-    const nameText = this.add.text(cx, 424 + yOff, def.name, {
-      fontSize: '34px', color: '#ffffff', fontStyle: 'bold',
-      stroke: '#000000', strokeThickness: 6,
-    }).setOrigin(0.5).setAlpha(0);
-    this.tweens.add({
-      targets: nameText, alpha: 1, y: { from: 442 + yOff, to: 424 + yOff },
-      duration: 400, ease: 'Back.easeOut', delay: 500,
-    });
-
-    // NEW! 배지
-    if (pulled.isNew) {
-      const badge = this.add.text(W - 75, 145 + yOff, ' NEW! ', {
-        fontSize: '15px', color: '#ffff00', fontStyle: 'bold',
-        backgroundColor: '#cc0000', stroke: '#000', strokeThickness: 2,
-      }).setOrigin(0.5).setAlpha(0).setScale(0);
-      this.tweens.add({
-        targets: badge, alpha: 1, scaleX: 1, scaleY: 1,
-        duration: 300, ease: 'Back.easeOut', delay: 650,
-      });
-    }
-
-    // 탭 안내
     const isLast = this.revealItemIndex >= this.revealItems.length - 1;
-    const hint = isLast
-      ? 'TAP → RESULTS'
-      : `TAP → NEXT  (${this.revealItemIndex + 1}/${this.revealItems.length})`;
-    const tapHint = this.add.text(cx, 562 + yOff, hint, {
-      fontSize: '13px', color: '#555555', fontFamily: 'monospace',
-    }).setOrigin(0.5);
-    this.tweens.add({
-      targets: tapHint, alpha: { from: 0.3, to: 1 }, duration: 600, yoyo: true, repeat: -1,
-    });
+    const hint = isLast ? 'TAP → RESULTS' : `TAP → NEXT  (${this.revealItemIndex + 1}/${this.revealItems.length})`;
+    const tapHint = this.add.text(cx, H - 40, hint, { fontSize: '13px', color: '#9a9fb0', fontFamily: 'monospace' }).setOrigin(0.5);
+    this.tweens.add({ targets: tapHint, alpha: { from: 0.3, to: 1 }, duration: 600, yoyo: true, repeat: -1 });
 
-    // 10연차: 결과 화면으로 바로 건너뛰기 (영상 유무와 무관하게 항상 표시)
+    // 10연차: 결과 화면으로 바로 건너뛰기
     if (this.revealItems.length > 1) {
       this.addSkipButton(() => {
         this.tweens.killAll();
@@ -920,10 +1059,9 @@ export default class GachaScene extends BaseScene {
       });
     }
 
-    // 탭 진행 (700ms 디바운스)
+    // 탭 진행 (700ms 디바운스) · 10뽑기는 3.5초 자동 진행
     this.time.delayedCall(700, () => {
       if (!this.scene.isActive()) return;
-
       let advanced = false;
       const advance = () => {
         if (advanced) return;
@@ -934,14 +1072,9 @@ export default class GachaScene extends BaseScene {
         this.revealItemIndex++;
         this.showNextReveal();
       };
-
       this.input.on('pointerdown', advance);
-
-      // 10뽑기는 3.5초 자동 진행
       if (this.revealItems.length > 1) {
-        this.time.delayedCall(3500, () => {
-          if (this.scene.isActive()) advance();
-        });
+        this.time.delayedCall(3500, () => { if (this.scene.isActive()) advance(); });
       }
     });
   }
@@ -952,144 +1085,91 @@ export default class GachaScene extends BaseScene {
 
   private showSummary() {
     this.clearUI();
-    const { width: _W, height: _H } = this.cameras.main;
-    const _cx = _W / 2;
-    const _yOff = (_H - 600) / 2;
-    if (this.textures.exists('gacha_background')) {
-      addBackground(this, 'gacha_background', _W, _H);
-    } else {
-      this.add.rectangle(_cx, _H / 2, _W, _H, 0x060612);
-    }
-    this.add.rectangle(_cx, _H / 2, _W, _H, 0x000000, 0.55);
+    const { width: W, height: H } = this.cameras.main;
+    const cx = W / 2;
+    const btnY = H - 80;
 
-    this.add.text(_cx, 38 + _yOff, '[ EXTRACTION COMPLETE ]', {
-      fontSize: '17px', color: '#00ff41', fontStyle: 'bold', fontFamily: 'monospace',
-    }).setOrigin(0.5);
-
-    // ── 캐릭터 + 배경화면 통합 그리드 ───────────────────────────────
-    const charCount = this.pullResults.length;
-    const wpCount = this.wpResults.length;
-    const total = charCount + wpCount;
-    const cols = Math.min(total, 5);
-    const cardW = 64, cardH = 84, gapX = 8, gapY = 12;
-    const totalW = cols * cardW + (cols - 1) * gapX;
-    const startX = (_W - totalW) / 2 + cardW / 2;
-    const startY = (total > 5 ? 130 : 175) + _yOff;
-
-    // 캐릭터 카드
-    this.pullResults.forEach((pulled, i) => {
+    // 1회 뽑기 — 큰 카드 하나가 곧 결과
+    if (this.isSingleOnly()) {
+      const pulled = this.pullResults[0];
       const def = getCharacterDef(pulled.id);
-      const col = i % 5;
-      const row = Math.floor(i / 5);
-      const x = startX + col * (cardW + gapX);
-      const y = startY + row * (cardH + gapY);
-      const gColorInt = parseInt(def.gradeColor.replace('#', ''), 16);
+      this.resultBackdrop(def.grade === 'UR' ? 0.68 : 0.6);
+      const skorY = btnY - 46;
+      const room = skorY - 30 - 40;                 // 카드 + 이름 두 줄이 들어갈 높이
+      const k = Math.min(1, (room - 100) / 306);
+      const blockTop = 40 + Math.max(0, (room - (306 * k + 100)) / 2);
+      this.drawBigCard(pulled, def, this.pullMeta[0] ?? { awakenUp: false, level: 0 }, cx, blockTop + 306 * k / 2, k);
+      this.resultButtons(btnY);
+      return;
+    }
 
-      const bg  = this.add.rectangle(x, y, cardW, cardH, 0x111122).setStrokeStyle(1, gColorInt).setAlpha(0);
-      const img = this.add.image(x, y - 8, def.imageKey).setDisplaySize(cardW - 19, cardH - 22).setAlpha(0);
-      const nm  = this.add.text(x, y + cardH / 2 - 10, def.name, { fontSize: '9px', color: '#cccccc' }).setOrigin(0.5).setAlpha(0);
+    this.resultBackdrop(0.62);
+    const title = this.add.text(cx, 40, '소환 결과', { fontSize: '26px', fontStyle: 'bold', stroke: '#2a0a4a', strokeThickness: 4 }).setOrigin(0.5);
+    gradientText(title, [[0, '#fff7c2'], [0.5, '#ffd34d'], [1, '#ff9f1a']]);
+    const nNew = this.pullResults.filter(p => p.isNew).length;
+    const counts = [`신규 ${nNew}`, `중복 ${this.pullResults.length - nNew}`];
+    if (this.wpResults.length) counts.push(`배경화면 ${this.wpResults.length}`);
+    this.add.text(cx, 68, counts.join(' · '), { fontSize: '13px', color: '#d9c6f0', fontStyle: 'bold' }).setOrigin(0.5);
 
-      const charTargets: Phaser.GameObjects.GameObject[] = [bg, img, nm];
-      if (pulled.isNew) {
-        const newBadge = this.add.text(x + cardW / 2, y - cardH / 2 + 2, 'NEW', {
-          fontSize: '8px', color: '#ffff00', backgroundColor: '#aa0000', padding: { x: 2, y: 1 },
-        }).setOrigin(1, 0).setAlpha(0);
-        charTargets.push(newBadge);
+    // ── 캐릭터 카드 — 등급순 5열 (UR → SR → R, 같은 등급은 뽑은 순서) ──
+    const RANK: Record<string, number> = { UR: 0, SR: 1, R: 2 };
+    const order = this.pullResults.map((p, i) => ({ p, meta: this.pullMeta[i] ?? { awakenUp: false, level: 0 } }))
+      .sort((a, b) => (RANK[a.p.grade] ?? 3) - (RANK[b.p.grade] ?? 3));
+    const gx = 6, gy = 34;
+    const kw = Math.min(84, Math.floor((W - 24 - 4 * gx) / 5));
+    const kh = Math.round(kw * 112 / 84);
+    const top = 92;
+    order.forEach(({ p, meta }, i) => {
+      const def = getCharacterDef(p.id);
+      const rowN = Math.min(5, order.length - Math.floor(i / 5) * 5);
+      const rx0 = cx - (rowN * kw + (rowN - 1) * gx) / 2;
+      const x = rx0 + (i % 5) * (kw + gx) + kw / 2;
+      const y = top + Math.floor(i / 5) * (kh + gy) + kh / 2;
+      const ur = def.grade === 'UR';
+      const items: Phaser.GameObjects.GameObject[] = [];
+      const frame = this.gradeFrame(def, kw + 6, kh + 6, 10, ur);
+      items.push(this.add.image(x, y, frame.key).setOrigin(0.5, frame.originY));
+      const src = `gacha_card_${p.id}`;
+      if (this.textures.exists(src)) {
+        const img = this.add.image(x, y, bakeRoundedImage(this, `gacha_cardR_${p.id}_${kw}`, src, kw, kh, 8, 0.15)).setDisplaySize(kw, kh);
+        if (!p.isNew) img.setTint(0x9a9a9a);      // 중복은 어둡게
+        items.push(img);
       }
-
-      this.tweens.add({ targets: charTargets, alpha: 1, duration: 200, delay: i * 60 });
+      const gk = getGradeImgKey(def.grade);
+      if (gk) items.push(this.add.image(x - kw / 2 + 14, y - kh / 2 + 14, gk).setDisplaySize(22, 22));
+      if (p.isNew) items.push(...this.newTag(x + kw / 2 - 21, y - kh / 2 + 12, 38));
+      items.push(this.add.rectangle(x, y + kh / 2 - 9, kw, 18, 0x0a0616, 0.75));
+      items.push(this.add.text(x, y + kh / 2 - 9, def.name, { fontSize: '11px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5));
+      if (!p.isNew) items.push(...this.dupTag(x, y + kh / 2 + 15, kw - 4, meta, 9));
+      items.forEach(o => (o as Phaser.GameObjects.Image).setAlpha(0));
+      this.tweens.add({
+        targets: items, alpha: 1, duration: 220, delay: i * 70,
+        onStart: () => { if (ur) this.sparkles(x, y, kw + 6, kh + 6, 'UR', getGradeColorInt(def)); },
+      });
     });
 
-    // 배경화면 카드 (캐릭터 뒤에 이어서 배치)
+    // ── 배경화면 — 아래 가로 줄 ──
+    const rows = Math.ceil(order.length / 5);
+    let wy = top + rows * (kh + gy) + 4;
     this.wpResults.forEach((wp, i) => {
-      const globalIndex = charCount + i;
-      const col = globalIndex % 5;
-      const row = Math.floor(globalIndex / 5);
-      const x = startX + col * (cardW + gapX);
-      const y = startY + row * (cardH + gapY);
-      const wpDef = getWallpaperDef(wp.id);
-
-      const bg = this.add.rectangle(x, y, cardW, cardH, 0x0d0d1a)
-        .setStrokeStyle(1.5, WP_ACCENT_INT).setAlpha(0);
-
-      // 썸네일 (bgKey로 미리 로드된 이미지 사용)
-      if (wpDef && this.textures.exists(wpDef.bgKey)) {
-        const thumb = this.add.image(x, y - 8, wpDef.bgKey)
-          .setDisplaySize(cardW - 4, cardH - 22).setAlpha(0);
-        this.tweens.add({ targets: thumb, alpha: 1, duration: 200, delay: globalIndex * 60 });
+      const def = getWallpaperDef(wp.id);
+      const rh = 62;
+      const g = this.add.graphics().fillStyle(WP_ACCENT_INT, 0.12).fillRoundedRect(16, wy, W - 32, rh, 12)
+        .lineStyle(1.5, WP_ACCENT_INT).strokeRoundedRect(16, wy, W - 32, rh, 12);
+      const items: Phaser.GameObjects.GameObject[] = [g];
+      const src = `gacha_wp_${wp.id}`;
+      if (this.textures.exists(src)) {
+        items.push(this.add.image(22, wy + 5, bakeRoundedImage(this, `gacha_wpR_${wp.id}`, src, 84, 52, 6)).setOrigin(0).setDisplaySize(84, 52));
       }
-
-      // WP 배지 (우상단)
-      const wpBadge = this.add.text(x + cardW / 2, y - cardH / 2 + 2, 'WP', {
-        fontSize: '8px', color: WP_ACCENT_HEX, backgroundColor: '#000000cc',
-        padding: { x: 2, y: 1 },
-      }).setOrigin(1, 0).setAlpha(0);
-
-      const nm = this.add.text(x, y + cardH / 2 - 10, wpDef?.name ?? wp.id, {
-        fontSize: '9px', color: WP_ACCENT_HEX,
-      }).setOrigin(0.5).setAlpha(0);
-
-      const wpTargets: Phaser.GameObjects.GameObject[] = [bg, nm, wpBadge];
-      if (wp.isNew) {
-        const newBadge = this.add.text(x - cardW / 2, y - cardH / 2 + 2, 'NEW', {
-          fontSize: '8px', color: '#ffff00', backgroundColor: '#aa0000', padding: { x: 2, y: 1 },
-        }).setOrigin(0, 0).setAlpha(0);
-        wpTargets.push(newBadge);
-      }
-
-      this.tweens.add({ targets: wpTargets, alpha: 1, duration: 200, delay: globalIndex * 60 });
+      items.push(this.add.text(118, wy + 20, '배경화면', { fontSize: '11px', color: WP_ACCENT_HEX, fontStyle: 'bold' }).setOrigin(0, 0.5));
+      items.push(this.add.text(118, wy + 42, def?.name ?? wp.id, { fontSize: '17px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0, 0.5));
+      if (wp.isNew) items.push(...this.newTag(W - 52, wy + 31, 44));
+      items.forEach(o => (o as Phaser.GameObjects.Image).setAlpha(0));
+      this.tweens.add({ targets: items, alpha: 1, duration: 220, delay: (order.length + i) * 70 });
+      wy += rh + 8;
     });
 
-    // 그리드 하단 계산
-    const totalRows = Math.ceil(total / 5);
-    const gridBottom = startY + (totalRows - 1) * (cardH + gapY) + cardH / 2;
-
-    // 잔여 SKOR
-    const skorY = gridBottom + 20;
-    this.add.text(_cx, skorY, `잔여 SKOR: ${Math.floor(this.remainingSkor)}`, {
-      fontSize: '14px', color: '#00ff41', fontFamily: 'monospace',
-    }).setOrigin(0.5);
-
-    // 1회 / 10회 다시뽑기 (한 줄) + 메인으로 버튼
-    const pullRowY = Math.min(skorY + 42, 458 + _yOff);
-    const mainBtnY = Math.min(pullRowY + 54, 520 + _yOff);
-    const btnW = 122;
-    const gap = 8;
-    const singleX = _cx - btnW / 2 - gap / 2;
-    const multiX  = _cx + btnW / 2 + gap / 2;
-
-    const single = this.add.rectangle(singleX, pullRowY, btnW, 44, 0x000000, 0.72)
-      .setStrokeStyle(1.5, 0xddaa00).setInteractive({ useHandCursor: true });
-    this.add.text(singleX, pullRowY - 7, '1회 뽑기', {
-      fontSize: '13px', color: '#ffffff', fontStyle: 'bold',
-    }).setOrigin(0.5);
-    this.add.text(singleX, pullRowY + 9, '100 SKOR', {
-      fontSize: '10px', color: '#ddaa00',
-    }).setOrigin(0.5);
-    single.on('pointerover', () => single.setStrokeStyle(2.5, 0xddaa00));
-    single.on('pointerout',  () => single.setStrokeStyle(1.5, 0xddaa00));
-    single.on('pointerdown', () => this.startPull('single'));
-
-    const multi = this.add.rectangle(multiX, pullRowY, btnW, 44, 0x000000, 0.72)
-      .setStrokeStyle(1.5, 0x7b2fff).setInteractive({ useHandCursor: true });
-    this.add.text(multiX, pullRowY - 7, '10회 뽑기', {
-      fontSize: '13px', color: '#ffffff', fontStyle: 'bold',
-    }).setOrigin(0.5);
-    this.add.text(multiX, pullRowY + 9, '900 SKOR', {
-      fontSize: '10px', color: '#aa88ff',
-    }).setOrigin(0.5);
-    multi.on('pointerover', () => multi.setStrokeStyle(2.5, 0x7b2fff));
-    multi.on('pointerout',  () => multi.setStrokeStyle(1.5, 0x7b2fff));
-    multi.on('pointerdown', () => this.startPull('multi'));
-
-    const mainBtn = this.add.rectangle(_cx, mainBtnY, 260, 40, 0x1a1a1a)
-      .setStrokeStyle(1, 0x444444).setInteractive({ useHandCursor: true });
-    this.add.text(_cx, mainBtnY, '메인으로', {
-      fontSize: '16px', color: '#888888', fontStyle: 'bold', fontFamily: 'monospace',
-    }).setOrigin(0.5);
-    mainBtn.on('pointerover', () => mainBtn.setFillStyle(0x282828));
-    mainBtn.on('pointerout',  () => mainBtn.setFillStyle(0x1a1a1a));
-    mainBtn.on('pointerdown', () => this.scene.start('ModeSelectScene'));
+    this.resultButtons(btnY);
   }
 
   // ═══════════════════════════════════════════════════
@@ -1099,15 +1179,14 @@ export default class GachaScene extends BaseScene {
   private addSkipButton(onClick: () => void) {
     const skipX = this.scale.width - 37;
     const skipY = 28 + (this.scale.height - 600) / 2;
-    this.add.rectangle(skipX, skipY, 88, 30, 0x000000, 0.6)
-      .setInteractive()
-      .on('pointerdown', onClick);
+    // 판 하나만 눌린다 (30 → 손가락 크기 44 로 넓힌다). 누르는 즉시 처리 — 리빌의 '화면 탭 → 다음' 보다 먼저 받아야 한다
+    const bg = setTouchInteractive(this.add.rectangle(skipX, skipY, 88, 30, 0x000000, 0.6));
     const txt = this.add.text(skipX, skipY, 'SKIP  ▶▶', {
       fontSize: '12px', color: '#777777', fontFamily: 'monospace',
-    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-    txt.on('pointerover', () => txt.setColor('#cccccc'));
-    txt.on('pointerout',  () => txt.setColor('#777777'));
-    txt.on('pointerdown', onClick);
+    }).setOrigin(0.5);
+    bg.on('pointerover', () => txt.setColor('#cccccc'));
+    bg.on('pointerout',  () => txt.setColor('#777777'));
+    bg.on('pointerdown', onClick);
   }
 
   private clearUI() {
