@@ -34,8 +34,9 @@ import { preloadCharSheets, ensureCharAnims } from '../utils/charAnim';
 import BaseScene from './BaseScene';
 import { ACTIVE_BTN } from '../config/activeButton';
 import { addBackground } from '../utils/background';
-import { textContentWidth } from '../utils/textSafety';
 import { GameOverView, type RankValue } from './gameOver/GameOverView';
+import { HudView, HUD_BOTTOM } from './hud/HudView';
+import { bakeButton, bakeRadialGlow, bakeRoundedImage } from '../utils/buttonSkin';
 
 export default class GameScene extends BaseScene {
   protected inputGuardMs = 0; // 게임플레이 씬은 즉시 입력 허용
@@ -47,7 +48,8 @@ export default class GameScene extends BaseScene {
   private topazPoops!: Phaser.Physics.Arcade.Group;
   private rainbowPoops!: Phaser.Physics.Arcade.Group;
   protected score: number = 0;
-  protected scoreText!: Phaser.GameObjects.Text;
+  /** 위 HUD (C안) — 점수·최고·진행선·피버 알약·획득 글자 */
+  private hud!: HudView;
   private highScore: number = 0;
   /** 이번 판 시작 때 개인 최고 — 게임오버의 '이전 최고' (highScore 는 플레이 중 따라 오른다) */
   private highScoreAtStart: number = 0;
@@ -55,10 +57,8 @@ export default class GameScene extends BaseScene {
   private rankBefore: Promise<{ all: RankValue; char: RankValue }> | null = null;
   private ranksAtStart: { all: RankValue; char: RankValue } | null = null;
   private gameOverView: GameOverView | null = null;
-  protected highScoreText!: Phaser.GameObjects.Text;
   private charHighScore: number = 0;       // HUD 표시용 (실시간 갱신)
   private charHighScoreAtStart: number = 0; // 신기록 판정용 (게임 시작 시 고정)
-  private charHighScoreText?: Phaser.GameObjects.Text;
   protected gameOver: boolean = false;
   private spawnTimer!: Phaser.Time.TimerEvent;
   protected difficultyLevel: number = 2;
@@ -93,8 +93,18 @@ export default class GameScene extends BaseScene {
   private lastChargeScore: number = 0;
   private activeBtn?: Phaser.GameObjects.Arc;
   private activeBtnLabel?: Phaser.GameObjects.Text;
-  /** 버튼 배율 (ACTIVE_BTN.scale) — 테두리·링 굵기에 곱한다 */
+  /** 테두리·링 굵기 배율 — 판 반지름 / 처음 설계 반지름 */
   private activeBtnScale = 1;
+  /** 버튼 판 (발동 가능 / 흐림 두 장을 구워 두고 갈아 끼운다) */
+  private activePlate?: Phaser.GameObjects.Image;
+  private activePlateKeys = { on: '', off: '' };
+  /** 칸 점 — 충전 칸 수만큼 */
+  private activeDots?: Phaser.GameObjects.Graphics;
+  private lastDotsKey = '';
+  /** 꽉 찼을 때 — 금빛 후광 + READY */
+  private activeHalo?: Phaser.GameObjects.Image;
+  private activeReadyTag?: Phaser.GameObjects.Container;
+  private activeShownFull = false;
   /** 마지막으로 버튼에 그린 발동 가능 여부 — 바뀌면 다시 그린다 (테드 소환 중 등) */
   private activeUsable = true;
   /** 다음 칸까지 차오르는 테두리 */
@@ -105,9 +115,6 @@ export default class GameScene extends BaseScene {
   protected isFeverTime: boolean = false; // 피버 타임 활성화 여부
   private feverTimeRemaining: number = 0; // 피버 타임 남은 시간 (ms)
   private feverTimeTimer?: Phaser.Time.TimerEvent; // 피버 타임 카운트다운 타이머
-  private feverTimeUITexts: Phaser.GameObjects.Text[] = []; // 피버 타임 UI 텍스트 (각 글자별)
-  private feverTimeColorOffset: number = 0; // 무지개 색상 회전 오프셋
-  private feverTimeColorTimer?: Phaser.Time.TimerEvent; // 색상 애니메이션 타이머
   private feverCount: number = 0;          // 피버 발동 횟수 누계 (레인보우 피버 조건 판정용)
   private isRainbowFever: boolean = false; // 레인보우 피버 활성 여부 (광부×황금광산 시너지)
   private lastClearPoopsScore: number = 0; // 마지막 전체 똥 제거 발동 점수 (매화×매화 시너지)
@@ -115,7 +122,6 @@ export default class GameScene extends BaseScene {
   private nextFeverScore: number = 0;
   private feverScoreK: number = 1;
   private lastDisplayedFeverSecond: number = -1; // 이전에 표시한 초값 (변경 없으면 재계산 스킵)
-  private get feverTimeLabel(): string { return this.isRainbowFever ? 'RAINBOW FEVER' : 'FEVER TIME'; }
   /** difficultyLevel 기반으로 현재 spawn 간격을 항상 최신값으로 계산 */
   private get currentSpawnDelay(): number {
     return Math.max(400, this.difficultyConfig.spawnDelay - (this.difficultyLevel * 80));
@@ -131,13 +137,10 @@ export default class GameScene extends BaseScene {
   private static readonly CHARS_WITH_SPRITES = CHARACTERS
     .filter(c => c.id !== 'chibi')
     .map(c => c.id);
-  private static readonly RAINBOW_COLORS = [
-    '#ff0000', '#ff7f00', '#ffff00', '#00ff00', '#0000ff', '#4b0082', '#9400d3',
-  ];
-  /** 레인보우 피버 전용 네온 컬러 — 더 선명하고 밝은 팔레트 */
-  private static readonly NEON_RAINBOW_COLORS = [
-    '#ff00cc', '#ff6600', '#ffee00', '#00ff88', '#00ccff', '#cc00ff', '#ffffff',
-  ];
+  /** 특수똥 획득 글자 옆 아이콘 (똥 텍스처 키) */
+  private static readonly SPECIAL_ICON: Record<string, string> = {
+    gold: 'gold_poop', diamond: 'diamond_poop', topaz: 'topaz_poop', rainbow: 'rainbow_poop',
+  };
   /** 레인보우 피버 변환 시 방울 터짐 효과 색상 */
   private static readonly BUBBLE_COLORS = [0xff00ff, 0x00ffff, 0xffee00, 0x00ff88, 0xff6600, 0xcc00ff];
   private selectedCharId: string = 'chibi'; // 선택된 캐릭터 ID
@@ -184,6 +187,12 @@ export default class GameScene extends BaseScene {
     this.activeBtn = undefined;
     this.activeBtnLabel = undefined;
     this.activeBtnScale = 1;
+    this.activePlate = undefined;
+    this.activeDots = undefined;
+    this.lastDotsKey = '';
+    this.activeHalo = undefined;
+    this.activeReadyTag = undefined;
+    this.activeShownFull = false;
     this.activeUsable = true;
     this.activeRing = undefined;
     this.lastRingPct = -1;
@@ -312,6 +321,11 @@ export default class GameScene extends BaseScene {
     if (!this.textures.exists('diamond_poop')) this.load.image('diamond_poop', 'assets/poops/diamond_poop.webp');
     if (!this.textures.exists('topaz_poop')) this.load.image('topaz_poop', 'assets/poops/topaz.webp');
     if (!this.textures.exists('rainbow_poop')) this.load.image('rainbow_poop', 'assets/poops/rainbow_poop.webp');
+    // 액티브 버튼 얼굴 칩 (ui/collection/face 128px — 얼굴 파일이 없는 캐릭터는 로드 실패로 넘어간다)
+    {
+      const id = getSafeSelectedCharacter();
+      if (!this.textures.exists(`hud_facesrc_${id}`)) this.load.image(`hud_facesrc_${id}`, `assets/ui/collection/face/${id}.webp`);
+    }
     // 게임오버 캐릭터 칩의 등급 글자 (작은 png 한 장)
     {
       const g = getCharacterDef(getSafeSelectedCharacter()).grade;
@@ -526,45 +540,15 @@ export default class GameScene extends BaseScene {
       this
     );
 
-    // HUD 배경 패널 (반투명 다크 바)
-    const HUD_H = 36;
-    const hudBg = this.add.graphics();
-    hudBg.fillStyle(0x000000, 0.28);
-    hudBg.fillRect(0, 0, W, HUD_H);
-    hudBg.setDepth(9);
-
-    const hudTextY = Math.round(HUD_H / 2) - 11; // 18px 폰트 수직 중앙
-
-    // 점수 텍스트 (왼쪽 위)
-    this.scoreText = this.add.text(16, hudTextY, '점수: 0', {
-      fontSize: '18px',
-      color: '#ffffff',
-      fontStyle: 'bold',
-      stroke: '#000000',
-      strokeThickness: 3
-    }).setDepth(10);
-
-    // 최고 점수 텍스트 (오른쪽 위)
-    this.highScoreText = this.add.text(W - 16, hudTextY, `최고: ${this.highScore}`, {
-      fontSize: '18px',
-      color: '#FFD700',
-      fontStyle: 'bold',
-      stroke: '#000000',
-      strokeThickness: 3
-    }).setOrigin(1, 0).setDepth(10);
-
-    if (this.scoreDifficulty === Difficulty.EXTREME) {
-      this.charHighScoreText = this.add.text(W - 16, hudTextY + 22, `캐릭터: ${this.charHighScore}`, {
-        fontSize: '14px',
-        color: '#aaddff',
-        fontStyle: 'bold',
-        stroke: '#000000',
-        strokeThickness: 3
-      }).setOrigin(1, 0).setDepth(10);
-    }
+    // 위 HUD (C안) — 점수 · 최고(+ EXTREME 캐릭터 최고) · 진행선. 위 60px 안에서 끝난다
+    this.hud = new HudView(this, {
+      best: this.highScoreAtStart,
+      char: this.scoreDifficulty === Difficulty.EXTREME
+        ? { name: getCharacterDef(this.selectedCharId).name, best: this.charHighScoreAtStart } : undefined,
+    });
 
     // 조작 안내 (3초 후 자동으로 페이드아웃)
-    const hintText = this.add.text(cx, 58, '← → 키로 이동', {
+    const hintText = this.add.text(cx, HUD_BOTTOM + 24, '← → 키로 이동', {
       fontSize: '15px',
       color: '#ffffff',
       stroke: '#000000',
@@ -594,7 +578,7 @@ export default class GameScene extends BaseScene {
 
     // 시너지 뱃지 (배경화면-캐릭터 조합 일치 시 게임 시작 직후 표시)
     if (this.activeSynergy) {
-      const badge = this.add.text(cx, 15, `✦ ${this.activeSynergy.label}`, {
+      const badge = this.add.text(cx, HUD_BOTTOM + 2, `✦ ${this.activeSynergy.label}`, {
         fontSize: '12px',
         color: '#FFD700',
         stroke: '#000',
@@ -914,7 +898,7 @@ export default class GameScene extends BaseScene {
     poop: Phaser.Physics.Arcade.Sprite,
     type: import('../abilities/types').SpecialPoopType,
     baseScore: number,
-    emoji: string,
+    _emoji: string,
     color: string,
     counterIncrement: () => void,
   ) {
@@ -926,14 +910,9 @@ export default class GameScene extends BaseScene {
     const total = baseScore + bonus;
     this.collectBonusTotal += bonus;
     this.updateScore(total);
-    if (!this.isFeverTime) {
-      const suffix = bonus > 0 ? ` (+${bonus})` : '';
-      const t = this.add.text(this.scale.width / 2, 100, `${emoji} +${total}점!${suffix} ${emoji}`, {
-        fontSize: '28px', color, fontStyle: 'bold',
-        stroke: '#000', strokeThickness: 4,
-      }).setOrigin(0.5);
-      this.time.delayedCall(1000, () => t.destroy());
-    }
+    // 피버 알약 바로 아래 — 피버 중에도 겹치지 않으니 띄운다
+    const suffix = bonus > 0 ? ` (+${bonus})` : '';
+    this.hud.popSpecial(GameScene.SPECIAL_ICON[type] ?? '', `+${total}${suffix}`, color);
   }
 
   private handleTopazCollected(poop: Phaser.Physics.Arcade.Sprite) {
@@ -966,18 +945,10 @@ export default class GameScene extends BaseScene {
     if (!this.gameOver) {
       const oldScore = this.score;
       this.score += amount;
-      this.scoreText.setText(`점수: ${this.score}`);
-
       // 실시간으로 최고 점수 갱신
-      if (this.score > this.highScore) {
-        this.highScore = this.score;
-        this.highScoreText.setText(`최고: ${this.highScore}`);
-      }
-
-      if (this.charHighScoreText && this.score > this.charHighScore) {
-        this.charHighScore = this.score;
-        this.charHighScoreText.setText(`캐릭터: ${this.charHighScore}`);
-      }
+      if (this.score > this.highScore) this.highScore = this.score;
+      if (this.scoreDifficulty === Difficulty.EXTREME && this.score > this.charHighScore) this.charHighScore = this.score;
+      this.hud.setScore(this.score);
 
       // 점수 증가 범위 내에서 건너뛴 생성 포인트를 확인
       this.checkMissedSpawnPoints(oldScore, this.score);
@@ -1027,17 +998,50 @@ export default class GameScene extends BaseScene {
     const usable = this.ability.canUseActive(this.abilityAPI);
     this.activeUsable = usable;
     const ready = this.activeCharges > 0 && usable;
-    this.activeBtn.setFillStyle(ready ? 0x1b2340 : 0x15161c, ready ? 0.92 : 0.55);
-    this.activeBtn.setStrokeStyle(Math.max(1.5, 3 * this.activeBtnScale), ready ? 0xffd166 : 0x3a3d45);
-    this.activeBtnLabel.setText(String(this.activeCharges));
+    const plateKey = ready ? this.activePlateKeys.on : this.activePlateKeys.off;
+    if (this.activePlate && this.activePlate.texture.key !== plateKey) this.activePlate.setTexture(plateKey);
+    const label = String(this.activeCharges);
+    if (this.activeBtnLabel.text !== label) this.activeBtnLabel.setText(label);
     this.activeBtnLabel.setColor(ready ? '#ffd166' : '#555a63');
     this.drawActiveRing();
     const step = this.ability.getActiveChargeScore();
     const max = this.ability.getActiveMaxCharges();
+    this.drawActiveDots(max);
+    this.setActiveFull(this.activeCharges >= max && usable);
     this.ability.updateActiveChargeView(this.abilityAPI, {
       charges: this.activeCharges, max, usable,
       progress: this.activeCharges >= max ? 1 : Phaser.Math.Clamp((this.score - this.lastChargeScore) / step, 0, 1),
     });
+  }
+
+  /** 칸 점 — 판 아래에 최대 칸 수만큼, 찬 칸은 금색. 칸 수가 바뀔 때만 다시 그린다 */
+  private drawActiveDots(max: number): void {
+    const g = this.activeDots, btn = this.activeBtn;
+    if (!g || !btn) return;
+    const key = `${this.activeCharges}/${max}`;
+    if (key === this.lastDotsKey) return;
+    this.lastDotsKey = key;
+    g.clear();
+    const gap = 12, y = btn.y + btn.radius + 12, x0 = btn.x - ((max - 1) * gap) / 2;
+    for (let i = 0; i < max; i++) {
+      const on = i < this.activeCharges;
+      g.fillStyle(on ? 0xffd166 : 0x15161c, on ? 1 : 0.8).fillCircle(x0 + i * gap, y, 4);
+      g.lineStyle(1, on ? 0x7a4a00 : 0x3a3d45).strokeCircle(x0 + i * gap, y, 4);
+    }
+  }
+
+  /** 꽉 찼을 때 — 금빛 후광이 숨 쉬고 READY 꼬리표. 상태가 바뀔 때만 */
+  private setActiveFull(full: boolean): void {
+    if (full === this.activeShownFull || !this.activeHalo || !this.activeReadyTag) return;
+    this.activeShownFull = full;
+    this.tweens.killTweensOf(this.activeHalo);
+    this.activeReadyTag.setVisible(full);
+    if (full) {
+      this.activeHalo.setAlpha(0.55);
+      this.tweens.add({ targets: this.activeHalo, alpha: 0.9, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    } else {
+      this.activeHalo.setAlpha(0);
+    }
   }
 
   /**
@@ -1086,28 +1090,65 @@ export default class GameScene extends BaseScene {
     for (let i = 0; i < this.activeCharges; i++) this.ability.onActiveChargeGained(this.abilityAPI);
     const { width: W, height: H } = this.scale;
     // 크기·자리·터치 영역은 ACTIVE_BTN 한 곳에서 (모든 캐릭터 공통)
-    const s = ACTIVE_BTN.scale;
-    const R = ACTIVE_BTN.baseRadius * s;
+    const R = ACTIVE_BTN.radius;
     const cx = W - ACTIVE_BTN.centerFromRight;
     const cy = H - ACTIVE_BTN.centerFromBottom;
+    const s = R / ACTIVE_BTN.baseRadius;                // 테두리·링 굵기 배율
     this.activeBtnScale = s;
 
-    this.activeBtn = this.add.circle(cx, cy, R, 0x1b2340, 0.92)
-      .setStrokeStyle(Math.max(1.5, 3 * s), 0xffd166)
-      .setDepth(11)
-      .setScrollFactor(0);
+    // 금빛 후광 — 꽉 찼을 때만 숨 쉰다 (부드러운 원형 빛 · 빛살 없음)
+    this.activeHalo = this.add.image(cx, cy, bakeRadialGlow(this, 'hud_active_halo', 128))
+      .setDisplaySize(R * 3.4, R * 3.4).setTint(0xffc94a).setAlpha(0).setDepth(10.5).setScrollFactor(0);
+
+    // 판 — 발동 가능 / 흐림 두 장을 한 번 굽는다
+    const on = bakeButton(this, `hud_active_on_${R}`, {
+      w: R * 2, h: R * 2, radius: R, top: '#2f3a78', bottom: '#121633', border: '#ffd166', borderW: 3, lip: '#0a0c1e', lipH: 3, gloss: 0.3,
+    });
+    const off = bakeButton(this, `hud_active_off_${R}`, {
+      w: R * 2, h: R * 2, radius: R, top: '#2a2c34', bottom: '#121318', border: '#3a3d45', borderW: 3, lip: '#08090c', lipH: 3, gloss: 0,
+    });
+    this.activePlateKeys = { on: on.key, off: off.key };
+    this.activePlate = this.add.image(cx, cy, on.key).setOrigin(0.5, on.originY).setDepth(11).setScrollFactor(0);
+    // 눌리는 원 — 판과 같은 크기 (투명). 링·진행 표시는 이 원의 중심·반지름을 기준으로 그린다
+    this.activeBtn = this.add.circle(cx, cy, R, 0x000000, 0).setDepth(11.2).setScrollFactor(0);
     this.activeBtnLabel = this.add.text(cx, cy, '0', {
-      fontSize: `${Math.round(26 * s)}px`, color: '#ffd166', fontStyle: 'bold', fontFamily: 'monospace',
+      fontSize: '24px', color: '#ffd166', fontStyle: 'bold', fontFamily: 'monospace',
     }).setOrigin(0.5).setDepth(12).setScrollFactor(0);
 
     this.activeRing = this.add.graphics().setDepth(12).setScrollFactor(0);
-    // 능력이 충전 표시를 직접 그리면(테드의 충전 큐브) 숫자와 진행 링은 능력 몫 — 원만 그대로
-    if (this.ability.createActiveChargeView(this.abilityAPI, { x: cx, y: cy, r: R, s })) {
+    // 능력이 충전 표시를 직접 그리면(테드의 충전 큐브) 숫자와 진행 링은 능력 몫 — 판은 그대로.
+    // 큐브 배율은 판과 따로 (ACTIVE_BTN.viewScale) — 판을 키워도 큐브는 판 안에 들어간다
+    if (this.ability.createActiveChargeView(this.abilityAPI, { x: cx, y: cy, r: R, s: ACTIVE_BTN.viewScale })) {
       this.activeBtnLabel.setVisible(false);
       this.activeRing.setVisible(false);
     }
 
-    // 눌리는 영역은 보이는 원보다 넓게 (지름 44 이상). 원의 로컬 좌표는 왼쪽 위가 0 이라 중심이 (R, R)
+    // 칸 점 (판 아래) · 얼굴 칩 (왼쪽 위) · Space 키캡 (PC, 왼쪽 아래) · READY 꼬리표 (위)
+    this.activeDots = this.add.graphics().setDepth(12).setScrollFactor(0);
+    const faceSrc = `hud_facesrc_${this.selectedCharId}`;
+    if (this.textures.exists(faceSrc)) {
+      const fx = cx - R * 0.78, fy = cy - R * 0.78;
+      this.add.image(fx, fy, bakeRoundedImage(this, `hud_face_${this.selectedCharId}_22`, faceSrc, 22, 22, 11))
+        .setDisplaySize(22, 22).setDepth(12.6).setScrollFactor(0);
+      this.add.circle(fx, fy, 11).setStrokeStyle(1.5, 0xffffff).setDepth(12.7).setScrollFactor(0);
+    }
+    if (this.sys.game.device.os.desktop) {
+      const kx = cx - R - 4, ky = cy + R * 0.8;
+      this.add.graphics().setDepth(12.6).setScrollFactor(0)
+        .fillStyle(0xffffff, 0.94).fillRoundedRect(kx - 21, ky - 9, 42, 18, 9)
+        .lineStyle(1.5, 0x121633).strokeRoundedRect(kx - 21, ky - 9, 42, 18, 9);
+      this.add.text(kx, ky, 'Space', { fontSize: '10px', color: '#121633', fontStyle: 'bold' })
+        .setOrigin(0.5).setDepth(12.7).setScrollFactor(0);
+    }
+    const tag = this.add.container(cx, cy - R - 16).setDepth(12.6).setScrollFactor(0).setVisible(false);
+    const tagSkin = bakeButton(this, 'hud_active_ready', {
+      w: 64, h: 22, radius: 11, top: '#fff3a8', bottom: '#ffb81a', border: '#7a4a00', borderW: 2, lip: '#a8650a', lipH: 2, gloss: 0,
+    });
+    tag.add(this.add.image(0, 0, tagSkin.key).setOrigin(0.5, tagSkin.originY));
+    tag.add(this.add.text(0, 0, 'READY', { fontSize: '12px', color: '#5b2e0e', fontStyle: 'bold' }).setOrigin(0.5));
+    this.activeReadyTag = tag;
+
+    // 눌리는 영역 = 보이는 판 (지름 60, 하한 44). 원의 로컬 좌표는 왼쪽 위가 0 이라 중심이 (R, R)
     const hitR = Math.max(R, ACTIVE_BTN.hitRadius);
     this.activeBtn.setInteractive({
       hitArea: new Phaser.Geom.Circle(R, R, hitR),
@@ -1352,64 +1393,8 @@ export default class GameScene extends BaseScene {
     // spawnTimer를 피버 타임 생성 패턴으로 교체
     this.resetSpawnTimer(isRainbowFeverNow ? this.spawnRainbowFeverPoop : this.spawnFeverPoop);
 
-    // UI 텍스트 생성 (각 글자별로 개별 Text 객체 생성)
-    // 기존 텍스트 제거
-    this.feverTimeUITexts.forEach((text) => text.destroy());
-    this.feverTimeUITexts = [];
-    this.feverTimeColorOffset = 0;
-
-    const initialSeconds = Math.ceil(FEVER_TIME_CONFIG.duration / 1000);
-    const fullText = `${this.feverTimeLabel} ${initialSeconds}초`;
-
-    // 각 글자별로 Text 객체 생성 (x=0에 먼저 배치 후 width 합산해 재정렬)
-    const colors = isRainbowFeverNow ? GameScene.NEON_RAINBOW_COLORS : GameScene.RAINBOW_COLORS;
-    const uiFontSize = isRainbowFeverNow ? '22px' : FEVER_TIME_CONFIG.ui.fontSize;
-    const uiStroke  = isRainbowFeverNow ? '#cc00ff' : FEVER_TIME_CONFIG.ui.stroke;
-    const uiStrokeThickness = isRainbowFeverNow ? 5 : FEVER_TIME_CONFIG.ui.strokeThickness;
-
-    for (let i = 0; i < fullText.length; i++) {
-      const charText = this.add.text(
-        0,
-        FEVER_TIME_CONFIG.ui.position.y,
-        fullText[i],
-        {
-          fontSize: uiFontSize,
-          color: colors[i % colors.length],
-          fontStyle: 'bold',
-          stroke: uiStroke,
-          strokeThickness: uiStrokeThickness,
-          shadow: isRainbowFeverNow
-            ? { offsetX: 0, offsetY: 0, color: colors[i % colors.length], blur: 8, stroke: true, fill: true }
-            : undefined,
-        }
-      ).setOrigin(0, 0.5).setDepth(FEVER_TIME_CONFIG.ui.depth);
-      this.feverTimeUITexts.push(charText);
-    }
-
-    // 생성된 Text 객체의 width를 합산해 중앙 정렬
-    const totalWidth = this.feverTimeUITexts.reduce((sum, t) => sum + textContentWidth(t), 0);
-    let currentX = this.scale.width / 2 - totalWidth / 2;
-    for (const charText of this.feverTimeUITexts) {
-      charText.setX(currentX);
-      currentX += textContentWidth(charText);
-    }
-
-    // 레인보우 피버: 글자마다 파도치는 bounce 애니메이션
-    if (isRainbowFeverNow) {
-      this.feverTimeUITexts.forEach((charText, i) => {
-        this.tweens.add({
-          targets: charText,
-          y: FEVER_TIME_CONFIG.ui.position.y - 10,
-          duration: 260,
-          ease: 'Sine.easeInOut',
-          yoyo: true,
-          repeat: -1,
-          delay: i * 38,
-        });
-      });
-    }
-
-
+    // 피버 알약 — 위 HUD 바로 아래 (가운데 무지개 글자 대신)
+    this.hud.showFever(isRainbowFeverNow, Math.ceil(FEVER_TIME_CONFIG.duration / 1000));
 
     // 카운트다운 타이머
     if (this.feverTimeTimer) {
@@ -1418,17 +1403,6 @@ export default class GameScene extends BaseScene {
     this.feverTimeTimer = this.time.addEvent({
       delay: 100,
       callback: this.updateFeverTime,
-      callbackScope: this,
-      loop: true
-    });
-
-    // 색상 애니메이션 타이머 (0.2초마다 색상 한 칸 이동)
-    if (this.feverTimeColorTimer) {
-      this.feverTimeColorTimer.remove();
-    }
-    this.feverTimeColorTimer = this.time.addEvent({
-      delay: isRainbowFeverNow ? 80 : 200,
-      callback: this.updateFeverTimeColors,
       callbackScope: this,
       loop: true
     });
@@ -1449,53 +1423,16 @@ export default class GameScene extends BaseScene {
     const secondsRemaining = Math.ceil(this.feverTimeRemaining / 1000);
     if (secondsRemaining === this.lastDisplayedFeverSecond) return; // 초 변화 없으면 스킵
     this.lastDisplayedFeverSecond = secondsRemaining;
-
-    const newText = `${this.feverTimeLabel} ${secondsRemaining}초`;
-
-    // 텍스트 내용 업데이트 + 길이 초과분 숨기기
-    for (let i = 0; i < this.feverTimeUITexts.length; i++) {
-      if (i < newText.length) {
-        this.feverTimeUITexts[i].setText(newText[i]).setVisible(true);
-      } else {
-        this.feverTimeUITexts[i].setVisible(false);
-      }
-    }
-
-    // 보이는 글자들만 폭 합산해 중앙 정렬
-    let totalWidth = 0;
-    for (let i = 0; i < Math.min(this.feverTimeUITexts.length, newText.length); i++) {
-      totalWidth += textContentWidth(this.feverTimeUITexts[i]);
-    }
-    let currentX = this.scale.width / 2 - totalWidth / 2;
-    for (let i = 0; i < Math.min(this.feverTimeUITexts.length, newText.length); i++) {
-      this.feverTimeUITexts[i].setX(currentX);
-      currentX += textContentWidth(this.feverTimeUITexts[i]);
-    }
+    this.hud.setFeverSeconds(secondsRemaining);
   }
 
-  /**
-   * 피버 타임 색상 애니메이션 업데이트
-   */
-  private updateFeverTimeColors() {
-    const colors = this.isRainbowFever ? GameScene.NEON_RAINBOW_COLORS : GameScene.RAINBOW_COLORS;
-    this.feverTimeColorOffset = (this.feverTimeColorOffset - 1 + colors.length) % colors.length;
-    for (let i = 0; i < this.feverTimeUITexts.length; i++) {
-      this.feverTimeUITexts[i].setColor(colors[(i + this.feverTimeColorOffset) % colors.length]);
-    }
-  }
-
-  /**
-   * 피버 타임 종료
-   */
   /** 피버 타임 UI/타이머 정리 (spawnTimer 재설정 없음). 비활성 상태면 no-op. */
   private clearFeverTimeUI() {
     if (!this.isFeverTime) return;
     this.isFeverTime = false;
     this.isRainbowFever = false;
     this.feverTimeTimer?.remove();
-    this.feverTimeColorTimer?.remove();
-    this.feverTimeUITexts.forEach(t => { this.tweens.killTweensOf(t); t.destroy(); });
-    this.feverTimeUITexts = [];
+    this.hud.hideFever();
   }
 
   private endFeverTime() {
