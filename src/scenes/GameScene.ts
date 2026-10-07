@@ -29,8 +29,9 @@ import type { CharacterAbility, GameSceneAPI } from '../abilities/types';
 import { getCharacterAbility } from '../abilities/index';
 import { BaseAbility } from '../abilities/BaseAbility';
 import { realNow } from '../utils/realTime';
-import { preloadFxAssets, loadFxPickSheet, preloadFxSheet } from '../utils/vfx';
-import { preloadCharSheets, ensureCharAnims } from '../utils/charAnim';
+import { preloadFxAssets } from '../utils/vfx';
+import { ensureCharAnims } from '../utils/charAnim';
+import { loadCharacterAssets } from '../utils/characterAssets';
 import BaseScene from './BaseScene';
 import { ACTIVE_BTN } from '../config/activeButton';
 import { addBackground } from '../utils/background';
@@ -250,32 +251,9 @@ export default class GameScene extends BaseScene {
   preload() {
     // VFX 파티클 텍스처 (이미 캐시에 있으면 건너뜀)
     preloadFxAssets(this);
-    // 캐릭터 애니메이션 시트 — 시트가 있는 캐릭터만, 없으면 조용히 건너뜀
-    preloadCharSheets(this, this.getAnimSheetId());
-    // 동반자 시트 (k의 태이 등) — 플레이어가 아니라 능력이 만드는 스프라이트가 쓴다
-    for (const id of getCharacterDef(this.selectedCharId).extraSheets ?? []) {
-      preloadCharSheets(this, id);
-    }
-    // 능력이 프레임을 골라 쓰는 시트 (테드의 체스 말) — 재생용이 아니라 텍스처만 올린다
-    for (const file of getCharacterDef(this.selectedCharId).extraFxSheets ?? []) {
-      loadFxPickSheet(this, file);
-    }
-    // 이 캐릭터 전용 재생 시트 (테드의 체스 큐브) — 크기 때문에 전원에게 올리지 않는다
-    for (const key of getCharacterDef(this.selectedCharId).extraFxAnims ?? []) {
-      preloadFxSheet(this, key);
-    }
-    // 능력 전용 한 장 그림 (테드 어센트 컷인 일러스트)
-    for (const [key, path] of Object.entries(getCharacterDef(this.selectedCharId).extraImages ?? {})) {
-      if (!this.textures.exists(key)) this.load.image(key, path);
-    }
-    // 능력 전용 큰 그림 시트 (테드 수묵 컷신) — 칸 크기는 파일 이름 끝 `_WxH`.
-    // 여러 줄 시트도 그대로 읽는다 (왼→오, 위→아래 순). 한 변 2048 이하로 묶는다 — 저사양 MAX_TEXTURE_SIZE
-    for (const [key, path] of Object.entries(getCharacterDef(this.selectedCharId).extraSpriteSheets ?? {})) {
-      const m = /_(\d+)x(\d+)\.\w+$/.exec(path);
-      if (m && !this.textures.exists(key)) {
-        this.load.spritesheet(key, path, { frameWidth: Number(m[1]), frameHeight: Number(m[2]) });
-      }
-    }
+    // 판 캐릭터 에셋 (스프라이트 · 시트 · 능력 그림 · 얼굴 칩) — 이전 판과 다른 캐릭터면 이전 몫을 먼저 내린다 (utils/characterAssets).
+    // 난이도 화면이 미리 받아 둔 것은 건너뛴다
+    loadCharacterAssets(this, this.selectedCharId);
 
     // 선택된 배경화면 조건부 로딩 (DifficultySelectScene에서 미리 로드 안 된 경우 fallback)
     const wpDef = this.selectedWpId ? getWallpaperDef(this.selectedWpId) : null;
@@ -296,24 +274,6 @@ export default class GameScene extends BaseScene {
       this.load.image('xmas_background', 'assets/backgrounds/xmas_background.webp');
     }
 
-    // Player assets
-    const CHARS_WITH_SPRITES = GameScene.CHARS_WITH_SPRITES;
-    if (CHARS_WITH_SPRITES.includes(this.selectedCharId)) {
-      const p = `${this.selectedCharId}_`;
-      if (!this.textures.exists(`${p}front`)) this.load.image(`${p}front`, `assets/players/${p}front.webp`);
-      if (!this.textures.exists(`${p}left`)) this.load.image(`${p}left`, `assets/players/${p}left.webp`);
-      if (!this.textures.exists(`${p}right`)) this.load.image(`${p}right`, `assets/players/${p}right.webp`);
-      // 변신·동반자 등 추가 스프라이트 (캐릭터 정의의 extraSprites) — mugi 황금변신, k 태이/초사이언 등
-      for (const key of getCharacterDef(this.selectedCharId).extraSprites ?? []) {
-        if (!this.textures.exists(key)) this.load.image(key, `assets/players/${key}.webp`);
-      }
-    } else {
-      // chibi (기본) 또는 플레이어 스프라이트가 없는 UR 캐릭터 → 치비로 fallback
-      if (!this.textures.exists('front')) this.load.image('front', 'assets/players/chibi_front.webp');
-      if (!this.textures.exists('left')) this.load.image('left', 'assets/players/chibi_left.webp');
-      if (!this.textures.exists('right')) this.load.image('right', 'assets/players/chibi_right.webp');
-    }
-
     if (!this.textures.exists('poop')) this.load.image('poop', 'assets/poops/poop.webp');
     if (!this.textures.exists('poop_glasses')) this.load.image('poop_glasses', 'assets/poops/poop_glasses.webp');
     if (!this.textures.exists('poop_sunglass')) this.load.image('poop_sunglass', 'assets/poops/poop_sunglass.webp');
@@ -323,11 +283,6 @@ export default class GameScene extends BaseScene {
     if (!this.textures.exists('diamond_poop')) this.load.image('diamond_poop', 'assets/poops/diamond_poop.webp');
     if (!this.textures.exists('topaz_poop')) this.load.image('topaz_poop', 'assets/poops/topaz.webp');
     if (!this.textures.exists('rainbow_poop')) this.load.image('rainbow_poop', 'assets/poops/rainbow_poop.webp');
-    // 액티브 버튼 얼굴 칩 (ui/collection/face 128px — 얼굴 파일이 없는 캐릭터는 로드 실패로 넘어간다)
-    {
-      const id = getSafeSelectedCharacter();
-      if (!this.textures.exists(`hud_facesrc_${id}`)) this.load.image(`hud_facesrc_${id}`, `assets/ui/collection/face/${id}.webp`);
-    }
     // 게임오버 캐릭터 칩의 등급 글자 (작은 png 한 장)
     {
       const g = getCharacterDef(getSafeSelectedCharacter()).grade;

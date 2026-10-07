@@ -7,6 +7,8 @@ import { addBackground } from '../utils/background';
 import { getHighScore } from '../utils/localStorage';
 import { bakeButton, gradientText, wireButton, type ButtonSkin } from '../utils/buttonSkin';
 import { DIFFICULTY_TIER, type Tier } from '../utils/difficultyTheme';
+import { loadCharacterAssets } from '../utils/characterAssets';
+import { getSafeSelectedCharacter } from '../utils/character';
 
 /** 카드 한 장 (C안 — 위 반은 그 난이도의 게임 맵, 아래는 똥 개수 · 속도 · 이번 달 최고) */
 interface CardSpec {
@@ -82,11 +84,6 @@ export default class DifficultySelectScene extends BaseScene {
         this.load.image('xmas_background', 'assets/backgrounds/xmas_background.webp');
       }
 
-      // 플레이어
-      if (!this.textures.exists('front')) this.load.image('front', 'assets/players/chibi_front.webp');
-      if (!this.textures.exists('left')) this.load.image('left', 'assets/players/chibi_left.webp');
-      if (!this.textures.exists('right')) this.load.image('right', 'assets/players/chibi_right.webp');
-
       // 똥 이미지
       if (!this.textures.exists('poop_sunglass2')) this.load.image('poop_sunglass2', 'assets/poops/poop_sunglass2.webp');
       if (!this.textures.exists('poop_smile')) this.load.image('poop_smile', 'assets/poops/poop_smile.webp');
@@ -153,6 +150,12 @@ export default class DifficultySelectScene extends BaseScene {
       const y = top + ch / 2 + Math.floor(i / 2) * (ch + GAP_Y);
       this.createCard(spec, x, y, cw, ch);
     });
+
+    // 판 캐릭터 에셋을 미리 받아 둔다 (렉 #7) — 화면은 먼저 띄우고, 난이도를 고르는 동안 뒤에서.
+    // 이전 판과 다른 캐릭터면 이전 캐릭터 몫을 여기서 내린다 (판이 끝나 그 텍스처를 그리는 오브젝트가 없다).
+    // 다 받기 전에 판을 시작해도 GameScene.preload 가 남은 것만 받는다
+    loadCharacterAssets(this, getSafeSelectedCharacter(), { deferred: true });
+    this.load.start();
   }
 
   /** PHYSICAL — EXTREME 규칙 그대로, 캐릭터 능력만 끈다. 점수는 PHYSICAL 키로 따로 쌓인다 */
