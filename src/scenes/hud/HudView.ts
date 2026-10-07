@@ -38,6 +38,26 @@ const FEVER_LOGO = {
 const LOGO_SCALE = 0.5;
 const LOGO_SLOT = { x: 0.835, y: 0.62 };
 
+/**
+ * 남은 초 숫자 시트 (v2 — 로고 결에 맞춘 불타는 숫자 · 무지개 숫자, 2026-10-08 대표 지시). 열 = 숫자 0~9, 행 = 반복 칸.
+ * origin = 숫자 몸통 아래 가운데. advance = 칸 원본 기준 글자 간격 (두 자리일 때)
+ * (원본 · 기준점: ddong-fx-work/fever-logo/v2/sheets.json)
+ */
+const FEVER_DIGITS = {
+  fever:   { key: 'feverdigits_fever',   path: 'assets/fx/sheets/feverdigits_fever_88x94.png',    fw: 88,  fh: 94, rows: 2, fps: 6,  ox: 0.4545, oy: 0.9362, adv: 71.4 },
+  rainbow: { key: 'feverdigits_rainbow', path: 'assets/fx/sheets/feverdigits_rainbow_108x90.png', fw: 108, fh: 90, rows: 6, fps: 10, ox: 0.4907, oy: 0.9333, adv: 84.4 },
+} as const;
+/**
+ * 숫자 배율 — 칸 원본 대비. 0.36 이면 높이 약 34px (불꽃) · 32px (무지개) — A 판의 숫자 칸에 들어가는 크기.
+ * 3·2·1 에 2.1 배로 튀면 잠깐 판 위로 솟지만 아래 획득 글자(POP_Y)와는 멀다
+ */
+const DIGIT_SCALE = 0.36;
+/** 숫자가 바뀔 때 튀기 (sheets.json countdown_pop) — 3·2·1 은 더 크게 + 흰 번쩍 + 숫자만 2px 흔들림 */
+const POP = {
+  normal: { from: 1.5, ms: 180 },
+  last3:  { from: 2.1, ms: 260, flashMs: 90, shakePx: 2 },
+} as const;
+
 export interface HudOptions {
   /** 이번 판 시작 때 최고 (이번 시즌) */
   best: number;
@@ -61,7 +81,15 @@ export class HudView {
   private lastBarScale = -1;
   private charName = '';
   private charBest = 0;
-  private fever?: { box: Phaser.GameObjects.Container; secs: Phaser.GameObjects.Text; lastSecs: number; sprite?: Phaser.GameObjects.Sprite };
+  private fever?: {
+    box: Phaser.GameObjects.Container;
+    /** 남은 초 — 숫자 시트가 있으면 숫자 스프라이트 묶음, 없으면 게임 글자 */
+    secs: Phaser.GameObjects.Container | Phaser.GameObjects.Text;
+    lastSecs: number;
+    sprite?: Phaser.GameObjects.Sprite;
+    digits?: (typeof FEVER_DIGITS)['fever' | 'rainbow'];
+    slot?: { x: number; y: number };
+  };
 
   /**
    * 피버 로고 시트 올리기 — GameScene.preload 에서. 판마다 쓰는 공통 텍스처라 한 번 올리면 둔다 (캐릭터 몫이 아니다).
@@ -71,6 +99,8 @@ export class HudView {
     for (const k of withRainbow ? ['fever', 'rainbow'] as const : ['fever'] as const) {
       const L = FEVER_LOGO[k];
       if (!scene.textures.exists(L.key)) scene.load.spritesheet(L.key, L.path, { frameWidth: L.fw, frameHeight: L.fh });
+      const D = FEVER_DIGITS[k];
+      if (!scene.textures.exists(D.key)) scene.load.spritesheet(D.key, D.path, { frameWidth: D.fw, frameHeight: D.fh });
     }
   }
 
@@ -179,12 +209,53 @@ export class HudView {
     sprite.play(intro);
     sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => { if (sprite.active) sprite.play(loop); });
     box.add(sprite);
-    // 남은 초 — 게임 글자(기본 글꼴)로 판 안 숫자 자리에 가운데 정렬
-    const secs = scene.add.text(-dw / 2 + LOGO_SLOT.x * dw, -dh / 2 + LOGO_SLOT.y * dh, String(seconds), {
-      fontSize: '20px', color: '#ffffff', fontStyle: 'bold', stroke: L.stroke, strokeThickness: 6,
-    }).setOrigin(0.5);
+    // 남은 초 — 판 안 숫자 자리. 숫자 시트가 있으면 로고 결 숫자 스프라이트, 없으면 게임 글자
+    const slot = { x: -dw / 2 + LOGO_SLOT.x * dw, y: -dh / 2 + LOGO_SLOT.y * dh };
+    const D = FEVER_DIGITS[rainbow ? 'rainbow' : 'fever'];
+    let secs: Phaser.GameObjects.Container | Phaser.GameObjects.Text;
+    if (scene.textures.exists(D.key)) {
+      this.ensureDigitAnims(D);
+      secs = this.makeDigits(D, slot, seconds);
+    } else {
+      secs = scene.add.text(slot.x, slot.y, String(seconds), {
+        fontSize: '20px', color: '#ffffff', fontStyle: 'bold', stroke: L.stroke, strokeThickness: 6,
+      }).setOrigin(0.5);
+    }
     box.add(secs);
-    this.fever = { box, secs, lastSecs: seconds, sprite };
+    this.fever = { box, secs, lastSecs: seconds, sprite, digits: scene.textures.exists(D.key) ? D : undefined, slot };
+  }
+
+  /** 숫자마다 반복 애니메이션 (그 숫자 열의 행들) — 처음 한 번 만들어 두고 다음 피버도 쓴다 */
+  private ensureDigitAnims(D: (typeof FEVER_DIGITS)['fever' | 'rainbow']) {
+    const { anims } = this.scene;
+    for (let d = 0; d <= 9; d++) {
+      const key = `${D.key}_${d}`;
+      if (anims.exists(key)) continue;
+      const frames = Array.from({ length: D.rows }, (_, r) => ({ key: D.key, frame: r * 10 + d }));
+      anims.create({ key, frames, frameRate: D.fps, repeat: -1 });
+    }
+  }
+
+  /**
+   * 숫자 묶음 — 묶음의 원점이 숫자 몸통 아래 가운데라서, 튈 때 숫자 자리에 발을 붙인 채 위로 커진다.
+   * 묶음을 숫자 칸 가운데보다 몸통 높이의 절반만큼 아래에 놓는다
+   */
+  private makeDigits(D: (typeof FEVER_DIGITS)['fever' | 'rainbow'], slot: { x: number; y: number }, n: number) {
+    const bodyH = D.fh * D.oy * DIGIT_SCALE;
+    const box = this.scene.add.container(slot.x, slot.y + bodyH / 2);
+    this.fillDigits(box, D, n);
+    return box;
+  }
+
+  private fillDigits(box: Phaser.GameObjects.Container, D: (typeof FEVER_DIGITS)['fever' | 'rainbow'], n: number) {
+    box.removeAll(true);
+    const str = String(n), step = D.adv * DIGIT_SCALE;
+    [...str].forEach((ch, i) => {
+      const x = (i - (str.length - 1) / 2) * step;
+      const sp = this.scene.add.sprite(x, 0, D.key, Number(ch)).setOrigin(D.ox, D.oy).setScale(DIGIT_SCALE);
+      sp.play(`${D.key}_${ch}`);
+      box.add(sp);
+    });
   }
 
   /** 시트가 없을 때 대신 — 예전 알약 (주황 / 분홍-보라) */
@@ -205,15 +276,36 @@ export class HudView {
     this.fever = { box, secs, lastSecs: seconds };
   }
 
-  /** 남은 초 — 바뀔 때만. 숫자가 1.5 → 1.0 으로 180ms 동안 작게 튄다 */
+  /**
+   * 남은 초 — 바뀔 때만. 1.5 → 1.0 (180ms) 으로 튄다.
+   * 3·2·1 은 2.1 → 1.0 (260ms) + 흰 번쩍(90ms) + 숫자만 좌우 2px 흔들림 — 화면은 흔들지 않는다
+   */
   setFeverSeconds(seconds: number) {
-    if (!this.fever || seconds === this.fever.lastSecs) return;
-    this.fever.lastSecs = seconds;
-    const t = this.fever.secs;
-    t.setText(String(seconds));
+    const f = this.fever;
+    if (!f || seconds === f.lastSecs) return;
+    f.lastSecs = seconds;
+    const t = f.secs;
+    const last3 = seconds <= 3 && seconds >= 1 && !!f.digits;
+    if (t instanceof Phaser.GameObjects.Text) t.setText(String(seconds));
+    else if (f.digits) this.fillDigits(t, f.digits, seconds);
     this.scene.tweens.killTweensOf(t);
-    t.setScale(1.5);
-    this.scene.tweens.add({ targets: t, scale: 1, duration: 180, ease: 'Quad.easeOut' });
+    const pop = last3 ? POP.last3 : POP.normal;
+    t.setScale(pop.from);
+    this.scene.tweens.add({ targets: t, scale: 1, duration: pop.ms, ease: 'Back.easeOut' });
+    if (last3 && t instanceof Phaser.GameObjects.Container && f.slot) {
+      // 흰 번쩍 — 숫자를 통째로 흰색으로 칠하면 불꽃 번짐까지 흰 덩어리가 돼 숫자가 안 읽힌다.
+      // 같은 칸을 흰색으로 더해(ADD) 얹고 90ms 동안 걷어 낸다
+      for (const sp of [...t.list] as Phaser.GameObjects.Sprite[]) {
+        const fl = this.scene.add.image(sp.x, sp.y, sp.texture.key, sp.frame.name).setOrigin(sp.originX, sp.originY)
+          .setScale(sp.scaleX).setTintFill(0xffffff).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.6);
+        t.add(fl);
+        this.scene.tweens.add({ targets: fl, alpha: 0, duration: POP.last3.flashMs, onComplete: () => fl.destroy() });
+      }
+      const x0 = f.slot.x;
+      t.setX(x0);
+      this.scene.tweens.add({ targets: t, x: { from: x0 - POP.last3.shakePx, to: x0 + POP.last3.shakePx }, duration: 35, yoyo: true, repeat: 2,
+        onComplete: () => { if (t.active) t.setX(x0); } });
+    }
   }
 
   /** 피버 끝 — 스프라이트 · 글자 · 트윈 정리 (텍스처와 전역 애니메이션은 다음 피버가 다시 쓴다) */
@@ -221,6 +313,7 @@ export class HudView {
     if (!this.fever) return;
     this.scene.tweens.killTweensOf(this.fever.secs);
     this.fever.sprite?.stop();
+    // 숫자 스프라이트는 묶음과 같이 부서진다 (애니메이션도 같이 멈춘다)
     this.fever.box.destroy();
     this.fever = undefined;
   }
