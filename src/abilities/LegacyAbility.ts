@@ -211,36 +211,33 @@ export class LegacyAbility extends BaseAbility {
     // ─ 발밑 섬광 ─────────────────────────────────────────────────
     playFx(scene, 'bloom', cx, cy, { scale: 0.8, alpha: 0.85, tint: 0xffaa00, depth: 154 });
 
-    // ─ 사방으로 뻗는 빛줄기 ──────────────────────────────────────
-    // 원본은 fillRect 로 그린 가늘고 긴 막대 8개였다. burst('shard') 로 옮겼더니
-    // 텍스처가 각진 삼각형이라 '터지는 빛'이 아니라 '노란 삼각형'으로 읽혔다 —
-    // 가로로 늘린 streak 을 직접 뿌려 원래 성격을 되돌린다
-    for (let i = 0; i < 8; i++) {
-      const ang = (i / 8) * Math.PI * 2 + Phaser.Math.FloatBetween(-0.25, 0.25);
-      const len = Phaser.Math.FloatBetween(46, 96);
-      const img = fxSprite(scene, cx, cy, 'fx_proc_streak', {
-        rotation: ang,
-        scale: [0.06, 0.05],
-        origin: [0, 0.5],
-        tint: i % 2 === 0 ? 0xffee00 : 0xffaa00,
-        alpha: 0.95,
-        blend: 'normal',
-        depth: 156,
-        lifeMs: 700,
-        slot: 'legacy_shard',
-        maxConcurrent: 10,
-      });
-      if (!img) continue;
+    // ─ 퍼지는 금빛 글로우 + 반짝이 ──────────────────────────────
+    // 예전엔 streak 8가닥을 사방으로 뻗었다 — 바퀴살 빛살은 게임 전체에서 쓰지 않는다
+    // (대표 지시 2026-10-07, 욱일기처럼 보인다). 같은 순간의 무게는 둥근 빛이 크게 번지는
+    // 것과 무작위로 흩어지는 반짝이로 낸다. 둘 다 기존 텍스처·슬롯을 쓴다 (새 굽기 없음)
+    const glow = fxSprite(scene, cx, cy, 'fx_proc_glow', {
+      scale: [0.45, 0.45],
+      tint: 0xffdd33,
+      alpha: 0.95,
+      blend: 'normal',
+      depth: 156,
+      lifeMs: 700,
+      slot: 'legacy_shard',
+      maxConcurrent: 10,
+    });
+    if (glow) {
       scene.tweens.add({
-        targets: img,
-        x: cx + Math.cos(ang) * len,
-        y: cy + Math.sin(ang) * len,
-        scaleX: 0.015, alpha: 0,
-        duration: Phaser.Math.Between(280, 440),
+        targets: glow,
+        scaleX: 1.5, scaleY: 1.5, alpha: 0,
+        duration: 440,
         ease: 'Quad.easeOut',
-        onComplete: () => img.destroy(),
+        onComplete: () => glow.destroy(),
       });
     }
+    burst(scene, cx, cy, 'sparkle', {
+      count: 10, scale: 0.9, speed: 1.3, depth: 156, blend: 'normal',
+      tint: [0xffee00, 0xffaa00, 0xffffff],
+    });
 
     // ─ 상단 노란빛 ───────────────────────────────────────────────
     // 그라데이션 Graphics 대신 방사형 글로우를 화면 위쪽 밖에 걸쳐 놓는다 —

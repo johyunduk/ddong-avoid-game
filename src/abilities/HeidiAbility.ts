@@ -270,6 +270,11 @@ interface Weapon {
  * 설계 문서는 `docs/fx-heidi-puyo.md`. 선례는 K 의 태이(동반자 배회)와
  * 레드의 참새(발사 시 시트 교체·진행 방향 판단)다.
  */
+/** 기폭찰 폭발 재생 칸 — 0·1칸(방사 스파이크 섬광)을 뺀다 */
+const TAGBLAST_FRAMES = [2, 3, 4, 5, 6, 7] as const;
+/** 나선환 폭발 재생 칸 — 1칸(부채꼴로 뻗는 섬광)을 뺀다. 0칸은 둥근 섬광이라 남긴다 */
+const RASENBLAST_FRAMES = [0, 2, 3, 4, 5, 6, 7] as const;
+
 export class HeidiAbility extends BaseAbility {
   private dead = false;
   private tracked = new Set<Phaser.GameObjects.GameObject>();
@@ -1187,7 +1192,7 @@ export class HeidiAbility extends BaseAbility {
       this.startTrail(api.scene, b.fx, b.fy, b.tx, b.ty, now,
         P.blinkCoreTint, P.blinkGlowTint, P.blinkR, P.cloneFinPoints);
       this.hitPoops(api, b.fx, b.fy, b.tx, b.ty, P.blinkR, P.blinkLimit, P.cloneFinPoints);
-      // 집중선(speedLines)은 뺐다 — 노란 방사선이 화면을 덮어 섬광선이 묻혔다 (사람 판정)
+      // 집중선은 뺐다 — 노란 방사선이 화면을 덮어 섬광선이 묻혔다 (사람 판정). 방사형 빛살은 이제 게임 전체 금지
     }
 
     // 도착 — 선 끝에 몸이 나타난다
@@ -2001,8 +2006,18 @@ export class HeidiAbility extends BaseAbility {
       const key = fxPickSheetKey(HEIDI_FX_TAGBLAST);
       const d = api.player.displayHeight * P.tagBlastSize;
       if (scene.textures.exists(key)) {
-        const b = this.track(scene.add.sprite(t.x, t.y, key, 0).setOrigin(0.5, 0.5)
+        const b = this.track(scene.add.sprite(t.x, t.y, key, TAGBLAST_FRAMES[0]).setOrigin(0.5, 0.5)
           .setDisplaySize(d, d).setDepth(DEPTH_PUYO + 2));
+        // 빠진 섬광 칸 대신 — 둥근 빛이 한 번 번진다 (bloom 의 십자 플레어도 피해 순수 글로우)
+        //   폭발(6칸 0.3초)보다 짧게 끝나 폭발과 함께 확실히 걷힌다 — 기술 끝에 남지 않는다
+        if (scene.textures.exists('fx_proc_glow')) {
+          const fl = this.track(scene.add.image(t.x, t.y, 'fx_proc_glow').setTint(0xffd27a).setAlpha(0.9)
+            .setBlendMode(Phaser.BlendModes.ADD).setDepth(DEPTH_PUYO + 2).setScale((d / 192) * 0.5));
+          scene.tweens.add({
+            targets: fl, scaleX: (d / 192) * 1.1, scaleY: (d / 192) * 1.1, alpha: 0, duration: 160,
+            ease: 'Quad.easeOut', onComplete: () => this.discard(fl),
+          });
+        }
         const anim = this.animKey(HEIDI_FX_TAGBLAST);
         if (scene.anims.exists(anim)) {
           b.play({ key: anim }, true);
@@ -3832,7 +3847,7 @@ export class HeidiAbility extends BaseAbility {
   private registerAnims(scene: Phaser.Scene): void {
     const def = (
       sheet: string,
-      span: { start: number; end: number; fps: number },
+      span: { start: number; end: number; fps: number; frames?: readonly number[] },
       repeat: number,
     ) => {
       const texKey = fxPickSheetKey(sheet);
@@ -3841,7 +3856,8 @@ export class HeidiAbility extends BaseAbility {
       if (scene.anims.exists(key)) return;
       scene.anims.create({
         key,
-        frames: scene.anims.generateFrameNumbers(texKey, { start: span.start, end: span.end }),
+        frames: scene.anims.generateFrameNumbers(texKey,
+          span.frames ? { frames: [...span.frames] } : { start: span.start, end: span.end }),
         frameRate: span.fps,
         repeat,
       });
@@ -3857,10 +3873,14 @@ export class HeidiAbility extends BaseAbility {
     // 아마테라스 — 까마귀 날갯짓, 검은 불 (둘 다 루프)
     def(HEIDI_FX_RASENGAN,   { start: 0, end: 7, fps: 20 }, -1);
     def(HEIDI_FX_SWORDWAVE,  { start: 0, end: 7, fps: 18 }, -1);
-    def(HEIDI_FX_TAGBLAST,   { start: 0, end: 7, fps: HEIDI_PARAMS.tagBlastFps }, 0);
+    // 폭발 시트 0·1칸(tagblast)·1칸(rasenblast)은 바퀴살처럼 뻗는 섬광이라 건너뛴다
+    // (방사형 빛살 금지 — 대표 지시 2026-10-07). 시트는 그대로 두고 재생 칸만 뺀다
+    def(HEIDI_FX_TAGBLAST,   { start: 0, end: 7, fps: HEIDI_PARAMS.tagBlastFps, frames: TAGBLAST_FRAMES }, 0);
     def(HEIDI_FX_CHOJISLAM,  { start: 0, end: 7, fps: 8 / (HEIDI_PARAMS.slamWaveMs / 1000) }, 0);
     def(HEIDI_FX_PALM,       { start: 0, end: 7, fps: 16 }, 0);   // 22 → 16 — 너무 빨라 안 보였다
-    def(HEIDI_FX_RASENBLAST, { start: 0, end: 7, fps: 8 / (HEIDI_PARAMS.rasenBlastMs / 1000) }, 0);
+    def(HEIDI_FX_RASENBLAST, {
+      start: 0, end: 7, fps: RASENBLAST_FRAMES.length / (HEIDI_PARAMS.rasenBlastMs / 1000), frames: RASENBLAST_FRAMES,
+    }, 0);
     def(HEIDI_FX_CROW,      { start: 0, end: 5, fps: 14 }, -1);
     def(HEIDI_FX_AMATERASU, { start: 0, end: 7, fps: 14 }, -1);
     def(HEIDI_FX_CHOJIBALL, { start: 0, end: 3, fps: 8 }, -1);

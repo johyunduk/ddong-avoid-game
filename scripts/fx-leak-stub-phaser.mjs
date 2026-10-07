@@ -379,8 +379,10 @@ export function createFakeScene() {
       });
     },
     // 레드는 시트 한 장에서 구간(걷기/포효 …)을 잘라 애니메이션을 직접 등록한다
-    generateFrameNumbers: (key, { start = 0, end = 0 } = {}) =>
-      Array.from({ length: end - start + 1 }, (_, i) => ({ key, frame: start + i })),
+    // frames 를 주면 그 칸만 (실제 Phaser 와 같다 — 폭발 시트가 방사 섬광 칸을 건너뛴다)
+    generateFrameNumbers: (key, { start = 0, end = 0, frames } = {}) =>
+      frames ? frames.map(frame => ({ key, frame }))
+        : Array.from({ length: end - start + 1 }, (_, i) => ({ key, frame: start + i })),
   };
   const textureKeys = new Set();
   scene.textures = {
