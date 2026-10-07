@@ -67,6 +67,8 @@ export class GameOverView {
   private topMenu: Phaser.GameObjects.Container | null = null;
   /** 씬이 끝났다 — 늦게 도착한 일러스트가 다음 판 화면에 그려지지 않게 */
   private dead = false;
+  /** 일러스트 크롭을 띄운 이미지 — 텍스처를 지우기 **전에** 먼저 부순다 (destroy 참고) */
+  private artImage: Phaser.GameObjects.Image | null = null;
 
   constructor(scene: Phaser.Scene, info: GameOverInfo, handlers: GameOverHandlers) {
     this.scene = scene;
@@ -163,7 +165,8 @@ export class GameOverView {
       if (this.dead || !scene.textures.exists(def.illustKey)) return;
       this.bakeArt(def.illustKey);
       if (loadedHere) scene.textures.remove(def.illustKey);
-      scene.add.image(this.cx, 0, ART_KEY).setOrigin(0.5, 0).setDisplaySize(this.W, Math.round(this.H * ART_RATIO)).setDepth(DEPTH + 1);
+      this.artImage = scene.add.image(this.cx, 0, ART_KEY).setOrigin(0.5, 0)
+        .setDisplaySize(this.W, Math.round(this.H * ART_RATIO)).setDepth(DEPTH + 1);
     };
     const loadedHere = !scene.textures.exists(def.illustKey);
     if (!loadedHere) { place(); return; }
@@ -445,10 +448,19 @@ export class GameOverView {
     this.input = null;
   }
 
-  /** 씬이 끝날 때 — HTML 입력칸과 크롭 텍스처를 치운다 */
+  /**
+   * 씬을 떠날 때 — HTML 입력칸과 크롭 텍스처를 치운다. 메인 메뉴 · 다시 하기 · shutdown 에서 부른다 (두 번 불러도 된다).
+   *
+   * **이미지를 먼저 부수고 텍스처를 지운다.** 버튼은 프레임 안(입력 처리)에서 불리고 씬 전환은 다음 단계에야
+   * 일어나서, 그 사이 같은 프레임의 렌더가 한 번 더 돈다. 텍스처만 지우면 화면에 남은 이미지가 사라진 텍스처를 그리려다
+   * 'glTexture' null 로 렌더러가 터지고 게임 루프가 멈춘다 — 메인 메뉴 · 다시 하기가 안 넘어가던 원인 (2026-10-07).
+   * 스페이스 재시작만 됐던 건 키 이벤트가 프레임 밖에서 와서 전환이 렌더보다 먼저 처리됐기 때문
+   */
   destroy() {
     this.dead = true;
     this.removeInput();
+    this.artImage?.destroy();
+    this.artImage = null;
     if (this.scene.textures.exists(ART_KEY)) this.scene.textures.remove(ART_KEY);
   }
 }
