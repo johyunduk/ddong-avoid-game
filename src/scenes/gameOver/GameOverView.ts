@@ -63,6 +63,8 @@ export class GameOverView {
   private initialsRow: Phaser.GameObjects.GameObject[] = [];
   private initialsError: Phaser.GameObjects.Text | null = null;
   private submitting = false;
+  /** 신기록 화면 왼쪽 위 '메뉴' — 등록을 마치면 없애고 아래 줄로 옮긴다 */
+  private topMenu: Phaser.GameObjects.Container | null = null;
   /** 씬이 끝났다 — 늦게 도착한 일러스트가 다음 판 화면에 그려지지 않게 */
   private dead = false;
 
@@ -128,8 +130,8 @@ export class GameOverView {
     if (info.isNewRecord) {
       this.buildInitialsRow(H - 90);
       this.retryButton(H - 32, W - 60, 56);
-      // 메인 메뉴 — 아래가 이니셜 줄로 차니 왼쪽 위 작은 버튼 (등록 뒤에는 이니셜 줄 자리로 옮겨 온다)
-      this.menuButton(44, 84, 64, 30, '메뉴', 13);
+      // 메인 메뉴 — 등록 전에는 아래가 이니셜 줄로 차니 왼쪽 위 작은 버튼. 등록하면 아래 결과 줄 오른쪽으로 옮긴다 (showRegistered)
+      this.topMenu = this.menuButton(44, 84, 64, 30, '메뉴', 13);
     } else {
       this.retryButton(H - 96, W - 40, 92);
       this.menuButton(cx, H - 28, 180, 38, '메인 메뉴', 18);
@@ -303,7 +305,7 @@ export class GameOverView {
     wireButton(scene, box, w, h, () => this.handlers.onRetry());
   }
 
-  private menuButton(x: number, y: number, w: number, h: number, label: string, px: number) {
+  private menuButton(x: number, y: number, w: number, h: number, label: string, px: number): Phaser.GameObjects.Container {
     const { scene } = this;
     const box = scene.add.container(x, y).setDepth(DEPTH + 5);
     const skin = bakeButton(scene, `go_menu_${w}x${h}`, {
@@ -313,6 +315,7 @@ export class GameOverView {
     box.add(scene.add.image(0, 0, skin.key).setOrigin(0.5, skin.originY));
     box.add(scene.add.text(0, 0, label, { fontSize: `${px}px`, color: '#2a3340', fontStyle: 'bold' }).setOrigin(0.5));
     wireButton(scene, box, w, h, () => this.handlers.onMenu());
+    return box;
   }
 
   // ── 이니셜 입력 (신기록) ─────────────────────────────────────────────
@@ -390,12 +393,23 @@ export class GameOverView {
     this.handlers.onSubmitInitials(initials);
   }
 
-  /** 등록 결과 — 이니셜 줄 자리에 한 줄 (실패면 빨간 글자) */
+  /**
+   * 등록 결과 — 이니셜 줄 자리에 결과 한 줄 + 오른쪽에 '메인 메뉴' 알약 (실패여도 같다).
+   * 왼쪽 위 '메뉴' 는 없앤다 — 일반 화면과 같은 아래쪽 동선 (다시 하기 바로 위)
+   */
   showRegistered(text: string, ok: boolean) {
+    const { W, H } = this;
     this.initialsRow.forEach(o => o.destroy());
-    this.initialsRow = [this.scene.add.text(this.cx, this.H - 90, text, {
-      fontSize: '17px', color: ok ? '#7dff9a' : '#ff5a4a', fontStyle: 'bold', stroke: '#000000', strokeThickness: 4,
-    }).setOrigin(0.5).setDepth(DEPTH + 3)];
+    this.topMenu?.destroy();
+    this.topMenu = null;
+    const menuW = 120, menuX = W - 30 - menuW / 2;
+    const textX = (20 + (menuX - menuW / 2 - 10)) / 2;   // 왼쪽 끝 ~ 알약 왼쪽 사이 가운데
+    this.initialsRow = [
+      this.scene.add.text(textX, H - 90, text, {
+        fontSize: '16px', color: ok ? '#7dff9a' : '#ff5a4a', fontStyle: 'bold', stroke: '#000000', strokeThickness: 4,
+      }).setOrigin(0.5).setDepth(DEPTH + 3),
+      this.menuButton(menuX, H - 90, menuW, 44, '메인 메뉴', 16),
+    ];
   }
 
   // ── 값 갈아 끼우기 ───────────────────────────────────────────────────
