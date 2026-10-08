@@ -53,6 +53,8 @@ export default class GachaScene extends BaseScene {
   private remainingSkor = 0;
   private pullResults: PulledCharacter[] = [];
   private wpResults: PulledWallpaper[] = [];
+  /** SKOR 부족 토스트 — 한 번에 하나만 (연달아 누르면 쌓이지 않고 다시 뜬다) */
+  private skorToast: Phaser.GameObjects.Container | null = null;
   /** pullResults 와 같은 순서 */
   private pullMeta: PullMeta[] = [];
   /** 이 씬이 직접 올린 큰 그림 (진열 일러스트 · 배경화면 큰 그림) — 나갈 때 내린다. 원래 있던 키는 남긴다 */
@@ -128,6 +130,7 @@ export default class GachaScene extends BaseScene {
     this.pullMeta = [];
     this.revealItems = [];
     this.revealItemIndex = 0;
+    this.skorToast = null;
     this.events.once('shutdown', () => this.releaseTextures());
     this.buildLobby();
   }
@@ -442,6 +445,51 @@ export default class GachaScene extends BaseScene {
     wireButton(this, box, w, h, () => this.startPull(type), true);
   }
 
+  /**
+   * SKOR 부족 토스트 (A안 — 위쪽 알림 판). SKOR 알약 바로 아래에 짙은 빨강 판 300x58:
+   * 'SKOR 이 부족해요' + 보유 N / 필요 M + 모자란 비율 막대. 1.8초 뒤 위로 밀며 사라진다.
+   * 연달아 누르면 쌓이지 않고 하나만 다시 뜬다. 로비 · 뽑기 결과의 1회 더 · 10회 더 가 같이 쓴다.
+   * 시안: ddong-fx-work/small-screens/3_skor_toast/A_*.png
+   */
+  private showSkorToast(have: number, need: number) {
+    if (this.skorToast) {
+      this.tweens.killTweensOf(this.skorToast);
+      this.skorToast.destroy();
+      this.skorToast = null;
+    }
+    const W = this.scale.width;
+    const tw = Math.min(300, W - 24), th = 58, y = 64 + th / 2;
+    const L = -tw / 2;
+    const box = this.add.container(W / 2, y).setDepth(1000);
+    box.add(this.add.graphics()
+      .fillStyle(0x000000, 0.35).fillRoundedRect(L + 2, -th / 2 + 4, tw, th, 16)
+      .fillGradientStyle(0x5a0f22, 0x5a0f22, 0x2a0612, 0x2a0612, 0.97).fillRoundedRect(L, -th / 2, tw, th, 16)
+      .lineStyle(2, 0xff6b6b).strokeRoundedRect(L, -th / 2, tw, th, 16));
+    box.add(this.add.text(L + 30, 0, '💰', { fontSize: '22px' }).setOrigin(0.5));
+    box.add(this.add.text(L + 54, -12, 'SKOR 이 부족해요', { fontSize: '15px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0, 0.5));
+    const parts: [string, string, string][] = [['보유', '#ffb3b3', '12px'], [have.toLocaleString(), '#ffd34d', '14px'], ['/ 필요', '#ffb3b3', '12px'], [need.toLocaleString(), '#ffd34d', '14px']];
+    let x = L + 54;
+    for (const [t, c, fs] of parts) {
+      const o = this.add.text(x, 13, t, { fontSize: fs, color: c, fontStyle: 'bold' }).setOrigin(0, 0.5);
+      box.add(o);
+      x += o.width + 6;
+    }
+    // 모자란 비율 막대 — 보유 / 필요
+    const bw = Math.max(40, Math.min(70, tw / 2 - 14 - (x - (L + tw / 2)))), bx = tw / 2 - 14 - bw;
+    const frac = Phaser.Math.Clamp(have / need, 0, 1);
+    box.add(this.add.graphics()
+      .fillStyle(0x000000, 0.45).fillRoundedRect(bx, 13 - 5, bw, 10, 5)
+      .fillStyle(0xff8a80).fillRoundedRect(bx, 13 - 5, Math.max(frac > 0 ? 10 : 0, bw * frac), 10, 5));
+    this.skorToast = box;
+
+    box.setAlpha(0).setY(y - 16);
+    this.tweens.add({ targets: box, alpha: 1, y, duration: 180, ease: 'Quad.easeOut' });
+    this.tweens.add({
+      targets: box, alpha: 0, y: y - 30, duration: 260, delay: 1800, ease: 'Quad.easeIn',
+      onComplete: () => { if (this.skorToast === box) this.skorToast = null; box.destroy(); },
+    });
+  }
+
   // ═══════════════════════════════════════════════════
   // PULL FLOW
   // ═══════════════════════════════════════════════════
@@ -459,13 +507,7 @@ export default class GachaScene extends BaseScene {
       return;
     }
     if (this.skorBalance < cost) {
-      const errMsg = this.add.text(this.scale.width / 2, this.scale.height - 196, `SKOR 부족  (보유 ${Math.floor(this.skorBalance)} / 필요 ${cost})`, {
-        fontSize: '13px', color: '#ff5555',
-        stroke: '#000000', strokeThickness: 3,
-        backgroundColor: '#00000099',
-        padding: { x: 10, y: 5 },
-      }).setOrigin(0.5);
-      this.time.delayedCall(2200, () => { if (errMsg.active) errMsg.destroy(); });
+      this.showSkorToast(Math.floor(this.skorBalance), cost);
       return;
     }
 
