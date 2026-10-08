@@ -1,7 +1,6 @@
 import Phaser from 'phaser';
 import { getCharacterDef, getGradeImgKey } from '../../utils/character';
 import { bakeButton, gradientText, wireButton } from '../../utils/buttonSkin';
-import { GAME_FONT } from '../../utils/gameFont';
 
 /**
  * 게임오버 화면 (B안 — 2026-10-07 대표 채택). 그리기만 맡는다 — 점수 등록 · SKOR 정산 · 순위 조회는 GameScene 이 하고
@@ -12,8 +11,9 @@ import { GAME_FONT } from '../../utils/gameFont';
  *   점수(64px) · 최고 줄 / 신기록이면 색종이 + NEW RECORD 리본
  *   보라 시트에 칩 셋: 전체 순위 · 캐릭터 순위 · SKOR
  *   특수똥 4종 개수 줄
- *   신기록: 이니셜 입력 줄 + 다시 하기(큰 버튼) · 메인 메뉴는 왼쪽 위 작은 버튼
- *   일반:   다시 하기(더 큰 버튼) + 메인 메뉴
+ *   다시 하기(큰 버튼) + 메인 메뉴 — 신기록이든 아니든 같다
+ *   신기록: 일러스트 위(y≈196)에 이니셜 기록판 (B안, 2026-10-08) + 등록 전까지 왼쪽 위 작은 '메뉴'.
+ *           폰 키보드가 아래 절반을 가려도 보이는 자리라서 위로 올렸다
  *
  * 높이는 실기 720 기준 시안 좌표를 위·아래 끝에서 잰 거리로 옮겼다 (화면 높이가 달라도 아래 버튼이 바닥에 붙는다).
  * 방사형 빛살은 쓰지 않는다 (게임 전체 금지 — 신기록 강조는 색종이 · 리본 · 글로우로).
@@ -47,6 +47,11 @@ const DEPTH = 200;
 const ART_RATIO = 0.65;
 /** 일러스트 크롭 텍스처 — 한 장만 쓰고 씬이 끝나면 지운다 */
 const ART_KEY = 'gameover_art';
+/**
+ * 이니셜 기록판 (B안 시안 480x720 좌표: ddong-fx-work/small-screens/4_initials/B_*).
+ * y = 판 가운데 (위에서 잰 값) · slots = 글자 칸 가운데의 화면 가운데 기준 x · btnX = 등록 버튼 가운데
+ */
+const BOARD = { y: 199, w: 328, h: 96, slots: [-100, -50, 0], btnX: 112, btnW: 84, btnH: 56 } as const;
 const SPECIALS: [keyof GameOverInfo['collected'], string][] = [
   ['gold', 'gold_poop'], ['diamond', 'diamond_poop'], ['topaz', 'topaz_poop'], ['rainbow', 'rainbow_poop'],
 ];
@@ -61,8 +66,19 @@ export class GameOverView {
   private readonly cx: number;
   private chips: { value: Phaser.GameObjects.Text; sub: Phaser.GameObjects.Text }[] = [];
   private input: HTMLInputElement | null = null;
-  private initialsRow: Phaser.GameObjects.GameObject[] = [];
-  private initialsError: Phaser.GameObjects.Text | null = null;
+  /** 기록판 — 보이는 것은 전부 Phaser. 입력은 판 위에 겹친 투명 HTML input 이 받는다 */
+  private board: {
+    y: number;
+    g: Phaser.GameObjects.Graphics;
+    letters: Phaser.GameObjects.Text[];
+    cursor: Phaser.GameObjects.Rectangle;
+    btnImg: Phaser.GameObjects.Image;
+    btn: Phaser.GameObjects.Container;
+    objs: Phaser.GameObjects.GameObject[];
+    error: Phaser.GameObjects.Container | null;
+  } | null = null;
+  /** 입력칸 위치를 다시 맞추는 리스너 (화면 크기 · 키보드로 visualViewport 가 바뀔 때) — 씬을 나갈 때 뗀다 */
+  private relayout: (() => void) | null = null;
   private submitting = false;
   /** 신기록 화면 왼쪽 위 '메뉴' — 등록을 마치면 없애고 아래 줄로 옮긴다 */
   private topMenu: Phaser.GameObjects.Container | null = null;
@@ -130,14 +146,13 @@ export class GameOverView {
     this.sheet(def.name);
     this.specials(H - 158);
 
+    // 아래는 신기록이든 아니든 같다 — 이니셜은 위 기록판에서 받는다 (B안)
+    this.retryButton(H - 96, W - 40, 92);
+    this.menuButton(cx, H - 28, 180, 38, '메인 메뉴', 18);
     if (info.isNewRecord) {
-      this.buildInitialsRow(H - 90);
-      this.retryButton(H - 32, W - 60, 56);
-      // 메인 메뉴 — 등록 전에는 아래가 이니셜 줄로 차니 왼쪽 위 작은 버튼. 등록하면 아래 결과 줄 오른쪽으로 옮긴다 (showRegistered)
+      this.buildRecordBoard();
+      // 왼쪽 위 작은 '메뉴' — 등록 전까지만. 등록하면 아래 메인 메뉴 하나로 (showRegistered)
       this.topMenu = this.menuButton(44, 84, 64, 30, '메뉴', 13);
-    } else {
-      this.retryButton(H - 96, W - 40, 92);
-      this.menuButton(cx, H - 28, 180, 38, '메인 메뉴', 18);
     }
   }
 
@@ -322,99 +337,187 @@ export class GameOverView {
     return box;
   }
 
-  // ── 이니셜 입력 (신기록) ─────────────────────────────────────────────
+  // ── 이니셜 기록판 (신기록) ───────────────────────────────────────────
 
   /**
-   * 이니셜 3자 + 랭킹 등록. 입력칸은 HTML input (모바일 키보드) — 캔버스 위치·배율에 맞춰 띄운다.
-   * 규칙은 예전과 같다: 영어 대문자 3자, 저장된 이니셜이 있으면 미리 채움, Enter 로도 등록
+   * 'NEW RECORD · 이니셜' 기록판 — 아케이드식 밑줄 3칸 + 큰 글자 + 등록 버튼(84x56).
+   * 보이는 것은 전부 Phaser 로 그리고, 입력은 판의 글자 칸 위에 겹친 **투명 HTML input** 이 받는다
+   * (탭이 곧 input 탭이라 폰 키보드가 열린다. 스페이스 재시작은 GameScene 이 input 포커스면 무시한다).
+   * 저장 규칙은 예전과 같다: 영어 대문자 3자. 소문자는 대문자로 바꾸고, 그 밖의 글자는 지운 뒤 오류로 알린다
    */
-  private buildInitialsRow(y: number) {
-    const { scene, cx } = this;
-    const fieldW = 126, btnW = 112;
-    const x0 = cx - (fieldW + 10 + btnW) / 2;
+  private buildRecordBoard() {
+    const { scene, cx, H } = this;
+    // 일러스트 위 · 리본(H-420) 위. 화면이 낮으면 리본과 안 겹치게 위로 당긴다
+    const y = Math.min(BOARD.y, H - 420 - 72);
+    const g = scene.add.graphics().setDepth(DEPTH + 6);
+    const label = scene.add.text(cx, y - 32, 'NEW RECORD · 이니셜', {
+      fontSize: '13px', color: '#ffe08a', fontStyle: 'bold',
+    }).setOrigin(0.5).setDepth(DEPTH + 7);
+    const letters = BOARD.slots.map(dx => scene.add.text(cx + dx, y + 2, '', {
+      fontSize: '36px', color: '#ffffff', fontStyle: 'bold', stroke: '#140a24', strokeThickness: 6,
+    }).setOrigin(0.5).setDepth(DEPTH + 7));
+    // 커서 — 다음 칸에서 깜빡인다
+    const cursor = scene.add.rectangle(0, y + 2, 3, 30, 0xffd34d).setDepth(DEPTH + 7);
+    scene.tweens.add({ targets: cursor, alpha: 0, duration: 450, yoyo: true, repeat: -1, ease: 'Stepped' });
 
-    const label = scene.add.text(cx, y - 36, '이니셜 입력 (영어 대문자 3자)', {
-      fontSize: '13px', color: '#ffffff', fontStyle: 'bold', stroke: '#000000', strokeThickness: 4,
-    }).setOrigin(0.5).setDepth(DEPTH + 3);
+    const btn = scene.add.container(cx + BOARD.btnX, y + 2).setDepth(DEPTH + 7);
+    const btnImg = scene.add.image(0, 0, this.registerSkin(false)).setOrigin(0.5, 0.5);
+    btn.add([btnImg, scene.add.text(0, -1, '등록', {
+      fontSize: '19px', color: '#ffffff', fontStyle: 'bold', stroke: '#1a1a24', strokeThickness: 5,
+    }).setOrigin(0.5)]);
+    wireButton(scene, btn, BOARD.btnW, BOARD.btnH, () => this.trySubmit(), true);
 
+    this.board = { y, g, letters, cursor, btnImg, btn, objs: [label, ...letters, cursor, btn], error: null };
+    this.createInput();
+    this.renderBoard();
+  }
+
+  /** 등록 버튼 판 — 회색(아직) / 초록(3자 다 채움). bakeButton 은 키로 캐시한다 */
+  private registerSkin(ready: boolean): string {
+    const { scene } = this;
+    const skin = bakeButton(scene, ready ? 'go_reg_on' : 'go_reg_off', ready
+      ? { w: BOARD.btnW, h: BOARD.btnH, radius: 14, top: '#7dff9a', bottom: '#1fae4a', border: '#0a3a18', borderW: 3, lip: '#0f6a2c', lipH: 5, gloss: 0 }
+      : { w: BOARD.btnW, h: BOARD.btnH, radius: 14, top: '#9aa0b0', bottom: '#5c6272', border: '#1a1a24', borderW: 3, lip: '#3a3e4a', lipH: 5, gloss: 0 });
+    return skin.key;
+  }
+
+  /** 상태대로 판을 다시 그린다 — 입력 중(다음 칸 금색 + 커서) / 다 채움(밑줄 전부 금색 + 등록 초록) / 오류(테두리·밑줄 빨강) */
+  private renderBoard() {
+    const b = this.board;
+    if (!b) return;
+    const { cx } = this;
+    const v = this.input?.value ?? '';
+    const err = !!b.error, full = v.length === 3;
+    const left = cx - BOARD.w / 2, top = b.y - BOARD.h / 2;
+    b.g.clear();
+    b.g.fillStyle(0x000000, 0.35).fillRoundedRect(left + 2, top + 5, BOARD.w, BOARD.h, 18);
+    b.g.fillGradientStyle(0x3a1a78, 0x3a1a78, 0x150a30, 0x150a30, 1).fillRoundedRect(left, top, BOARD.w, BOARD.h, 18);
+    b.g.lineStyle(3, err ? 0xff4a4a : 0xffd34d).strokeRoundedRect(left, top, BOARD.w, BOARD.h, 18);
+    BOARD.slots.forEach((dx, i) => {
+      b.letters[i].setText(v[i] ?? '');
+      const color = err ? 0xff4a4a : full || i === v.length ? 0xffd34d : 0x6a5a8a;
+      b.g.fillStyle(color).fillRoundedRect(cx + dx - 18, b.y + 27, 36, 5, 2.5);
+    });
+    b.cursor.setVisible(!full && !this.submitting).setX(cx + BOARD.slots[Math.min(v.length, 2)]);
+    b.btnImg.setTexture(this.registerSkin(full && !err));
+  }
+
+  /** 투명 input — 판의 글자 칸 위(등록 버튼은 비킨다). 위치는 화면 크기 · visualViewport 가 바뀔 때마다 다시 맞춘다 */
+  private createInput() {
+    const { scene } = this;
     const input = document.createElement('input');
     input.type = 'text';
-    input.maxLength = 3;
-    input.placeholder = 'ABC';
+    input.autocomplete = 'off';
+    input.spellcheck = false;
     input.autocapitalize = 'characters';
-    const rect = scene.game.canvas.getBoundingClientRect();
-    const sx = rect.width / this.W, sy = rect.height / this.H;
-    input.style.cssText = `
-      position: fixed; left: ${rect.left + x0 * sx}px; top: ${rect.top + (y - 22) * sy}px;
-      width: ${Math.round(fieldW * sx)}px; height: ${Math.round(44 * sy)}px;
-      font-size: ${Math.round(24 * sy)}px; text-align: center; text-transform: uppercase;
-      letter-spacing: ${Math.round(14 * sx)}px; padding-left: ${Math.round(14 * sx)}px;
-      border: ${Math.max(2, Math.round(2.5 * sy))}px solid #FFD700; border-radius: 8px;
-      background: #000; color: #fff; font-weight: bold; outline: none; box-sizing: border-box; z-index: 9999;
-      font-family: ${GAME_FONT};
-    `;
-    input.addEventListener('input', () => { input.value = input.value.toUpperCase().replace(/[^A-Z]/g, ''); });
-    input.addEventListener('keypress', (e) => { if (e.key === 'Enter') this.trySubmit(); });
+    input.setAttribute('autocorrect', 'off');
+    input.setAttribute('enterkeyhint', 'done');
+    input.setAttribute('aria-label', '랭킹 이니셜 (영어 대문자 3자)');
+    // 글자 크기 16px — iOS 가 포커스 때 화면을 확대하지 않는 최소값. 보이는 글자는 Phaser 가 그린다
+    input.style.cssText = `position: fixed; z-index: 9999; margin: 0; padding: 0; border: 0; outline: none;
+      background: transparent; color: transparent; caret-color: transparent; opacity: 0; font-size: 16px; box-sizing: border-box;`;
+    const sanitize = () => {
+      const up = input.value.toUpperCase();
+      const clean = up.replace(/[^A-Z]/g, '');
+      if (clean !== up) this.showBoardError();          // 숫자 · 한글 · 기호 — 지우고 알린다
+      else if (clean.length) this.clearBoardError();
+      input.value = clean.slice(0, 3);
+      this.renderBoard();
+    };
+    // 한글 IME 조합 중에는 손대지 않는다 — 조합이 끝나면(compositionend) 한 번에 거른다
+    input.addEventListener('input', (e) => { if (!(e as InputEvent).isComposing) sanitize(); });
+    input.addEventListener('compositionend', sanitize);
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); this.trySubmit(); } });
     document.body.appendChild(input);
     this.input = input;
 
-    const bx = x0 + fieldW + 10 + btnW / 2;
-    const box = scene.add.container(bx, y).setDepth(DEPTH + 5);
-    const skin = bakeButton(scene, 'go_submit', {
-      w: btnW, h: 44, radius: 14, top: '#7dff9a', bottom: '#1fae4a', border: '#0a3a18', borderW: 3, lip: '#0f6a2c', lipH: 5, gloss: 0,
-    });
-    box.add(scene.add.image(0, 0, skin.key).setOrigin(0.5, skin.originY));
-    box.add(scene.add.text(0, 0, '랭킹 등록', { fontSize: '17px', color: '#ffffff', fontStyle: 'bold', stroke: '#0a3a18', strokeThickness: 5 }).setOrigin(0.5));
-    wireButton(scene, box, btnW, 44, () => this.trySubmit(), true);
-
-    this.initialsRow = [label, box];
+    const place = () => {
+      const b = this.board;
+      if (!this.input || !b) return;
+      const rect = scene.game.canvas.getBoundingClientRect();
+      const sx = rect.width / scene.scale.width, sy = rect.height / scene.scale.height;
+      const left = this.cx - BOARD.w / 2, right = this.cx + BOARD.btnX - BOARD.btnW / 2 - 6;
+      Object.assign(input.style, {
+        left: `${rect.left + left * sx}px`, top: `${rect.top + (b.y - BOARD.h / 2) * sy}px`,
+        width: `${(right - left) * sx}px`, height: `${BOARD.h * sy}px`,
+      });
+    };
+    place();
+    this.relayout = place;
+    scene.scale.on(Phaser.Scale.Events.RESIZE, place);
+    window.visualViewport?.addEventListener('resize', place);
+    window.visualViewport?.addEventListener('scroll', place);
   }
 
-  /** 저장된 이니셜로 채우고 입력칸에 초점 */
+  private showBoardError() {
+    const b = this.board;
+    if (!b || b.error) return;
+    const { scene, cx } = this;
+    const y = b.y + BOARD.h / 2 + 16, w = 210, h = 24;
+    const g = scene.add.graphics();
+    g.fillStyle(0x3a0a12, 0.95).fillRoundedRect(-w / 2, -h / 2, w, h, h / 2);
+    g.lineStyle(1.5, 0xff4a4a).strokeRoundedRect(-w / 2, -h / 2, w, h, h / 2);
+    b.error = scene.add.container(cx, y, [g, scene.add.text(0, 0, '영어 대문자 3자로 입력해 주세요', {
+      fontSize: '12px', color: '#ffffff', fontStyle: 'bold',
+    }).setOrigin(0.5)]).setDepth(DEPTH + 7);
+  }
+
+  private clearBoardError() {
+    if (!this.board?.error) return;
+    this.board.error.destroy();
+    this.board.error = null;
+  }
+
+  /** 저장된 이니셜로 채우고 입력칸에 초점 (PC 는 바로 칠 수 있다. 폰은 탭해야 키보드가 열린다) */
   prefillInitials(initials: string | null) {
     if (!this.input) return;
-    if (initials) this.input.value = initials;
+    if (initials) this.input.value = initials.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3);
+    this.renderBoard();
     this.input.focus();
   }
 
   private trySubmit() {
     if (!this.input || this.submitting) return;
-    const initials = this.input.value.trim().toUpperCase();
-    const err = initials.length !== 3 ? '정확히 3글자를 입력하세요' : !/^[A-Z]{3}$/.test(initials) ? '영어 대문자만 입력하세요' : null;
-    this.initialsError?.destroy();
-    this.initialsError = null;
-    if (err) {
-      this.initialsError = this.scene.add.text(this.cx, this.H - 126 + 18, err, {
-        fontSize: '13px', color: '#ff5a4a', fontStyle: 'bold', stroke: '#000000', strokeThickness: 4,
-      }).setOrigin(0.5).setDepth(DEPTH + 6);
+    const initials = this.input.value;
+    if (!/^[A-Z]{3}$/.test(initials)) {
+      this.showBoardError();
+      this.renderBoard();
+      this.input.focus();
       return;
     }
     this.submitting = true;
+    this.input.blur();
     this.removeInput();
-    this.initialsRow.forEach(o => o.destroy());
-    this.initialsRow = [this.scene.add.text(this.cx, this.H - 90, '랭킹 등록 중…', {
-      fontSize: '16px', color: '#ffe08a', fontStyle: 'bold', stroke: '#000000', strokeThickness: 4,
-    }).setOrigin(0.5).setDepth(DEPTH + 3)];
+    this.boardMessage('랭킹 등록 중…', '#ffe08a', 0xffd34d);
     this.handlers.onSubmitInitials(initials);
   }
 
+  /** 기록판 안을 한 줄 글자로 바꾼다 (등록 중 · 등록 결과). 'NEW RECORD · 이니셜' 머리글은 남긴다 */
+  private boardMessage(text: string, color: string, border: number) {
+    const b = this.board;
+    if (!b) return;
+    const { scene, cx } = this;
+    this.clearBoardError();
+    b.objs.slice(1).forEach(o => o.destroy());
+    b.objs = [b.objs[0]];
+    const left = cx - BOARD.w / 2, top = b.y - BOARD.h / 2;
+    b.g.clear();
+    b.g.fillStyle(0x000000, 0.35).fillRoundedRect(left + 2, top + 5, BOARD.w, BOARD.h, 18);
+    b.g.fillGradientStyle(0x3a1a78, 0x3a1a78, 0x150a30, 0x150a30, 1).fillRoundedRect(left, top, BOARD.w, BOARD.h, 18);
+    b.g.lineStyle(3, border).strokeRoundedRect(left, top, BOARD.w, BOARD.h, 18);
+    b.objs.push(scene.add.text(cx, b.y + 8, text, {
+      fontSize: '22px', color, fontStyle: 'bold', stroke: '#140a24', strokeThickness: 5,
+    }).setOrigin(0.5).setDepth(DEPTH + 7));
+  }
+
   /**
-   * 등록 결과 — 이니셜 줄 자리에 결과 한 줄 + 오른쪽에 '메인 메뉴' 알약 (실패여도 같다).
-   * 왼쪽 위 '메뉴' 는 없앤다 — 일반 화면과 같은 아래쪽 동선 (다시 하기 바로 위)
+   * 등록 결과 — 기록판 안에 'DUK · 전체 N위 등록' (실패면 빨강). 왼쪽 위 '메뉴' 는 없앤다 —
+   * 아래 메인 메뉴가 처음부터 있으니 등록 뒤엔 그것 하나로 (일반 화면과 같은 동선)
    */
   showRegistered(text: string, ok: boolean) {
-    const { W, H } = this;
-    this.initialsRow.forEach(o => o.destroy());
     this.topMenu?.destroy();
     this.topMenu = null;
-    const menuW = 120, menuX = W - 30 - menuW / 2;
-    const textX = (20 + (menuX - menuW / 2 - 10)) / 2;   // 왼쪽 끝 ~ 알약 왼쪽 사이 가운데
-    this.initialsRow = [
-      this.scene.add.text(textX, H - 90, text, {
-        fontSize: '16px', color: ok ? '#7dff9a' : '#ff5a4a', fontStyle: 'bold', stroke: '#000000', strokeThickness: 4,
-      }).setOrigin(0.5).setDepth(DEPTH + 3),
-      this.menuButton(menuX, H - 90, menuW, 44, '메인 메뉴', 16),
-    ];
+    this.boardMessage(text, ok ? '#7dff9a' : '#ff6a5a', ok ? 0x3ddb7a : 0xff4a4a);
   }
 
   // ── 값 갈아 끼우기 ───────────────────────────────────────────────────
@@ -445,7 +548,14 @@ export class GameOverView {
     chip.sub.setText(sub).setColor(subColor);
   }
 
+  /** 투명 input 과 위치 리스너를 뗀다 — 남으면 다음 화면 위에 보이지 않는 입력칸이 탭을 가로챈다 */
   private removeInput() {
+    if (this.relayout) {
+      this.scene.scale.off(Phaser.Scale.Events.RESIZE, this.relayout);
+      window.visualViewport?.removeEventListener('resize', this.relayout);
+      window.visualViewport?.removeEventListener('scroll', this.relayout);
+      this.relayout = null;
+    }
     if (this.input && this.input.parentNode) this.input.parentNode.removeChild(this.input);
     this.input = null;
   }
