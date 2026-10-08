@@ -498,7 +498,8 @@ export class GameOverView {
     if (!b) return;
     const { scene, cx } = this;
     this.clearBoardError();
-    b.objs.slice(1).forEach(o => o.destroy());
+    // 걸린 트윈을 먼저 끊고 부순다 — 커서 깜빡임은 무한 반복이라, 오브젝트만 부수면 씬이 끝날 때까지 트윈이 남는다
+    b.objs.slice(1).forEach(o => { scene.tweens.killTweensOf(o); o.destroy(); });
     b.objs = [b.objs[0]];
     const left = cx - BOARD.w / 2, top = b.y - BOARD.h / 2;
     b.g.clear();
