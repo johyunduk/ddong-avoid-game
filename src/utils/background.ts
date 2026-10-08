@@ -84,7 +84,9 @@ export const GROUND_FX: Readonly<Record<string, GroundFx>> = {
   background3:      fromDebris('stone',    { light: 0xc49997, mid: 0xb79296, dark: 0x77667d, outline: 0x30364d }, 0xbf9fa0),
   xmas_background:  fromDebris('snow',     { light: 0xfffefe, mid: 0xfefefe, dark: 0xcfebfc, outline: 0x90a4b0 }, 0xf4f3f3),
   wp_hanok_bg:      fromDebris('soil',     { light: 0xfdc171, mid: 0xf4af67, dark: 0xda7636, outline: 0x292829 }, 0xeeba7e),
-  wp_lake_bg:       fromDebris('soil',     { light: 0xffdf8b, mid: 0xf1b36c, dark: 0xae814e, outline: 0x625837 }, 0xeec789),   // 호수 C (v4) — 맑은 낮 섬 마을 흙길
+  // 호수 C (v4) — 잔해는 흙길 위 풀 턱 색 (대표 피드백: 흙색이면 흙길에 묻힌다). lake_C_480x720 의 y 566~600 풀 픽셀에서
+  // 밝기 백분위로 뽑았다: light 85~100 · mid 45~60 · dark 15~30. outline 은 가장 어두운 풀(#0C5642)을 62% 로 더 눌러 흙 위에서 또렷하게
+  wp_lake_bg:       fromDebris('soil',     { light: 0xd0e72f, mid: 0x66aa3e, dark: 0x1c794e, outline: 0x073528 }, 0xa6cd8f),
   wp_maehwa_bg:     fromDebris('snow',     { light: 0xffffff, mid: 0xbab5e5, dark: 0x908cb1, outline: 0x5a586f }, 0xd5d3e8),   // 설중매 C2 (v5) — 눈 덮인 땅
   wp_gold_mine_bg:  fromDebris('soil',     { light: 0xed9b57, mid: 0xb26f44, dark: 0x4c3b33, outline: 0x1a1413 }, 0xcb9065),
   wp_fantasy_bg:    fromDebris('stone',    { light: 0xdca896, mid: 0xb094a0, dark: 0x837997, outline: 0x3f425e }, 0xc4a5a4),
