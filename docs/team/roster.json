@@ -9,5 +9,6 @@
   "w8": { "name": "composer", "kind": "claude", "label": "음악·Claude", "role": "docs/team/composer.md" },
   "w9": { "name": "planner", "kind": "claude", "label": "기획·Claude", "role": "docs/team/planner.md" },
   "wB": { "name": "lore", "kind": "claude", "label": "세계관·Claude", "role": "docs/team/lore.md" },
-  "wC": { "name": "dev2", "kind": "claude", "label": "개발2·Claude(임시)", "role": "docs/team/dev2.md" }
+  "wC": { "name": "dev2", "kind": "claude", "label": "개발2·Claude(임시)", "role": "docs/team/dev2.md" },
+  "wD": { "name": "builder2", "kind": "codex", "label": "제작2·Codex(임시)", "role": "docs/team/builder2.md" }
 }
