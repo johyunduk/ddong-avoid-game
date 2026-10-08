@@ -31,6 +31,10 @@ interface PullMeta {
   level: number;
 }
 
+/** 배경화면 획득 카드의 청록 — 시안 A (WP_ACCENT 보라는 수집 화면 · 요약 줄 결이라 따로 둔다) */
+const WP_CARD_TEAL_HEX = '#40c8ff';
+const WP_CARD_TEAL = 0x40c8ff;
+
 /** 진열이 넘어가는 간격 (ms) */
 const SLIDE_MS = 3000;
 
@@ -643,83 +647,84 @@ export default class GachaScene extends BaseScene {
     });
   }
 
+  /**
+   * 배경화면 획득 카드 (A안 — 가로 카드). 뽑기 결과 캐릭터 카드와 같은 판 결:
+   * 수집 썸네일(ui/collection/wp)을 360x233 카드로 크게 · 청록 테두리와 글로우 · 등급 자리에 '배경화면' 칩.
+   * 신규 = NEW + 반짝이, 중복 = 카드를 어둡게 + '보유 중'. 배경은 그 배경화면을 어둡게 깐다.
+   * 1회 뽑기의 마지막 장이면 이 카드가 곧 결과 화면이라 SKOR 알약과 1회 더 · 10회 더 · 닫기가 붙는다.
+   * 시안: ddong-fx-work/small-screens/1_wallpaper_card/A_*.png
+   */
   private showWallpaperRevealCard(wp: PulledWallpaper, def: BackgroundDef | undefined) {
     this.clearUI();
-
-    const wpName = def?.name ?? wp.id;
-
-    const { width: _W, height: _H } = this.cameras.main;
-    const _cx = _W / 2;
-    const _yOff = (_H - 600) / 2;
-
-    // ── 배경: 실제 배경화면 이미지 (있으면) 또는 단색 ──
-    if (def && this.textures.exists(def.bgKey)) {
-      addBackground(this, def.bgKey, _W, _H);
-    } else {
-      this.add.rectangle(_cx, _H / 2, _W, _H, 0x050515);
-    }
-    // 어두운 오버레이
-    this.add.rectangle(_cx, _H / 2, _W, _H, 0x000000, 0.5);
-
-    // 보라 헤이즈
-    this.add.circle(_cx, 260 + _yOff, 220, WP_ACCENT_INT, 0.10);
-    this.add.circle(_cx, 260 + _yOff, 120, WP_ACCENT_INT, 0.07);
-
-    // ── 상단 타이틀 ──
-    const title = this.add.text(_cx, 60 + _yOff, '배경화면 획득!', {
-      fontSize: '22px', color: '#ffffff', fontStyle: 'bold',
-      stroke: '#000000', strokeThickness: 5,
-    }).setOrigin(0.5).setAlpha(0);
-    this.tweens.add({ targets: title, alpha: 1, duration: 300, delay: 100 });
-
-    // ── WALLPAPER 배지 ──
-    const badge = this.add.text(_cx, 100 + _yOff, 'WALLPAPER', {
-      fontSize: '13px', color: WP_ACCENT_HEX, fontStyle: 'bold',
-      stroke: '#000000', strokeThickness: 4,
-      fontFamily: 'monospace', letterSpacing: 4,
-    }).setOrigin(0.5).setAlpha(0);
-    this.tweens.add({ targets: badge, alpha: 1, duration: 300, delay: 250 });
-
-    // ── 배경화면 이름 ──
-    const nameText = this.add.text(_cx, 500 + _yOff, wpName, {
-      fontSize: '30px', color: '#ffffff', fontStyle: 'bold',
-      stroke: '#000000', strokeThickness: 6,
-    }).setOrigin(0.5).setAlpha(0);
-    this.tweens.add({
-      targets: nameText, alpha: 1, y: { from: 520 + _yOff, to: 500 + _yOff },
-      duration: 400, ease: 'Back.easeOut', delay: 400,
-    });
-
-    // ── 설명 ──
-    if (def?.description) {
-      const desc = this.add.text(_cx, 544 + _yOff, def.description, {
-        fontSize: '13px', color: '#cccccc',
-        stroke: '#000000', strokeThickness: 3,
-      }).setOrigin(0.5).setAlpha(0);
-      this.tweens.add({ targets: desc, alpha: 1, duration: 300, delay: 550 });
-    }
-
-    // ── NEW! 배지 ──
-    if (wp.isNew) {
-      const newBadge = this.add.text(_W - 75, 145 + _yOff, ' NEW! ', {
-        fontSize: '15px', color: '#ffff00', fontStyle: 'bold',
-        backgroundColor: '#cc0000', stroke: '#000', strokeThickness: 2,
-      }).setOrigin(0.5).setAlpha(0).setScale(0);
-      this.tweens.add({
-        targets: newBadge, alpha: 1, scaleX: 1, scaleY: 1,
-        duration: 300, ease: 'Back.easeOut', delay: 650,
-      });
-    }
-
-    // ── 탭 안내 ──
+    const { width: W, height: H } = this.cameras.main;
+    const cx = W / 2;
     const isLast = this.revealItemIndex >= this.revealItems.length - 1;
-    const hint = isLast ? 'TAP → RESULTS' : `TAP → NEXT  (${this.revealItemIndex + 1}/${this.revealItems.length})`;
-    const tapHint = this.add.text(_cx, 576 + _yOff, hint, {
-      fontSize: '13px', color: '#555555', fontFamily: 'monospace',
-    }).setOrigin(0.5);
-    this.tweens.add({
-      targets: tapHint, alpha: { from: 0.3, to: 1 }, duration: 600, yoyo: true, repeat: -1,
+    const final = isLast && this.pullResults.length <= 1;   // 1회 뽑기의 마지막 장 = 결과 화면
+
+    // ── 배경: 그 배경화면을 어둡게 ──
+    if (def && this.textures.exists(def.bgKey)) addBackground(this, def.bgKey, W, H);
+    else this.add.rectangle(cx, H / 2, W, H, 0x050515);
+    this.add.rectangle(cx, H / 2, W, H, 0x0a0618, 0.55);
+
+    // ── 카드 (360x233, 폭이 모자라면 줄인다) ──
+    const cw = Math.min(360, W - 30), ch = Math.round(cw * 233 / 360);
+    const btnY = H - 80;
+    const cy = final ? Math.min(H * 0.35, btnY - 46 - 160 - ch / 2) : H * 0.39;
+    const card = this.add.container(cx, cy);
+    const frame = bakeButton(this, `gacha_wpframe_${cw}x${ch}`, {
+      w: cw + 8, h: ch + 8, radius: 18, top: '#9fe8ff', bottom: WP_CARD_TEAL_HEX, border: '#06324a', borderW: 3,
+      lip: '#06324a', lipH: 5, gloss: 0, glow: 'rgba(64,200,255,0.8)',
     });
+    card.add(this.add.image(0, 0, frame.key).setOrigin(0.5, frame.originY));
+    const src = `gacha_wp_${wp.id}`;
+    if (this.textures.exists(src)) {
+      const img = this.add.image(0, 0, bakeRoundedImage(this, `gacha_wpR_${wp.id}_${cw}`, src, cw, ch, 14)).setDisplaySize(cw, ch);
+      if (!wp.isNew) img.setTint(0x8a8a8a);            // 중복은 어둡게
+      card.add(img);
+    } else if (def && this.textures.exists(def.bgKey)) {
+      card.add(this.add.image(0, 0, def.bgKey).setDisplaySize(cw, ch));
+    }
+    // '배경화면' 칩 (등급 자리, 왼쪽 위) · NEW / 보유 중 (오른쪽 위). edge = 칩의 바깥 끝 x, side = 그 끝이 왼쪽(-1)/오른쪽(+1)
+    const chip = (edge: number, side: -1 | 1, label: string, fill: number, stroke: number, color: string) => {
+      const y = -ch / 2 + 23;
+      const t = this.add.text(0, y, label, { fontSize: '13px', color, fontStyle: 'bold' }).setOrigin(0.5);
+      const w = t.width + 26, x = edge - side * w / 2;
+      t.setX(x);
+      card.add(this.add.graphics().fillStyle(fill, 0.92).fillRoundedRect(x - w / 2, y - 13, w, 26, 13).lineStyle(2, stroke).strokeRoundedRect(x - w / 2, y - 13, w, 26, 13));
+      card.add(t);
+    };
+    chip(-cw / 2 + 12, -1, '배경화면', 0x0a1a2e, WP_CARD_TEAL, '#e8f8ff');
+    if (wp.isNew) card.add(this.newTag(cw / 2 - 38, -ch / 2 + 23, 54));
+    else chip(cw / 2 - 12, 1, '보유 중', 0x1e1236, 0x8a7ab8, '#e6dcff');
+    card.setScale(0.6).setAlpha(0);
+    this.tweens.add({
+      targets: card, scale: 1, alpha: 1, duration: 420, ease: 'Back.easeOut',
+      onComplete: () => { if (wp.isNew) this.sparkles(cx, cy, cw + 8, ch + 8, 'SR', WP_CARD_TEAL); },
+    });
+
+    // ── 이름 · 설명 · 한 줄 ──
+    const nameY = cy + ch / 2 + 44;
+    const name = this.add.text(cx, nameY, def?.name ?? wp.id, { fontSize: '36px', fontStyle: 'bold', stroke: '#06223a', strokeThickness: 6 }).setOrigin(0.5);
+    gradientText(name, [[0, '#ffffff'], [0.55, '#bdf0ff'], [1, '#5ad1ff']]);
+    const parts: Phaser.GameObjects.GameObject[] = [name];
+    if (def?.description) {
+      parts.push(this.add.text(cx, nameY + 38, def.description, { fontSize: '14px', color: '#ffffff', fontStyle: 'bold', stroke: '#000000', strokeThickness: 3 }).setOrigin(0.5));
+    }
+    parts.push(this.add.text(cx, nameY + 64, wp.isNew ? '설정에서 바로 바꿀 수 있어요' : '이미 가진 배경화면이에요', {
+      fontSize: '12px', color: wp.isNew ? '#9fdcff' : '#b9a3d6', fontStyle: 'bold',
+    }).setOrigin(0.5));
+    parts.forEach(p => (p as Phaser.GameObjects.Text).setAlpha(0));
+    this.tweens.add({ targets: parts, alpha: 1, duration: 300, delay: 300 });
+
+    // ── 1회 뽑기 결과면 버튼, 아니면 탭 진행 ──
+    if (final) {
+      this.resultButtons(btnY);
+      return;
+    }
+    const hint = this.add.text(cx, H - 40, isLast ? '화면을 누르면 결과로' : `화면을 누르면 다음으로  (${this.revealItemIndex + 1}/${this.revealItems.length})`, {
+      fontSize: '12px', color: '#b9a3d6',
+    }).setOrigin(0.5);
+    this.tweens.add({ targets: hint, alpha: { from: 0.35, to: 1 }, duration: 600, yoyo: true, repeat: -1 });
 
     // 10연차: 결과 화면으로 바로 건너뛰기
     if (this.revealItems.length > 1) {
@@ -730,11 +735,9 @@ export default class GachaScene extends BaseScene {
         this.showSummary();
       });
     }
-
-    // 700ms 후 탭 진행
+    // 700ms 뒤 탭 진행 · 10뽑기는 3.5초 자동
     this.time.delayedCall(700, () => {
       if (!this.scene.isActive()) return;
-
       let advanced = false;
       const advance = () => {
         if (advanced) return;
@@ -745,15 +748,8 @@ export default class GachaScene extends BaseScene {
         this.revealItemIndex++;
         this.showNextReveal();
       };
-
       this.input.on('pointerdown', advance);
-
-      // 10뽑기는 3.5초 자동 진행
-      if (this.revealItems.length > 1) {
-        this.time.delayedCall(3500, () => {
-          if (this.scene.isActive()) advance();
-        });
-      }
+      if (this.revealItems.length > 1) this.time.delayedCall(3500, () => { if (this.scene.isActive()) advance(); });
     });
   }
 
