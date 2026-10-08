@@ -62,7 +62,7 @@ export const WALLPAPERS: BackgroundDef[] = [
     thumbPath: 'assets/wallpapers/lake_thumb.webp',
     bgKey: 'wp_lake_bg',
     bgPath: 'assets/wallpapers/lake_bg.webp',
-    description: '잔물결 하나 없이 하늘을 담은 새벽 호수',
+    description: '물레방아 도는 섬 마을과 빨간 돛배가 떠 있는 맑은 호수',
   },
   {
     id: 'wp_maehwa',
