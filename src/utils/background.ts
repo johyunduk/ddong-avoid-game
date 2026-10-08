@@ -31,13 +31,12 @@ export function coverBackground(
 // 배경 텍스처 키(bgKey) 하나에 한 벌. 없는 키는 DEFAULT_GROUND_FX(지금 흙색)로 떨어진다.
 
 /** 땅 재질 — 잔해 모양이 갈린다 */
-export type GroundMaterial = 'soil' | 'snow' | 'concrete' | 'stone' | 'grass';
+export type GroundMaterial = 'soil' | 'snow' | 'concrete' | 'stone';
 
 export interface GroundFx {
   /**
    * soil = 흙더미 + 균열 · snow = 둥근 눈 더미 + 눈 튐(균열 없음)
    * concrete = 각진 파편 + 금 간 균열 · stone = 돌 조각 + 균열
-   * grass = 위로 삐죽한 풀 다발(끝이 밝다) + 균열 대신 흩어진 잎 조각
    */
   material: GroundMaterial;
   /** 더미 4톤 (0xRRGGBB) — 외곽선 · 그늘 · 바탕 · 윗면 빛. 하드 엣지라 반투명 없이 이 넷만 쓴다 */
@@ -87,8 +86,7 @@ export const GROUND_FX: Readonly<Record<string, GroundFx>> = {
   wp_hanok_bg:      fromDebris('soil',     { light: 0xfdc171, mid: 0xf4af67, dark: 0xda7636, outline: 0x292829 }, 0xeeba7e),
   // 호수 C (v4) — 잔해는 흙길 위 풀 턱 색 (대표 피드백: 흙색이면 흙길에 묻힌다). lake_C_480x720 의 y 566~600 풀 픽셀에서
   // 밝기 백분위로 뽑았다: light 85~100 · mid 45~60 · dark 15~30. outline 은 가장 어두운 풀(#0C5642)을 62% 로 더 눌러 흙 위에서 또렷하게
-  // 재질은 grass — 흙더미 대신 풀 다발, 균열 대신 잎 튐 (대표 피드백: "초록 흙더미"가 아니라 진짜 풀 모양)
-  wp_lake_bg:       fromDebris('grass',    { light: 0xd0e72f, mid: 0x66aa3e, dark: 0x1c794e, outline: 0x073528 }, 0xa6cd8f),
+  wp_lake_bg:       fromDebris('soil',     { light: 0xd0e72f, mid: 0x66aa3e, dark: 0x1c794e, outline: 0x073528 }, 0xa6cd8f),
   wp_maehwa_bg:     fromDebris('snow',     { light: 0xffffff, mid: 0xbab5e5, dark: 0x908cb1, outline: 0x5a586f }, 0xd5d3e8),   // 설중매 C2 (v5) — 눈 덮인 땅
   wp_gold_mine_bg:  fromDebris('soil',     { light: 0xed9b57, mid: 0xb26f44, dark: 0x4c3b33, outline: 0x1a1413 }, 0xcb9065),
   wp_fantasy_bg:    fromDebris('stone',    { light: 0xdca896, mid: 0xb094a0, dark: 0x837997, outline: 0x3f425e }, 0xc4a5a4),
