@@ -71,7 +71,7 @@ export const WALLPAPERS: BackgroundDef[] = [
     thumbPath: 'assets/wallpapers/maehwa_thumb.webp',
     bgKey: 'wp_maehwa_bg',
     bgPath: 'assets/wallpapers/maehwa_bg.webp',
-    description: '이른 봄 흰 매화가 눈처럼 흩날리는 언덕',
+    description: '눈 덮인 한옥 마을, 해 질 녘에 핀 붉은 매화',
   },
   {
     id: 'wp_gold_mine',

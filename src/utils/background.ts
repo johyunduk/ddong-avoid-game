@@ -85,7 +85,7 @@ export const GROUND_FX: Readonly<Record<string, GroundFx>> = {
   xmas_background:  fromDebris('snow',     { light: 0xfffefe, mid: 0xfefefe, dark: 0xcfebfc, outline: 0x90a4b0 }, 0xf4f3f3),
   wp_hanok_bg:      fromDebris('soil',     { light: 0xfdc171, mid: 0xf4af67, dark: 0xda7636, outline: 0x292829 }, 0xeeba7e),
   wp_lake_bg:       fromDebris('soil',     { light: 0xfa9c61, mid: 0xca7a48, dark: 0x915834, outline: 0x623928 }, 0xdb956a),
-  wp_maehwa_bg:     fromDebris('soil',     { light: 0xdd9168, mid: 0xb1714e, dark: 0x7f5138, outline: 0x5d3729 }, 0xc58e70),
+  wp_maehwa_bg:     fromDebris('snow',     { light: 0xffffff, mid: 0xbab5e5, dark: 0x908cb1, outline: 0x5a586f }, 0xd5d3e8),   // 설중매 C2 (v5) — 눈 덮인 땅
   wp_gold_mine_bg:  fromDebris('soil',     { light: 0xed9b57, mid: 0xb26f44, dark: 0x4c3b33, outline: 0x1a1413 }, 0xcb9065),
   wp_fantasy_bg:    fromDebris('stone',    { light: 0xdca896, mid: 0xb094a0, dark: 0x837997, outline: 0x3f425e }, 0xc4a5a4),
 };
