@@ -36,12 +36,18 @@ const LAND_MOUND_W = 46;
 const LAND_MOUND_H = 12;
 const LAND_MOUND_ORIGIN_Y = 0.7;       // 더미 안에서 바닥선 높이 (위 8px 솟고 아래 3px 덮는다 —
                                        // 바닥선 자르기는 마스크가 하니 더미는 이음매만 덮으면 된다)
+/**
+ * grass 는 다발이 **바닥 풀 띠 위로 충분히 솟아야** 띠와 섞이지 않는다 — 더미 칸을 세로로 키운다
+ * (바닥선 위 14px · 아래 3px). 원점도 그만큼 아래로
+ */
+const LAND_GRASS_H = 18;
+const LAND_GRASS_ORIGIN_Y = 15 / 18;
 const LAND_CRACK_W = 96;
 const LAND_CRACK_H = 28;
 const LAND_CRACK_ORIGIN_Y = 0.1;
 
 /** 이번 판 착지 잔해 — 구운 텍스처 키 둘 + 착지 연기 색 */
-interface LandFx { mound: string; crack: string; smoke: number }
+interface LandFx { mound: string; crack: string; smoke: number; moundOriginY: number }
 
 type RGB = readonly [number, number, number];
 type Put = (x: number, y: number, c: RGB) => void;
@@ -90,7 +96,9 @@ function shadeMask(
 }
 
 function bakeMound(scene: Phaser.Scene, key: string, pal: GroundFx): void {
-  const W = LAND_MOUND_W, H = LAND_MOUND_H, G = Math.round(H * LAND_MOUND_ORIGIN_Y);
+  const grass = pal.material === 'grass';
+  const W = LAND_MOUND_W, H = grass ? LAND_GRASS_H : LAND_MOUND_H;
+  const G = Math.round(H * (grass ? LAND_GRASS_ORIGIN_Y : LAND_MOUND_ORIGIN_Y));
   const OUT = rgb(pal.outline), DARK = rgb(pal.dark), BASE = rgb(pal.base), LIGHT = rgb(pal.light);
   const u = (x: number) => (x - W / 2) / (W / 2);
   bakePixels(scene, key, W, H, (put) => {
@@ -121,6 +129,38 @@ function bakeMound(scene: Phaser.Scene, key: string, pal: GroundFx): void {
       for (const [cx, cy] of [[1, G - 2], [6, G - 4], [W - 4, G - 2], [W - 9, G - 4]]) {
         for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++) put(cx + dx, cy + dy, dy === 0 ? LIGHT : DARK);
         put(cx - 1, cy, OUT); put(cx + 2, cy + 1, OUT);
+      }
+      return;
+    }
+    if (grass) {
+      // 풀 다발 — 위로 삐죽한 잎 5장(톱니 5개)이 아래 뭉친 밑동에서 솟는다. 잎마다 조각 번호가 달라
+      // 겹친 잎 사이에도 외곽선이 생긴다 (한 덩이로 뭉개지지 않게). [밑동 가운데 x, 끝 x, 키(바닥선 위), 밑동 반폭]
+      const blades: readonly (readonly [number, number, number, number])[] = [
+        [14, 10, 9, 3.5], [19, 17, 12, 3.5], [24, 25, 14, 4], [29, 32, 11, 3.5], [33, 37, 8, 3],
+      ];
+      const blade = (x: number, y: number) => blades.findIndex(([bx, tx, h, hw]) => {
+        const t = (G - y) / h;                     // 0 = 바닥선, 1 = 끝
+        if (t < 0 || t > 1) return false;
+        const cx = bx + (tx - bx) * t;             // 끝으로 갈수록 바깥으로 눕는다
+        return Math.abs(x - cx) <= hw * (1 - t) + 0.5;
+      });
+      // 밑동 — 바닥선 위 3줄 ~ 아래 2줄을 덮는 뭉친 풀 (말의 잘린 경계를 덮는다)
+      const part = (x: number, y: number) => {
+        const b = blade(x, y);
+        if (b >= 0) return b;
+        return x >= 9 && x <= 37 && y >= G - 3 && y <= G + 2 ? 9 : -1;
+      };
+      for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+          const id = part(x, y);
+          if (id < 0) continue;
+          let c = BASE;
+          // 외곽선 — 위·옆에 더해 **아래도** 두른다. 아래 풀 띠와 같은 색이라 아랫변이 없으면 띠에 섞인다
+          if (part(x, y - 1) !== id || part(x - 1, y) !== id || part(x + 1, y) !== id || part(x, y + 1) < 0) c = OUT;
+          else if (id < 9 && G - y >= blades[id][2] - 4) c = LIGHT;   // 잎 끝 — 밝은 색
+          else if (y >= G - 1) c = DARK;                               // 밑동 그늘
+          put(x, y, c);
+        }
       }
       return;
     }
@@ -172,6 +212,26 @@ function bakeCrack(scene: Phaser.Scene, key: string, pal: GroundFx): void {
   bakePixels(scene, key, W, H, (put) => {
     let seed = pal.material === 'stone' ? 23 : 11;
     const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+    if (pal.material === 'grass') {
+      // 균열 대신 잎 튐 — 눈 튐과 같은 틀, 잎 조각 5장이 옆으로 흩어져 땅에 떨어져 있다 (멀수록 작다).
+      // 잎 = 외곽선 두른 3x2 ~ 5x2 마름모꼴, 윗줄 밝은 색. 좌우 번갈아 기울인다
+      const OUT = rgb(pal.outline), BASE = rgb(pal.base), LIGHT = rgb(pal.light);
+      const leaves: readonly (readonly [number, number, number])[] = [   // [가운데에서 x, 바닥선 아래 y, 길이]
+        [-30, 4, 5], [-17, 1, 4], [12, 2, 5], [24, 5, 4], [36, 3, 3],
+      ];
+      leaves.forEach(([dx, dy, len], i) => {
+        const x0 = Math.round(W / 2 + dx - len / 2), y0 = G + dy;
+        const tilt = i % 2 === 0 ? 1 : -1;
+        for (let k = 0; k < len; k++) {
+          const yy = y0 + (tilt > 0 ? (k >= len / 2 ? 1 : 0) : (k < len / 2 ? 1 : 0));
+          put(x0 + k, yy, k === 0 || k === len - 1 ? OUT : LIGHT);
+          put(x0 + k, yy + 1, k === 0 || k === len - 1 ? OUT : BASE);
+        }
+        put(x0 - 1, y0 + 1, OUT); put(x0 + len, y0 + 1, OUT);
+        for (let k = 0; k < len; k++) put(x0 + k, y0 + 2 + (tilt > 0 ? (k >= len / 2 ? 1 : 0) : (k < len / 2 ? 1 : 0)), OUT);
+      });
+      return;
+    }
     if (pal.material === 'snow') {
       // 균열 대신 눈 튐 — 가운데에서 옆으로 흩어진 눈 덩이 (멀수록 땅에 가깝고 작다). 땅 면이라 세로로 눌린다
       for (let i = 0; i < 26; i++) {
@@ -214,7 +274,10 @@ function bakeLandDecoTextures(scene: Phaser.Scene, bgKey: string): LandFx {
   const crack = `${LAND_CRACK_KEY}_${sig}`;
   bakeMound(scene, mound, pal);
   bakeCrack(scene, crack, pal);
-  return { mound, crack, smoke: pal.smoke };
+  return {
+    mound, crack, smoke: pal.smoke,
+    moundOriginY: pal.material === 'grass' ? LAND_GRASS_ORIGIN_Y : LAND_MOUND_ORIGIN_Y,
+  };
 }
 
 /** 충전 큐브 — 한 수가 도는 시간(45° 칸 한 장을 이만큼), 결과 링 간격(버튼 테두리에서 한 링씩), 링 연출 시간 */
@@ -1178,7 +1241,7 @@ export class TedAbility extends BaseAbility {
     if (!fx || !scene.textures.exists(fx.mound)) return;
     const crack = scene.add.image(x, y, fx.crack).setOrigin(0.5, LAND_CRACK_ORIGIN_Y)
       .setDepth(CHESS_DEPTH - 0.5).setAlpha(0).setScale(0.6 * P.chessMoundScale, P.chessMoundScale);
-    const mound = scene.add.image(x, y, fx.mound).setOrigin(0.5, LAND_MOUND_ORIGIN_Y)
+    const mound = scene.add.image(x, y, fx.mound).setOrigin(0.5, fx.moundOriginY)
       .setDepth(CHESS_DEPTH + 0.5).setScale(P.chessMoundScale * 0.3);
     this.tracked.add(crack);
     this.tracked.add(mound);
