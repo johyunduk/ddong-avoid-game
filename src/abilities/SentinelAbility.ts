@@ -11,7 +11,15 @@ import { SENTINEL_PARAMS } from '../config/abilityParams';
  * - 방전: 보호막이 가득 찼을 때만 pulseIntervalSec 마다 반경 pulseRadius 안 일반 똥을 지우고 개당 pulsePointsPerPoop.
  *   안 맞을수록 점수 — 예전(막을수록 점수 · 점수로 충전)의 고리를 뒤집었다
  * - 각성 단계별 값은 구현돼 있지 않다 (SENTINEL_PARAMS 하나)
- * - UI: 붉은 공이 허리 주변 수평 궤도 공전 + 전기 파지직 (재사용 Graphics). 가득 찬 동안 허리에 하늘색 고리 — 최소 표시, 정식 연출은 fx
+ * - UI: 붉은 공이 허리 주변 수평 궤도 공전 + 전기 파지직 (재사용 Graphics)
+ * - 방전 연출 (fx, 화풍: 오브젝트 하드 엣지 · 발광은 부드럽게 · 밝은 하늘 위에서 읽히게 normal 블렌드):
+ *   가득 찬 동안 — 공이 흰 심지로 달아오르고 허리에 붉은 하드 엣지 고리 + 옅은 후광. 후광은 방전이 다가올수록 짙어진다.
+ *   방전 PULSE_TELE_MS 전 — 반경 pulseRadius 자리에 옅은 고리가 먼저 떠서 범위를 예고한다.
+ *   방전 — 같은 고리가 몸에서 pulseRadius 까지 퍼져 잠깐 머물고 사라진다 (바퀴살 빛줄기 없음 — 전기는 고리를 따라서만 긴다).
+ *   오브젝트는 판 시작에 한 번 만든 Image 4장(후광 · 섬광 · 예고 고리 · 충격파)을 숨겼다 켰다 한다 — 방전 1회가 새로 만드는 것은
+ *   점수 글자 1개뿐이고, 똥 파괴 이펙트는 recycle() 의 impactHit(동시 6 상한)이 맡는다.
+ * - 회수 분산: 방전 한 번에 지울 똥을 거리순으로 잡아 두고 **프레임당 PULSE_KILLS_PER_FRAME 개씩** 지운다 (한 프레임 몰림 → 끊김).
+ *   지울 때 아직 살아 있고 방전 자리 반경 안인 똥만 친다 — 그 사이 풀에서 다시 나온 똥(화면 위쪽)은 건드리지 않는다
  */
 export class SentinelAbility extends BaseAbility {
   private shieldCount = 0;
@@ -32,8 +40,23 @@ export class SentinelAbility extends BaseAbility {
   fullMs = 0;
   shieldMs: number[] = [];
   private lastNow = 0;
-  /** 가득 찬 동안 허리에 두르는 전기 고리 (최소 표시) — 한 장을 만들어 두고 위치 · 보임만 바꾼다 */
+  /** 가득 찬 동안 허리에 두르는 고리 — 한 장을 만들어 두고 위치 · 보임만 바꾼다 */
   private fullRing: Phaser.GameObjects.Graphics | null = null;
+  /** 가득 찬 동안의 후광 · 방전 섬광 · 범위 예고 고리 · 충격파 — 판 시작에 한 번 만들고 보임만 바꾼다 */
+  private fullHalo: Phaser.GameObjects.Image | null = null;
+  private pulseFlash: Phaser.GameObjects.Image | null = null;
+  private teleRing: Phaser.GameObjects.Image | null = null;
+  private shockRing: Phaser.GameObjects.Image | null = null;
+  /** 공을 달아오른 모습으로 그렸는지 — 가득 참이 바뀐 프레임에만 다시 그린다 */
+  private dropletsHot = false;
+  /** 방전으로 지울 똥 대기열 (거리순) — 프레임당 PULSE_KILLS_PER_FRAME 개씩 비운다 */
+  private zapQueue: PoolablePoopBase[] = [];
+  private zapCx = 0;
+  private zapCy = 0;
+  /** 이번 방전에서 지운 만큼 모은 점수 — 대기열이 비면 addAbilityBonus 한 번 + '+N' 한 번 */
+  private zapBonus = 0;
+  /** 진행 중인 방전 한 번에 든 처리 시간 합 (ms) — 대기열이 비면 pulseMaxMs 로 */
+  private pulseWorkMs = 0;
   private orbitDroplets: Phaser.GameObjects.Graphics[] = [];
   private orbitAngle = 0;
 
@@ -49,6 +72,20 @@ export class SentinelAbility extends BaseAbility {
   private static readonly RED           = 0xff2222;
   private static readonly RED_LIGHT     = 0xff6666;
 
+  /** 방전 한 프레임에 지우는 똥 상한 (planner 제안 — 측정에서 방전 프레임 끊김 후보가 펄스 없는 판의 약 4배) */
+  private static readonly PULSE_KILLS_PER_FRAME = 4;
+  /** 범위 예고 고리가 뜨는 시간 (방전 전 ms) */
+  private static readonly PULSE_TELE_MS = 450;
+  /** 충격파: 몸에서 반경까지 퍼지는 시간 · 반경에 머무는 시간 · 사라지는 시간 (ms) */
+  private static readonly SHOCK_GROW_MS = 170;
+  private static readonly SHOCK_HOLD_MS = 110;
+  private static readonly SHOCK_FADE_MS = 200;
+  private static readonly RING_KEY = 'sentinel_pulse_ring';
+  private static readonly GLOW_KEY = 'sentinel_pulse_glow';
+  /** 고리 텍스처 바깥 여백 (발광 · 전기가 반경 밖으로 나가는 폭) */
+  private static readonly RING_PAD = 18;
+  private static readonly GLOW_TEX = 128;
+
   override onCreate(api: GameSceneAPI): void {
     // 판마다 새 인스턴스지만(getCharacterAbility) 상태는 여기서 명시적으로 처음으로 (규칙 1)
     this.shieldCount = SENTINEL_PARAMS.startShields;
@@ -60,8 +97,11 @@ export class SentinelAbility extends BaseAbility {
     this.fullMs = 0;
     this.shieldMs = new Array(SENTINEL_PARAMS.maxShields + 1).fill(0);
     this.lastNow = api.scene.time.now;
-    this.fullRing = api.scene.add.graphics().setDepth(100).setVisible(false);
-    this.fullRing.lineStyle(2, 0x66e0ff, 0.9).strokeEllipse(0, 0, 64, 18);
+    this.dropletsHot = false;
+    this.zapQueue = [];
+    this.zapBonus = 0;
+    this.pulseWorkMs = 0;
+    this.createPulseVisuals(api.scene);
     this.chargeTimer = api.scene.time.addEvent({
       delay: SENTINEL_PARAMS.chargeIntervalSec * 1000, loop: true, callback: () => this.tryCharge(api),
     });
@@ -87,15 +127,69 @@ export class SentinelAbility extends BaseAbility {
 
   /**
    * 과충전 방전 — 보호막이 가득 찼을 때만. 아니면 그 주기는 건너뛴다 (횟수에도 안 넣는다).
-   * 점수는 zapNearbyPoops 의 addAbilityBonus(→ updateScore)
+   * 여기서는 반경 안 똥을 거리순으로 잡아 두기만 한다 — 실제 회수 · 점수는 drainZapQueue 가 프레임마다 나눠서.
+   * pulseMaxMs 의 뜻은 그대로 '방전 한 번 처리 시간' — 잡기 프레임 + 회수 프레임들을 더해 대기열이 빌 때 잰다
    */
   private pulse(api: GameSceneAPI): void {
     if (this.shieldCount < SENTINEL_PARAMS.maxShields) return;
     const t0 = performance.now();
-    const n = this.zapNearbyPoops(api, SENTINEL_PARAMS.pulseRadius, SENTINEL_PARAMS.pulsePointsPerPoop);
+    const cx = api.player.x;
+    const cy = api.player.y;
+    const r2 = SENTINEL_PARAMS.pulseRadius * SENTINEL_PARAMS.pulseRadius;
+    const found: { p: PoolablePoopBase; d2: number }[] = [];
+    for (const obj of api.poops.getChildren()) {
+      const p = obj as PoolablePoopBase;
+      if (!p.active) continue;
+      const d2 = (p.x - cx) ** 2 + (p.y - cy) ** 2;
+      if (d2 <= r2) found.push({ p, d2 });
+    }
+    found.sort((a, b) => a.d2 - b.d2);
+    // 앞 방전의 대기열이 남아 있으면 뒤에 잇는다 (주기 4초라 실제로는 비어 있다)
+    for (const f of found) this.zapQueue.push(f.p);
+    this.zapCx = cx;
+    this.zapCy = cy;
     this.pulsesFired++;
-    this.pulseKills += n;
-    this.pulseMaxMs = Math.max(this.pulseMaxMs, performance.now() - t0);
+    this.playPulseEffect(api, cx, cy);
+    this.pulseWorkMs += performance.now() - t0;
+    if (this.zapQueue.length === 0) this.closePulseTiming();
+  }
+
+  /** 방전 한 번이 끝났다 (대기열이 빔) — 그 방전에 든 처리 시간 합을 pulseMaxMs 에 */
+  private closePulseTiming(): void {
+    this.pulseMaxMs = Math.max(this.pulseMaxMs, this.pulseWorkMs);
+    this.pulseWorkMs = 0;
+  }
+
+  /**
+   * 대기열에서 이번 프레임 몫(PULSE_KILLS_PER_FRAME)을 지운다. 점수는 지운 만큼 모아 두었다가 대기열이 비면
+   * addAbilityBonus(→ updateScore) 한 번 + '+N' 한 번 — 합계는 한 번에 지울 때와 같다.
+   * 배치마다 주면 updateScore(점수 글자 다시 그리기 · 특수 똥 판정)가 방전 한 번에 2~3번 돌아 처리 시간이 두 배가 됐다 (sentinel_check P5)
+   */
+  private drainZapQueue(api: GameSceneAPI): void {
+    if (this.zapQueue.length === 0) return;
+    const t0 = performance.now();
+    // 방전 자리에서 반경 + 여유 안 — 잡아 둔 뒤 몇 프레임 떨어진 만큼. 풀에서 다시 나온 똥(화면 위쪽)은 여기서 걸러진다
+    const lim = SENTINEL_PARAMS.pulseRadius + 40;
+    const lim2 = lim * lim;
+    let killed = 0;
+    while (killed < SentinelAbility.PULSE_KILLS_PER_FRAME && this.zapQueue.length > 0) {
+      const p = this.zapQueue.shift()!;
+      if (!p.active || (p.x - this.zapCx) ** 2 + (p.y - this.zapCy) ** 2 > lim2) continue;
+      p.recycle();
+      killed++;
+    }
+    if (killed > 0) {
+      const bonus = killed * SENTINEL_PARAMS.pulsePointsPerPoop;
+      this.pulseKills += killed;
+      this.zapBonus += bonus;
+    }
+    if (this.zapQueue.length === 0 && this.zapBonus > 0) {
+      api.addAbilityBonus(this.zapBonus);
+      this.showZapBonusText(api, this.zapBonus);
+      this.zapBonus = 0;
+    }
+    this.pulseWorkMs += performance.now() - t0;
+    if (this.zapQueue.length === 0) this.closePulseTiming();
   }
 
   override onHitPoop(api: GameSceneAPI): boolean {
@@ -118,7 +212,8 @@ export class SentinelAbility extends BaseAbility {
     this.aliveMs += dt;
     if (full) this.fullMs += dt;
     this.shieldMs[Math.min(this.shieldCount, SENTINEL_PARAMS.maxShields)] += dt;
-    if (this.fullRing) this.fullRing.setVisible(full).setPosition(api.player.x, api.player.y + SentinelAbility.ORBIT_WAIST_Y);
+    this.drainZapQueue(api);
+    this.updateFullIndicator(api, full);
 
     if (this.orbitDroplets.length === 0) return;
 
@@ -162,8 +257,17 @@ export class SentinelAbility extends BaseAbility {
     this.chargeTimer = null;
     this.pulseTimer?.remove();
     this.pulseTimer = null;
-    this.fullRing?.destroy();
+    this.zapQueue = [];
+    for (const o of [this.fullRing, this.fullHalo, this.pulseFlash, this.teleRing, this.shockRing]) {
+      if (!o) continue;
+      o.scene?.tweens.killTweensOf(o);
+      o.destroy();
+    }
     this.fullRing = null;
+    this.fullHalo = null;
+    this.pulseFlash = null;
+    this.teleRing = null;
+    this.shockRing = null;
     this.sparkTween?.stop();
     this.sparkGfx?.destroy();
     this.orbitDroplets.forEach(drop => drop.destroy());
@@ -252,16 +356,193 @@ export class SentinelAbility extends BaseAbility {
     });
   }
 
-  private drawDroplet(g: Phaser.GameObjects.Graphics): void {
+  /** hot: 가득 찬 동안 — 하이라이트 대신 가운데 흰 심지 (달아오름) */
+  private drawDroplet(g: Phaser.GameObjects.Graphics, hot = this.dropletsHot): void {
     g.clear();
-    g.fillStyle(SentinelAbility.RED, 0.22);
+    g.fillStyle(SentinelAbility.RED, hot ? 0.3 : 0.22);
     g.fillCircle(0, 0, 15);
     g.fillStyle(SentinelAbility.RED, 0.4);
     g.fillCircle(0, 0, 10);
     g.fillStyle(SentinelAbility.RED, 0.95);
     g.fillCircle(0, 0, 7);
-    g.fillStyle(0xffffff, 0.5);
-    g.fillCircle(-2, -2.5, 2.5);
+    if (hot) {
+      g.fillStyle(0xffffff, 1);
+      g.fillCircle(0, 0, 3.5);
+    } else {
+      g.fillStyle(0xffffff, 0.5);
+      g.fillCircle(-2, -2.5, 2.5);
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // 방전 연출 — 가득 참 표시 · 범위 예고 · 충격파
+  // ─────────────────────────────────────────────────────────────
+
+  /** 판 시작에 한 번 — 텍스처를 굽고 재사용할 오브젝트를 숨긴 채 만든다 */
+  private createPulseVisuals(scene: Phaser.Scene): void {
+    SentinelAbility.bakeTextures(scene);
+
+    // 허리 고리 — 진홍 띠 + 흰 심지 (하드 엣지). 한 번 그리고 위치 · 보임만 바꾼다
+    this.fullRing = scene.add.graphics().setDepth(100).setVisible(false);
+    this.fullRing.lineStyle(4, 0xc4101f, 1).strokeEllipse(0, 0, 64, 18);
+    this.fullRing.lineStyle(1.5, 0xfff3f3, 1).strokeEllipse(0, 0, 64, 18);
+
+    const glowScale = 96 / SentinelAbility.GLOW_TEX;
+    this.fullHalo = scene.add.image(0, 0, SentinelAbility.GLOW_KEY).setDepth(88).setScale(glowScale).setVisible(false);
+    this.pulseFlash = scene.add.image(0, 0, SentinelAbility.GLOW_KEY).setDepth(88).setVisible(false);
+    this.teleRing = scene.add.image(0, 0, SentinelAbility.RING_KEY).setDepth(90).setVisible(false);
+    this.shockRing = scene.add.image(0, 0, SentinelAbility.RING_KEY).setDepth(150).setVisible(false);
+  }
+
+  /**
+   * 텍스처 두 장 — 키가 있으면 건너뛴다 (다시 하기). 배율 1 에서 고리 반지름 = pulseRadius.
+   * 고리: 안쪽 여운(부드럽게) → 겹친 발광 획 → 밝은 하늘 대비용 어두운 얇은 테 → 진홍 하드 띠 + 흰 심지
+   *       → 띠를 따라 기는 전기 (원주 방향으로만 꺾인다 — 바깥으로 뻗는 줄기 없음)
+   */
+  private static bakeTextures(scene: Phaser.Scene): void {
+    const R = Math.round(SENTINEL_PARAMS.pulseRadius);
+    if (!scene.textures.exists(SentinelAbility.RING_KEY)) {
+      const n = (R + SentinelAbility.RING_PAD) * 2;
+      const tex = scene.textures.createCanvas(SentinelAbility.RING_KEY, n, n);
+      if (tex) {
+        const ctx = tex.getContext();
+        const c = n / 2;
+        const circle = (r: number) => { ctx.beginPath(); ctx.arc(c, c, r, 0, Math.PI * 2); };
+        const wake = ctx.createRadialGradient(c, c, 0, c, c, R - 3);
+        wake.addColorStop(0, 'rgba(255,60,80,0)');
+        wake.addColorStop(0.55, 'rgba(255,60,80,0)');
+        wake.addColorStop(0.9, 'rgba(255,60,80,0.10)');
+        wake.addColorStop(1, 'rgba(255,60,80,0.22)');
+        ctx.fillStyle = wake;
+        circle(R - 3);
+        ctx.fill();
+        for (const [lw, a] of [[30, 0.06], [20, 0.09], [12, 0.14]] as const) {
+          ctx.strokeStyle = `rgba(255,74,90,${a})`;
+          ctx.lineWidth = lw;
+          circle(R);
+          ctx.stroke();
+        }
+        ctx.strokeStyle = 'rgba(80,8,24,0.6)';
+        ctx.lineWidth = 2;
+        circle(R + 4.5);
+        ctx.stroke();
+        ctx.strokeStyle = '#e8202e';
+        ctx.lineWidth = 6;
+        circle(R);
+        ctx.stroke();
+        ctx.strokeStyle = '#fff3f3';
+        ctx.lineWidth = 2.5;
+        circle(R);
+        ctx.stroke();
+        // 전기 — 고정 시드라 판마다 같은 모양 (한 번 굽는 텍스처)
+        let seed = 7;
+        const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+        ctx.lineJoin = 'miter';
+        for (let k = 0; k < 9; k++) {
+          const a0 = (k / 9) * Math.PI * 2 + rnd() * 0.4;
+          const span = 0.22 + rnd() * 0.18;
+          const segs = 6;
+          const pts: [number, number][] = [];
+          for (let s = 0; s <= segs; s++) {
+            const a = a0 + (span * s) / segs;
+            const rr = R + (s === 0 || s === segs ? 0 : (rnd() - 0.5) * 12);
+            pts.push([c + Math.cos(a) * rr, c + Math.sin(a) * rr]);
+          }
+          for (const [col, lw] of [['#c4101f', 3.5], ['#ffffff', 1.4]] as const) {
+            ctx.strokeStyle = col;
+            ctx.lineWidth = lw;
+            ctx.beginPath();
+            pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+            ctx.stroke();
+          }
+        }
+        tex.refresh();
+      }
+    }
+    if (!scene.textures.exists(SentinelAbility.GLOW_KEY)) {
+      const n = SentinelAbility.GLOW_TEX;
+      const tex = scene.textures.createCanvas(SentinelAbility.GLOW_KEY, n, n);
+      if (tex) {
+        const ctx = tex.getContext();
+        const c = n / 2;
+        const g = ctx.createRadialGradient(c, c, 0, c, c, c);
+        g.addColorStop(0, 'rgba(255,240,240,0.9)');
+        g.addColorStop(0.18, 'rgba(255,90,100,0.55)');
+        g.addColorStop(0.5, 'rgba(255,60,80,0.18)');
+        g.addColorStop(1, 'rgba(255,60,80,0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, n, n);
+        tex.refresh();
+      }
+    }
+  }
+
+  /**
+   * 매 프레임 — 가득 찬 동안의 표시. 다음 방전까지 남은 시간으로 후광을 짙게 하고, 마지막 PULSE_TELE_MS 동안 범위 예고 고리.
+   * 오브젝트를 만들지 않는다 (위치 · 알파 · 보임만)
+   */
+  private updateFullIndicator(api: GameSceneAPI, full: boolean): void {
+    if (full !== this.dropletsHot) {
+      this.dropletsHot = full;
+      this.orbitDroplets.forEach(d => d.active && this.drawDroplet(d, full));
+    }
+    const x = api.player.x;
+    const y = api.player.y;
+    this.fullRing?.setVisible(full).setPosition(x, y + SentinelAbility.ORBIT_WAIST_Y);
+    const halo = this.fullHalo;
+    const tele = this.teleRing;
+    if (!full) {
+      halo?.setVisible(false);
+      tele?.setVisible(false);
+      return;
+    }
+    const delay = SENTINEL_PARAMS.pulseIntervalSec * 1000;
+    const remain = this.pulseTimer ? this.pulseTimer.getRemaining() : delay;
+    const near = 1 - Phaser.Math.Clamp(remain / delay, 0, 1);   // 0 = 방금 방전 · 1 = 곧 방전
+    if (halo) {
+      const beat = 0.5 + 0.5 * Math.sin(api.scene.time.now * (0.006 + 0.012 * near));
+      halo.setVisible(true).setPosition(x, y + SentinelAbility.ORBIT_WAIST_Y).setAlpha(0.18 + 0.3 * near + 0.12 * beat);
+    }
+    if (tele) {
+      const tm = SentinelAbility.PULSE_TELE_MS;
+      if (remain <= tm) {
+        const k = 1 - remain / tm;
+        tele.setVisible(true).setPosition(x, y).setScale(1.06 - 0.06 * k).setAlpha(0.32 * k);
+      } else {
+        tele.setVisible(false);
+      }
+    }
+  }
+
+  /** 방전 한 번 — 섬광 + 충격파 고리가 몸에서 반경까지 퍼져 잠깐 머문다. 재사용 Image 두 장에 트윈만 건다 */
+  private playPulseEffect(api: GameSceneAPI, cx: number, cy: number): void {
+    const scene = api.scene;
+    this.teleRing?.setVisible(false);
+
+    const flash = this.pulseFlash;
+    if (flash) {
+      scene.tweens.killTweensOf(flash);
+      const s0 = 70 / SentinelAbility.GLOW_TEX;
+      flash.setVisible(true).setPosition(cx, cy).setScale(s0).setAlpha(0.95);
+      scene.tweens.add({
+        targets: flash, scale: s0 * 2.4, alpha: 0, duration: 160, ease: 'Quad.easeOut',
+        onComplete: () => flash.setVisible(false),
+      });
+    }
+
+    const ring = this.shockRing;
+    if (ring) {
+      scene.tweens.killTweensOf(ring);
+      ring.setVisible(true).setPosition(cx, cy).setScale(0.12).setAlpha(1);
+      scene.tweens.chain({
+        targets: ring,
+        tweens: [
+          { scale: 1, duration: SentinelAbility.SHOCK_GROW_MS, ease: 'Expo.easeOut' },
+          { alpha: 0, scale: 1.03, duration: SentinelAbility.SHOCK_FADE_MS, delay: SentinelAbility.SHOCK_HOLD_MS, ease: 'Quad.easeIn' },
+        ],
+        onComplete: () => ring.setVisible(false),
+      });
+    }
   }
 
   // ─────────────────────────────────────────────────────────────
