@@ -60,7 +60,15 @@ function livePos(poop: Phaser.Physics.Arcade.Sprite, last: LastPos): LastPos {
 }
 
 export class MaehwaAbility extends BaseAbility {
-  private lastMaehwaScore = 0;
+  /**
+   * 다음 베기까지 쌓인 '플레이 점수' — 자기 베기 보너스를 뺀 점수만 센다 (2026-10 밸런스).
+   * 예전에는 score % slashInterval 로 판정해서, 자기 보너스가 배수를 넘겨 버리면 그 베기가 통째로 삼켜지고
+   * 다음 배수까지 밀렸다 (slashPoints 를 올릴수록 더 자주 삼켜 오히려 점수가 줄었다 — 측정에서 −36%)
+   */
+  private slashProgress = 0;
+  /** 측정용 누계 (밸런스 하네스가 읽는다 — 화면 · 저장에는 안 쓴다) — 판당 베기(발동) 횟수 · 베기로 지운 똥 수 */
+  slashesFired = 0;
+  slashKills = 0;
 
   /** onDestroy 시 정리할 예약 타이머 (씬 재시작 후 stale 실행 방지) */
   private pendingTimers: Phaser.Time.TimerEvent[] = [];
@@ -74,14 +82,22 @@ export class MaehwaAbility extends BaseAbility {
     return this.awakeningLevel >= 2 ? MAEHWA_PARAMS.awake2SpecialBonus : 0;
   }
 
-  override onScoreMilestone(score: number, api: GameSceneAPI): void {
-    // **자기 보너스로 들어온 마일스톤은 삼킨다** (레드·테드·하이디와 같은 규칙). 삭제 점수가
-    // 생기면서 보너스 한 번이 발동 간격을 넘길 수 있게 됐다 — 이 줄이 없으면 발동이 연쇄로 번진다
+  override onCreate(_api: GameSceneAPI): void {
+    // 판마다 새 인스턴스지만 상태는 여기서 명시적으로 처음으로 (규칙 1)
+    this.slashProgress = 0;
+    this.slashesFired = 0;
+    this.slashKills = 0;
+  }
+
+  override onScoreMilestone(_score: number, api: GameSceneAPI): void {
+    // GameScene 은 점수 1점마다 이걸 부른다. **자기 보너스로 들어온 점수는 세지 않는다** (레드·테드·하이디와 같은 가드) —
+    // 이 줄이 없으면 베기 보너스가 다음 베기를 부르고 연쇄로 번진다.
+    // 다만 판정은 점수 배수가 아니라 '플레이 점수' 카운터라, 보너스가 배수를 넘겨도 베기가 삼켜지지 않는다 (위상이 안 밀린다)
     if (this.awarding) return;
-    if (score % MAEHWA_PARAMS.slashInterval === 0 && score > this.lastMaehwaScore) {
-      this.lastMaehwaScore = score;
-      this.slashClosestPoops(MAEHWA_PARAMS.slashCount, api);
-    }
+    if (++this.slashProgress < MAEHWA_PARAMS.slashInterval) return;
+    this.slashProgress = 0;
+    this.slashesFired++;
+    this.slashClosestPoops(MAEHWA_PARAMS.slashCount, api);
   }
 
   override onDestroy(_api: GameSceneAPI): void {
@@ -184,6 +200,7 @@ export class MaehwaAbility extends BaseAbility {
       const cut = livePos(poop, last);
       if (poop.active) {
         (poop as PoolablePoopBase).recycle(true);
+        this.slashKills++;
         this.awardBonus(api, MAEHWA_PARAMS.slashPoints);
       }
       this.afterglow(api, cut.x, cut.y);
