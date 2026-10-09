@@ -31,7 +31,7 @@ export class SentinelAbility extends BaseAbility {
   private pulseTimer: Phaser.Time.TimerEvent | null = null;
   /**
    * 측정용 누계 (밸런스 하네스가 읽는다 — 화면 · 저장에는 안 쓴다):
-   * 방전 횟수 · 방전으로 지운 똥 · 방전 한 번 처리 시간(ms) 최댓값 · 판 시간 · 가득 찬 시간 · 보호막 개수별(0~maxShields) 머문 시간
+   * 방전 횟수 · 방전으로 지운 똥 · 방전이 쓴 한 프레임 처리 시간(ms) 최댓값 · 판 시간(게임 시계 — 히트스톱 제외) · 가득 찬 시간 · 보호막 개수별(0~maxShields) 머문 시간
    */
   pulsesFired = 0;
   pulseKills = 0;
@@ -39,7 +39,6 @@ export class SentinelAbility extends BaseAbility {
   aliveMs = 0;
   fullMs = 0;
   shieldMs: number[] = [];
-  private lastNow = 0;
   /** 가득 찬 동안 허리에 두르는 고리 — 한 장을 만들어 두고 위치 · 보임만 바꾼다 */
   private fullRing: Phaser.GameObjects.Graphics | null = null;
   /** 가득 찬 동안의 후광 · 방전 섬광 · 범위 예고 고리 · 충격파 — 판 시작에 한 번 만들고 보임만 바꾼다 */
@@ -53,10 +52,8 @@ export class SentinelAbility extends BaseAbility {
   private zapQueue: PoolablePoopBase[] = [];
   private zapCx = 0;
   private zapCy = 0;
-  /** 이번 방전에서 지운 만큼 모은 점수 — 대기열이 비면 addAbilityBonus 한 번 + '+N' 한 번 */
+  /** 이번 방전에서 지금까지 준 점수 — 대기열이 비면 '+N' 글자 한 번 (점수 자체는 묶음마다 이미 줬다) */
   private zapBonus = 0;
-  /** 진행 중인 방전 한 번에 든 처리 시간 합 (ms) — 대기열이 비면 pulseMaxMs 로 */
-  private pulseWorkMs = 0;
   private orbitDroplets: Phaser.GameObjects.Graphics[] = [];
   private orbitAngle = 0;
 
@@ -96,11 +93,9 @@ export class SentinelAbility extends BaseAbility {
     this.aliveMs = 0;
     this.fullMs = 0;
     this.shieldMs = new Array(SENTINEL_PARAMS.maxShields + 1).fill(0);
-    this.lastNow = api.scene.time.now;
     this.dropletsHot = false;
     this.zapQueue = [];
     this.zapBonus = 0;
-    this.pulseWorkMs = 0;
     this.createPulseVisuals(api.scene);
     this.chargeTimer = api.scene.time.addEvent({
       delay: SENTINEL_PARAMS.chargeIntervalSec * 1000, loop: true, callback: () => this.tryCharge(api),
@@ -128,7 +123,8 @@ export class SentinelAbility extends BaseAbility {
   /**
    * 과충전 방전 — 보호막이 가득 찼을 때만. 아니면 그 주기는 건너뛴다 (횟수에도 안 넣는다).
    * 여기서는 반경 안 똥을 거리순으로 잡아 두기만 한다 — 실제 회수 · 점수는 drainZapQueue 가 프레임마다 나눠서.
-   * pulseMaxMs 의 뜻은 그대로 '방전 한 번 처리 시간' — 잡기 프레임 + 회수 프레임들을 더해 대기열이 빌 때 잰다
+   * pulseMaxMs = 방전이 쓴 **한 프레임** 처리 시간의 최댓값 (잡기 프레임 · 회수 프레임 각각).
+   *   예전 뜻(방전 한 번 처리 시간)은 회수를 여러 프레임에 나누면 합이 되어 끊김을 재지 못한다 — 끊김은 프레임당 시간이 기준
    */
   private pulse(api: GameSceneAPI): void {
     if (this.shieldCount < SENTINEL_PARAMS.maxShields) return;
@@ -150,20 +146,14 @@ export class SentinelAbility extends BaseAbility {
     this.zapCy = cy;
     this.pulsesFired++;
     this.playPulseEffect(api, cx, cy);
-    this.pulseWorkMs += performance.now() - t0;
-    if (this.zapQueue.length === 0) this.closePulseTiming();
-  }
-
-  /** 방전 한 번이 끝났다 (대기열이 빔) — 그 방전에 든 처리 시간 합을 pulseMaxMs 에 */
-  private closePulseTiming(): void {
-    this.pulseMaxMs = Math.max(this.pulseMaxMs, this.pulseWorkMs);
-    this.pulseWorkMs = 0;
+    this.pulseMaxMs = Math.max(this.pulseMaxMs, performance.now() - t0);
   }
 
   /**
-   * 대기열에서 이번 프레임 몫(PULSE_KILLS_PER_FRAME)을 지운다. 점수는 지운 만큼 모아 두었다가 대기열이 비면
-   * addAbilityBonus(→ updateScore) 한 번 + '+N' 한 번 — 합계는 한 번에 지울 때와 같다.
-   * 배치마다 주면 updateScore(점수 글자 다시 그리기 · 특수 똥 판정)가 방전 한 번에 2~3번 돌아 처리 시간이 두 배가 됐다 (sentinel_check P5)
+   * 대기열에서 이번 프레임 몫(PULSE_KILLS_PER_FRAME)을 지우고 **같은 프레임에** 그 수 × pulsePointsPerPoop 를
+   * addAbilityBonus(→ updateScore) — 지운 똥과 받은 점수가 언제나 맞는다. 도중에 게임오버가 나도(onDestroy 가 대기열을 버린다)
+   * 이미 지운 똥의 점수는 들어가 있다. 대기열 끝까지 모았다가 주면 그 사이 게임오버에 점수가 빠졌다 (묶음 리뷰 1번).
+   * '+N' 글자만 대기열이 빌 때 이번 방전 합계로 한 번
    */
   private drainZapQueue(api: GameSceneAPI): void {
     if (this.zapQueue.length === 0) return;
@@ -182,14 +172,13 @@ export class SentinelAbility extends BaseAbility {
       const bonus = killed * SENTINEL_PARAMS.pulsePointsPerPoop;
       this.pulseKills += killed;
       this.zapBonus += bonus;
+      if (bonus > 0) api.addAbilityBonus(bonus);
     }
     if (this.zapQueue.length === 0 && this.zapBonus > 0) {
-      api.addAbilityBonus(this.zapBonus);
       this.showZapBonusText(api, this.zapBonus);
       this.zapBonus = 0;
     }
-    this.pulseWorkMs += performance.now() - t0;
-    if (this.zapQueue.length === 0) this.closePulseTiming();
+    this.pulseMaxMs = Math.max(this.pulseMaxMs, performance.now() - t0);
   }
 
   override onHitPoop(api: GameSceneAPI): boolean {
@@ -204,10 +193,11 @@ export class SentinelAbility extends BaseAbility {
   }
 
   override onUpdate(api: GameSceneAPI): void {
-    // 측정용 시간 — scene.time 이라 히트스톱 · 일시정지 동안은 안 흐른다
-    const now = api.scene.time.now;
-    const dt = Math.max(0, now - this.lastNow);
-    this.lastNow = now;
+    // 측정용 시간 — 프레임 delta × scene.time.timeScale. scene.time.now 는 timeScale 과 무관하게 흘러서
+    // (Clock.update 가 now 를 먼저 갱신하고 배율은 TimerEvent 에만 건다) 히트스톱(timeScale 0) 구간이 섞였다 (묶음 리뷰 2번).
+    // 이제 충전 · 방전 타이머와 같은 시계로 잰다 — 히트스톱 · 시계 일시정지 동안은 안 흐른다
+    const clock = api.scene.time;
+    const dt = clock.paused ? 0 : api.scene.game.loop.delta * clock.timeScale;
     const full = this.shieldCount >= SENTINEL_PARAMS.maxShields;
     this.aliveMs += dt;
     if (full) this.fullMs += dt;
