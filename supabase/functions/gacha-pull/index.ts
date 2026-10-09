@@ -7,15 +7,26 @@ const corsHeaders = {
 };
 
 // ── 배경화면 풀 정의 ─────────────────────────────────────────────────────
-// 등급 없음. 10종 균등 확률.
-// 뽑기당 드롭율 3.5% → 종당 실효 확률 0.35% (캐릭터 UR과 동일 수준)
-const WP_DROP_CHANCE = 0.035; // 슬롯당 3.5% → 종당 실효 확률 약 1.17%
+// 등급 없음. 아래 WP_POOL 의 종이 모두 같은 확률.
+// 슬롯마다 WP_DROP_CHANCE(3.5%) 로 배경화면이 나오고, 그 안에서 종을 균등하게 고른다
+// → 종당 실효 확률 = 3.5% ÷ 12종 ≈ 0.29% (2026-10-09 대표 결정 A안: 종이 늘어도 3.5% 는 그대로 두고 나눈다)
+// 화면 표시는 src/utils/gacha.ts 의 GACHA_WP_DROP_CHANCE, 종 목록은 src/utils/wallpaper.ts 의 GACHA_WP_IDS 와 같아야 한다
+// (scripts/check-roster.mjs 가 둘 다 검사한다)
+const WP_DROP_CHANCE = 0.035; // 슬롯당 3.5%
 const WP_POOL = [
   { id: 'wp_hanok'     },
   { id: 'wp_lake'      },
   { id: 'wp_maehwa'    },
   { id: 'wp_gold_mine' },
   { id: 'wp_fantasy'   },
+  // SR 캐릭터 배경화면 일곱 장 (2026-10-09)
+  { id: 'wp_ted'       },
+  { id: 'wp_heidi'     },
+  { id: 'wp_red'       },
+  { id: 'wp_k'         },
+  { id: 'wp_hacker'    },
+  { id: 'wp_glitch'    },
+  { id: 'wp_noise'     },
 ];
 
 function pullWallpaper(): { id: string } {

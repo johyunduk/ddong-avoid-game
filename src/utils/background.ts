@@ -90,6 +90,14 @@ export const GROUND_FX: Readonly<Record<string, GroundFx>> = {
   wp_maehwa_bg:     fromDebris('snow',     { light: 0xffffff, mid: 0xbab5e5, dark: 0x908cb1, outline: 0x5a586f }, 0xd5d3e8),   // 설중매 C2 (v5) — 눈 덮인 땅
   wp_gold_mine_bg:  fromDebris('soil',     { light: 0xed9b57, mid: 0xb26f44, dark: 0x4c3b33, outline: 0x1a1413 }, 0xcb9065),
   wp_fantasy_bg:    fromDebris('stone',    { light: 0xdca896, mid: 0xb094a0, dark: 0x837997, outline: 0x3f425e }, 0xc4a5a4),
+  // SR 캐릭터 배경화면 일곱 장 (2026-10-09) — ddong-fx-work/backgrounds/new/_bundle/bundle.json 의 ground_fx
+  wp_ted_bg:        fromDebris('stone',    { light: 0xececed, mid: 0xbbbbc9, dark: 0x36384a, outline: 0x1c1d26 }, 0xcfcfd5),
+  wp_heidi_bg:      fromDebris('stone',    { light: 0x9da0b9, mid: 0x7b7d93, dark: 0x595a6a, outline: 0x3e3e4a }, 0x9698ab),
+  wp_red_bg:        fromDebris('concrete', { light: 0x5f6687, mid: 0x464c68, dark: 0x32374b, outline: 0x232632 }, 0x696e86),
+  wp_k_bg:          fromDebris('stone',    { light: 0xfffffd, mid: 0xb8ac9f, dark: 0xa89e93, outline: 0x726561 }, 0xeae4dc),
+  wp_hacker_bg:     fromDebris('concrete', { light: 0x98a9d8, mid: 0x65729a, dark: 0x49526f, outline: 0x2c3143 }, 0x8b96b9),
+  wp_glitch_bg:     fromDebris('concrete', { light: 0xefd8cc, mid: 0xad9b94, dark: 0x796d67, outline: 0x49413e }, 0xc9bab2),
+  wp_noise_bg:      fromDebris('stone',    { light: 0xb0abc5, mid: 0x79768c, dark: 0x555362, outline: 0x33323b }, 0x9c99ac),
 };
 
 export function getGroundFx(bgKey: string): GroundFx {

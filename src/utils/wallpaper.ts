@@ -16,7 +16,7 @@ export const WP_ACCENT_INT = 0xcc88ff;
 export const DEFAULT_WP_IDS = ['wp_bg_easy', 'wp_bg_normal', 'wp_bg_hard'] as const;
 
 // 배경화면 목록 — 실제 에셋은 public/assets/wallpapers/ 폴더에 추가 필요
-// 등급 없음: 모두 동일 확률 (~0.35%/종, 캐릭터 UR 수준)
+// 등급 없음: 뽑기 가능한 종은 모두 같은 확률 — 슬롯당 GACHA_WP_DROP_CHANCE(3.5%) ÷ 종 수 (12종이면 종당 약 0.29%)
 export const WALLPAPERS: BackgroundDef[] = [
   // ── 기본 제공 배경 (처음부터 보유, 가챠 불필요) ───────────────────────────
   {
@@ -90,6 +90,70 @@ export const WALLPAPERS: BackgroundDef[] = [
     bgKey: 'wp_fantasy_bg',
     bgPath: 'assets/wallpapers/fantasy_bg.webp',
     description: '깃발 휘날리는 성채 앞 기사들의 진영',
+  },
+  // ── SR 캐릭터 배경화면 일곱 장 (2026-10-09) — 원본: ddong-fx-work/backgrounds/new/_bundle/bundle.json ──
+  {
+    id: 'wp_ted',
+    name: '체스 광장',
+    thumbKey: 'wp_ted_thumb',
+    thumbPath: 'assets/wallpapers/ted_thumb.webp',
+    bgKey: 'wp_ted_bg',
+    bgPath: 'assets/wallpapers/ted_bg.webp',
+    description: '새벽 안개 속, 거대한 말들이 잠든 흑백의 광장',
+  },
+  {
+    id: 'wp_heidi',
+    name: '마을 큰길',
+    thumbKey: 'wp_heidi_thumb',
+    thumbPath: 'assets/wallpapers/heidi_thumb.webp',
+    bgKey: 'wp_heidi_bg',
+    bgPath: 'assets/wallpapers/heidi_bg.webp',
+    description: '등불이 걸린 큰길 끝, 발바닥 문이 기다리는 봄 아침',
+  },
+  {
+    id: 'wp_red',
+    name: '고철 차고',
+    thumbKey: 'wp_red_thumb',
+    thumbPath: 'assets/wallpapers/red_thumb.webp',
+    bgKey: 'wp_red_bg',
+    bgPath: 'assets/wallpapers/red_bg.webp',
+    description: '비 갠 오후, 레드가 로봇을 고치는 고철 정비장',
+  },
+  {
+    id: 'wp_k',
+    name: '무대 위에서',
+    thumbKey: 'wp_k_thumb',
+    thumbPath: 'assets/wallpapers/k_thumb.webp',
+    bgKey: 'wp_k_bg',
+    bgPath: 'assets/wallpapers/k_bg.webp',
+    description: '네 기둥 사이 흰 무대 위, 흐린 하늘 아래 결전 직전',
+  },
+  {
+    id: 'wp_hacker',
+    name: '겨울 아침 옥탑',
+    thumbKey: 'wp_hacker_thumb',
+    thumbPath: 'assets/wallpapers/hacker_thumb.webp',
+    bgKey: 'wp_hacker_bg',
+    bgPath: 'assets/wallpapers/hacker_bg.webp',
+    description: '서리 내린 맑은 겨울 아침, 불 꺼진 서버 방',
+  },
+  {
+    id: 'wp_glitch',
+    name: '복숭아빛 오락실',
+    thumbKey: 'wp_glitch_thumb',
+    thumbPath: 'assets/wallpapers/glitch_thumb.webp',
+    bgKey: 'wp_glitch_bg',
+    bgPath: 'assets/wallpapers/glitch_bg.webp',
+    description: '해 지기 직전, 복숭아빛 하늘에 네온이 켜지는 거리',
+  },
+  {
+    id: 'wp_noise',
+    name: '안개 숲 오솔길',
+    thumbKey: 'wp_noise_thumb',
+    thumbPath: 'assets/wallpapers/noise_thumb.webp',
+    bgKey: 'wp_noise_bg',
+    bgPath: 'assets/wallpapers/noise_bg.webp',
+    description: '연보라 안개 속, 빈 마을로 이어지는 조용한 숲길',
   },
 ];
 

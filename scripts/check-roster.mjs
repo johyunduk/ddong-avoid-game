@@ -161,6 +161,27 @@ function subset(label, list, { allow = [] } = {}) {
     else pass(label, `등급 ${grades.join('·')} · 배경화면 ${swp}`);
   }
 
+  {
+    // 배경화면 풀 — 서버가 주는 id 는 클라이언트가 그릴 수 있어야 하고, 클라이언트가 뽑기에서 얻는다고 보여 주는 id 는 서버 풀에 있어야 한다
+    const label3 = 'gacha-pull WP_POOL = 클라이언트 GACHA_WP_IDS (wallpaper.ts 의 기본 제공 3종을 뺀 목록)';
+    const m = /const\s+WP_POOL\s*=\s*\[([\s\S]*?)\];/.exec(server);
+    const wpSrc = read('src', 'utils', 'wallpaper.ts');
+    const all = [...wpSrc.matchAll(/^\s*id:\s*'(wp_[\w]+)'/gm)].map(x => x[1]);
+    const defaults = (/DEFAULT_WP_IDS\s*=\s*\[([^\]]*)\]/.exec(wpSrc)?.[1] ?? '').match(/wp_\w+/g) ?? [];
+    if (!m || !all.length || !defaults.length) {
+      fail(label3, 'WP_POOL · WALLPAPERS · DEFAULT_WP_IDS 중 하나를 찾지 못했다 — 이름이 바뀌었는지 확인해라');
+    } else {
+      const pool = [...m[1].matchAll(/id:\s*'(wp_\w+)'/g)].map(x => x[1]);
+      const client = all.filter(id => !defaults.includes(id));
+      const onlyServer = pool.filter(id => !client.includes(id)), onlyClient = client.filter(id => !pool.includes(id));
+      if (onlyServer.length || onlyClient.length) {
+        fail(label3, `서버에만: ${onlyServer.join(', ') || '-'} / 화면에만: ${onlyClient.join(', ') || '-'}`);
+      } else {
+        pass(label3, `${pool.length}종 · 종당 ${(num(constOf(server, 'WP_DROP_CHANCE') ?? '') * 100 / pool.length).toFixed(3)}%`);
+      }
+    }
+  }
+
   const label2 = 'gacha-pull OBTAINABLE_IDS = 공개 명단 − chibi (화면 확률 계산과 같은 풀)';
   const obt = literalList(server, 'OBTAINABLE_IDS');
   if (obt === null) {

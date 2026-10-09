@@ -16,6 +16,14 @@ export const SYNERGY_MAP: Record<string, WallpaperSynergy> = {
   'wp_lake:archieve':   { label: '호수 × 아카이브',  ...SYNERGY_BONUSES },
   'wp_maehwa:maehwa':   { label: '매화 × 매화',      ...SYNERGY_BONUSES, clearPoops: true },
   'wp_fantasy:knight':  { label: '판타지 왕국 × 나이트', ...SYNERGY_BONUSES },
+  // SR 캐릭터 배경화면 (2026-10-09) — 대표 결정: 기본 시너지만, 특별 효과 없음
+  'wp_ted:ted':         { label: '체스 광장 × 테드',       ...SYNERGY_BONUSES },
+  'wp_heidi:heidi':     { label: '마을 큰길 × 하이디',     ...SYNERGY_BONUSES },
+  'wp_red:red':         { label: '고철 차고 × 레드',       ...SYNERGY_BONUSES },
+  'wp_k:k':             { label: '무대 위에서 × K',        ...SYNERGY_BONUSES },
+  'wp_hacker:hacker':   { label: '겨울 아침 옥탑 × 루트',  ...SYNERGY_BONUSES },
+  'wp_glitch:glitch':   { label: '복숭아빛 오락실 × 글리치', ...SYNERGY_BONUSES },
+  'wp_noise:noise':     { label: '안개 숲 오솔길 × 노이즈', ...SYNERGY_BONUSES },
   // 추후 새 배경화면 추가 시 여기에만 항목 추가
 };
 
