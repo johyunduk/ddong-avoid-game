@@ -103,14 +103,29 @@ const HIT_HALF_H = 26;
 
 export class KnightAbility extends BaseAbility {
   private lastBeamScore = 0;
+  /** 첫 검기(firstBeamScore)를 쐈는가 — 판마다 onCreate 에서 false */
+  private firstBeamDone = false;
 
   /** onDestroy 시 정리할 예약 타이머 (씬 재시작 후 stale 실행 방지) */
   private pendingTimers: Phaser.Time.TimerEvent[] = [];
+
+  override onCreate(_api: GameSceneAPI): void {
+    // 판마다 새 인스턴스지만 상태는 여기서 명시적으로 처음으로 (규칙 1)
+    this.lastBeamScore = 0;
+    this.firstBeamDone = false;
+  }
 
   override onScoreMilestone(score: number, api: GameSceneAPI): void {
     // **자기 보너스로 들어온 마일스톤은 삼킨다** (레드·테드·하이디와 같은 규칙). 삭제 점수가
     // 생기면서 보너스 한 번이 발동 간격을 넘길 수 있게 됐다 — 이 줄이 없으면 발동이 연쇄로 번진다
     if (this.awarding) return;
+    // 첫 검기만 당긴다 — 그 뒤는 beamInterval 배수 그대로 (120 · 240 …)
+    if (!this.firstBeamDone && score >= KNIGHT_PARAMS.firstBeamScore) {
+      this.firstBeamDone = true;
+      this.lastBeamScore = score;
+      this.fireVolley(api);
+      return;
+    }
     if (score % KNIGHT_PARAMS.beamInterval === 0 && score > this.lastBeamScore) {
       this.lastBeamScore = score;
       this.fireVolley(api);

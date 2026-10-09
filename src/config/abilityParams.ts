@@ -110,11 +110,13 @@ export const SENTINEL_DESC = {
 export const KNIGHT_PARAMS = {
   beamKillBonus: 28,       // 검기로 제거한 일반 똥 1개당 추가 점수 (1 → 40 사람 지시 → 28, 2026-10 밸런스)
   beamInterval: 120,       // 검기 발사 점수 간격 (100 → 120, 2026-10 밸런스)
+  firstBeamScore: 40,      // 첫 검기만 이 점수에 당긴다 (판 시작 약 4초). 그 뒤는 beamInterval 배수 그대로.
+                           // 초반에 죽는 판(점수 ~100)에서 검기가 한 번도 안 나가 R 수준이던 것 (2026-10 밸런스)
 } as const;
 
 export const KNIGHT_DESC = {
   basicEffect: `검기로 제거한 일반 똥 1개당 +${KNIGHT_PARAMS.beamKillBonus}점`,
-  specialAbility: `${KNIGHT_PARAMS.beamInterval}점마다 3방향 검기 발사 — 경로 위 일반 똥 전부 소멸`,
+  specialAbility: `${KNIGHT_PARAMS.beamInterval}점마다 3방향 검기 발사 (첫 검기는 ${KNIGHT_PARAMS.firstBeamScore}점) — 경로 위 일반 똥 전부 소멸`,
 } as const;
 
 // ── 구미 (Gumi / UR) ──────────────────────────────────────────────────
