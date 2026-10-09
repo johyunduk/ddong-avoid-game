@@ -5,13 +5,35 @@ import type PoolablePoopBase from '../objects/PoolablePoopBase';
 import { SENTINEL_PARAMS } from '../config/abilityParams';
 
 /**
- * 센티넬 (UR) — 보호막
- * ★0: 2개 시작 / 300점마다 충전 / 최대 3  / ★1: 2개 / 250점마다 / 최대 4
- * ★2: 3개 시작 / 200점마다 충전 / 최대 4  / ★3: 3개 / 150점마다 / 최대 5 + 흡수 시 연쇄 전기 3개 추가 제거
- * - UI: 붉은 공이 허리 주변 수평 궤도 공전 + 전기 파지직 (재사용 Graphics)
+ * 센티넬 (UR) — 보호막 + 과충전 방전 (2026-10 밸런스 개편, 값은 SENTINEL_PARAMS)
+ * - 보호막: 시작 startShields 개. **게임 시간** chargeIntervalSec 마다 1개 충전 (최대 maxShields), 한 판 maxChargesPerRun 번까지.
+ *   가득 찬 상태의 주기는 충전도 상한 카운트도 쓰지 않는다. 막으면 주변 똥을 지우되 점수는 blockZapPoints (0)
+ * - 방전: 보호막이 가득 찼을 때만 pulseIntervalSec 마다 반경 pulseRadius 안 일반 똥을 지우고 개당 pulsePointsPerPoop.
+ *   안 맞을수록 점수 — 예전(막을수록 점수 · 점수로 충전)의 고리를 뒤집었다
+ * - 각성 단계별 값은 구현돼 있지 않다 (SENTINEL_PARAMS 하나)
+ * - UI: 붉은 공이 허리 주변 수평 궤도 공전 + 전기 파지직 (재사용 Graphics). 가득 찬 동안 허리에 하늘색 고리 — 최소 표시, 정식 연출은 fx
  */
 export class SentinelAbility extends BaseAbility {
   private shieldCount = 0;
+  /** 이번 판에 충전된 횟수 — maxChargesPerRun 까지 */
+  private chargesGiven = 0;
+  /** 충전 타이머 — 씬 시계(scene.time)에 건다: 히트스톱(timeScale 0) · 일시정지 동안 멈추고, 씬이 끝나면 시계째 사라진다 */
+  private chargeTimer: Phaser.Time.TimerEvent | null = null;
+  /** 방전 타이머 — 충전 타이머와 같은 규칙: scene.time, onCreate 에서 만들고 onDestroy 에서 뗀다 */
+  private pulseTimer: Phaser.Time.TimerEvent | null = null;
+  /**
+   * 측정용 누계 (밸런스 하네스가 읽는다 — 화면 · 저장에는 안 쓴다):
+   * 방전 횟수 · 방전으로 지운 똥 · 방전 한 번 처리 시간(ms) 최댓값 · 판 시간 · 가득 찬 시간 · 보호막 개수별(0~maxShields) 머문 시간
+   */
+  pulsesFired = 0;
+  pulseKills = 0;
+  pulseMaxMs = 0;
+  aliveMs = 0;
+  fullMs = 0;
+  shieldMs: number[] = [];
+  private lastNow = 0;
+  /** 가득 찬 동안 허리에 두르는 전기 고리 (최소 표시) — 한 장을 만들어 두고 위치 · 보임만 바꾼다 */
+  private fullRing: Phaser.GameObjects.Graphics | null = null;
   private orbitDroplets: Phaser.GameObjects.Graphics[] = [];
   private orbitAngle = 0;
 
@@ -28,17 +50,52 @@ export class SentinelAbility extends BaseAbility {
   private static readonly RED_LIGHT     = 0xff6666;
 
   override onCreate(api: GameSceneAPI): void {
+    // 판마다 새 인스턴스지만(getCharacterAbility) 상태는 여기서 명시적으로 처음으로 (규칙 1)
     this.shieldCount = SENTINEL_PARAMS.startShields;
+    this.chargesGiven = 0;
+    this.pulsesFired = 0;
+    this.pulseKills = 0;
+    this.pulseMaxMs = 0;
+    this.aliveMs = 0;
+    this.fullMs = 0;
+    this.shieldMs = new Array(SENTINEL_PARAMS.maxShields + 1).fill(0);
+    this.lastNow = api.scene.time.now;
+    this.fullRing = api.scene.add.graphics().setDepth(100).setVisible(false);
+    this.fullRing.lineStyle(2, 0x66e0ff, 0.9).strokeEllipse(0, 0, 64, 18);
+    this.chargeTimer = api.scene.time.addEvent({
+      delay: SENTINEL_PARAMS.chargeIntervalSec * 1000, loop: true, callback: () => this.tryCharge(api),
+    });
+    this.pulseTimer = api.scene.time.addEvent({
+      delay: SENTINEL_PARAMS.pulseIntervalSec * 1000, loop: true, callback: () => this.pulse(api),
+    });
     this.spawnDroplets(api, SENTINEL_PARAMS.startShields);
     this.sparkGfx = api.scene.add.graphics().setDepth(96).setAlpha(0);
   }
 
-  override onScoreMilestone(score: number, api: GameSceneAPI): void {
-    if (score % SENTINEL_PARAMS.chargeInterval === 0 && this.shieldCount < SENTINEL_PARAMS.maxShields) {
-      this.shieldCount++;
-      this.playShieldChargeEffect(api);
-      this.spawnDroplets(api, 1);
-    }
+  /**
+   * 시간 충전 — 점수 마일스톤이 아니다. 막아서 번 점수 · 피버 점수가 충전을 앞당기던 고리를 끊는다.
+   * 가득 차 있으면 그 주기는 버린다 (상한 카운트도 안 쓴다). 한 판 maxChargesPerRun 번에서 멈춘다
+   */
+  private tryCharge(api: GameSceneAPI): void {
+    if (this.chargesGiven >= SENTINEL_PARAMS.maxChargesPerRun) { this.chargeTimer?.remove(); this.chargeTimer = null; return; }
+    if (this.shieldCount >= SENTINEL_PARAMS.maxShields) return;
+    this.shieldCount++;
+    this.chargesGiven++;
+    this.playShieldChargeEffect(api);
+    this.spawnDroplets(api, 1);
+  }
+
+  /**
+   * 과충전 방전 — 보호막이 가득 찼을 때만. 아니면 그 주기는 건너뛴다 (횟수에도 안 넣는다).
+   * 점수는 zapNearbyPoops 의 addAbilityBonus(→ updateScore)
+   */
+  private pulse(api: GameSceneAPI): void {
+    if (this.shieldCount < SENTINEL_PARAMS.maxShields) return;
+    const t0 = performance.now();
+    const n = this.zapNearbyPoops(api, SENTINEL_PARAMS.pulseRadius, SENTINEL_PARAMS.pulsePointsPerPoop);
+    this.pulsesFired++;
+    this.pulseKills += n;
+    this.pulseMaxMs = Math.max(this.pulseMaxMs, performance.now() - t0);
   }
 
   override onHitPoop(api: GameSceneAPI): boolean {
@@ -46,13 +103,23 @@ export class SentinelAbility extends BaseAbility {
       this.shieldCount--;
       this.scatterDroplets(api, 1);
       this.playShieldBreakEffect(api);
-      this.zapNearbyPoops(api, 320);
+      this.zapNearbyPoops(api, SENTINEL_PARAMS.blockZapRadius, SENTINEL_PARAMS.blockZapPoints);
       return true;
     }
     return false;
   }
 
   override onUpdate(api: GameSceneAPI): void {
+    // 측정용 시간 — scene.time 이라 히트스톱 · 일시정지 동안은 안 흐른다
+    const now = api.scene.time.now;
+    const dt = Math.max(0, now - this.lastNow);
+    this.lastNow = now;
+    const full = this.shieldCount >= SENTINEL_PARAMS.maxShields;
+    this.aliveMs += dt;
+    if (full) this.fullMs += dt;
+    this.shieldMs[Math.min(this.shieldCount, SENTINEL_PARAMS.maxShields)] += dt;
+    if (this.fullRing) this.fullRing.setVisible(full).setPosition(api.player.x, api.player.y + SentinelAbility.ORBIT_WAIST_Y);
+
     if (this.orbitDroplets.length === 0) return;
 
     const delta  = api.scene.game.loop.delta / 1000;
@@ -91,6 +158,12 @@ export class SentinelAbility extends BaseAbility {
   // ─────────────────────────────────────────────────────────────
 
   override onDestroy(_api: GameSceneAPI): void {
+    this.chargeTimer?.remove();
+    this.chargeTimer = null;
+    this.pulseTimer?.remove();
+    this.pulseTimer = null;
+    this.fullRing?.destroy();
+    this.fullRing = null;
     this.sparkTween?.stop();
     this.sparkGfx?.destroy();
     this.orbitDroplets.forEach(drop => drop.destroy());
@@ -195,7 +268,8 @@ export class SentinelAbility extends BaseAbility {
   // 파장 범위 내 똥 제거
   // ─────────────────────────────────────────────────────────────
 
-  private zapNearbyPoops(api: GameSceneAPI, radius: number): void {
+  /** 반경 안 일반 똥을 지우고 개당 pointsPerPoop 점 — 막기 · 방전 펄스가 같이 쓴다. 지운 개수를 돌려준다 */
+  private zapNearbyPoops(api: GameSceneAPI, radius: number, pointsPerPoop: number): number {
     const cx = api.player.x;
     const cy = api.player.y;
     const r2 = radius * radius;
@@ -203,14 +277,17 @@ export class SentinelAbility extends BaseAbility {
     const targets = (api.poops.getChildren() as Phaser.Physics.Arcade.Sprite[])
       .filter(p => p.active && (p.x - cx) ** 2 + (p.y - cy) ** 2 <= r2);
 
-    if (targets.length === 0) return;
+    if (targets.length === 0) return 0;
 
     const positions = targets.map(p => ({ x: p.x, y: p.y }));
     targets.forEach(p => (p as PoolablePoopBase).recycle());
 
-    const bonus = targets.length * 10;
-    api.addAbilityBonus(bonus);
-    this.showZapBonusText(api, bonus);
+    // 점수 (막기 0 · 방전 40) — 0 이면 점수도 '+0' 글자도 없다. 똥은 그대로 지운다
+    const bonus = targets.length * pointsPerPoop;
+    if (bonus > 0) {
+      api.addAbilityBonus(bonus);
+      this.showZapBonusText(api, bonus);
+    }
 
     // 단일 Graphics에 모든 위치 그리기 → 3회 redraw로 지글 효과
     const zapG = api.scene.add.graphics().setDepth(155);
@@ -253,6 +330,7 @@ export class SentinelAbility extends BaseAbility {
         onComplete: () => zapG.destroy(),
       });
     });
+    return targets.length;
   }
 
   // ─────────────────────────────────────────────────────────────

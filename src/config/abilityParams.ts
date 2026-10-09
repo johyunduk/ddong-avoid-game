@@ -86,15 +86,24 @@ export const NOISE_DESC = {
 } as const;
 
 // ── 센티넬 (Sentinel / UR) ────────────────────────────────────────────
+// 2026-10 밸런스 개편 (balance/exp 측정 · 7c-2 채택): 맞을수록 강해지던 고리(막기 점수 → 점수 충전)를 끊고,
+// 점수는 '안 맞고 버틸 때' 나가는 방전에서 낸다. 충전은 점수가 아니라 게임 시간, 한 판 총량에 끝이 있다
 export const SENTINEL_PARAMS = {
   startShields: 2,          // 시작 보호막 개수
-  chargeInterval: 300,      // 보호막 충전 점수 간격
-  maxShields: 3,            // 최대 보호막 개수
+  chargeIntervalSec: 20,    // 보호막 충전 간격 (게임 시간 초) — 예전 '300점마다'
+  maxShields: 3,            // 동시에 들 수 있는 최대 보호막 개수
+  maxChargesPerRun: 8,      // 한 판에 충전되는 총량 — 실제로 찬 횟수만 센다 (가득 찬 상태의 주기는 안 센다)
+  blockZapPoints: 0,        // 막을 때 지운 똥 1개당 점수 — 예전 10. 맞는 것이 점수가 되지 않게
+  blockZapRadius: 320,      // 막을 때 똥을 지우는 반경 (px)
+  // 방전: 보호막이 가득(maxShields) 찼을 때만 — 안 맞을수록 점수
+  pulseIntervalSec: 4,      // 방전 주기 (게임 시간 초)
+  pulseRadius: 190,         // 방전 반경 (px, 플레이어 중심) — 일반 똥만 지운다
+  pulsePointsPerPoop: 40,   // 방전으로 지운 똥 1개당 점수
 } as const;
 
 export const SENTINEL_DESC = {
-  basicEffect: `시작 시 보호막 ${SENTINEL_PARAMS.startShields}개 보유 (피격 흡수 시 주변 똥 전기로 제거, 제거된 똥 1개당 +10점)`,
-  specialAbility: `${SENTINEL_PARAMS.chargeInterval}점마다 보호막 1개 충전 (최대 ${SENTINEL_PARAMS.maxShields}개)`,
+  basicEffect: `시작 시 보호막 ${SENTINEL_PARAMS.startShields}개 보유 (피격 흡수 시 주변 똥 전기로 제거${SENTINEL_PARAMS.blockZapPoints > 0 ? `, 제거된 똥 1개당 +${SENTINEL_PARAMS.blockZapPoints}점` : ''})`,
+  specialAbility: `${SENTINEL_PARAMS.chargeIntervalSec}초마다 보호막 1개 충전 (최대 ${SENTINEL_PARAMS.maxShields}개 · 한 판 ${SENTINEL_PARAMS.maxChargesPerRun}번까지) · 보호막이 가득 차 있으면 ${SENTINEL_PARAMS.pulseIntervalSec}초마다 방전 — 주변 똥 제거 (+${SENTINEL_PARAMS.pulsePointsPerPoop}점/개)`,
 } as const;
 
 // ── 나이트 (Knight / SR) ──────────────────────────────────────────────
