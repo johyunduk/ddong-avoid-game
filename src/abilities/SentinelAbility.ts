@@ -3,6 +3,8 @@ import { BaseAbility } from './BaseAbility';
 import type { GameSceneAPI } from './types';
 import type PoolablePoopBase from '../objects/PoolablePoopBase';
 import { SENTINEL_PARAMS } from '../config/abilityParams';
+import { POOP_CONFIG } from '../config/poop';
+import { playFx } from '../utils/vfx';
 
 /**
  * 센티넬 (UR) — 보호막 + 과충전 방전 (2026-10 밸런스 개편, 값은 SENTINEL_PARAMS)
@@ -17,10 +19,12 @@ import { SENTINEL_PARAMS } from '../config/abilityParams';
  *   방전 PULSE_TELE_MS 전 — 반경 pulseRadius 자리에 옅은 고리가 먼저 떠서 범위를 예고한다.
  *   방전 — 같은 고리가 몸에서 pulseRadius 까지 퍼져 잠깐 머물고 사라진다 (바퀴살 빛줄기 없음 — 전기는 고리를 따라서만 긴다).
  *   오브젝트는 판 시작에 한 번 만든 Image 4장(후광 · 섬광 · 예고 고리 · 충격파)을 숨겼다 켰다 한다 — 방전 1회가 새로 만드는 것은
- *   점수 글자 1개뿐이고, 똥 파괴 이펙트는 recycle() 의 impactHit(동시 6 상한)이 맡는다.
- * - 회수 분산: 방전 한 번에 지울 똥을 거리순으로 잡아 두고 **프레임당 PULSE_KILLS_PER_FRAME 개씩** 지운다 (한 프레임 몰림 → 끊김).
- *   방전 순간 반경 안에서 잡은 대상은 그 사이 반경 밖으로 떨어져도 끝까지 지운다 (한 번에 지울 때와 같은 수).
- *   지울 때는 '아직 활성(플레이어에 닿았으면 이미 회수돼 비활성) · 같은 똥(풀에서 다시 나오지 않음)' 만 본다
+ *   점수 글자 1개뿐이고, 똥 파괴 이펙트는 impactHit(동시 6 상한)이다.
+ * - **게임 동작은 한 프레임에**: 방전 순간 반경 안 똥을 그 자리에서 전부 지우고 점수도 그 자리에서 한 번에 준다
+ *   (21df9a20 의 zapNearbyPoops 와 같은 동작). 지우기를 다음 프레임 이후로 미루면 그 사이 가장 가까운 똥이 먼저 플레이어에
+ *   닿거나(보호막이 깎여 가득이 풀림) 바닥에 닿아, 펄스당 지운 똥이 6.3 → 5.6 으로 줄었다 (회귀 측정, d4465f48).
+ * - **끊김 대책은 연출만 나눈다**: 지운 자리를 좌표로만 담아 두고 파괴 이펙트를 프레임당 PULSE_FX_PER_FRAME 개씩 그린다.
+ *   똥 참조를 들고 있지 않으므로 풀 재사용과 얽히지 않는다
  */
 export class SentinelAbility extends BaseAbility {
   private shieldCount = 0;
@@ -49,13 +53,8 @@ export class SentinelAbility extends BaseAbility {
   private shockRing: Phaser.GameObjects.Image | null = null;
   /** 공을 달아오른 모습으로 그렸는지 — 가득 참이 바뀐 프레임에만 다시 그린다 */
   private dropletsHot = false;
-  /**
-   * 방전으로 지울 똥 대기열 (거리순) — 프레임당 PULSE_KILLS_PER_FRAME 개씩 비운다.
-   * y0 = 잡을 때의 y. 똥은 아래로만 떨어지므로 지울 때 y 가 그보다 위면 풀에서 다시 나온 다른 똥이다 (생성 위치는 화면 위)
-   */
-  private zapQueue: { p: PoolablePoopBase; y0: number }[] = [];
-  /** 이번 방전에서 지금까지 준 점수 — 대기열이 비면 '+N' 글자 한 번 (점수 자체는 묶음마다 이미 줬다) */
-  private zapBonus = 0;
+  /** 방전으로 지운 자리 (거리순, 좌표만) — 파괴 이펙트를 프레임당 PULSE_FX_PER_FRAME 개씩 그린다. 게임 동작과 무관 */
+  private zapFxQueue: { x: number; y: number }[] = [];
   private orbitDroplets: Phaser.GameObjects.Graphics[] = [];
   private orbitAngle = 0;
 
@@ -71,8 +70,8 @@ export class SentinelAbility extends BaseAbility {
   private static readonly RED           = 0xff2222;
   private static readonly RED_LIGHT     = 0xff6666;
 
-  /** 방전 한 프레임에 지우는 똥 상한 (planner 제안 — 측정에서 방전 프레임 끊김 후보가 펄스 없는 판의 약 4배) */
-  private static readonly PULSE_KILLS_PER_FRAME = 4;
+  /** 방전 파괴 이펙트를 한 프레임에 그리는 상한 (측정에서 방전 프레임 끊김 후보가 펄스 없는 판의 약 4배) — 지우기 자체는 한 프레임 */
+  private static readonly PULSE_FX_PER_FRAME = 4;
   /** 범위 예고 고리가 뜨는 시간 (방전 전 ms) */
   private static readonly PULSE_TELE_MS = 450;
   /** 충격파: 몸에서 반경까지 퍼지는 시간 · 반경에 머무는 시간 · 사라지는 시간 (ms) */
@@ -96,8 +95,7 @@ export class SentinelAbility extends BaseAbility {
     this.fullMs = 0;
     this.shieldMs = new Array(SENTINEL_PARAMS.maxShields + 1).fill(0);
     this.dropletsHot = false;
-    this.zapQueue = [];
-    this.zapBonus = 0;
+    this.zapFxQueue = [];
     this.createPulseVisuals(api.scene);
     this.chargeTimer = api.scene.time.addEvent({
       delay: SENTINEL_PARAMS.chargeIntervalSec * 1000, loop: true, callback: () => this.tryCharge(api),
@@ -124,9 +122,9 @@ export class SentinelAbility extends BaseAbility {
 
   /**
    * 과충전 방전 — 보호막이 가득 찼을 때만. 아니면 그 주기는 건너뛴다 (횟수에도 안 넣는다).
-   * 여기서는 반경 안 똥을 거리순으로 잡아 두기만 한다 — 실제 회수 · 점수는 drainZapQueue 가 프레임마다 나눠서.
-   * pulseMaxMs = 방전이 쓴 **한 프레임** 처리 시간의 최댓값 (잡기 프레임 · 회수 프레임 각각).
-   *   예전 뜻(방전 한 번 처리 시간)은 회수를 여러 프레임에 나누면 합이 되어 끊김을 재지 못한다 — 끊김은 프레임당 시간이 기준
+   * 반경 안 일반 똥을 **이 프레임에** 전부 지우고(이펙트 없이) 점수를 한 번에 addAbilityBonus(→ updateScore).
+   * 파괴 이펙트만 좌표로 담아 drainZapFx 가 프레임마다 나눠 그린다.
+   * pulseMaxMs = 방전이 쓴 **한 프레임** 처리 시간의 최댓값 (지우기 프레임 · 이펙트 프레임 각각)
    */
   private pulse(api: GameSceneAPI): void {
     if (this.shieldCount < SENTINEL_PARAMS.maxShields) return;
@@ -142,40 +140,33 @@ export class SentinelAbility extends BaseAbility {
       if (d2 <= r2) found.push({ p, d2 });
     }
     found.sort((a, b) => a.d2 - b.d2);
-    // 앞 방전의 대기열이 남아 있으면 뒤에 잇는다 (주기 4초라 실제로는 비어 있다)
-    for (const f of found) this.zapQueue.push({ p: f.p, y0: f.p.y });
+    const camH = api.scene.cameras.main.height;
+    for (const { p } of found) {
+      // 파괴 이펙트는 recycle() 이 그리는 조건(화면 안)과 같을 때만 좌표로 담는다 — 그리기는 drainZapFx 가 나눠서
+      if (p.y >= -POOP_CONFIG.destroyOffset && p.y <= camH) this.zapFxQueue.push({ x: p.x, y: p.y });
+      p.recycle(true);
+    }
+    const n = found.length;
+    if (n > 0) {
+      const bonus = n * SENTINEL_PARAMS.pulsePointsPerPoop;
+      this.pulseKills += n;
+      if (bonus > 0) {
+        api.addAbilityBonus(bonus);
+        this.showZapBonusText(api, bonus);
+      }
+    }
     this.pulsesFired++;
     this.playPulseEffect(api, cx, cy);
     this.pulseMaxMs = Math.max(this.pulseMaxMs, performance.now() - t0);
   }
 
-  /**
-   * 대기열에서 이번 프레임 몫(PULSE_KILLS_PER_FRAME)을 지우고 **같은 프레임에** 그 수 × pulsePointsPerPoop 를
-   * addAbilityBonus(→ updateScore) — 지운 똥과 받은 점수가 언제나 맞는다. 도중에 게임오버가 나도(onDestroy 가 대기열을 버린다)
-   * 이미 지운 똥의 점수는 들어가 있다. 대기열 끝까지 모았다가 주면 그 사이 게임오버에 점수가 빠졌다 (묶음 리뷰 1번).
-   * '+N' 글자만 대기열이 빌 때 이번 방전 합계로 한 번
-   */
-  private drainZapQueue(api: GameSceneAPI): void {
-    if (this.zapQueue.length === 0) return;
+  /** 방전 파괴 이펙트를 이번 프레임 몫(PULSE_FX_PER_FRAME)만 그린다 — 좌표만 쓰므로 똥 · 점수와 무관 */
+  private drainZapFx(api: GameSceneAPI): void {
+    if (this.zapFxQueue.length === 0) return;
     const t0 = performance.now();
-    // 반경은 다시 보지 않는다 — 잡은 뒤 반경 밖으로 떨어진 대상까지 지워야 한 번에 지울 때와 수가 같다
-    // (반경 재확인이 있던 3cce0183 은 펄스당 지운 똥 6.3 → 5.6, 점수 high −12% · mid −25% — 회귀 측정)
-    let killed = 0;
-    while (killed < SentinelAbility.PULSE_KILLS_PER_FRAME && this.zapQueue.length > 0) {
-      const { p, y0 } = this.zapQueue.shift()!;
-      if (!p.active || p.y < y0 - 1) continue;   // 이미 사라짐(플레이어에 닿음 · 바닥 등) · 풀에서 다시 나온 다른 똥
-      p.recycle();
-      killed++;
-    }
-    if (killed > 0) {
-      const bonus = killed * SENTINEL_PARAMS.pulsePointsPerPoop;
-      this.pulseKills += killed;
-      this.zapBonus += bonus;
-      if (bonus > 0) api.addAbilityBonus(bonus);
-    }
-    if (this.zapQueue.length === 0 && this.zapBonus > 0) {
-      this.showZapBonusText(api, this.zapBonus);
-      this.zapBonus = 0;
+    for (let i = 0; i < SentinelAbility.PULSE_FX_PER_FRAME && this.zapFxQueue.length > 0; i++) {
+      const { x, y } = this.zapFxQueue.shift()!;
+      playFx(api.scene, 'impactHit', x, y);
     }
     this.pulseMaxMs = Math.max(this.pulseMaxMs, performance.now() - t0);
   }
@@ -201,7 +192,7 @@ export class SentinelAbility extends BaseAbility {
     this.aliveMs += dt;
     if (full) this.fullMs += dt;
     this.shieldMs[Math.min(this.shieldCount, SENTINEL_PARAMS.maxShields)] += dt;
-    this.drainZapQueue(api);
+    this.drainZapFx(api);
     this.updateFullIndicator(api, full);
 
     if (this.orbitDroplets.length === 0) return;
@@ -246,7 +237,7 @@ export class SentinelAbility extends BaseAbility {
     this.chargeTimer = null;
     this.pulseTimer?.remove();
     this.pulseTimer = null;
-    this.zapQueue = [];
+    this.zapFxQueue = [];
     for (const o of [this.fullRing, this.fullHalo, this.pulseFlash, this.teleRing, this.shockRing]) {
       if (!o) continue;
       o.scene?.tweens.killTweensOf(o);
