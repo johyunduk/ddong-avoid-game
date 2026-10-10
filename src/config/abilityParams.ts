@@ -180,16 +180,15 @@ export const LEGACY_PARAMS = {
   legacyInterval: 900,        // 레거시 모드 발동 간격 — 자기 보너스를 뺀 '플레이 점수' 900점마다 (v4: 점수 600 배수 → 카운터 450, v4.1 L1: 450 → 900)
   legacyDuration: 4000,      // 레거시 모드 지속 시간 (ms)
   scoreExtra: 0.10,           // 레거시 모드 점수 추가분 (1.1배, v4.1 L1: 0.20 → 0.10)
-  burnChanceNormal: 0.50,     // 일반 불태우기 확률 (v4.1 L1: 0.40 → 0.60, v6 D1′: → 0.50)
+  burnChanceNormal: 0.40,     // 일반 불태우기 확률 (v4.1 L1: 0.40 → 0.60, v6 D1′ 0.50 → D1″ 0.40)
   burnChanceLegacy: 0.75,     // 레거시 불태우기 확률 (v4.1 L1: 0.90 → 0.75)
   burnCountNormal: 2,         // 일반 불태우기 개수
   burnCountLegacy: 3,         // 레거시 불태우기 개수 (v4.1 L1: 4 → 3)
-  burnPoints: 75,             // 불태운 똥 1개당 점수 (하드코딩 10 → 35, 밸런스 v4 → 40, v4.1 L1 → 75, v6). 대상은 플레이어 머리 위에서 가까운 순
-  burnMinAbove: 150,          // 플레이어 위 이 거리(px, 세로) 안의 똥은 태우지 않는다 — 그 위에서 가까운 순 (v6 D1′). 코앞 똥을 지워 주면 피할 일이 없어진다
+  burnPoints: 86,             // 불태운 똥 1개당 점수 (하드코딩 10 → 35, 밸런스 v4 → 40, v4.1 L1 → 75, v6 → 86, v6 D1″). 대상은 플레이어 머리 위에서 가까운 순
 } as const;
 
 export const LEGACY_DESC = {
-  basicEffect: `시작 ${LEGACY_PARAMS.feverDuration / 1000}초 금똥 피버 + 황금 빗줄기 / 스폰마다 ${LEGACY_PARAMS.burnChanceNormal * 100}% 확률로 머리 위 ${LEGACY_PARAMS.burnMinAbove}px 너머 가까운 똥 ${LEGACY_PARAMS.burnCountNormal}개 불태워 소멸 (+${LEGACY_PARAMS.burnPoints}점/개)`,
+  basicEffect: `시작 ${LEGACY_PARAMS.feverDuration / 1000}초 금똥 피버 + 황금 빗줄기 / 스폰마다 ${LEGACY_PARAMS.burnChanceNormal * 100}% 확률로 머리 위 가까운 똥 ${LEGACY_PARAMS.burnCountNormal}개 불태워 소멸 (+${LEGACY_PARAMS.burnPoints}점/개)`,
   specialAbility: `${LEGACY_PARAMS.legacyInterval}점마다 ${LEGACY_PARAMS.legacyDuration / 1000}초간 레거시 모드: 점수 ${1 + LEGACY_PARAMS.scoreExtra}배 · 황금 빗줄기 강화 · 불태우기 ${LEGACY_PARAMS.burnChanceLegacy * 100}% 확률 ${LEGACY_PARAMS.burnCountLegacy}개 소멸`,
 } as const;
 
