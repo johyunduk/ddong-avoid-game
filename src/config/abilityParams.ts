@@ -142,7 +142,7 @@ export const SENTINEL_PARAMS = {
   maxShields: 2,            // 동시에 들 수 있는 최대 보호막 개수. 3 → 2 (2026-10 밸런스 v6) — 시작 2개가 곧 '가득'
   maxChargesPerRun: 0,      // 한 판에 충전되는 총량 — 실제로 찬 횟수만 센다 (가득 찬 상태의 주기는 안 센다). 8 → 3 (2026-10 밸런스 v6) → 1 (v6 B′) → 0 (v6 B‴). 0 이면 충전 타이머를 걸지 않는다
   blockZapPoints: 0,        // 막을 때 지운 똥 1개당 점수 — 예전 10. 맞는 것이 점수가 되지 않게
-  blockZapRadius: 320,      // 막을 때 똥을 지우는 반경 (px)
+  blockZapRadius: 0,        // 막을 때 똥을 지우는 반경 (px). 320 → 0 (v6 B⁶) — 0 이면 정리 · 정리 연출을 건너뛴다 (깨지는 연출 · 막은 뒤 무적은 그대로)
   // 방전: 보호막이 가득(maxShields) 찼을 때만 — 안 맞을수록 점수
   pulseIntervalSec: 4,      // 방전 주기 (게임 시간 초)
   pulseRadius: 190,         // 방전 반경 (px, 플레이어 중심) — 일반 똥만 지운다
@@ -165,7 +165,7 @@ export const SENTINEL_DEFERRED_SHEETS = [
 ] as const;
 
 export const SENTINEL_DESC = {
-  basicEffect: `시작 시 보호막 ${SENTINEL_PARAMS.startShields}개 보유 (피격 흡수 시 주변 똥 전기로 제거${SENTINEL_PARAMS.blockZapPoints > 0 ? `, 제거된 똥 1개당 +${SENTINEL_PARAMS.blockZapPoints}점` : ''})`,
+  basicEffect: `시작 시 보호막 ${SENTINEL_PARAMS.startShields}개 보유 (피격 1회 흡수${SENTINEL_PARAMS.blockZapRadius > 0 ? ` · 주변 똥 전기로 제거${SENTINEL_PARAMS.blockZapPoints > 0 ? `, 제거된 똥 1개당 +${SENTINEL_PARAMS.blockZapPoints}점` : ''}` : ''})`,
   specialAbility: `${SENTINEL_PARAMS.maxChargesPerRun > 0 ? `${SENTINEL_PARAMS.chargeIntervalSec}초마다 보호막 1개 충전 (최대 ${SENTINEL_PARAMS.maxShields}개 · 한 판 ${SENTINEL_PARAMS.maxChargesPerRun}번까지) · ` : '보호막은 충전되지 않는다 · '}보호막이 가득 차 있으면 ${SENTINEL_PARAMS.pulseIntervalSec}초마다 방전 — 주변 똥 제거 (+${SENTINEL_PARAMS.pulsePointsPerPoop}점/개) · 가득이 아니어도 보호막이 있으면 약한 방전 (좁은 범위, +${SENTINEL_PARAMS.weakPulsePointsPerPoop}점/개) · 매초 보호막 2 · 1 · 0개일 때 +${SENTINEL_PARAMS.holdBonusPerSec.slice().reverse().join(' / ')}점`,
 } as const;
 

@@ -259,7 +259,8 @@ export class SentinelAbility extends BaseAbility {
       this.shieldCount--;
       this.scatterDroplets(api, 1);
       this.playShieldBreakEffect(api);
-      this.zapNearbyPoops(api, SENTINEL_PARAMS.blockZapRadius, SENTINEL_PARAMS.blockZapPoints);
+      // 반경 0 이면 주변 정리 · 정리 연출을 건너뛴다 (v6 B⁶). 깨지는 연출 · 막은 뒤 무적(GameScene)은 그대로
+      if (SENTINEL_PARAMS.blockZapRadius > 0) this.zapNearbyPoops(api, SENTINEL_PARAMS.blockZapRadius, SENTINEL_PARAMS.blockZapPoints);
       return true;
     }
     return false;
