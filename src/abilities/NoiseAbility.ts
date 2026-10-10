@@ -20,7 +20,7 @@ import { StagedLoader } from './stagedLoader';
  *
  * 성능 · 정리 (센티넬 · 글리치와 같은 규칙): 시트 7장은 판 시작 뒤 StagedLoader 로 한 장씩. 오브젝트는 판 시작에 한 번 —
  * 안개 Sprite 2(뒤 · 앞) · 뭉침/압축 Sprite 1 · 돌풍 Sprite 1 · 꼬리 Sprite 1 · 흩어짐 Sprite 1 · 입자 Image 40.
- * 똥 참조는 들고 있지 않는다 — 통과는 똥에 이번 안개 번호만 적어 중복을 막고(아래 PASS_TAG), 지운 자리는 좌표로만 연출.
+ * 똥 참조는 들고 있지 않는다 — 통과는 똥의 abilityTag 에 이번 안개 번호(1부터)를 적어 중복을 막고(회수 · 재사용 때 0 으로 지워진다), 지운 자리는 좌표로만 연출.
  * 블렌드 전부 normal. 타이머는 씬 시계 · onDestroy 에서 정리. 점수는 addAbilityBonus(→ updateScore)
  */
 export class NoiseAbility extends BaseAbility {
@@ -73,7 +73,6 @@ export class NoiseAbility extends BaseAbility {
   private static readonly MOTE_POOL = 40;
   private static readonly GHOST_ALPHA = 0.4;
   /** 똥에 적는 '이번 안개에서 이미 통과함' 표시 — 안개 번호. 풀에서 다시 나온 똥은 화면 위에서 나와 같은 안개(1.6초) 안에 몸까지 못 온다 */
-  private static readonly PASS_TAG = '__noisePassFog';
   /** 연출 (ms · px) — 표시 크기는 시안(gust_preview_v3)과 같다 */
   private static readonly FOG_DISPLAY_W = 96;
   private static readonly GATHER_MS = 200;
@@ -210,10 +209,10 @@ export class NoiseAbility extends BaseAbility {
 
   override passesThrough(poop: Phaser.GameObjects.GameObject, api: GameSceneAPI): boolean {
     if (!this.inFog(api)) return false;
-    const tagged = poop as unknown as Record<string, number | undefined>;
-    if (tagged[NoiseAbility.PASS_TAG] === this.fogSerial) return true;   // 이번 안개에서 이미 지나가는 중 — 다시 세지 않는다
+    const p = poop as PoolablePoopBase;
+    if (p.abilityTag === this.fogSerial) return true;   // 이번 안개에서 이미 지나가는 중 — 다시 세지 않는다
     if (this.passLeft <= 0) return false;
-    tagged[NoiseAbility.PASS_TAG] = this.fogSerial;
+    p.abilityTag = this.fogSerial;
     this.passLeft--;
     this.passes++;
     if (NOISE_PARAMS.passPoints > 0) api.addAbilityBonus(NOISE_PARAMS.passPoints);

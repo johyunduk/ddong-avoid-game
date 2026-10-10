@@ -59,6 +59,7 @@ export default class Poop extends PoolablePoopBase {
       this.setDisplaySize(displaySize, displaySize);
       this._displaySize = displaySize;
     }
+    this.abilityTag = 0;   // PoolablePoopBase.abilityTag — 이 reinit 은 super 를 안 부르므로 여기서도 지운다
     this.setActive(true).setVisible(true);
 
     const body = this.body as Phaser.Physics.Arcade.Body;
