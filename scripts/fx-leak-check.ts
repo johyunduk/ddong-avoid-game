@@ -1014,9 +1014,10 @@ async function main() {
   let redLaunchInputs = 0;
   for (let volley = 0; volley < RED_PARAMS.sparrowCount; volley++) {
     redRefill();
-    redScore = (volley + 1) * RED_PARAMS.sparrowInterval - 1;
+    // v6 부터 발사는 '점수 50의 배수'가 아니라 자기 보너스를 뺀 플레이 점수 sparrowInterval 점마다 —
+    // 한 번 부르면 카운터가 1 오를 뿐이라 발사가 안 났다 (매화 [9] 와 같은 갱신). 플레이 점수 sparrowInterval 점을 넣는다
     redLaunchInputs++;
-    redApi.addAbilityBonus(1);
+    redApi.addAbilityBonus(RED_PARAMS.sparrowInterval);
     for (let i = 0; i < 14; i++) { red.onUpdate(redApi); await sleep(16); }
   }
   // 마무리가 끝날 때까지 (티라노 900+520+700 = 2120ms / 로봇 420+260+180+520 = 1380ms).
@@ -1762,7 +1763,8 @@ async function main() {
   };
   tRed2.onCreate(tApi2);
   await sleep(60);
-  tRed2.onScoreMilestone(RED_PARAMS.sparrowInterval, tApi2);
+  // 한 마리 발사 — 플레이 점수 카운터를 sparrowInterval 번 (v6)
+  for (let k = 1; k <= RED_PARAMS.sparrowInterval; k++) tRed2.onScoreMilestone(k, tApi2);
   for (let i = 0; i < 12; i++) { tRed2.onUpdate(tApi2); await sleep(4); }
   const tunnelled = tunnelPoops[0].active;
   console.log(`  [C5] 프레임 ${SLOW_MS}ms(한 프레임 ${step.toFixed(0)}px, 판정 지름 `
@@ -1842,7 +1844,7 @@ async function main() {
       ab.onCreate(bApi);
       (ab as any).lastLaunchScore = RED_PARAMS.sparrowInterval - 1;
       bScore = RED_PARAMS.sparrowInterval;
-      ab.onScoreMilestone(RED_PARAMS.sparrowInterval, bApi);   // 한 마리 발사
+      for (let k = 1; k <= RED_PARAMS.sparrowInterval; k++) ab.onScoreMilestone(k, bApi);   // 한 마리 발사 — 카운터 sparrowInterval 번 (v6)
       // 참새가 화면 위로 빠져나갈 때까지. 한 프레임에 몇 개를 회수하는지도 같이 잰다
       for (let i = 0; i < 20 && (ab as any).shots.length > 0; i++) {
         const aliveBefore = field.filter(q => q.active).length;
