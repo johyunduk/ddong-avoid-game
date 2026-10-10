@@ -2,9 +2,10 @@ import Phaser from 'phaser';
 import { BaseAbility } from './BaseAbility';
 import type { GameSceneAPI } from './types';
 import type PoolablePoopBase from '../objects/PoolablePoopBase';
-import { SENTINEL_PARAMS } from '../config/abilityParams';
+import { SENTINEL_PARAMS, SENTINEL_DEFERRED_SHEETS } from '../config/abilityParams';
 import { POOP_CONFIG } from '../config/poop';
-import { playFx } from '../utils/vfx';
+import { playFx, fxPickSheetKey, loadFxPickSheet } from '../utils/vfx';
+import { StagedLoader } from './stagedLoader';
 
 /**
  * 센티넬 (UR) — 보호막 + 과충전 방전 (2026-10 밸런스 개편, 값은 SENTINEL_PARAMS)
@@ -14,11 +15,12 @@ import { playFx } from '../utils/vfx';
  *   안 맞을수록 점수 — 예전(막을수록 점수 · 점수로 충전)의 고리를 뒤집었다
  * - 각성 단계별 값은 구현돼 있지 않다 (SENTINEL_PARAMS 하나)
  * - UI: 붉은 공이 허리 주변 수평 궤도 공전 + 전기 파지직 (재사용 Graphics)
- * - 방전 연출 (fx, 화풍: 오브젝트 하드 엣지 · 발광은 부드럽게 · 밝은 하늘 위에서 읽히게 normal 블렌드):
- *   가득 찬 동안 — 공이 흰 심지로 달아오르고 허리에 붉은 하드 엣지 고리 + 옅은 후광. 후광은 방전이 다가올수록 짙어진다.
- *   방전 PULSE_TELE_MS 전 — 반경 pulseRadius 자리에 옅은 고리가 먼저 떠서 범위를 예고한다.
- *   방전 — 같은 고리가 몸에서 pulseRadius 까지 퍼져 잠깐 머물고 사라진다 (바퀴살 빛줄기 없음 — 전기는 고리를 따라서만 긴다).
- *   오브젝트는 판 시작에 한 번 만든 Image 4장(후광 · 섬광 · 예고 고리 · 충격파)을 숨겼다 켰다 한다 — 방전 1회가 새로 만드는 것은
+ * - 방전 연출 (fx, v2 C 「방패 돔 붕괴」 — 시트 SENTINEL_DEFERRED_SHEETS, 주문서 ddong-fx-work/sentinel-pulse/v2/sheet_spec_C.md):
+ *   가득 찬 동안 — 작은 육각 방패 돔이 몸을 덮고(4칸 반복), 공이 흰 심지로 달아오른다.
+ *   방전 WARN1_MS 전 — 돔 칸이 전부 켜짐, WARN2_MS 전 — 금이 감.
+ *   방전 — 큰 돔이 작은 돔 크기에서 반경 pulseRadius 까지 GROW_MS 에 부풀고 HOLD_MS 머문 뒤 깨짐 5칸 + 파편 풀.
+ *   바퀴살 빛줄기 없음 · 블렌드는 전부 normal (발광은 시트에 구웠다). 시트는 판 시작 뒤 StagedLoader 로 한 장씩.
+ *   오브젝트는 판 시작에 한 번: Sprite 2 (작은 돔 · 큰 돔) · 파편 Image SHARD_COUNT — 방전 1회가 새로 만드는 것은
  *   점수 글자 1개뿐이고, 똥 파괴 이펙트는 impactHit(동시 6 상한)이다.
  * - **게임 동작은 한 프레임에**: 방전 순간 반경 안 똥을 그 자리에서 전부 지우고 점수도 그 자리에서 한 번에 준다
  *   (21df9a20 의 zapNearbyPoops 와 같은 동작). 지우기를 다음 프레임 이후로 미루면 그 사이 가장 가까운 똥이 먼저 플레이어에
@@ -47,13 +49,17 @@ export class SentinelAbility extends BaseAbility {
   aliveMs = 0;
   fullMs = 0;
   shieldMs: number[] = [];
-  /** 가득 찬 동안 허리에 두르는 고리 — 한 장을 만들어 두고 위치 · 보임만 바꾼다 */
-  private fullRing: Phaser.GameObjects.Graphics | null = null;
-  /** 가득 찬 동안의 후광 · 방전 섬광 · 범위 예고 고리 · 충격파 — 판 시작에 한 번 만들고 보임만 바꾼다 */
-  private fullHalo: Phaser.GameObjects.Image | null = null;
-  private pulseFlash: Phaser.GameObjects.Image | null = null;
-  private teleRing: Phaser.GameObjects.Image | null = null;
-  private shockRing: Phaser.GameObjects.Image | null = null;
+  /** 방패 돔 — 작은 돔(가득 찬 동안) · 큰 돔(방전) · 파편 풀. 시트가 올라오면 onSheetLoaded 가 만든다 */
+  private smallDome: Phaser.GameObjects.Sprite | null = null;
+  private bigDome: Phaser.GameObjects.Sprite | null = null;
+  private shards: Phaser.GameObjects.Image[] = [];
+  private domeLoader: StagedLoader | null = null;
+  /**
+   * 방전 뒤 작은 돔을 숨겨 두는 동안 true — 씬 시계 타이머(domeBackTimer)가 DOME_BACK_MS 뒤 푼다.
+   * scene.time.now 로 재면 히트스톱 · 일시정지(timeScale)와 어긋난다 (now 는 배율과 무관하게 흐른다)
+   */
+  private domeHidden = false;
+  private domeBackTimer: Phaser.Time.TimerEvent | null = null;
   /** 공을 달아오른 모습으로 그렸는지 — 가득 참이 바뀐 프레임에만 다시 그린다 */
   private dropletsHot = false;
   /** 방전으로 지운 자리 (거리순, 좌표 · 지운 시각만) — 파괴 이펙트를 프레임당 PULSE_FX_PER_FRAME 개씩 그린다. 게임 동작과 무관 */
@@ -80,17 +86,29 @@ export class SentinelAbility extends BaseAbility {
    * 대기열에 남긴다 — 그래도 이만큼 지나면 지운 순간과 너무 벌어져 버린다
    */
   private static readonly PULSE_FX_MAX_WAIT_MS = 900;
-  /** 범위 예고 고리가 뜨는 시간 (방전 전 ms) */
-  private static readonly PULSE_TELE_MS = 450;
-  /** 충격파: 몸에서 반경까지 퍼지는 시간 · 반경에 머무는 시간 · 사라지는 시간 (ms) */
-  private static readonly SHOCK_GROW_MS = 170;
-  private static readonly SHOCK_HOLD_MS = 110;
-  private static readonly SHOCK_FADE_MS = 200;
-  private static readonly RING_KEY = 'sentinel_pulse_ring';
-  private static readonly GLOW_KEY = 'sentinel_pulse_glow';
-  /** 고리 텍스처 바깥 여백 (발광 · 전기가 반경 밖으로 나가는 폭) */
-  private static readonly RING_PAD = 18;
-  private static readonly GLOW_TEX = 128;
+  /** 예고 — 방전 전 ms: 칸이 전부 켜짐(작은 돔 f4) · 금이 감(f5) */
+  private static readonly WARN1_MS = 450;
+  private static readonly WARN2_MS = 200;
+  /** 큰 돔: 부풀기 · 반경에 머물기 (그 뒤 깨짐 5칸 30fps ≈ 167ms) · 작은 돔이 다시 나타나는 시각 (방전 기준 ms) */
+  private static readonly GROW_MS = 170;
+  private static readonly HOLD_MS = 30;
+  private static readonly DOME_BACK_MS = 600;
+  /** 파편 풀 크기(동시 상한) · 떨어지는 시간 */
+  private static readonly SHARD_COUNT = 12;
+  private static readonly SHARD_MS = 450;
+  /** 시트 나눠 올리기 — 판 시작 뒤 첫 장까지 · 장 사이 (ms). 첫 방전은 가득 찬 뒤라 그 전에 다 올라온다 */
+  private static readonly SHEET_START_MS = 600;
+  private static readonly SHEET_GAP_MS = 250;
+  /**
+   * 시트 기하 (ddong-fx-work/sentinel-pulse/v2/proc_sheets.py 가 맞춘 값) — 원 중심 = 칸 안 (ox, oy) 비율,
+   * 텍스처 반지름 r, 밑변은 원 중심 아래 base px. 표시: 작은 돔 반지름 72px (발밑에서 머리 위까지),
+   * 큰 돔 반지름 = pulseRadius. 둘 다 밑변을 발밑(플레이어 중심 + 38)에 둔다 → dy = 38 − base × 배율
+   */
+  private static readonly DOME = {
+    small: { key: fxPickSheetKey('sentinel_dome_220x144.png'), idleAnim: 'sentinel_dome_idle', ox: 110 / 220, oy: 108 / 144, r: 100, scale: 0.72, alpha: 0.9, dy: 38 - 33 * 0.72 },
+    big: { key: fxPickSheetKey('sentinel_domebreak_480x263.png'), breakAnim: 'sentinel_dome_break', ox: 240 / 480, oy: 240 / 263, r: 200, scale: SENTINEL_PARAMS.pulseRadius / 200, alpha: 0.85, dy: 38 - 20 * (SENTINEL_PARAMS.pulseRadius / 200) },
+    shard: { key: fxPickSheetKey('sentinel_shard_48x48.png') },
+  } as const;
 
   override onCreate(api: GameSceneAPI): void {
     // 판마다 새 인스턴스지만(getCharacterAbility) 상태는 여기서 명시적으로 처음으로 (규칙 1)
@@ -105,6 +123,8 @@ export class SentinelAbility extends BaseAbility {
     this.shieldMs = new Array(SENTINEL_PARAMS.maxShields + 1).fill(0);
     this.dropletsHot = false;
     this.zapFxQueue = [];
+    this.domeHidden = false;
+    this.domeBackTimer = null;
     this.createPulseVisuals(api.scene);
     this.chargeTimer = api.scene.time.addEvent({
       delay: SENTINEL_PARAMS.chargeIntervalSec * 1000, loop: true, callback: () => this.tryCharge(api),
@@ -208,6 +228,7 @@ export class SentinelAbility extends BaseAbility {
     this.aliveMs += dt;
     if (full) this.fullMs += dt;
     this.shieldMs[Math.min(this.shieldCount, SENTINEL_PARAMS.maxShields)] += dt;
+    this.domeLoader?.step();
     this.drainZapFx(api);
     this.updateFullIndicator(api, full);
 
@@ -254,16 +275,18 @@ export class SentinelAbility extends BaseAbility {
     this.pulseTimer?.remove();
     this.pulseTimer = null;
     this.zapFxQueue = [];
-    for (const o of [this.fullRing, this.fullHalo, this.pulseFlash, this.teleRing, this.shockRing]) {
+    this.domeLoader?.stop();
+    this.domeLoader = null;
+    this.domeBackTimer?.remove();
+    this.domeBackTimer = null;
+    for (const o of [this.smallDome, this.bigDome, ...this.shards]) {
       if (!o) continue;
       o.scene?.tweens.killTweensOf(o);
       o.destroy();
     }
-    this.fullRing = null;
-    this.fullHalo = null;
-    this.pulseFlash = null;
-    this.teleRing = null;
-    this.shockRing = null;
+    this.smallDome = null;
+    this.bigDome = null;
+    this.shards = [];
     this.sparkTween?.stop();
     this.sparkGfx?.destroy();
     this.orbitDroplets.forEach(drop => drop.destroy());
@@ -371,174 +394,122 @@ export class SentinelAbility extends BaseAbility {
   }
 
   // ─────────────────────────────────────────────────────────────
-  // 방전 연출 — 가득 참 표시 · 범위 예고 · 충격파
+  // 방전 연출 — 방패 돔 (v2 C) : 가득 찬 동안 작은 돔 · 예고 · 부풀어 깨짐 · 파편
   // ─────────────────────────────────────────────────────────────
 
-  /** 판 시작에 한 번 — 텍스처를 굽고 재사용할 오브젝트를 숨긴 채 만든다 */
-  private createPulseVisuals(scene: Phaser.Scene): void {
-    SentinelAbility.bakeTextures(scene);
-
-    // 허리 고리 — 진홍 띠 + 흰 심지 (하드 엣지). 한 번 그리고 위치 · 보임만 바꾼다
-    this.fullRing = scene.add.graphics().setDepth(100).setVisible(false);
-    this.fullRing.lineStyle(4, 0xc4101f, 1).strokeEllipse(0, 0, 64, 18);
-    this.fullRing.lineStyle(1.5, 0xfff3f3, 1).strokeEllipse(0, 0, 64, 18);
-
-    const glowScale = 96 / SentinelAbility.GLOW_TEX;
-    this.fullHalo = scene.add.image(0, 0, SentinelAbility.GLOW_KEY).setDepth(88).setScale(glowScale).setVisible(false);
-    this.pulseFlash = scene.add.image(0, 0, SentinelAbility.GLOW_KEY).setDepth(88).setVisible(false);
-    this.teleRing = scene.add.image(0, 0, SentinelAbility.RING_KEY).setDepth(90).setVisible(false);
-    this.shockRing = scene.add.image(0, 0, SentinelAbility.RING_KEY).setDepth(150).setVisible(false);
-  }
-
   /**
-   * 텍스처 두 장 — 키가 있으면 건너뛴다 (다시 하기). 배율 1 에서 고리 반지름 = pulseRadius.
-   * 고리: 안쪽 여운(부드럽게) → 겹친 발광 획 → 밝은 하늘 대비용 어두운 얇은 테 → 진홍 하드 띠 + 흰 심지
-   *       → 띠를 따라 기는 전기 (원주 방향으로만 꺾인다 — 바깥으로 뻗는 줄기 없음)
+   * 판 시작에 한 번 — 시트 3장을 StagedLoader 로 한 장씩 올리고(판 시작 한 프레임에 몰지 않게),
+   * 올라오는 대로 재사용할 Sprite 2장 · 파편 Image 풀을 숨긴 채 만든다. 시트가 아직 없으면 그 연출만 건너뛴다
    */
-  private static bakeTextures(scene: Phaser.Scene): void {
-    const R = Math.round(SENTINEL_PARAMS.pulseRadius);
-    if (!scene.textures.exists(SentinelAbility.RING_KEY)) {
-      const n = (R + SentinelAbility.RING_PAD) * 2;
-      const tex = scene.textures.createCanvas(SentinelAbility.RING_KEY, n, n);
-      if (tex) {
-        const ctx = tex.getContext();
-        const c = n / 2;
-        const circle = (r: number) => { ctx.beginPath(); ctx.arc(c, c, r, 0, Math.PI * 2); };
-        const wake = ctx.createRadialGradient(c, c, 0, c, c, R - 3);
-        wake.addColorStop(0, 'rgba(255,60,80,0)');
-        wake.addColorStop(0.55, 'rgba(255,60,80,0)');
-        wake.addColorStop(0.9, 'rgba(255,60,80,0.10)');
-        wake.addColorStop(1, 'rgba(255,60,80,0.22)');
-        ctx.fillStyle = wake;
-        circle(R - 3);
-        ctx.fill();
-        for (const [lw, a] of [[30, 0.06], [20, 0.09], [12, 0.14]] as const) {
-          ctx.strokeStyle = `rgba(255,74,90,${a})`;
-          ctx.lineWidth = lw;
-          circle(R);
-          ctx.stroke();
-        }
-        ctx.strokeStyle = 'rgba(80,8,24,0.6)';
-        ctx.lineWidth = 2;
-        circle(R + 4.5);
-        ctx.stroke();
-        ctx.strokeStyle = '#e8202e';
-        ctx.lineWidth = 6;
-        circle(R);
-        ctx.stroke();
-        ctx.strokeStyle = '#fff3f3';
-        ctx.lineWidth = 2.5;
-        circle(R);
-        ctx.stroke();
-        // 전기 — 고정 시드라 판마다 같은 모양 (한 번 굽는 텍스처)
-        let seed = 7;
-        const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-        ctx.lineJoin = 'miter';
-        for (let k = 0; k < 9; k++) {
-          const a0 = (k / 9) * Math.PI * 2 + rnd() * 0.4;
-          const span = 0.22 + rnd() * 0.18;
-          const segs = 6;
-          const pts: [number, number][] = [];
-          for (let s = 0; s <= segs; s++) {
-            const a = a0 + (span * s) / segs;
-            const rr = R + (s === 0 || s === segs ? 0 : (rnd() - 0.5) * 12);
-            pts.push([c + Math.cos(a) * rr, c + Math.sin(a) * rr]);
-          }
-          for (const [col, lw] of [['#c4101f', 3.5], ['#ffffff', 1.4]] as const) {
-            ctx.strokeStyle = col;
-            ctx.lineWidth = lw;
-            ctx.beginPath();
-            pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
-            ctx.stroke();
-          }
-        }
-        tex.refresh();
+  private createPulseVisuals(scene: Phaser.Scene): void {
+    this.domeLoader?.stop();
+    this.domeLoader = new StagedLoader(
+      scene,
+      SENTINEL_DEFERRED_SHEETS.map(f => ({ key: fxPickSheetKey(f), enqueue: (sc: Phaser.Scene) => loadFxPickSheet(sc, f) })),
+      SentinelAbility.SHEET_GAP_MS, SentinelAbility.SHEET_START_MS,
+      key => this.onSheetLoaded(scene, key),
+    );
+    // 다시 하기 — 이미 올라와 있는 시트는 로더가 건너뛰므로 여기서 바로 만든다
+    for (const f of SENTINEL_DEFERRED_SHEETS) this.onSheetLoaded(scene, fxPickSheetKey(f));
+  }
+
+  /** 시트 한 장이 올라왔다 — 애니메이션을 등록하고 그 시트를 쓰는 오브젝트를 만든다 (이미 있으면 건너뛴다) */
+  private onSheetLoaded(scene: Phaser.Scene, key: string): void {
+    if (!scene.textures.exists(key)) return;
+    const D = SentinelAbility.DOME;
+    if (key === D.small.key) {
+      if (!scene.anims.exists(D.small.idleAnim)) {
+        scene.anims.create({ key: D.small.idleAnim, frames: scene.anims.generateFrameNumbers(key, { start: 0, end: 3 }), frameRate: 8, repeat: -1 });
       }
-    }
-    if (!scene.textures.exists(SentinelAbility.GLOW_KEY)) {
-      const n = SentinelAbility.GLOW_TEX;
-      const tex = scene.textures.createCanvas(SentinelAbility.GLOW_KEY, n, n);
-      if (tex) {
-        const ctx = tex.getContext();
-        const c = n / 2;
-        const g = ctx.createRadialGradient(c, c, 0, c, c, c);
-        g.addColorStop(0, 'rgba(255,240,240,0.9)');
-        g.addColorStop(0.18, 'rgba(255,90,100,0.55)');
-        g.addColorStop(0.5, 'rgba(255,60,80,0.18)');
-        g.addColorStop(1, 'rgba(255,60,80,0)');
-        ctx.fillStyle = g;
-        ctx.fillRect(0, 0, n, n);
-        tex.refresh();
+      this.smallDome ??= scene.add.sprite(0, 0, key, 0).setOrigin(D.small.ox, D.small.oy).setScale(D.small.scale).setDepth(95).setVisible(false);
+    } else if (key === D.big.key) {
+      if (!scene.anims.exists(D.big.breakAnim)) {
+        scene.anims.create({ key: D.big.breakAnim, frames: scene.anims.generateFrameNumbers(key, { start: 1, end: 5 }), frameRate: 30, repeat: 0 });
       }
+      this.bigDome ??= scene.add.sprite(0, 0, key, 0).setOrigin(D.big.ox, D.big.oy).setDepth(150).setVisible(false);
+    } else if (key === D.shard.key && this.shards.length === 0) {
+      for (let i = 0; i < SentinelAbility.SHARD_COUNT; i++) this.shards.push(scene.add.image(0, 0, key, i % 4).setDepth(151).setVisible(false));
     }
   }
 
   /**
-   * 매 프레임 — 가득 찬 동안의 표시. 다음 방전까지 남은 시간으로 후광을 짙게 하고, 마지막 PULSE_TELE_MS 동안 범위 예고 고리.
-   * 오브젝트를 만들지 않는다 (위치 · 알파 · 보임만)
+   * 매 프레임 — 가득 찬 동안 작은 돔을 발밑에 붙이고, 다음 방전까지 남은 시간으로 예고 칸을 고른다.
+   * 오브젝트를 만들지 않는다 (위치 · 칸 · 보임만)
    */
   private updateFullIndicator(api: GameSceneAPI, full: boolean): void {
     if (full !== this.dropletsHot) {
       this.dropletsHot = full;
       this.orbitDroplets.forEach(d => d.active && this.drawDroplet(d, full));
     }
-    const x = api.player.x;
-    const y = api.player.y;
-    this.fullRing?.setVisible(full).setPosition(x, y + SentinelAbility.ORBIT_WAIST_Y);
-    const halo = this.fullHalo;
-    const tele = this.teleRing;
-    if (!full) {
-      halo?.setVisible(false);
-      tele?.setVisible(false);
+    const dome = this.smallDome;
+    if (!dome) return;
+    const D = SentinelAbility.DOME;
+    // 가득이 아니거나 방전 직후(큰 돔이 깨지는 동안) — 숨긴다
+    if (!full || this.domeHidden) {
+      if (dome.visible && !full) { api.scene.tweens.killTweensOf(dome); dome.anims.stop(); dome.setVisible(false); }
       return;
     }
+    dome.setPosition(api.player.x, api.player.y + D.small.dy);
+    if (!dome.visible) { dome.setVisible(true).setAlpha(0); api.scene.tweens.add({ targets: dome, alpha: D.small.alpha, duration: 200 }); }
     const delay = SENTINEL_PARAMS.pulseIntervalSec * 1000;
     const remain = this.pulseTimer ? this.pulseTimer.getRemaining() : delay;
-    const near = 1 - Phaser.Math.Clamp(remain / delay, 0, 1);   // 0 = 방금 방전 · 1 = 곧 방전
-    if (halo) {
-      const beat = 0.5 + 0.5 * Math.sin(api.scene.time.now * (0.006 + 0.012 * near));
-      halo.setVisible(true).setPosition(x, y + SentinelAbility.ORBIT_WAIST_Y).setAlpha(0.18 + 0.3 * near + 0.12 * beat);
-    }
-    if (tele) {
-      const tm = SentinelAbility.PULSE_TELE_MS;
-      if (remain <= tm) {
-        const k = 1 - remain / tm;
-        tele.setVisible(true).setPosition(x, y).setScale(1.06 - 0.06 * k).setAlpha(0.32 * k);
-      } else {
-        tele.setVisible(false);
-      }
+    const want = remain <= SentinelAbility.WARN2_MS ? 5 : remain <= SentinelAbility.WARN1_MS ? 4 : -1;
+    if (want >= 0) {
+      if (dome.anims.isPlaying || Number(dome.frame.name) !== want) { dome.anims.stop(); dome.setFrame(want); }
+    } else if (!dome.anims.isPlaying) {
+      dome.play(D.small.idleAnim);
     }
   }
 
-  /** 방전 한 번 — 섬광 + 충격파 고리가 몸에서 반경까지 퍼져 잠깐 머문다. 재사용 Image 두 장에 트윈만 건다 */
-  private playPulseEffect(api: GameSceneAPI, cx: number, cy: number): void {
+  /**
+   * 방전 한 번 — 작은 돔을 숨기고 큰 돔을 작은 돔 크기에서 반경까지 부풀렸다(GROW) 잠깐 머물고(HOLD) 깨짐 5칸을 재생한다.
+   * 깨지는 순간 파편 풀을 돔 위쪽 테두리에서 흩뿌린다. 재사용 Sprite 2 · Image 풀에 트윈만 건다
+   */
+  private playPulseEffect(api: GameSceneAPI, cx: number, _cy: number): void {
     const scene = api.scene;
-    this.teleRing?.setVisible(false);
+    const D = SentinelAbility.DOME;
+    const big = this.bigDome;
+    this.domeHidden = true;
+    this.domeBackTimer?.remove();
+    this.domeBackTimer = scene.time.delayedCall(SentinelAbility.DOME_BACK_MS, () => { this.domeHidden = false; this.domeBackTimer = null; });
+    if (this.smallDome) { scene.tweens.killTweensOf(this.smallDome); this.smallDome.anims.stop(); this.smallDome.setVisible(false); }
+    if (!big) return;   // 시트가 아직 안 올라옴 — 게임 동작(지우기 · 점수)은 이미 끝났다
+    const x = cx, y = api.player.y + D.big.dy;
+    scene.tweens.killTweensOf(big);
+    big.anims.stop();
+    big.off(Phaser.Animations.Events.ANIMATION_COMPLETE);
+    big.setFrame(0).setPosition(x, y).setAlpha(D.big.alpha).setVisible(true).setScale(D.small.scale * D.small.r / D.big.r);
+    scene.tweens.add({
+      targets: big, scale: D.big.scale, duration: SentinelAbility.GROW_MS, ease: 'Expo.easeOut',
+      onComplete: () => {
+        // 반경에 HOLD_MS 머문다 — 범위가 읽히는 순간. 시계는 씬 시계(히트스톱 · 일시정지와 같이 멈춤)
+        scene.time.delayedCall(SentinelAbility.HOLD_MS, () => {
+          if (!big.active || !big.visible) return;
+          big.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => big.setVisible(false));
+          big.play(D.big.breakAnim);
+          this.throwShards(scene, x, y);
+        });
+      },
+    });
+  }
 
-    const flash = this.pulseFlash;
-    if (flash) {
-      scene.tweens.killTweensOf(flash);
-      const s0 = 70 / SentinelAbility.GLOW_TEX;
-      flash.setVisible(true).setPosition(cx, cy).setScale(s0).setAlpha(0.95);
+  /** 파편 — 돔 위쪽 테두리(반경 pulseRadius)에서 바깥으로 조금 밀리며 떨어진다. 풀을 돌려 쓴다 (동시 SHARD_COUNT) */
+  private throwShards(scene: Phaser.Scene, x: number, y: number): void {
+    const R = SENTINEL_PARAMS.pulseRadius;
+    const n = this.shards.length;
+    this.shards.forEach((s, i) => {
+      scene.tweens.killTweensOf(s);
+      const a = Math.PI + ((i + 0.5) / n) * Math.PI + Phaser.Math.FloatBetween(-0.12, 0.12);
+      const k = Phaser.Math.FloatBetween(0.82, 0.98);
+      const sx = x + Math.cos(a) * R * k, sy = y + Math.sin(a) * R * k;
+      s.setFrame(i % 4).setPosition(sx, sy).setScale(Phaser.Math.FloatBetween(0.5, 0.85))
+        .setRotation(Phaser.Math.FloatBetween(0, 6.28)).setAlpha(1).setVisible(true);
+      scene.tweens.add({ targets: s, x: sx + Math.cos(a) * Phaser.Math.FloatBetween(14, 34), duration: SentinelAbility.SHARD_MS, ease: 'Quad.easeOut' });
       scene.tweens.add({
-        targets: flash, scale: s0 * 2.4, alpha: 0, duration: 160, ease: 'Quad.easeOut',
-        onComplete: () => flash.setVisible(false),
+        targets: s, y: sy + Phaser.Math.FloatBetween(60, 120), rotation: s.rotation + Phaser.Math.FloatBetween(-2, 2), alpha: 0,
+        duration: SentinelAbility.SHARD_MS, ease: 'Quad.easeIn', onComplete: () => s.setVisible(false),
       });
-    }
-
-    const ring = this.shockRing;
-    if (ring) {
-      scene.tweens.killTweensOf(ring);
-      ring.setVisible(true).setPosition(cx, cy).setScale(0.12).setAlpha(1);
-      scene.tweens.chain({
-        targets: ring,
-        tweens: [
-          { scale: 1, duration: SentinelAbility.SHOCK_GROW_MS, ease: 'Expo.easeOut' },
-          { alpha: 0, scale: 1.03, duration: SentinelAbility.SHOCK_FADE_MS, delay: SentinelAbility.SHOCK_HOLD_MS, ease: 'Quad.easeIn' },
-        ],
-        onComplete: () => ring.setVisible(false),
-      });
-    }
+    });
   }
 
   // ─────────────────────────────────────────────────────────────

@@ -101,6 +101,16 @@ export const SENTINEL_PARAMS = {
   pulsePointsPerPoop: 40,   // 방전으로 지운 똥 1개당 점수
 } as const;
 
+/**
+ * 센티넬 방전 연출 시트 (v2 C 「방패 돔 붕괴」, builder b 원본 → fx 가공) — 판 시작 뒤 SentinelAbility 가 나눠 올린다.
+ * character.ts 의 deferredFxSheets 가 이 목록을 써서 캐릭터를 바꿀 때 같이 내린다
+ */
+export const SENTINEL_DEFERRED_SHEETS = [
+  'sentinel_dome_220x144.png',        // 작은 돔 — 가득 찬 동안 f0~f3 반복 · 예고 f4(칸 켜짐) · f5(금)
+  'sentinel_domebreak_480x263.png',   // 큰 돔 — f0 다 부푼 돔 · f1~f5 깨짐
+  'sentinel_shard_48x48.png',         // 파편 4종 (코드가 흩뿌린다)
+] as const;
+
 export const SENTINEL_DESC = {
   basicEffect: `시작 시 보호막 ${SENTINEL_PARAMS.startShields}개 보유 (피격 흡수 시 주변 똥 전기로 제거${SENTINEL_PARAMS.blockZapPoints > 0 ? `, 제거된 똥 1개당 +${SENTINEL_PARAMS.blockZapPoints}점` : ''})`,
   specialAbility: `${SENTINEL_PARAMS.chargeIntervalSec}초마다 보호막 1개 충전 (최대 ${SENTINEL_PARAMS.maxShields}개 · 한 판 ${SENTINEL_PARAMS.maxChargesPerRun}번까지) · 보호막이 가득 차 있으면 ${SENTINEL_PARAMS.pulseIntervalSec}초마다 방전 — 주변 똥 제거 (+${SENTINEL_PARAMS.pulsePointsPerPoop}점/개)`,

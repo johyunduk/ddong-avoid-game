@@ -1,7 +1,7 @@
 import {
   HACKER_DESC, MINER_DESC, MAEHWA_DESC,
   ARCHIEVE_DESC, GLITCH_DESC, NOISE_DESC,
-  SENTINEL_DESC, LEGACY_DESC, KNIGHT_DESC,
+  SENTINEL_DESC, SENTINEL_DEFERRED_SHEETS, LEGACY_DESC, KNIGHT_DESC,
   GUMI_DESC, MUGI_DESC, K_DESC, TED_DESC, RED_DESC, RED_SHEETS, HEIDI_DESC, HEIDI_PRELOAD_SHEETS, HEIDI_DEFERRED_SHEETS,
 } from '../config/abilityParams';
 import { type FxKey } from './vfx';
@@ -210,6 +210,8 @@ export const CHARACTERS: CharacterDef[] = [
     videoPath: 'assets/vids/sentinel.mp4',
     basicEffect: SENTINEL_DESC.basicEffect,
     specialAbility: SENTINEL_DESC.specialAbility,
+    // 방전 연출(방패 돔) 시트 — 판 시작 뒤 SentinelAbility 가 나눠 올린다. 캐릭터를 바꾸면 같이 내린다
+    deferredFxSheets: [...SENTINEL_DEFERRED_SHEETS],
   },
   {
     id: 'legacy',
