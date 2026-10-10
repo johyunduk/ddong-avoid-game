@@ -177,7 +177,7 @@ export class GlitchAbility extends BaseAbility {
     const half = 26 - 17 * k, L = Math.max(5, half * 0.45);
     g.clear();
     for (const p of b.targets) {
-      if (!this.compressed.has(p)) continue;
+      if (!p.active || !this.compressed.has(p)) continue;   // 점수가 피버를 열어 같은 프레임에 회수된 똥 — 꺾쇠를 그리지 않는다
       for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]] as const) {
         const cx = p.x + sx * half, cy = p.y + sy * half;
         for (const [c, w] of [[GlitchAbility.INK, 4], [GlitchAbility.PINK, 2]] as const) {
