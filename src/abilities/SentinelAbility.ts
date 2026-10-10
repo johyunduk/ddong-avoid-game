@@ -42,6 +42,13 @@ export class SentinelAbility extends BaseAbility {
   private holdText: Phaser.GameObjects.Text | null = null;
   private holdTween: Phaser.Tweens.Tween | null = null;
   /**
+   * 막은 뒤 남은 막기 무적(ms, v6 B⁶′) — 이 동안 닿은 똥은 GameScene 이 회수만 하고 보호막은 그대로.
+   * Player 무적과 섞지 않는다. onUpdate 에서 delta × timeScale 로 줄인다 (히트스톱 · 일시정지 동안 멈춤)
+   */
+  private blockInvulnMs = 0;
+  /** 막기 무적 깜빡임을 걸었는지 — 끝날 때 플레이어 알파를 1 로 돌린다 */
+  private blinking = false;
+  /**
    * 측정용 누계 (밸런스 하네스가 읽는다 — 화면 · 저장에는 안 쓴다):
    * 방전 횟수 · 방전으로 지운 똥 · 방전이 쓴 한 프레임 처리 시간(ms) 최댓값 · 판 시간(게임 시계 — 히트스톱 제외) · 가득 찬 시간 · 보호막 개수별(0~maxShields) 머문 시간
    */
@@ -133,6 +140,8 @@ export class SentinelAbility extends BaseAbility {
     this.weakPulseKills = 0;
     this.holdTicks = 0;
     this.holdPoints = 0;
+    this.blockInvulnMs = 0;
+    this.blinking = false;
     this.holdTween = null;
     this.pulseMaxMs = 0;
     this.pulseFxDropped = 0;
@@ -218,6 +227,17 @@ export class SentinelAbility extends BaseAbility {
     this.pulseMaxMs = Math.max(this.pulseMaxMs, performance.now() - t0);
   }
 
+  /** 막기 무적 시간을 줄이고, 그동안 플레이어를 가볍게 깜빡인다 (80ms 간격 알파 1 ↔ 0.55). 끝나면 알파 1 */
+  private tickBlockInvuln(api: GameSceneAPI, dt: number): void {
+    if (this.blockInvulnMs <= 0) {
+      if (this.blinking) { this.blinking = false; api.player.setAlpha(1); }
+      return;
+    }
+    this.blockInvulnMs = Math.max(0, this.blockInvulnMs - dt);
+    this.blinking = true;
+    api.player.setAlpha(Math.floor(this.blockInvulnMs / 80) % 2 === 0 ? 1 : 0.55);
+  }
+
   /**
    * 보유 중 초당 보너스 (v6 B⁗) — 지금 보호막 개수로 고른 점수를 awardBonus(→ addAbilityBonus → updateScore) 로 한 번.
    * 표시는 미리 만든 작은 글자 하나를 플레이어 오른쪽 위에 잠깐 띄운다
@@ -255,11 +275,14 @@ export class SentinelAbility extends BaseAbility {
   }
 
   override onHitPoop(api: GameSceneAPI): boolean {
+    // 막은 직후 짧은 막기 무적 — 붙어 떨어진 두 번째 똥이 다음 프레임에 보호막을 또 깎지 않게 (v6 B⁶′). 회수만 · 점수 없음
+    if (this.blockInvulnMs > 0) return true;
     if (this.shieldCount > 0) {
       this.shieldCount--;
+      this.blockInvulnMs = SENTINEL_PARAMS.blockInvulnSec * 1000;
       this.scatterDroplets(api, 1);
       this.playShieldBreakEffect(api);
-      // 반경 0 이면 주변 정리 · 정리 연출을 건너뛴다 (v6 B⁶). 깨지는 연출 · 막은 뒤 무적(GameScene)은 그대로
+      // 반경 0 이면 주변 정리 · 정리 연출을 건너뛴다 (v6 B⁶). 깨지는 연출은 그대로, 막은 뒤 보호는 위 blockInvulnMs (B⁶′)
       if (SENTINEL_PARAMS.blockZapRadius > 0) this.zapNearbyPoops(api, SENTINEL_PARAMS.blockZapRadius, SENTINEL_PARAMS.blockZapPoints);
       return true;
     }
@@ -279,6 +302,7 @@ export class SentinelAbility extends BaseAbility {
     this.domeLoader?.step();
     this.drainZapFx(api);
     this.updateFullIndicator(api, full);
+    this.tickBlockInvuln(api, dt);
 
     if (this.orbitDroplets.length === 0) return;
 
@@ -317,7 +341,9 @@ export class SentinelAbility extends BaseAbility {
   // 리소스 정리 (게임 오버 시 GameScene에서 호출)
   // ─────────────────────────────────────────────────────────────
 
-  override onDestroy(_api: GameSceneAPI): void {
+  override onDestroy(api: GameSceneAPI): void {
+    if (this.blinking) { this.blinking = false; api.player.setAlpha(1); }
+    this.blockInvulnMs = 0;
     this.chargeTimer?.remove();
     this.chargeTimer = null;
     this.holdTimer?.remove();
