@@ -134,9 +134,10 @@ export class SentinelAbility extends BaseAbility {
     this.domeBackTimer = null;
     this.domeHoldTimer = null;
     this.createPulseVisuals(api.scene);
-    this.chargeTimer = api.scene.time.addEvent({
-      delay: SENTINEL_PARAMS.chargeIntervalSec * 1000, loop: true, callback: () => this.tryCharge(api),
-    });
+    // 판당 충전이 0 이면 타이머 자체를 걸지 않는다 (v6 B‴) — 시작 보호막만 쓴다
+    this.chargeTimer = SENTINEL_PARAMS.maxChargesPerRun > 0
+      ? api.scene.time.addEvent({ delay: SENTINEL_PARAMS.chargeIntervalSec * 1000, loop: true, callback: () => this.tryCharge(api) })
+      : null;
     this.pulseTimer = api.scene.time.addEvent({
       delay: SENTINEL_PARAMS.pulseIntervalSec * 1000, loop: true, callback: () => this.pulse(api),
     });
