@@ -34,6 +34,7 @@ export class GlitchAbility extends BaseAbility {
    * 예전엔 실루엣을 크게 키워 뒤에 깔았는데, 똥 그림이 텍스처 가운데보다 아래에 있어 위쪽만 두껍게 보였다 (대표 피드백)
    */
   private outlinePool: Phaser.GameObjects.Image[] = [];
+  private outlineScene: Phaser.Scene | null = null;
   private bracketG: Phaser.GameObjects.Graphics | null = null;
   /**
    * 조여드는 꺾쇠 — 대상 · 시작 시각. BRACKET_MS 동안만 다시 그린다. **연출일 뿐** — 압축은 고른 프레임에 이미 끝났다.
@@ -96,6 +97,10 @@ export class GlitchAbility extends BaseAbility {
   override onCreate(api: GameSceneAPI): void {
     // 판마다 새 인스턴스지만 상태는 여기서 명시적으로 처음으로 (규칙 1)
     this.compressed = new Map();
+    // 외곽선은 물리가 똥 자리를 옮긴 **뒤**(POST_UPDATE)에 맞춘다 — onUpdate 는 물리 이동 전이라 떨어지는 똥보다
+    // 한 프레임(속도 260 에서 약 4px, 압축 똥 폭 24px) 뒤에 그려져 테두리가 위로 어긋났다 (대표 피드백)
+    this.outlineScene = api.scene;
+    api.scene.events.on(Phaser.Scenes.Events.POST_UPDATE, this.syncOutlines, this);
     this.openSlits = [];
     this.texts = new Set();
     this.pending = [];
@@ -241,12 +246,16 @@ export class GlitchAbility extends BaseAbility {
         landed++;
         continue;
       }
-      c.outline?.setPosition(p.x, p.y);
     }
     if (landed > 0) {
       this.compressLanded += landed;
       this.award(api, landed * GLITCH_PARAMS.compressPoints, api.player.x, ground - 60);
     }
+  }
+
+  /** 물리 이동 뒤 — 외곽선을 지금 그려질 똥 자리에 (렌더 직전 마지막 갱신) */
+  private syncOutlines(): void {
+    for (const [p, c] of this.compressed) if (c.outline?.visible) c.outline.setPosition(p.x, p.y);
   }
 
   private release(p: PoolablePoopBase, c: { sx: number; sy: number; outline: Phaser.GameObjects.Image | null }): void {
@@ -416,6 +425,8 @@ export class GlitchAbility extends BaseAbility {
   }
 
   override onDestroy(_api: GameSceneAPI): void {
+    this.outlineScene?.events.off(Phaser.Scenes.Events.POST_UPDATE, this.syncOutlines, this);
+    this.outlineScene = null;
     this.compressTimer?.remove();
     this.riftTimer?.remove();
     this.compressTimer = null;

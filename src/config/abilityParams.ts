@@ -21,14 +21,45 @@ export const HACKER_DESC = {
 } as const;
 
 // ── 광부 (Miner / SR) ─────────────────────────────────────────────────
+// 「발파」 — planner proposal_v7b §1 (2026-10-10 정정본). 옛 무지개똥 생성은 없앴다 (무지개는 대발파 비가 맡는다)
 export const MINER_PARAMS = {
-  specialBonus: 5,         // 특수 똥 수집 시 추가 점수
-  rainbowInterval: 350,     // 무지개똥 생성 점수 간격
+  specialBonus: 5,          // 특수 똥 수집 시 추가 점수 (그대로)
+  // 기본 「작은 발파」
+  smallEverySec: 3.5,       // 주기 (게임 시간 초)
+  smallAimX: 60,            // 머리 위 ±이만큼 안에서 반경에 일반 똥이 가장 많이 드는 x 로 던진다
+  smallHeight: 180,         // 머리 위 폭발 높이 (px)
+  smallFuseSec: 0.35,       // 던지고 터지기까지
+  smallRadius: 110,         // 폭발 반경
+  smallMax: 5,              // 한 번에 지우는 상한 (화면 안 일반 똥만)
+  smallPoints: 105,         // 개당 점수
+  smallScale: 0.45,         // 연기 크기 (폭발 시트 기준 배율)
+  // 필살 「대발파」
+  bigInterval: 2000,        // 플레이 점수(자기 보너스 제외) 이만큼마다
+  bigGatherSec: 0.6,        // 모으기 — 무적. 이 시간 동안 다이너마이트 묶음이 날아가 끝에 '쾅'
+  bigHeight: 220,           // 머리 위 폭발 높이
+  bigRadius: 220,           // 폭발 반경
+  bigMax: 25,               // 상한 (화면 안 일반 똥만)
+  bigPoints: 100,           // 개당 점수
+  bigScale: 1.6,            // 연기 크기
+  // 대발파 뒤 특수 똥 비 (게임의 실제 특수 똥 — 받으면 원래 규칙대로 수집)
+  rainGold: 9,
+  rainDiamond: 5,
+  rainRainbow: 2,
+  rainSpeed: 0.7,           // 그 종류 보통 낙하 속도의 배율
+  rainSpread: 200,          // 폭발점에서 좌우 ±이만큼 부채꼴
+  rainSpawnSec: 0.5,        // 16개를 이 시간에 나눠 뿌린다
+  rainFallSec: 1.5,         // 옆으로 퍼지는 속도 기준 — 이 시간에 도착 x 근처까지
 } as const;
 
+/** 광부 발파 시트 (builder 원본 → fx 가공 ability-mock/v7/miner/proc_miner_sheets.py) — 판 시작 뒤 나눠 올린다 */
+export const MINER_DEFERRED_SHEETS = [
+  'miner_blast_256x256.png',   // 폭발 연기 구름 6칸 — 둥근 불덩이 → 연기 (칸 가운데 = 폭발점)
+  'miner_rock_40x40.png',      // 바위 조각 4종
+] as const;
+
 export const MINER_DESC = {
-  basicEffect: `특수 똥 수집 시 +${MINER_PARAMS.specialBonus}점 추가`,
-  specialAbility: `${MINER_PARAMS.rainbowInterval}점마다 무지개똥 생성`,
+  basicEffect: `${MINER_PARAMS.smallEverySec}초마다 머리 위로 작은 다이너마이트 — '퍽' 반경 ${MINER_PARAMS.smallRadius} 일반 똥 제거 (최대 ${MINER_PARAMS.smallMax} · +${MINER_PARAMS.smallPoints}점/개) · 특수 똥 수집 +${MINER_PARAMS.specialBonus}점`,
+  specialAbility: `${MINER_PARAMS.bigInterval}점마다 「대발파」 — 반경 ${MINER_PARAMS.bigRadius} 일반 똥 제거 (최대 ${MINER_PARAMS.bigMax} · +${MINER_PARAMS.bigPoints}점/개) 뒤 금 · 다이아 · 무지개 똥이 우수수`,
 } as const;
 
 // ── 매화 (Maehwa / SR) ────────────────────────────────────────────────
