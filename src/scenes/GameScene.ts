@@ -862,13 +862,17 @@ export default class GameScene extends BaseScene {
     counterIncrement: () => void,
   ) {
     if (this.gameOver) return;
+    // 능력이 직접 내보낸 특수 똥인가 — 회수가 표시(abilityTag)를 지우기 전에 묻는다
+    const selfBonus = this.ability.isSelfBonusPoop(poop);
     // 획득은 파괴가 아니다 — 타격 이펙트도, 별도 획득 연출도 넣지 않는다
     (poop as PoolablePoopBase).recycle(true);
     counterIncrement();
     const bonus = this.ability.onCollectSpecial(type) + (this.activeSynergy?.collectBonus ?? 0);
     const total = baseScore + bonus;
     this.collectBonusTotal += bonus;
-    this.updateScore(total);
+    // 능력이 내보낸 똥이면 자기 보너스로 — 점수 · 생성 트리거는 같고 능력의 플레이 점수 카운터에서만 빠진다
+    if (selfBonus) this.ability.awardSelfBonus(this.abilityAPI, total);
+    else this.updateScore(total);
     // 피버 알약 바로 아래 — 피버 중에도 겹치지 않으니 띄운다
     const suffix = bonus > 0 ? ` (+${bonus})` : '';
     this.hud.popSpecial(GameScene.SPECIAL_ICON[type] ?? '', `+${total}${suffix}`, color);

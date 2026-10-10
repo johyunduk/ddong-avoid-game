@@ -56,6 +56,16 @@ export interface CharacterAbility {
   /** 특수 똥 수집 시 추가 보너스 점수 반환 (없으면 0) */
   onCollectSpecial(type: SpecialPoopType): number;
 
+  /**
+   * 이 특수 똥이 **능력이 직접 내보낸 것**인가 (예: 광부 대발파의 특수 똥 비). GameScene 이 줍기 직전 — 회수로 표시가
+   * 지워지기 전에 — 묻는다. true 면 그 수집 점수를 updateScore 대신 {@link awardSelfBonus} 로 준다:
+   * 점수 · 금똥 등 생성 트리거는 같고, 능력의 '플레이 점수' 카운터에만 안 들어간다. 기본 false
+   */
+  isSelfBonusPoop(poop: Phaser.GameObjects.GameObject): boolean;
+
+  /** 자기 보너스로 점수를 준다 (awarding 을 세우고 addAbilityBonus → updateScore). 위 isSelfBonusPoop 가 true 일 때 GameScene 이 부른다 */
+  awardSelfBonus(api: GameSceneAPI, amount: number): void;
+
   /** 금·다이아 스폰 시 낙하 속도 감소량 반환 (루트: 40) */
   specialPoopSpeedReduction(type: 'gold' | 'diamond'): number;
 
