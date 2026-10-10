@@ -870,9 +870,15 @@ export default class GameScene extends BaseScene {
     const bonus = this.ability.onCollectSpecial(type) + (this.activeSynergy?.collectBonus ?? 0);
     const total = baseScore + bonus;
     this.collectBonusTotal += bonus;
-    // 능력이 내보낸 똥이면 자기 보너스로 — 점수 · 생성 트리거는 같고 능력의 플레이 점수 카운터에서만 빠진다
-    if (selfBonus) this.ability.awardSelfBonus(this.abilityAPI, total);
-    else this.updateScore(total);
+    // 능력이 내보낸 똥이면 자기 보너스로 — 점수 · 생성 트리거는 같고 능력의 플레이 점수 카운터에서만 빠진다.
+    // 다만 abilityBonusTotal 에는 넣지 않는다: 이 점수는 이미 종류별 수집 수(기본 점수) · collectBonusTotal 로 잡혀 있어,
+    // 같이 넣으면 서버 시간 검증(leaderboard-submit)이 보너스를 두 번 빼 필요 플레이 시간을 과소평가한다 (0a6a69ae 리뷰)
+    if (selfBonus) {
+      this.ability.awardSelfBonus(this.abilityAPI, total);   // → addAbilityBonus(total) 가 abilityBonusTotal += total
+      this.abilityBonusTotal -= total;                        // 그 몫만 되돌린다
+    } else {
+      this.updateScore(total);
+    }
     // 피버 알약 바로 아래 — 피버 중에도 겹치지 않으니 띄운다
     const suffix = bonus > 0 ? ` (+${bonus})` : '';
     this.hud.popSpecial(GameScene.SPECIAL_ICON[type] ?? '', `+${total}${suffix}`, color);
