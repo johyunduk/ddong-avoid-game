@@ -101,17 +101,17 @@ export const GLITCH_DESC = {
  */
 export const NOISE_PARAMS = {
   // 기본 「흐린 발자국」
-  fogMinMove: 60,           // 직전 안개 자리에서 이만큼(px) 움직였을 때만 새 안개
-  fogCooldownSec: 3,        // 직전 안개가 생긴 뒤 이만큼(게임 시간 초) 지나야 새 안개 (동시 1개)
+  fogMinMove: 45,           // (v6 N: 60 → 45) 직전 안개 자리에서 이만큼(px) 움직였을 때만 새 안개
+  fogCooldownSec: 2.5,      // (v6 N: 3 → 2.5) 직전 안개가 생긴 뒤 이만큼(게임 시간 초) 지나야 새 안개 (동시 1개)
   fogLifeSec: 1.6,          // 안개 유지 (통과 판정이 켜진 시간). 그 뒤 뭉침 0.2 · 압축 0.15 → 돌풍 (안개 전체 약 2초)
   fogRx: 33,                // 통과 판정 타원 — 노이즈 표시(50×80)의 1.3배 (반폭 · 반높이)
   fogRy: 52,
   passMax: 6,               // 안개 하나당 통과 상한 (일반 + 특수 합). 다 쓰면 노이즈가 또렷해지고 통과 꺼짐
   passPoints: 20,           // 통과한 똥 개당 점수
   gustSpeed: 1400,          // 돌풍 속도 (px/초, 게임 시간) — 발밑에서 화면 위까지 약 0.55초
-  gustBand: 90,             // 돌풍이 지우는 세로 띠 폭 (px) — 발사 자리에서 화면 위 끝까지
-  gustMax: 6,               // 돌풍 하나가 지우는 상한 (일반 똥만)
-  gustPoints: 85,           // 돌풍으로 지운 똥 개당 점수
+  gustBand: 110,            // (v6 N: 90 → 110) 돌풍이 지우는 세로 띠 폭 (px) — 발사 자리에서 화면 위 끝까지
+  gustMax: 8,               // (v6 N: 6 → 8) 돌풍 하나가 지우는 상한 (일반 똥만)
+  gustPoints: 140,          // (v6 N: 85 → 140) 돌풍으로 지운 똥 개당 점수
   // 특수 (옛 것 그대로) — 점수 reductionInterval 의 배수마다 다음 소환 reductionAmount 개 감소
   reductionInterval: 200,
   reductionAmount: 2,
