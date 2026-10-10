@@ -31,6 +31,8 @@ export interface CharacterTextureKeys {
 const BAKED_PREFIXES: Record<string, string[]> = {
   // 착지 흙더미·균열 (배경 팔레트별 `_<서명>`) · 소닉붐 테두리 · 수묵 진한 먹·흰 눈동자·아지랑이
   ted: ['ted_land_mound_', 'ted_land_crack_', 'ted_sonic_rim', 'ted_ink_iris_haze_', 'ted_ink_iris_core_', 'ted_ink_burst'],
+  // 압축 똥 외곽선 (똥 텍스처 · 크기마다) — GlitchAbility.OUTLINE_PREFIX
+  glitch: ['glitch_outline_'],
 };
 
 /** GameScene.preload 규칙을 따라 한 캐릭터의 키를 모은다 (공유 판정 전) */
