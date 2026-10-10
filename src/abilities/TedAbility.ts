@@ -1516,7 +1516,8 @@ export class TedAbility extends BaseAbility {
     return api.scene.time.now < this.ascentInvincibleUntil;
   }
 
-  override getActiveChargeScore(): number { return TED_PARAMS.ascentChargeScore; }
+  /** 어센트 충전은 화면 점수가 아니라 생존 시간 (v6 T″) — GameScene 이 delta × timeScale 로 칸을 채운다 */
+  override getActiveChargeMs(): number { return TED_PARAMS.ascentChargeSec * 1000; }
   override getActiveMaxCharges(): number { return TED_PARAMS.ascentMaxCharges; }
   override getActiveStartCharges(): number { return TED_PARAMS.ascentStartCharges; }
 

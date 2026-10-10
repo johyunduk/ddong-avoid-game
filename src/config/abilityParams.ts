@@ -330,7 +330,7 @@ export const K_DESC = {
 
 // ── 테드 (R) — 하늘에서 떨어지는 체스 말 ─────────────────────
 export const TED_PARAMS = {
-  chessInterval:  90,   // 체스 말 낙하 점수 간격. 60 → 38 (2026-10 밸런스) → 60 (v6 B′) → 90 (T′)
+  chessInterval:  60,   // 체스 말 낙하 점수 간격. 60 → 38 (2026-10 밸런스) → 60 (v6 B′) → 90 (T′) → 60 (T″, B′ 로 되돌림)
   chessPieces:    10,   // 시트 프레임 수 (흑/백 × 폰·나이트·비숍·퀸·킹)
   chessSpread:    35,   // 수직에서 기울일 수 있는 최대 각도(도)
   chessSpeed:     1900, // 낙하 속도 (px/s) — 꽂히는 느낌이 나려면 눈이 못 따라갈 만큼 빨라야 한다
@@ -419,7 +419,7 @@ export const TED_PARAMS = {
   chessBowBoostMs: 120, // 소닉붐 뒤 길어지기까지
   chessBowGlow: [0.11, 0.14] as readonly number[],     // 열기 점 배율 (평소, 소닉붐 뒤) — proc-glow 192px
   chessBowGlowAlpha: [0.45, 0.75] as readonly number[], // 열기 점 알파 (평소, 소닉붐 뒤)
-  chessPoopPoints: 80,  // 낙하 경로에서 깨뜨린 똥 하나당 점수 20 → 37 (2026-10 밸런스 v6) → 55 (v6 B′) → 80 (T′)
+  chessPoopPoints: 55,  // 낙하 경로에서 깨뜨린 똥 하나당 점수 20 → 37 (2026-10 밸런스 v6) → 55 (v6 B′) → 80 (T′) → 55 (T″, B′ 로 되돌림)
   spreadBonusPoints: 185, // 퍼짐 발동 **정액** 보너스. 지운 똥 개수와 무관하다. 100 → 185 (2026-10 밸런스 v6)
                         // 이 점수로 다시 낙하가 걸리지 않게 TedAbility 가 먼저
                         // lastChessScore 를 올린 뒤 준다 (smashPoops 와 같은 가드)
@@ -429,7 +429,7 @@ export const TED_PARAMS = {
   // 흑백 3x3 큐브가 층별로 돌다가 한 면이 순백/순흑으로 맞춰진다. **랜덤**이고
   // 나온 색이 뒤에 붙는 효과를 가른다. 즉시 전체 제거는 **양쪽 공통** —
   // 안 그러면 "흑 뽑으면 손해" 가 되어 슬롯머신이 된다.
-  ascentChargeScore: 5000, // 충전 한 칸에 필요한 점수 (화면 점수 기준)
+  ascentChargeSec:  30,     // 충전 한 칸 — 생존 시간(게임 시간 초). 화면 점수 5,000 → 시간 30초 (v6 T″). 히트스톱 · 일시정지 때 멈춤 · 꽉 찬 동안 안 쌓임
   ascentMaxCharges:  3,    // 쌓아 둘 수 있는 최대 칸 (메이플 어센트와 같다)
   ascentStartCharges: 1,   // 판 시작부터 한 칸 차 있다 — 첫 5,000점 전에도 한 번 쓸 수 있게
   ascentPoopPoints:  74,   // 액티브가 지운 똥 하나당 점수 (저장소 기준값) 40 → 74 (2026-10 밸런스 v6)
@@ -559,7 +559,7 @@ export const TED_PARAMS = {
 
 export const TED_DESC = {
   basicEffect:    `${TED_PARAMS.chessInterval}점마다 체스 말 하나가 하늘에서 비스듬히 날아와 바닥에 꽂힌다 — 경로상 똥 제거 (+${TED_PARAMS.chessPoopPoints}점/개). 말 ${TED_PARAMS.chessStackMax}개가 쌓이면 화면 가운데로 모였다가 사방으로 퍼진다`,
-  specialAbility: `**액티브 — 어센트.** 시작 시 ${TED_PARAMS.ascentStartCharges}칸, ${TED_PARAMS.ascentChargeScore}점마다 한 칸 충전(최대 ${TED_PARAMS.ascentMaxCharges}칸), 버튼 또는 스페이스로 발동. 수묵 컷신 동안 무적, 끝나면 화면의 똥을 모두 지우고(+${TED_PARAMS.ascentPoopPoints}점/개) 큐브가 ${TED_PARAMS.summonMs / 1000}초 동안 머리 옆을 돌며 ${TED_PARAMS.summonDropEveryMs / 1000}초마다 체스 말을 떨어뜨린다 — 그동안 떨어지는 체스 말은 낙하 도중 소닉붐을 일으켜 둥근 파장으로 주변 똥을 지우고(+${TED_PARAMS.chessPoopPoints}점/개) 남은 거리를 ${TED_PARAMS.sonicSpeedMul}배 빠르게 내리꽂는다. 큐브가 도는 동안에는 다시 발동할 수 없다`,
+  specialAbility: `**액티브 — 어센트.** 시작 시 ${TED_PARAMS.ascentStartCharges}칸, ${TED_PARAMS.ascentChargeSec}초마다 한 칸 충전(최대 ${TED_PARAMS.ascentMaxCharges}칸), 버튼 또는 스페이스로 발동. 수묵 컷신 동안 무적, 끝나면 화면의 똥을 모두 지우고(+${TED_PARAMS.ascentPoopPoints}점/개) 큐브가 ${TED_PARAMS.summonMs / 1000}초 동안 머리 옆을 돌며 ${TED_PARAMS.summonDropEveryMs / 1000}초마다 체스 말을 떨어뜨린다 — 그동안 떨어지는 체스 말은 낙하 도중 소닉붐을 일으켜 둥근 파장으로 주변 똥을 지우고(+${TED_PARAMS.chessPoopPoints}점/개) 남은 거리를 ${TED_PARAMS.sonicSpeedMul}배 빠르게 내리꽂는다. 큐브가 도는 동안에는 다시 발동할 수 없다`,
 } as const;
 
 // ── 레드 (Red / SR) — 참새 동료 ──────────────────────────────────
