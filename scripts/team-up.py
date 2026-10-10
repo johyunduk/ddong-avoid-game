@@ -10,6 +10,9 @@
   4. 빈 셸 패널이 있으면 새로 띄운다 (agent start) — 역할은 SessionStart 훅이 넣는다
   5. 다른 종류가 떠 있으면 **손대지 않고** 보고한다. 끌지 말지는 사람이 정한다
 
+managed:false 자리(w1 director)는 사람이 띄운다 — 시작·재시작은 하지 않고 2·3(이름 확인 · 이름 붙이기)만 한다.
+name 이 null 인 자리(w5 워커)는 통째로 건너뛴다.
+
 세션이 이상해 보이면 고치지 말고 이 스크립트를 다시 돌린다.
 """
 import argparse
@@ -20,6 +23,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 ROSTER = ROOT / "docs" / "team" / "roster.json"
+
+# agent start 뒤에 붙는 에이전트 인자 (`-- ...`).
+# codex 는 공용 백그라운드 서버에 붙으면 Herdr 재시작 뒤 'Cannot use the shared background server
+# … api_key_model_discovery' 로 바로 꺼진다 — 자리마다 제 서버로 띄운다 (reviewer w4 · builder2 wD)
+START_ARGS = {"codex": ["--no-daemon"]}
 
 
 def herdr(*args: str) -> tuple[int, dict | None, str]:
@@ -58,8 +66,9 @@ def main() -> int:
                 herdr("workspace", "rename", ws, seat["label"])
 
         name, kind = seat.get("name"), seat.get("kind")
-        if not name or seat.get("managed") is False:
+        if not name:
             continue
+        managed = seat.get("managed") is not False
 
         code, got, _ = herdr("agent", "get", name)
         if code == 0:
@@ -84,13 +93,17 @@ def main() -> int:
                 if c != 0:
                     print(f"  ✗ {out.strip()[:200]}")
                     problems += 1
+        elif not managed:
+            print(f"✗ {ws}: {name} 자리에 {kind} 가 떠 있지 않다 — 관리 밖 자리라 띄우지 않는다, 사람이 띄운다")
+            problems += 1
         elif shells:
             pid = shells[0]["pane_id"]
             print(f"· {ws}: {pid} 에 {kind} 시작 → 이름 {name}")
             changes += 1
             if not a.check:
+                extra = START_ARGS.get(kind, [])
                 c, _, out = herdr("agent", "start", name, "--kind", kind, "--pane", pid,
-                                  "--timeout", "60000")
+                                  "--timeout", "60000", *(["--", *extra] if extra else []))
                 if c != 0:
                     print(f"  ✗ {out.strip()[:200]}")
                     problems += 1
