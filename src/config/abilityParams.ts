@@ -79,35 +79,36 @@ export const MAEHWA_DESC = {
 } as const;
 
 // ── 아카이브 (Archieve / SR) ──────────────────────────────────────────
-// v8 — 배율 1.1 그대로 (생존 틱만), 200점마다 +20 은 뺐다. 「비눗방울」 · 「거대 거품」 — planner proposal_v8_gumi_archive.md §2
+// v9 — 배율 1.1 그대로 (생존 틱만). 기본 「날려서 맞추기」 · 필살 「거품 분수」 (대표 v9 시안 · 출발 값 balance/v6 A″, planner 가 다시 잡는다)
 export const ARCHIEVE_PARAMS = {
   scoreMultiplierExtra: 0.10, // 점수 배율 추가분 (base의 10% → 1.1배) — 생존 틱에만 (능력 점수엔 안 곱함)
-  // 기본 「비눗방울」
-  bubbleEverySec: 3,          // 주기 (게임 시간 초). 4 → 3 (v6 A′)
-  bubbleCount: 4,             // (v6 A′ 3 → 4) 한 번에 감싸는 수 (머리 위 가까운 화면 안 일반 똥)
-  bubbleRadius: 240,          // 머리 위 반경. 200 → 240 (v6 A′)
+  // 기본 「날려서 맞추기」
+  shotEverySec: 3,            // 주기 (게임 시간 초)
+  shotCount: 4,               // 한 번에 쏘는 방울 수 (반경 안 가까운 화면 안 일반 똥을 겨냥)
+  shotRadius: 380,            // 구슬(손) 둘레 겨냥 반경 — 구슬보다 위 똥만 (v9-2 실플레이: 240 은 위쪽만 보면 3초에 절반이 빈손). 출발 값 240 (v6 A″)
+  shotSpeed: 420,             // 비행 속도 (px/초) — 도착 시점 자리로 앞질러 겨냥
+  shotBend: 26,               // 궤적이 휘는 정도 (px, 거리 200 이상일 때) — 번갈아 좌 · 우
   bubbleRise: 300,            // 감싼 똥이 떠오르는 속도 (px/초)
-  bubblePoints: 180,          // 화면 위에서 '퐁' 할 때 개당. 145 → 130 (v6 A′) → 180 (A″)
-  // 필살 「거대 거품」
-  giantInterval: 2000,        // 플레이 점수(자기 보너스 제외) 이만큼마다
-  giantSwellSec: 0.5,         // 부풂 — 다 부푼 순간 안의 똥을 담는다
-  giantHoldSec: 0.3,          // 유지 뒤 '퐁' — 담긴 똥을 그 프레임에 회수
-  giantFloorGap: 80,          // 거품 아래 가장자리 = 바닥 위 이만큼 (위로는 화면 높이 약 75%, 좌우는 화면 폭을 넘친다)
-  giantMax: 30,               // 담는 상한 (화면 안 일반 똥, 아카이브에 가까운 것부터)
-  giantPoints: 100,           // 개당
-  giantFlatPoints: 1200,      // 발동당 정액 (v6 A′) — 담은 수와 무관, 자기 보너스(카운터에 안 들어감)
+  bubblePoints: 180,          // 화면 위에서 '퐁' 할 때 개당 (v6 A″)
+  // 필살 「거품 분수」 (거대 거품 대체)
+  fountainInterval: 2000,     // 플레이 점수(자기 보너스 제외) 이만큼마다
+  fountainGatherSec: 0.6,     // 모으기 — 무적 (솟구침 끝까지)
+  fountainRiseSec: 0.8,       // 바닥에서 화면 위까지 솟구침 — 앞줄이 지나간 일반 똥을 감싼다
+  fountainRiseSpeed: 700,     // 분수가 감싼 똥이 올라가는 속도 (px/초)
+  fountainMax: 30,            // 감싸는 상한 (v6 A′ 거대 거품과 같게)
+  fountainPoints: 100,        // 개당 (v6 A′)
+  fountainFlatPoints: 1200,   // 발동당 정액 (v6 A′ 거대 거품 정액을 이어받음) — 자기 보너스, 카운터에 안 들어감
 } as const;
 
 /** 아카이브 비눗방울 시트 (builder 후보 b → fx 가공 ability-mock/v8/proc_bubble_sheets.py) — 판 시작 뒤 나눠 올린다 */
 export const ARCHIEVE_DEFERRED_SHEETS = [
-  'archive_bubble_72x96.png',   // 작은 방울 4칸 — f0 · f1 떠오름 반복, f2 · f3 퐁 (방울 지름 약 59, 칸 가운데)
+  'archive_bubble_72x96.png',   // 방울 4칸 — f0 · f1 떠오름 반복, f2 · f3 퐁 (방울 지름 약 59, 칸 가운데). 분수 거품도 이 시트 (배율 ≤ 1.0)
   'archive_tag_30x21.png',      // 번호표 1장 — 숫자는 글자로
-  'archive_giant_480x560.png',  // 거대 거품 6칸 — f0 40% · f1 80% · f2 · f3 유지 반복 · f4 · f5 퐁 (테 반지름 219 × 265, 칸 가운데)
 ] as const;
 
 export const ARCHIEVE_DESC = {
-  basicEffect: `점수 획득 속도 ${1 + ARCHIEVE_PARAMS.scoreMultiplierExtra}배 · ${ARCHIEVE_PARAMS.bubbleEverySec}초마다 비눗방울 ${ARCHIEVE_PARAMS.bubbleCount}개가 머리 위 똥을 감싸 띄워 보냄 (+${ARCHIEVE_PARAMS.bubblePoints}점/개)`,
-  specialAbility: `${ARCHIEVE_PARAMS.giantInterval}점마다 「거대 거품」 — 화면을 덮어 안의 똥을 담고 '퐁' (+${ARCHIEVE_PARAMS.giantFlatPoints}점 · 최대 ${ARCHIEVE_PARAMS.giantMax} · +${ARCHIEVE_PARAMS.giantPoints}점/개)`,
+  basicEffect: `점수 획득 속도 ${1 + ARCHIEVE_PARAMS.scoreMultiplierExtra}배 · ${ARCHIEVE_PARAMS.shotEverySec}초마다 비눗방울 ${ARCHIEVE_PARAMS.shotCount}발을 날려 맞힌 똥을 감싸 띄워 보냄 (+${ARCHIEVE_PARAMS.bubblePoints}점/개)`,
+  specialAbility: `${ARCHIEVE_PARAMS.fountainInterval}점마다 「거품 분수」 — 바닥에서 거품이 솟구쳐 똥을 감싸 올려 보냄 (+${ARCHIEVE_PARAMS.fountainFlatPoints}점 · 최대 ${ARCHIEVE_PARAMS.fountainMax} · +${ARCHIEVE_PARAMS.fountainPoints}점/개)`,
 } as const;
 
 // ── 글리치 (Glitch / SR) ──────────────────────────────────────────────
@@ -263,11 +264,13 @@ export const GUMI_PARAMS = {
   foxConvertPoints:   80,   // 여우불이 일반 똥을 금똥으로 바꾸는 순간 개당 (v6 G3) — 자기 보너스, 금똥을 줍든 안 줍든 받는다 (G1 의 바닥 90 대체)
 } as const;
 
-/** 구미 여우비 시트 (builder 후보 b → fx 가공 ability-mock/v8/proc_foxrain_sheets.py) — 판 시작 뒤 나눠 올린다 */
+/** 구미 시트 (무지개 여우비 · 꼬리 — builder → fx 가공 ability-mock/v8/proc_*_sheets.py) — 판 시작 뒤 나눠 올린다 */
 export const GUMI_DEFERRED_SHEETS = [
   'gumi_rain_128x256.png',      // 금빛 빗줄기 4칸 — 화면 전체에 이어 깐다 (칸 경계에 잘린 줄은 지웠다)
   'gumi_melt_64x96.png',        // 똥 녹음 4칸 — 금빛 물듦 → 주르륵 → 물방울. 똥 자리 = (32, 27)
   'gumi_rainbow_430x215.png',   // 무지개 호 1장 (빛살 없음)
+  'gumi_tail_91x65.png',        // 꼬리 몸 8칸 — 흰 여우 꼬리 살랑임 (builder 후보 c, fx 가공 proc_tail_sheets.py). 밑동 = 칸 (0.044, 0.508)
+  'gumi_tailtip_91x65.png',     // 꼬리 끝 마스크 8칸 — 몸과 같은 칸, 9색 틴트
 ] as const;
 
 export const GUMI_DESC = {

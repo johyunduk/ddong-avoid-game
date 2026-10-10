@@ -16,7 +16,8 @@ import { LegacyAbility } from '../src/abilities/LegacyAbility';
 import { TedAbility, HEAD_ORIGIN_Y } from '../src/abilities/TedAbility';
 import { RedAbility, ROAR_RING_LIFE_MS } from '../src/abilities/RedAbility';
 import { HeidiAbility } from '../src/abilities/HeidiAbility';
-import { MAEHWA_PARAMS, LEGACY_PARAMS, K_PARAMS, TED_PARAMS, RED_PARAMS, RED_SHEETS, HEIDI_PARAMS, HEIDI_SHEETS, HEIDI_WEAPON_SHEET } from '../src/config/abilityParams';
+import { GumiAbility } from '../src/abilities/GumiAbility';
+import { MAEHWA_PARAMS, LEGACY_PARAMS, K_PARAMS, TED_PARAMS, RED_PARAMS, RED_SHEETS, HEIDI_PARAMS, HEIDI_SHEETS, HEIDI_WEAPON_SHEET, GUMI_PARAMS, GUMI_DEFERRED_SHEETS } from '../src/config/abilityParams';
 import { beam, fxSprite, getFxStats, preloadFxAssets, preloadFxSheet, playFx, getFxCounters, resetFxCounters, fxPickSheetKey, FX_PARTICLE_ASSETS, FX_ASSET_DIR } from '../src/utils/vfx';
 
 const VOLLEYS = 20;
@@ -344,24 +345,47 @@ async function main() {
   const kSettled = snapshot(kScene);
   console.log(fmt('[17b] K 정리 후', kSettled));
 
-  // ── 상시 가산 이펙트가 블룸 레이어를 붙잡지 않는지 ────────────────────
-  // 블룸 레이어는 depth 가 고정이라 올라간 오브젝트는 자기 depth 를 잃고,
-  // 하나라도 살아 있으면 전체 화면 블룸 패스가 계속 돈다.
-  // 구미 꼬리(9개 상시, 가산)가 여기 올라가 렉과 렌더 순서 붕괴를 일으킨 적이 있다.
-  const persist = [];
-  for (let i = 0; i < 9; i++) {
-    persist.push(fxSprite(scene, 100 + i * 10, 400, 'fx_proc_streak', {
-      rotation: 0, scale: [0.14, 0.14], origin: [0, 0.5],
-      tint: 0xff2200, alpha: 0.9, depth: 3, blend: 'add',
-      lifeMs: 60000, slot: 'gumi_tail', maxConcurrent: 12,
-    }));
+  // ── 구미 꼬리 풀 (v8 c21ac76b · 리뷰) — 9쌍(몸 + 끝)을 시트가 오면 한 번 만들고, 무적이 끝나면 숨겨 재사용한다.
+  // 예전엔 꼬리 9개가 상시 **가산** 이펙트라 블룸 레이어를 붙잡지 않는지만 쟀다 — 이제는 normal Sprite 풀이라
+  // ① 풀은 18장 한 번만 생기고 ② 쌓고 · 무적 · 숨김을 여러 번 돌아도 새로 생기지 않으며 ③ 블룸에 안 올라가고
+  // ④ onDestroy 에서 전부 사라지는지 본다. POST_UPDATE 동기화(syncTails)도 같이 돌린다
+  const gScene = createFakeScene();
+  preloadFxAssets(gScene);
+  for (const f of GUMI_DEFERRED_SHEETS) gScene.textures.__addAsset(fxPickSheetKey(f));
+  gScene.textures.__addAsset('glow_dot');   // 무적 9색 버스트 · 오라가 쓰는 소프트 닷 (캔버스로 굽는 경로는 노드에 document 가 없다)
+  const gPlayer = { x: 180, y: 520, body: { velocity: { x: 0 } }, setDepth() { return this; }, setAlpha() { return this; }, addPermanentSpeed() {} };
+  const none = { getChildren: () => [] };
+  const gApi = { scene: gScene, player: gPlayer, poops: none, goldPoops: none, diamondPoops: none, topazPoops: none, rainbowPoops: none,
+    addAbilityBonus() {}, spawnGoldPoopAt() {}, spawnGoldPoop() {} };
+  const gumi = new GumiAbility(0);
+  gumi.onCreate(gApi);
+  const pool = (gumi as any).tailPool;
+  const poolSprites = pool.length * 2;
+  let poolGrew = 0, visibleMax = 0;
+  for (let cycle = 0; cycle < 3; cycle++) {
+    for (let i = 0; i < GUMI_PARAMS.maxTails; i++) (gumi as any)._addTail(gApi);   // 9번째에 무적
+    gPlayer.body.velocity.x = cycle % 2 ? 240 : -240;
+    gScene.events.emit(Phaser.Scenes.Events.POST_UPDATE);
+    visibleMax = Math.max(visibleMax, pool.filter(t => t.img.visible).length);
+    (gumi as any).invincibleElapsed = 1e9;
+    (gumi as any)._updateInvincibility(gApi);                                         // 무적 끝 → 숨김 (380ms 트윈)
+    await sleep(1500);   // 숨김 트윈 · 무적 끝 파열(bloom 섬광 · 충격파)이 다 끝나도록
+    poolGrew += pool.length * 2 - poolSprites;
   }
-  const persistBloom = snapshot(scene).bloomRefs;
-  persist.forEach(o => o?.destroy());
-  await sleep(200);
-  const persistCleared = snapshot(scene);
-  console.log('상시 가산 9장: bloomRefs=%d (0 이어야 한다), 파기 후 sprites=%d timeouts=%d',
-    persistBloom, persistCleared.sprites, persistCleared.timeouts);
+  const tailSnap = snapshot(gScene);
+  const hiddenAll = pool.every(t => !t.img.visible && !t.tip.visible);
+  const normalAll = pool.every(t => t.img.blendMode === 0 && t.tip.blendMode === 0);
+  // 여우불(onCreate 의 첫 소환)이 만든 스프라이트를 빼고 꼬리 풀만 센다
+  console.log('구미 꼬리 풀: 18장 한 번 (%d) · 3회 쌓고 숨김 동안 새로 생김 %d · 최대 보임 %d · 숨김 %s · normal %s · bloomRefs=%d',
+    poolSprites, poolGrew, visibleMax, hiddenAll, normalAll, tailSnap.bloomRefs);
+  // 리스너 해제 — onDestroy 앞뒤로 POST_UPDATE 리스너 수를 잰다 (syncTails 가 tailApi 로 막혀도 리스너가 남으면 잡힌다)
+  const postBefore = gScene.events.listenerCount(Phaser.Scenes.Events.POST_UPDATE);
+  gumi.onDestroy(gApi);
+  const postAfter = gScene.events.listenerCount(Phaser.Scenes.Events.POST_UPDATE);
+  await sleep(300);
+  const tailGone = pool.every(t => !t.img.scene && !t.tip.scene);
+  const syncReleased = postBefore === 1 && postAfter === 0;
+  console.log('구미 꼬리 풀 onDestroy: 전부 파기 %s · POST_UPDATE 리스너 %d → %d', tailGone, postBefore, postAfter);
 
   // ── 잔상 누락 검사: 매화 1회 발동에서 sweep/잔상 요청 = 생성 이어야 한다 ──
   resetFxCounters();
@@ -2106,7 +2130,7 @@ async function main() {
       seenDirs === TED_PARAMS.chessStackMax && headDot > 0.999],
     ['[T15] 판정 끝점이 보이는 머리끝과 일치 (≤ 1px)', headErr <= 1],
     ['[12] 옅은 알파 + 가산 조합 0건 (밝은 배경에서 묻히는 조합)', faintAdditive.length === 0],
-    ['[13] 상시 가산 이펙트가 블룸 레이어를 붙잡지 않음', persistBloom === 0],
+    ['[13] 구미 꼬리 풀 — 18장 한 번 · 재사용 중 안 늘어남 · 9쌍 보임 · 숨김 · normal · 블룸 0', poolSprites === 18 && poolGrew === 0 && visibleMax === 9 && hiddenAll && normalAll && tailSnap.bloomRefs === 0],
     ['[15a] 레거시 오라·빗줄기·소각이 실제로 떠 있었음',
       legacyPeak.liveSprites + legacyPeak.liveEmitters > 0],
     ['[15b] 레거시 종료 후 기준선 복귀', isZero(legacySettled)],
@@ -2114,7 +2138,7 @@ async function main() {
     // 이미터는 각자 렌더 패스를 갖는 무거운 오브젝트다. 상한이 없던 시절
     // 레거시가 똥 4마리를 동시에 태우며 42개까지 띄웠고 그게 렉의 원인이었다
     ['[16] 파티클 이미터 동시 상한(14) 준수', legacyPeak.liveEmitters <= 14],
-    ['[14] 상시 이펙트 파기 시 보험 타이머까지 회수', persistCleared.timeouts === 0],
+    ['[14] 구미 꼬리 풀 onDestroy — 전부 파기 · POST_UPDATE 해제', tailGone && syncReleased],
     ['[17a] K 초사이언 자기 보너스 재진입 폭주 없음 (2초에 발사 ≤ 5회)', kCascade <= 5],
     ['[17b] K 정리 후 기준선 복귀', isZero(kSettled)],
     // 레드 — 참새가 부순 똥의 보너스(15점)가 발사 간격(50점)을 스스로 넘기는 되먹임.
