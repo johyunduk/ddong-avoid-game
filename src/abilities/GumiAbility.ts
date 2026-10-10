@@ -116,13 +116,21 @@ interface AuraParticle {
  * 수치: GUMI_PARAMS 참조
  */
 export class GumiAbility extends BaseAbility {
+  /** 여우불이 바꾼 금똥의 abilityTag (v6 G0) — 주운 점수는 자기 보너스, 판정 카운터에 안 센다. 회수 · 재사용 때 지워진다 */
+  private static readonly FOX_GOLD_TAG = 1;
+
   // ── 여우불 (특수 능력) ─────────────────────────────────────────────
-  private lastGumiScore = 0;
+  /**
+   * 다음 여우불까지 쌓인 '플레이 점수' (v6 G0, 매화 v3.3 과 같은 방식) — 자기 보너스(여우불 금똥 수집)는 세지 않는다.
+   * 예전 score % foxFireInterval 판정은 보너스가 배수를 넘기면 그 차례를 삼켰다
+   */
+  private foxProgress = 0;
   private foxFires: FoxFire[] = [];
 
   // ── 꼬리 스택 (기본 효과) ─────────────────────────────────────────
   private tailCount = 0;
-  private lastTailScore = 0;
+  /** 다음 꼬리까지 쌓인 플레이 점수 (v6 G0) — 무적 중에는 세지 않고, 무적이 끝나면 0 부터 */
+  private tailProgress = 0;
   private invincibleActive = false;
   private invincibleElapsed = 0;
   private tails: TailObj[] = [];
@@ -143,6 +151,8 @@ export class GumiAbility extends BaseAbility {
     // 씬 재시작 시 onDestroy가 호출되지 않으므로 stale 참조를 여기서 정리
     this.tails = [];
     this.tailCount = 0;
+    this.foxProgress = 0;
+    this.tailProgress = 0;
     this.specialBonus = 0;
     this.speedBonus = 0;
     this.spawnReduction = 0;
@@ -243,17 +253,24 @@ export class GumiAbility extends BaseAbility {
   }
 
   // ── 점수 마일스톤 ─────────────────────────────────────────────────
-  override onScoreMilestone(score: number, api: GameSceneAPI): void {
+  override onScoreMilestone(_score: number, api: GameSceneAPI): void {
+    // 점수 1점마다 불린다. 판정은 점수 배수가 아니라 '플레이 점수' 카운터 (v6 G0) — 자기 보너스(여우불 금똥)는 세지 않는다
+    if (this.awarding) return;
     // 여우불 (특수)
-    if (score % GUMI_PARAMS.foxFireInterval === 0 && score > this.lastGumiScore) {
-      this.lastGumiScore = score;
+    if (++this.foxProgress >= GUMI_PARAMS.foxFireInterval) {
+      this.foxProgress = 0;
       this.summonFoxFires(api);
     }
-    // 꼬리 추가 (기본) — 무적 중 누적 금지
-    if (score % GUMI_PARAMS.tailInterval === 0 && score > this.lastTailScore && !this.invincibleActive) {
-      this.lastTailScore = score;
+    // 꼬리 추가 (기본) — 무적 중에는 세지도 않는다 (예전 '무적 중 누적 금지')
+    if (!this.invincibleActive && ++this.tailProgress >= GUMI_PARAMS.tailInterval) {
+      this.tailProgress = 0;
       this._addTail(api);
     }
+  }
+
+  /** 여우불이 바꾼 금똥이면 그 수집 점수는 자기 보너스 (광부 비와 같은 원칙). 하늘 금똥은 그대로 센다 */
+  override isSelfBonusPoop(poop: Phaser.GameObjects.GameObject): boolean {
+    return (poop as PoolablePoopBase).abilityTag === GumiAbility.FOX_GOLD_TAG;
   }
 
   // ── 무적 발동 ─────────────────────────────────────────────────────
@@ -322,7 +339,7 @@ export class GumiAbility extends BaseAbility {
     });
     this.tails       = [];
     this.tailCount   = 0;
-    this.lastTailScore = api.score; // 무적 중 지나친 마일스톤 역추적 방지
+    this.tailProgress = 0; // 무적이 끝나면 꼬리 카운터는 0 부터
 
     // 꼬리별 누적 효과 초기화 — speedBonus는 원복 후 초기화
     const speedToRemove = this.speedBonus;
@@ -578,7 +595,11 @@ export class GumiAbility extends BaseAbility {
           const px = poop.x;
           const py = poop.y;
           (poop as unknown as PoolablePoopBase).recycle();
+          // 만든 금똥에 표시 — 그 자리에서만 찾고 참조는 들고 있지 않는다 (광부 비와 같은 방식)
+          const before = new Set(api.goldPoops.getChildren().filter(o => o.active));
           api.spawnGoldPoopAt(px, py);
+          const gold = api.goldPoops.getChildren().find(o => o.active && !before.has(o)) as PoolablePoopBase | undefined;
+          if (gold) gold.abilityTag = GumiAbility.FOX_GOLD_TAG;
           this.spawnHitFlash(px, py, scene);
           fire.img.destroy();
           fire.core.destroy();
