@@ -89,7 +89,7 @@ export const ARCHIEVE_PARAMS = {
   shotSpeed: 420,             // 비행 속도 (px/초) — 도착 시점 자리로 앞질러 겨냥
   shotBend: 26,               // 궤적이 휘는 정도 (px, 거리 200 이상일 때) — 번갈아 좌 · 우
   bubbleRise: 300,            // 감싼 똥이 떠오르는 속도 (px/초)
-  bubblePoints: 180,          // 화면 위에서 '퐁' 할 때 개당 (v6 A″)
+  bubblePoints: 240,          // 화면 위에서 '퐁' 할 때 개당 (v6 A″ 180 → A9′ 240)
   // 필살 「거품 분수」 (거대 거품 대체)
   fountainInterval: 2000,     // 플레이 점수(자기 보너스 제외) 이만큼마다
   fountainGatherSec: 0.6,     // 모으기 — 무적 (솟구침 끝까지)
