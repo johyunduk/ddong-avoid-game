@@ -112,9 +112,14 @@ export const NOISE_PARAMS = {
   gustBand: 110,            // (v6 N: 90 → 110) 돌풍이 지우는 세로 띠 폭 (px) — 발사 자리에서 화면 위 끝까지
   gustMax: 8,               // (v6 N: 6 → 8) 돌풍 하나가 지우는 상한 (일반 똥만)
   gustPoints: 210,          // (v6 N: 85 → 140 → N′ 185 → N″ 210) 돌풍으로 지운 똥 개당 점수
-  // 특수 (옛 것 그대로) — 점수 reductionInterval 의 배수마다 다음 소환 reductionAmount 개 감소
-  reductionInterval: 200,
-  reductionAmount: 2,
+  // 특수 「서리 안개」 (자동) — planner v6 (proposal_v6_values.md §14)
+  frostInterval: 2000,      // 플레이 점수(자기 보너스 제외) 이만큼마다 발동 — 첫 발동 약 60초 · 이후 약 50초
+  frostGatherSec: 0.6,      // 모으기 — 그동안 무적
+  frostFillSec: 0.35,       // 서리 안개가 화면 전체에 차오르는 시간 — 다 차는 순간 화면의 일반 똥이 한꺼번에 얼어 멈춤 (무적은 이때까지)
+  frostFreezeSec: 0.6,      // 얼어 멈춘 뒤 금이 가기까지 (멈춤 합계 = freeze + crack = 1.0초)
+  frostCrackSec: 0.4,       // 다 얼고 금이 간 채 멈춰 있는 시간 (멈춤 합계 = freeze + crack)
+  frostMax: 25,             // 한 번에 얼리는 상한 (일반 똥만)
+  frostPoints: 100,         // 깨진 똥 개당 점수
 } as const;
 
 /** 노이즈 v4 연출 시트 (builder 원본 → fx 가공 ability-mock/noise/proc_noise_sheets.py) — 판 시작 뒤 나눠 올린다 */
@@ -126,11 +131,14 @@ export const NOISE_DEFERRED_SHEETS = [
   'noise_gusttail_92x192.png',    // 돌풍 꼬리 6칸 — 같은 비행 칸 아래 1/3 을 가늘게 · 세로로 늘려 쓴다
   'noise_twistend_144x526.png',   // 꼭대기 흩어짐 4칸
   'noise_mote_28x22.png',         // 안개 입자 4종
+  'noise_frostfilm_182x163.png',  // 서리 안개 막 4칸 반복 — 가로로 이어 붙임 (양끝 30% 섞어 이음 없음)
+  'noise_iceshell_111x117.png',   // 얼음 덮개 3종 — 칸 가운데 = 고리 안쪽 가운데 (똥 자리)
+  'noise_iceshatter_100x166.png', // 깨짐 5칸 — f0 금 감, f1~f4 조각이 아래로. 원점 (0.5, 0.401) = 덮개 가운데
 ] as const;
 
 export const NOISE_DESC = {
   basicEffect: `움직인 자리에 안개 — 안에 있으면 똥 통과 (안개당 ${NOISE_PARAMS.passMax}개). 안개가 사라질 때 돌풍이 위로 솟아 지나가는 일반 똥 제거 (+${NOISE_PARAMS.gustPoints}점/개)`,
-  specialAbility: `${NOISE_PARAMS.reductionInterval}점마다 다음 소환 ${NOISE_PARAMS.reductionAmount}개 감소`,
+  specialAbility: `${NOISE_PARAMS.frostInterval}점마다 「서리 안개」 — 화면의 일반 똥을 얼려 멈췄다가 한꺼번에 깸 (최대 ${NOISE_PARAMS.frostMax}개 · +${NOISE_PARAMS.frostPoints}점/개)`,
 } as const;
 
 // ── 센티넬 (Sentinel / UR) ────────────────────────────────────────────
