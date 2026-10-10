@@ -390,13 +390,15 @@ export class LegacyAbility extends BaseAbility {
 
   /**
    * 불태우기 — 플레이어 **머리 위에서 가까운 순**으로 count 개 (밸런스 v4: 무작위 → 머리 위).
-   * 무작위 · 먼 곳 정리는 생존에 안 듣는다 — 같은 양을 머리 위로 옮기면 덜 맞는다
+   * 무작위 · 먼 곳 정리는 생존에 안 듣는다 — 같은 양을 머리 위로 옮기면 덜 맞는다.
+   * 다만 머리 바로 위 {@link LEGACY_PARAMS.burnMinAbove}px 안은 건너뛴다 (v6 D1′) — 코앞 똥까지 지워 주면 피할 일이 없어진다.
+   * 레거시 모드에서도 같은 규칙이다
    */
   private burnOverheadPoops(api: GameSceneAPI, count: number): void {
     const px = api.player.x, py = api.player.y;
     const above = api.poops.getChildren().filter(c => {
       const p = c as Phaser.Physics.Arcade.Sprite;
-      return p.active && p.y > -10 && p.y < py;
+      return p.active && p.y > -10 && p.y < py - LEGACY_PARAMS.burnMinAbove;
     }) as Phaser.Physics.Arcade.Sprite[];
 
     if (above.length === 0) return;
