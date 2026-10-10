@@ -10,7 +10,8 @@ import { StagedLoader } from './stagedLoader';
  * 노이즈 (SR) v4 — 통신에 잡음이 낀 것 · 안개 · 흐린 신호. 값은 NOISE_PARAMS (planner 1차, v6 는 balance)
  *
  * - 기본 「흐린 발자국」 (대표 설계):
- *   직전 안개 자리에서 fogMinMove 이상 움직였고 fogCooldownSec 이 지났으면 노이즈가 선 자리에 안개가 핀다 (고정 · 동시 1).
+ *   직전 안개를 피운 자리에서 fogMinMove 이상 움직였고 fogCooldownSec 이 지났으면 안개가 핀다 (고정 · 동시 1) — 자리는
+ *   **가려는 방향의 앞쪽**: 마지막 이동 방향(좌/우)으로 몸 앞 fogAhead px (화면 가장자리에서 clamp). 막 멈춰 있으면 제자리.
  *   몸 중심이 안개 타원(fogRx × fogRy) 안이면 노이즈가 반투명해지고 몸에 닿는 일반 · 특수 똥이 **그냥 지나간다**
  *   (맞지도 줍지도 않음 — GameScene 이 passesThrough 를 무적 다음 · 보호막 앞에서 묻는다). 안개당 passMax 개,
  *   다 쓰면 노이즈가 다시 또렷해진다 (= 꺼짐). 통과 개당 passPoints.
@@ -61,6 +62,10 @@ export class NoiseAbility extends BaseAbility {
    */
   private gameMs = 0;
   private lastFogX = 0;
+  /** 마지막 이동 방향(−1 왼쪽 · 1 오른쪽 · 0 없음) · 마지막으로 움직인 게임 시각 · 지난 프레임 x — 안개를 앞쪽에 피우는 기준 */
+  private moveDir = 0;
+  private lastMoveAt = -Infinity;
+  private prevX = 0;
   private lastFogAt = -Infinity;
   /** 지금 안개 자리 · 번호 (통과 중복 표시용) · 남은 통과 수 */
   private fogX = 0;
@@ -104,6 +109,9 @@ export class NoiseAbility extends BaseAbility {
   /** 똥에 적는 '이번 안개에서 이미 통과함' 표시 — 안개 번호. 풀에서 다시 나온 똥은 화면 위에서 나와 같은 안개(1.6초) 안에 몸까지 못 온다 */
   /** 연출 (ms · px) — 표시 크기는 시안(gust_preview_v3)과 같다 */
   private static readonly FOG_DISPLAY_W = 96;
+  /** 이동 판정 — 프레임당 이만큼(px) 넘게 움직이면 방향 갱신 · 마지막 이동에서 이만큼(ms, 게임 시간) 안이면 '움직이는 중' */
+  private static readonly MOVE_EPS = 0.5;
+  private static readonly MOVING_MS = 150;
   private static readonly GATHER_MS = 200;
   private static readonly CHARGE_MS = 150;
   private static readonly GUST_W = 56;
@@ -158,6 +166,9 @@ export class NoiseAbility extends BaseAbility {
     this.frostFrozenTotal = 0;
     this.phase = 'idle';
     this.lastFogX = api.player.x;
+    this.moveDir = 0;
+    this.lastMoveAt = -Infinity;
+    this.prevX = api.player.x;
     this.lastFogAt = -Infinity;
     this.gameMs = 0;
     this.fogSerial = 0;
@@ -301,6 +312,9 @@ export class NoiseAbility extends BaseAbility {
     const clock = api.scene.time;
     this.gameMs += clock.paused ? 0 : api.scene.game.loop.delta * clock.timeScale;
     const now = this.gameMs;
+    const dx = api.player.x - this.prevX;
+    if (Math.abs(dx) > NoiseAbility.MOVE_EPS) { this.moveDir = Math.sign(dx); this.lastMoveAt = now; }
+    this.prevX = api.player.x;
     if (this.phase === 'idle' && this.fogBack
       && Math.abs(api.player.x - this.lastFogX) >= NOISE_PARAMS.fogMinMove
       && now - this.lastFogAt >= NOISE_PARAMS.fogCooldownSec * 1000) {
@@ -317,10 +331,13 @@ export class NoiseAbility extends BaseAbility {
   }
 
   private spawnFog(api: GameSceneAPI): void {
-    const scene = api.scene, x = api.player.x, base = api.player.y + 44;
+    const scene = api.scene, base = api.player.y + 44, W = scene.cameras.main.width, half = NoiseAbility.FOG_DISPLAY_W / 2;
+    // 가려는 방향의 앞쪽 — 방금(MOVING_MS 안) 움직이고 있었으면 그 방향으로 fogAhead, 아니면 제자리. 화면 밖으로 안 나가게
+    const moving = this.gameMs - this.lastMoveAt <= NoiseAbility.MOVING_MS;
+    const x = Phaser.Math.Clamp(api.player.x + (moving ? this.moveDir * NOISE_PARAMS.fogAhead : 0), half, W - half);
     this.phase = 'fog';
     this.fogX = x;
-    this.lastFogX = x;
+    this.lastFogX = api.player.x;   // 다음 안개 조건(fogMinMove)은 피운 자리가 아니라 그때 노이즈 자리에서 잰다
     this.lastFogAt = this.gameMs;
     this.fogSerial++;
     this.passLeft = NOISE_PARAMS.passMax;
