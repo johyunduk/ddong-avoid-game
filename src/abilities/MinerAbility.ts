@@ -169,8 +169,10 @@ export class MinerAbility extends BaseAbility {
       const n = this.countIn(api, api.player.x + dx, by, P.smallRadius);
       if (n > best) { best = n; bx = api.player.x + dx; }
     }
-    this.smallBlasts++;
     this.fly(api, this.stickSmall, 1, bx, by, P.smallFuseSec * 1000, () => {
+      // 퓨즈 도중 대발파가 시작됐으면 터뜨리지 않는다 (대발파 진행 중엔 작은 발파를 미룬다 — 던질 때만 막으면 이 경계가 샌다)
+      if (this.bigActive) return;
+      this.smallBlasts++;
       const n = this.blast(api, bx, by, P.smallRadius, P.smallMax, P.smallPoints, this.blastSmall, P.smallScale, 3);
       this.smallKills += n;
     });
@@ -194,6 +196,8 @@ export class MinerAbility extends BaseAbility {
     const P = MINER_PARAMS;
     this.bigActive = true;
     this.bigBlasts++;
+    // 날아가던 작은 다이너마이트는 거둔다 (터지는 콜백은 bigActive 를 보고 건너뛴다)
+    if (this.stickSmall) { api.scene.tweens.killTweensOf(this.stickSmall); this.stickSmall.setVisible(false); }
     // 무적 — 모으기 동안 (+ 여유 한두 프레임: 물리 겹침이 폭발 회수보다 먼저 돈다)
     api.player.setInvincibleBriefly(P.bigGatherSec * 1000 + 100);
     const bx = Phaser.Math.Clamp(api.player.x, P.bigRadius * 0.4, api.scene.cameras.main.width - P.bigRadius * 0.4);
