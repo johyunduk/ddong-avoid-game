@@ -586,6 +586,7 @@ export class GumiAbility extends BaseAbility {
     this._updateTailPositions(api);
     if (this.invincibleActive) this._updateInvincibility(api);
     this._updateRain(api);
+    this._checkFoxGoldFloor(api);
 
     if (this.foxFires.length === 0) return;
 
@@ -762,7 +763,25 @@ export class GumiAbility extends BaseAbility {
     const f = this.rainFull;
     if (f) { api.scene.tweens.killTweensOf(f); f.setAlpha(GumiAbility.RAIN_ALPHA).setVisible(true); }
     const n = this.meltWhere(api, () => true, P.bowMax, api.player.x, api.player.y);
-    if (n > 0) this.award(api, n * P.bowPoints, api.scene.cameras.main.width / 2, 260);
+    // 발동당 정액 + 개당 — 한 번에 awardBonus (자기 보너스라 여우불 · 꼬리 카운터에 안 들어간다, v6 G1)
+    this.award(api, P.bowFlatPoints + n * P.bowPoints, api.scene.cameras.main.width / 2, 260);
+  }
+
+  /**
+   * 여우불 금똥이 줍지 못한 채 화면 바닥(카메라 아래 끝)에 닿으면 한 번 foxGoldFloorPoints (v6 G1, 자기 보너스).
+   * 표시(abilityTag)를 지워 같은 금똥이 두 번 받지 않게 한다 — 그 뒤 화면 밖에서 평소처럼 회수된다.
+   * 참조는 들고 있지 않는다 (매 프레임 금똥 그룹에서 지금 표시가 달린 것만 본다)
+   */
+  private _checkFoxGoldFloor(api: GameSceneAPI): void {
+    const floor = api.scene.cameras.main.height;
+    let n = 0;
+    for (const obj of api.goldPoops.getChildren()) {
+      const g = obj as PoolablePoopBase;
+      if (!g.active || g.abilityTag !== GumiAbility.FOX_GOLD_TAG || g.y < floor) continue;
+      g.abilityTag = 0;
+      n++;
+    }
+    if (n > 0) this.awardBonus(api, n * GUMI_PARAMS.foxGoldFloorPoints);
   }
 
   /** 점수 — awardBonus(→ addAbilityBonus → updateScore, 규칙 3 · 자기 보너스로는 여우불 · 꼬리가 차지 않음) + '+N' 글자 */

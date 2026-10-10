@@ -247,7 +247,7 @@ export const KNIGHT_DESC = {
 export const GUMI_PARAMS = {
   foxFireInterval:    200,  // 여우불 발동 점수 간격
   foxFireCount:       9,    // 여우불 수 = 소환 금똥 수
-  tailInterval:       150,  // 꼬리 1개 추가 점수 간격
+  tailInterval:       70,   // 꼬리 1개 추가 — 플레이 점수 간격. 150 → 70 (v6 G1, planner §15 안 2 「필살 당김」)
   maxTails:           9,    // 최대 꼬리 수 (9개 = 무적 발동)
   invincibleDuration: 3000, // 무적 지속 시간 (ms)
   tailSpecialBonus:   5,    // 1,4,7번 꼬리: 특수 똥 수집 추가 점수
@@ -259,6 +259,8 @@ export const GUMI_PARAMS = {
   bowSec:             0.6,  // 비가 그친 뒤 무지개 호
   bowMax:             30,   // 녹이는 상한 (화면 안 일반 똥, 구미에 가까운 것부터)
   bowPoints:          100,
+  bowFlatPoints:      3000, // 무지개 여우비 발동당 정액 (v6 G1) — 녹인 수와 무관, 자기 보너스(카운터 제외)
+  foxGoldFloorPoints: 90,   // 여우불 금똥이 줍지 못한 채 화면 바닥에 닿으면 한 번 (v6 G1) — 자기 보너스, 끔 봇도 받는다
 } as const;
 
 /** 구미 여우비 시트 (builder 후보 b → fx 가공 ability-mock/v8/proc_foxrain_sheets.py) — 판 시작 뒤 나눠 올린다 */
@@ -270,7 +272,7 @@ export const GUMI_DEFERRED_SHEETS = [
 
 export const GUMI_DESC = {
   basicEffect:    `${GUMI_PARAMS.tailInterval}점마다 꼬리 추가 (1,4,7번: 특수 똥 +${GUMI_PARAMS.tailSpecialBonus}점 / 2,5,8번: 속도 +${GUMI_PARAMS.tailSpeedBonus} / 3,6,9번: 소환 -1개) — 9개 시 3초 무적`,
-  specialAbility: `시작 시 + ${GUMI_PARAMS.foxFireInterval}점마다 여우불 ${GUMI_PARAMS.foxFireCount}개 소환 — 꼬리마다 금똥 1개 · 9꼬리 무적이 끝나면 무지개 여우비 (화면의 일반 똥을 녹임 최대 ${GUMI_PARAMS.bowMax} · +${GUMI_PARAMS.bowPoints}점/개)`,
+  specialAbility: `시작 시 + ${GUMI_PARAMS.foxFireInterval}점마다 여우불 ${GUMI_PARAMS.foxFireCount}개 소환 — 꼬리마다 금똥 1개 · 금똥을 놓쳐 바닥에 닿아도 +${GUMI_PARAMS.foxGoldFloorPoints}점 · 9꼬리 무적이 끝나면 무지개 여우비 (+${GUMI_PARAMS.bowFlatPoints}점 · 화면의 일반 똥을 녹임 최대 ${GUMI_PARAMS.bowMax} · +${GUMI_PARAMS.bowPoints}점/개)`,
 } as const;
 
 // ── 레거시 (Legacy / UR) ──────────────────────────────────────────────
