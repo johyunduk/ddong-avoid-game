@@ -122,12 +122,12 @@ export const SENTINEL_PARAMS = {
   // 방전: 보호막이 가득(maxShields) 찼을 때만 — 안 맞을수록 점수
   pulseIntervalSec: 4,      // 방전 주기 (게임 시간 초)
   pulseRadius: 190,         // 방전 반경 (px, 플레이어 중심) — 일반 똥만 지운다
-  pulsePointsPerPoop: 140,   // 방전으로 지운 똥 1개당 점수. 40 → 150 (2026-10 밸런스 v6) → 165 (v6 B″) → 140 (v6 B⁗)
+  pulsePointsPerPoop: 130,   // 방전으로 지운 똥 1개당 점수. 40 → 150 (2026-10 밸런스 v6) → 165 (v6 B″) → 140 (v6 B⁗) → 130 (v6 B⁵)
   // 약한 방전 (v6 B″): 보호막이 1개 이상이지만 가득은 아닐 때 — 같은 방전 주기(pulseIntervalSec)에 작은 반경 · 낮은 점수. 보호막 0 이면 없음
   weakPulseRadius: 130,     // 약한 방전 반경 (px, 플레이어 중심)
   weakPulsePointsPerPoop: 120, // 약한 방전으로 지운 똥 1개당 점수
   // 보유 중 초당 보너스 (v6 B⁗) — 게임 시간 1초마다 지금 보호막 개수로 고른 점수. [보호막 0, 1, 2(가득)] 순. 길이는 maxShields + 1
-  holdBonusPerSec: [25, 45, 50],
+  holdBonusPerSec: [35, 50, 55],   // B⁗ [25, 45, 50] → B⁵
 } as const;
 
 /**
