@@ -12,18 +12,6 @@ import { playFx } from '../utils/vfx';
  */
 export default class PoolablePoopBase extends Phaser.Physics.Arcade.Sprite {
   /**
-   * 풀에서 다시 꺼낸 횟수 (재사용 세대). reinit 마다 +1.
-   * 똥을 잡아 두었다가 나중에 처리하는 쪽(센티넬 방전 큐 등)이 '아직 그 똥인가'를 가른다 —
-   * 위치로는 못 가른다 (낮은 창에서는 잡을 때 y 가 생성 위치보다 위일 수 있다)
-   */
-  poolGen = 0;
-
-  /** 풀에서 다시 꺼냈다 — reinit 를 덮어쓰는 하위 클래스도 꼭 부른다 */
-  protected markReused(): void {
-    this.poolGen++;
-  }
-
-  /**
    * 충돌 판정을 **몸통 기준**으로 — 폭 hitboxW(텍스처 px), 높이는 몸통 상자 비율, 자리는 몸통 가운데.
    * 캔버스 가운데가 아니라 몸통 가운데에 두므로 위로 나간 장식(모자·뿔·반짝이)은 판정에 안 들어간다.
    * 크기·오프셋은 텍스처 px 이라 표시 크기(setDisplaySize)를 바꿔도 같은 비율로 따라간다
@@ -42,7 +30,6 @@ export default class PoolablePoopBase extends Phaser.Physics.Arcade.Sprite {
   }
 
   reinit(x: number, y: number) {
-    this.markReused();
     this.setActive(true).setVisible(true);
     const body = this.body as Phaser.Physics.Arcade.Body;
     if (body) {
