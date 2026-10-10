@@ -20,13 +20,16 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// 난이도별 물리적 최대 점수 (2시간 연속 플레이 기준)
+// 난이도별 최대 점수 — 명백한 조작만 막는 넉넉한 고정 상한 (2026-10 밸런스 v6, 대표 결정).
+// 능력 점수가 커지면서 예전 상한(easy 10k · normal 15k · hard 20k · extreme 99,999)은 오래 버틴 정상 판을 거부했다
+// (측정: extreme 사망 모드 1,052판 중 13판이 7~9분에 99,999 를 넘음). 실제 방어는 아래 시간 게이트 · 능력 보너스 95% 검사가 한다
+const SCORE_CAP_ALL = 300000;
 const SCORE_CAPS: Record<string, number> = {
-  easy: 10000,
-  normal: 15000,
-  hard: 20000,
-  extreme: 99999,
-  physical: 99999,
+  easy: SCORE_CAP_ALL,
+  normal: SCORE_CAP_ALL,
+  hard: SCORE_CAP_ALL,
+  extreme: SCORE_CAP_ALL,
+  physical: SCORE_CAP_ALL,
 };
 
 // 어빌리티 보너스 상한: 점수의 이 비율까지 허용 (나머지는 최소한 시간 기반이어야 함)
@@ -64,7 +67,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // 하드 캡: 물리적으로 불가능한 점수 차단
-    if (score > (SCORE_CAPS[difficulty] ?? 10000)) {
+    if (score > (SCORE_CAPS[difficulty] ?? SCORE_CAP_ALL)) {
       console.warn('Score exceeds hard cap', { score, difficulty });
       return new Response(
         JSON.stringify({ error: 'Score exceeds maximum possible value' }),
