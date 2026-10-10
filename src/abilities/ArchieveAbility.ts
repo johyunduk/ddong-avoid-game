@@ -48,6 +48,10 @@ export class ArchieveAbility extends BaseAbility {
   private tags: Phaser.GameObjects.Image[] = [];
   private tagTexts: Phaser.GameObjects.Text[] = [];
   private foam: Phaser.GameObjects.Sprite[] = [];
+  /** 발사 연출 — 구슬 반짝(방울이 부풀며 사라짐) 1 · 날아가는 방울 뒤 작은 방울 자국 TRAIL_POOL */
+  private flash: Phaser.GameObjects.Sprite | null = null;
+  private trail: Phaser.GameObjects.Sprite[] = [];
+  private trailAt = 0;
   private texts = new Set<Phaser.GameObjects.Text>();
 
   /** 측정용 (밸런스 하네스 — 화면 · 저장 X): 발사 · 맞힘 · 빗나감 · 분수 발동 · 분수로 담은 수 */
@@ -65,8 +69,11 @@ export class ArchieveAbility extends BaseAbility {
   private static readonly FOUNTAIN_POOL = 44;
   private static readonly FX_PER_FRAME = 4;
   private static readonly POP_STALE_MS = 600;
-  private static readonly HIT_R = 26;          // 날아가는 방울이 똥에 닿는 거리 (방울 지름 약 60 의 반쯤)
-  private static readonly SHOT_SCALE = 0.75;
+  private static readonly HIT_R = 30;          // 날아가는 방울이 똥에 닿는 거리
+  // 대표 '거품 4개 날리는 게 안 보인다' (v9-2): 방울을 키우고(0.75 → 1.0) 구슬 반짝 · 방울 자국을 더한다
+  private static readonly SHOT_SCALE = 1.0;
+  private static readonly TRAIL_POOL = 24;
+  private static readonly TRAIL_EVERY_MS = 45;
   private static readonly HAND_DX = 16;        // 구슬(손) — 몸 가운데에서
   private static readonly HAND_DY = -18;
   private static readonly K = {
@@ -98,6 +105,7 @@ export class ArchieveAbility extends BaseAbility {
     this.fountainSerial = 0;
     this.fountainTaken = 0;
     this.shotPool = []; this.wraps = []; this.pops = []; this.tags = []; this.tagTexts = []; this.foam = [];
+    this.flash = null; this.trail = []; this.trailAt = 0;
     this.texts = new Set();
     this.shotsFired = this.shotsHit = this.shotsMissed = this.fountainCasts = this.fountainHeld = 0;
     const scene = api.scene;
@@ -120,6 +128,8 @@ export class ArchieveAbility extends BaseAbility {
       for (let i = 0; i < C.WRAP_POOL; i++) this.wraps.push(scene.add.sprite(0, 0, key, 0).setDepth(1.1).setVisible(false));
       for (let i = 0; i < C.POP_POOL; i++) this.pops.push(scene.add.sprite(0, 0, key, 2).setDepth(1.1).setVisible(false));
       for (let i = 0; i < C.FOUNTAIN_POOL; i++) this.foam.push(scene.add.sprite(0, 0, key, i % 2).setDepth(1.05).setVisible(false));
+      this.flash = scene.add.sprite(0, 0, key, 0).setDepth(6).setVisible(false);
+      for (let i = 0; i < C.TRAIL_POOL; i++) this.trail.push(scene.add.sprite(0, 0, key, i % 2).setDepth(1.14).setVisible(false));
     } else if (key === K.tag && this.tags.length === 0) {
       for (let i = 0; i < C.TAG_POOL; i++) {
         this.tags.push(scene.add.image(0, 0, key).setOrigin(0.5, 1).setDepth(1.2).setVisible(false));
@@ -134,10 +144,11 @@ export class ArchieveAbility extends BaseAbility {
     this.popQueue = [];
     this.shots = [];
     this.fountainPhase = 'idle';
-    const all = [...this.shotPool, ...this.wraps, ...this.pops, ...this.tags, ...this.tagTexts, ...this.foam, ...this.texts];
+    const all = [...this.shotPool, ...this.wraps, ...this.pops, ...this.tags, ...this.tagTexts, ...this.foam, ...this.trail, ...(this.flash ? [this.flash] : []), ...this.texts];
     this.texts.clear();
     for (const o of all) { o.scene?.tweens.killTweensOf(o); o.destroy(); }
     this.shotPool = []; this.wraps = []; this.pops = []; this.tags = []; this.tagTexts = []; this.foam = [];
+    this.flash = null; this.trail = [];
   }
 
   // ─────────────────────────────────────────────────────────────
@@ -189,16 +200,18 @@ export class ArchieveAbility extends BaseAbility {
 
   /** 반경 안 가까운 화면 안 일반 똥을 shotCount 개 골라 **도착 시점 자리**로 쏜다 (낙하 속도는 이 프레임에만 읽는다) */
   private fire(api: GameSceneAPI): void {
-    const P = ARCHIEVE_PARAMS, H = api.scene.cameras.main.height, h = this.hand(api);
+    const P = ARCHIEVE_PARAMS, h = this.hand(api);
     const cand: { x: number; y: number; vy: number; d: number }[] = [];
     for (const obj of api.poops.getChildren()) {
       const p = obj as PoolablePoopBase;
-      if (!p.active || p.y < -20 || p.y > H || p.abilityTag !== 0) continue;
+      // 구슬보다 위 · 화면 안만 — 아래 똥은 방울이 닿기 전에 화면 밖으로 떨어져 빗나갔다 (실플레이 30초 27발 중 12발)
+      if (!p.active || p.y < -20 || p.y > h.y - 30 || p.abilityTag !== 0) continue;
       const d = (p.x - h.x) ** 2 + (p.y - h.y) ** 2;
       if (d <= P.shotRadius * P.shotRadius) cand.push({ x: p.x, y: p.y, vy: (p.body as Phaser.Physics.Arcade.Body).velocity.y, d });
     }
     if (cand.length === 0) return;
     cand.sort((a, b) => a.d - b.d);
+    this.flashOrb(api, h);
     cand.slice(0, P.shotCount).forEach((c, i) => {
       const spr = this.shotPool.find(s => !s.visible);
       if (!spr) return;
@@ -209,10 +222,31 @@ export class ArchieveAbility extends BaseAbility {
       const dist = Math.hypot(tx - h.x, ty - h.y);
       const dur = Math.max(0.12, dist / P.shotSpeed);
       const bend = (i % 2 ? 1 : -1) * P.shotBend * Math.min(1, dist / 200);
-      spr.setPosition(h.x, h.y).setScale(ArchieveAbility.SHOT_SCALE).setAlpha(1).setVisible(true).play('archive_bubble');
+      spr.setPosition(h.x, h.y).setScale(0.3).setAlpha(1).setVisible(true).play('archive_bubble');
+      api.scene.tweens.killTweensOf(spr);
+      api.scene.tweens.add({ targets: spr, scale: ArchieveAbility.SHOT_SCALE, duration: 140, ease: 'Back.easeOut' });   // 구슬에서 '퐁' 튀어나옴
       this.shots.push({ spr, x0: h.x, y0: h.y, x1: tx, y1: ty, bend, t: 0, dur: dur * 1000, vx: (tx - h.x) / dur, vy: (ty - h.y) / dur });
       this.shotsFired++;
     });
+  }
+
+  /** 구슬 반짝 — 방울이 손에서 부풀며 옅어진다 (빛살 X) */
+  private flashOrb(api: GameSceneAPI, h: { x: number; y: number }): void {
+    const f = this.flash;
+    if (!f) return;
+    api.scene.tweens.killTweensOf(f);
+    f.setPosition(h.x, h.y).setScale(0.4).setAlpha(0.95).setVisible(true);
+    api.scene.tweens.add({ targets: f, scale: 1.25, alpha: 0, duration: 260, ease: 'Quad.easeOut', onComplete: () => f.setVisible(false) });
+  }
+
+  /** 날아가는 방울 뒤 작은 방울 자국 — 방울마다 TRAIL_EVERY_MS 쯤에 하나 (풀 공유) */
+  private dropTrail(api: GameSceneAPI, x: number, y: number): void {
+    if (this.gameMs - this.trailAt < ArchieveAbility.TRAIL_EVERY_MS / Math.max(1, this.shots.length)) return;
+    this.trailAt = this.gameMs;
+    const d = this.trail.find(o => !o.visible);
+    if (!d) return;
+    d.setPosition(x + Phaser.Math.FloatBetween(-4, 4), y + Phaser.Math.FloatBetween(-4, 4)).setScale(Phaser.Math.FloatBetween(0.22, 0.32)).setAlpha(0.8).setVisible(true);
+    api.scene.tweens.add({ targets: d, alpha: 0, y: d.y - 10, duration: 360, onComplete: () => d.setVisible(false) });
   }
 
   /** 날아가는 방울 — 휜 궤적을 따라가며, 표시 없는 일반 똥에 닿으면 그 프레임에 감싼다. 겨냥 자리를 지나면 곧게 계속 · 화면 밖에서 빗나감 */
@@ -232,16 +266,18 @@ export class ArchieveAbility extends BaseAbility {
         x = s.x1 + s.vx * extra; y = s.y1 + s.vy * extra;
       }
       s.spr.setPosition(x, y);
-      for (const p of poops) {
-        if (!p.active || p.abilityTag !== 0 || p.y > cam.height) continue;
-        if ((p.x - x) ** 2 + (p.y - y) ** 2 > R2) continue;
-        p.abilityTag = ArchieveAbility.BUBBLE_BASE + (++this.bubbleSerial);   // 이 프레임부터 판정 없음
-        this.shotsHit++;
+      // 화면 밖이면 먼저 빗나감 — 위 밖에서 대기 중인 똥(y < −20)을 잡아 바로 퐁 · 점수가 되던 것 (5763c85a 리뷰)
+      if (x < -40 || x > cam.width + 40 || y < -40 || y > cam.height + 40) {
+        this.shotsMissed++;
         s.spr.anims.stop(); s.spr.setVisible(false);
         return false;
       }
-      if (x < -40 || x > cam.width + 40 || y < -40 || y > cam.height + 40) {
-        this.shotsMissed++;
+      this.dropTrail(api, x, y);
+      for (const p of poops) {
+        if (!p.active || p.abilityTag !== 0 || p.y < -20 || p.y > cam.height) continue;
+        if ((p.x - x) ** 2 + (p.y - y) ** 2 > R2) continue;
+        p.abilityTag = ArchieveAbility.BUBBLE_BASE + (++this.bubbleSerial);   // 이 프레임부터 판정 없음
+        this.shotsHit++;
         s.spr.anims.stop(); s.spr.setVisible(false);
         return false;
       }
@@ -351,6 +387,17 @@ export class ArchieveAbility extends BaseAbility {
     let left = 0;
     for (const obj of api.poops.getChildren()) { const p = obj as PoolablePoopBase; if (p.active && this.isFountain(p.abilityTag)) left++; }
     if (left === 0 || t > 3000) {
+      if (left > 0) {   // 3초 안에 못 올라간 대상 — 태그를 남기지 않고 이 프레임에 회수 · 점수로 마무리 (5763c85a 리뷰)
+        let n = 0;
+        for (const obj of api.poops.getChildren()) {
+          const p = obj as PoolablePoopBase;
+          if (!p.active || !this.isFountain(p.abilityTag)) continue;
+          this.popQueue.push({ x: p.x, y: Math.max(12, p.y), t: this.gameMs });
+          p.recycle(true); n++;
+        }
+        this.fountainHeld += n;
+        if (n > 0) this.award(api, n * P.fountainPoints, cam.width / 2, 70);
+      }
       this.fountainPhase = 'idle';
       this.lastShotAt = this.gameMs;   // 분수 뒤 기본 사격은 주기를 새로 센다
       this.award(api, P.fountainFlatPoints, cam.width / 2, 260);
