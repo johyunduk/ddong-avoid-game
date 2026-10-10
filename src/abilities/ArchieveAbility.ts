@@ -24,7 +24,7 @@ import { StagedLoader } from './stagedLoader';
  * 성능 · 정리: 시트 2장은 판 시작 뒤 StagedLoader. 오브젝트는 판 시작에 한 번 — 날아가는 방울 SHOT_POOL · 감싼 방울 WRAP_POOL ·
  * 번호표 Image + Text TAG_POOL · 퐁 POP_POOL · 분수 거품 FOUNTAIN_POOL. 퐁 연출만 프레임당 FX_PER_FRAME. 블렌드 normal
  */
-interface Shot { spr: Phaser.GameObjects.Sprite; x0: number; y0: number; x1: number; y1: number; bend: number; t: number; dur: number; vx: number; vy: number; }
+interface Shot { spr: Phaser.GameObjects.Sprite; x0: number; y0: number; x1: number; y1: number; bend: number; t: number; dur: number; vx: number; vy: number; trailAt: number; }
 
 export class ArchieveAbility extends BaseAbility {
   private accum = 0;
@@ -51,7 +51,6 @@ export class ArchieveAbility extends BaseAbility {
   /** 발사 연출 — 구슬 반짝(방울이 부풀며 사라짐) 1 · 날아가는 방울 뒤 작은 방울 자국 TRAIL_POOL */
   private flash: Phaser.GameObjects.Sprite | null = null;
   private trail: Phaser.GameObjects.Sprite[] = [];
-  private trailAt = 0;
   private texts = new Set<Phaser.GameObjects.Text>();
 
   /** 측정용 (밸런스 하네스 — 화면 · 저장 X): 발사 · 맞힘 · 빗나감 · 분수 발동 · 분수로 담은 수 */
@@ -105,7 +104,7 @@ export class ArchieveAbility extends BaseAbility {
     this.fountainSerial = 0;
     this.fountainTaken = 0;
     this.shotPool = []; this.wraps = []; this.pops = []; this.tags = []; this.tagTexts = []; this.foam = [];
-    this.flash = null; this.trail = []; this.trailAt = 0;
+    this.flash = null; this.trail = [];
     this.texts = new Set();
     this.shotsFired = this.shotsHit = this.shotsMissed = this.fountainCasts = this.fountainHeld = 0;
     const scene = api.scene;
@@ -225,7 +224,7 @@ export class ArchieveAbility extends BaseAbility {
       spr.setPosition(h.x, h.y).setScale(0.3).setAlpha(1).setVisible(true).play('archive_bubble');
       api.scene.tweens.killTweensOf(spr);
       api.scene.tweens.add({ targets: spr, scale: ArchieveAbility.SHOT_SCALE, duration: 140, ease: 'Back.easeOut' });   // 구슬에서 '퐁' 튀어나옴
-      this.shots.push({ spr, x0: h.x, y0: h.y, x1: tx, y1: ty, bend, t: 0, dur: dur * 1000, vx: (tx - h.x) / dur, vy: (ty - h.y) / dur });
+      this.shots.push({ spr, x0: h.x, y0: h.y, x1: tx, y1: ty, bend, t: 0, dur: dur * 1000, vx: (tx - h.x) / dur, vy: (ty - h.y) / dur, trailAt: 0 });
       this.shotsFired++;
     });
   }
@@ -239,10 +238,10 @@ export class ArchieveAbility extends BaseAbility {
     api.scene.tweens.add({ targets: f, scale: 1.25, alpha: 0, duration: 260, ease: 'Quad.easeOut', onComplete: () => f.setVisible(false) });
   }
 
-  /** 날아가는 방울 뒤 작은 방울 자국 — 방울마다 TRAIL_EVERY_MS 쯤에 하나 (풀 공유) */
-  private dropTrail(api: GameSceneAPI, x: number, y: number): void {
-    if (this.gameMs - this.trailAt < ArchieveAbility.TRAIL_EVERY_MS / Math.max(1, this.shots.length)) return;
-    this.trailAt = this.gameMs;
+  /** 날아가는 방울 뒤 작은 방울 자국 — 방울마다 TRAIL_EVERY_MS 쯤에 하나 (시각은 방울마다 — 하나로 두면 첫 방울에만 붙었다, 577fb2cf 리뷰) */
+  private dropTrail(api: GameSceneAPI, s: Shot, x: number, y: number): void {
+    if (s.t - s.trailAt < ArchieveAbility.TRAIL_EVERY_MS) return;
+    s.trailAt = s.t;
     const d = this.trail.find(o => !o.visible);
     if (!d) return;
     d.setPosition(x + Phaser.Math.FloatBetween(-4, 4), y + Phaser.Math.FloatBetween(-4, 4)).setScale(Phaser.Math.FloatBetween(0.22, 0.32)).setAlpha(0.8).setVisible(true);
@@ -272,7 +271,7 @@ export class ArchieveAbility extends BaseAbility {
         s.spr.anims.stop(); s.spr.setVisible(false);
         return false;
       }
-      this.dropTrail(api, x, y);
+      this.dropTrail(api, s, x, y);
       for (const p of poops) {
         if (!p.active || p.abilityTag !== 0 || p.y < -20 || p.y > cam.height) continue;
         if ((p.x - x) ** 2 + (p.y - y) ** 2 > R2) continue;
