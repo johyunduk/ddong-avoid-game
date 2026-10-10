@@ -60,14 +60,38 @@ export const ARCHIEVE_DESC = {
 } as const;
 
 // ── 글리치 (Glitch / SR) ──────────────────────────────────────────────
+/**
+ * 글리치 v2 (feat/glitch-v2 — 대표 확인 전 시안 구현). 기본 「압축 오류」 + 특수 「얇은 틈」.
+ * 값은 planner 1차(glitch_basic2.md 1안) · fx 가정(얇은 틈) — v6 밸런스에서 맞춘다
+ */
 export const GLITCH_PARAMS = {
-  collectInterval: 200,     // 분신 소환 점수 간격
-  collectCount: 1,          // 분신이 한 번에 수집하는 특수 똥 개수
+  // 기본 「압축 오류」 — 머리 위 기둥 안 일반 똥을 크기 · 판정 compressScale 로 줄인다 (지우지 않는다)
+  compressIntervalSec: 4,     // 발동 주기 (게임 시간 초)
+  compressHalfWidth: 100,     // 기둥 폭 — 글리치 x ± (px)
+  compressHeightRatio: 0.45,  // 기둥 높이 — 머리 위로 화면 높이의 비율
+  compressScale: 0.35,        // 줄인 크기 (판정도 같이)
+  compressMax: 5,             // 한 번에 줄이는 최대 수 (가까운 순)
+  compressPoints: 45,         // 압축된 똥이 바닥에 닿을 때 개당 점수
+  // 특수 「얇은 틈」 — 화면이 얇게 찢어진 틈 3개(큰 · 중 · 작)가 랜덤 각도로 열리고, 걸린 일반 똥을 지운다
+  riftIntervalSec: 18,        // 발동 주기 (게임 시간 초) — fx 가정
+  riftScales: [1, 0.7, 0.45], // 큰 · 중 · 작 (시트 틈 길이 230px 기준 배율)
+  riftTopY: 100,              // 틈 중심 범위 — 화면 위 (점수 표시 아래)
+  riftBottomRatio: 2 / 3,     // 틈 중심 범위 — 화면 높이의 이 비율까지
+  riftMinGap: 170,            // 틈 중심끼리 최소 거리 (px) · 서로 교차하지 않음
+  riftPoints: 40,             // 틈에 걸린 똥 개당 점수 — fx 가정
+  riftMax: 12,                // 한 번에 지우는 최대 수
 } as const;
 
+/** 글리치 v2 연출 시트 — 판 시작 뒤 GlitchAbility 가 나눠 올린다 (character.ts deferredFxSheets) */
+export const GLITCH_DEFERRED_SHEETS = [
+  'glitch_rift_256x48.png',   // 얇은 틈 8칸 — f0 실금 · f1~f3 열림 · f3↔f4 유지 · f5~f7 닫힘
+  'glitch_spark_80x80.png',   // 네온 지글 4칸 반복 (똥 둘레)
+  'glitch_bits_24x24.png',    // 네온 선 조각 4종
+] as const;
+
 export const GLITCH_DESC = {
-  basicEffect: '잔상 분신이 특수 똥 수집',
-  specialAbility: `${GLITCH_PARAMS.collectInterval}점마다 특수 똥 위치에 분신 소환`,
+  basicEffect: `${GLITCH_PARAMS.compressIntervalSec}초마다 머리 위 똥 최대 ${GLITCH_PARAMS.compressMax}개를 압축 오류로 쪼그라뜨림 — 바닥에 닿으면 +${GLITCH_PARAMS.compressPoints}점/개`,
+  specialAbility: `${GLITCH_PARAMS.riftIntervalSec}초마다 화면에 얇은 틈 3개 — 틈에 걸린 똥 제거 (+${GLITCH_PARAMS.riftPoints}점/개)`,
 } as const;
 
 // ── 노이즈 (Noise / SR) ───────────────────────────────────────────────

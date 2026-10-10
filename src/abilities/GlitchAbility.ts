@@ -1,111 +1,390 @@
 import Phaser from 'phaser';
 import { BaseAbility } from './BaseAbility';
 import type { GameSceneAPI } from './types';
-import { GLITCH_PARAMS } from '../config/abilityParams';
+import type PoolablePoopBase from '../objects/PoolablePoopBase';
+import { GLITCH_PARAMS, GLITCH_DEFERRED_SHEETS } from '../config/abilityParams';
+import { fxPickSheetKey, loadFxPickSheet } from '../utils/vfx';
+import { StagedLoader } from './stagedLoader';
 
 /**
- * 글리치 (SR) — 분신 소환
- * ★0: 200점마다 1개  / ★1: 180점마다 1개
- * ★2: 160점마다 2개  / ★3: 140점마다 2개 + 분신 소멸 시 주변 일반 똥 2개 파괴
+ * 글리치 (SR) v2 — 디지털 화면 · 데이터가 깨진다. 값은 GLITCH_PARAMS (planner 1차 · fx 가정, v6 에서 맞춘다)
+ *
+ * - 기본 「압축 오류」: compressIntervalSec 마다 머리 위 기둥(± compressHalfWidth, 화면 높이 compressHeightRatio) 안 일반 똥을
+ *   가까운 순 compressMax 개까지 크기 · 판정 compressScale 로 줄인다 — 지우지 않는다. 분홍 꺾쇠가 조여들고, 줄어든 똥에는
+ *   청록 외곽선이 붙어 작아도 보인다. 압축된 똥이 바닥(발밑 높이)에 닿으면 가는 네온 조각으로 '틱' 흩어지고 개당 compressPoints.
+ * - 특수 「얇은 틈」: riftIntervalSec 마다 화면이 얇게 찢어진 틈 3개(큰 · 중 · 작)가 랜덤 각도로 열린다.
+ *   틈 중심은 화면 위쪽(riftTopY ~ 높이 × riftBottomRatio), 서로 교차하지 않고 중심끼리 riftMinGap 이상.
+ *   열리는 순간 틈에 걸린 일반 똥을 **그 프레임에** 지우고 점수(개당 riftPoints, 최대 riftMax)를 그 자리에서 준다 (센티넬 23b71887 과 같은 규칙).
+ *   연출(네온 윤곽 → 지글 → 네온 선 조각)만 좌표로 담아 프레임당 FX_PER_FRAME 개씩 그린다.
+ *
+ * 화풍 · 성능 (CLAUDE.md 이펙트 화풍): 시트 3장(GLITCH_DEFERRED_SHEETS)은 판 시작 뒤 StagedLoader 로 한 장씩.
+ * 오브젝트는 판 시작에 한 번 만들어 숨겼다 켰다 한다 — 틈 Sprite 3 · 지글 Sprite 8 · 윤곽 Image 8×3 · 조각 Image 48 ·
+ * 압축 외곽선 Image 10×2 · 꺾쇠 Graphics 1. 발동 1회가 새로 만드는 것은 점수 글자뿐. 블렌드는 전부 normal (밝은 배경)
  */
 export class GlitchAbility extends BaseAbility {
-  private ghost?: Phaser.Physics.Arcade.Sprite;
-  private posHistory: Array<{ x: number; y: number }> = [];
-  private readonly TRAIL_FRAMES = 12; // ~0.2초 딜레이 (60fps 기준)
-  private attackTimers: Phaser.Time.TimerEvent[] = [];
-  private colliders: Phaser.Physics.Arcade.Collider[] = [];
+  private compressTimer: Phaser.Time.TimerEvent | null = null;
+  private riftTimer: Phaser.Time.TimerEvent | null = null;
+  private pending: Phaser.Time.TimerEvent[] = [];
+  private loader: StagedLoader | null = null;
 
+  /** 압축된 똥 — 원래 배율 · 잡을 때 y(아래로만 떨어지므로 지금 y 가 더 위면 풀에서 다시 나온 다른 똥) · 외곽선 */
+  private compressed = new Map<PoolablePoopBase, { sx: number; sy: number; y0: number; outline: Phaser.GameObjects.Image[] | null }>();
+  /** 압축 똥 외곽선 한 벌 = [진한 테 · 청록] — 15px 로 작아진 똥이 밝은 배경에서 묻히지 않게 두 겹 */
+  private outlinePool: Phaser.GameObjects.Image[][] = [];
+  private bracketG: Phaser.GameObjects.Graphics | null = null;
+  /** 조여드는 꺾쇠 — 대상 · 시작 시각. BRACKET_MS 동안만 다시 그린다 */
+  private brackets: { targets: PoolablePoopBase[]; t0: number } | null = null;
+
+  private rifts: Phaser.GameObjects.Sprite[] = [];
+  private sparks: Phaser.GameObjects.Sprite[] = [];
+  /** 걸린 똥 네온 윤곽 한 벌 = [청록 그림자 · 분홍 테 · 짙은 보라 속] */
+  private neon: Phaser.GameObjects.Image[][] = [];
+  private bits: Phaser.GameObjects.Image[] = [];
+  /** 틈에 걸려 지운 자리 — 좌표 · 텍스처 · 표시 크기만 (똥 참조 없음). 프레임당 FX_PER_FRAME 개씩 연출 */
+  private fxQueue: { x: number; y: number; key: string; frame: string | number; scale: number; disp: number }[] = [];
+
+  /** 측정용 (밸런스 하네스) — 압축 발동 · 압축한 똥 · 압축 똥이 바닥에서 점수 받은 수 · 틈 발동 · 틈으로 지운 똥 */
+  compressFired = 0;
+  compressedCount = 0;
+  compressLanded = 0;
+  riftFired = 0;
+  riftKills = 0;
+
+  private static readonly PINK = 0xff4fa3;
+  private static readonly CYAN = 0x3fe6e6;
+  private static readonly INK = 0x2a1530;
+  private static readonly BACK = 0x1b0b30;
+  private static readonly FX_PER_FRAME = 4;
+  private static readonly BRACKET_MS = 150;
+  private static readonly OUTLINE_POOL = 10;
+  private static readonly NEON_POOL = 8;
+  private static readonly BIT_POOL = 48;
+  private static readonly BITS_PER_POOP = 6;
+  /** 틈 시트 — 틈 길이 230px · 다 열렸을 때 반쯤 벌어진 높이 14px (배율 1). 지글 시트는 지름 44 똥 기준 */
+  private static readonly RIFT_LEN = 230;
+  private static readonly RIFT_HALF = 14;
+  private static readonly SPARK_FOR = 44;
+  /** 틈 타이밍 (ms): 예고(f0) · 유지 · 틈끼리 엇갈림 */
+  private static readonly RIFT_TELE_MS = 300;
+  private static readonly RIFT_HOLD_MS = 310;
+  private static readonly RIFT_STAGGER_MS = 60;
+  private static readonly KEYS = {
+    rift: fxPickSheetKey('glitch_rift_256x48.png'),
+    spark: fxPickSheetKey('glitch_spark_80x80.png'),
+    bits: fxPickSheetKey('glitch_bits_24x24.png'),
+  } as const;
+  private static readonly ANIM = { open: 'glitch_rift_open', hold: 'glitch_rift_hold', close: 'glitch_rift_close', spark: 'glitch_spark' } as const;
 
   override onCreate(api: GameSceneAPI): void {
-    // 초기 위치는 플레이어와 동일하게 (히스토리가 쌓이면서 자연스럽게 딜레이 생김)
-    this.ghost = api.scene.physics.add.sprite(api.player.x, api.player.y, 'glitch_front');
-    this.ghost.setDisplaySize(60, 80).setAlpha(0.45).setDepth(5);
-
-    // 중력 비활성화
-    const body = this.ghost.body as Phaser.Physics.Arcade.Body;
-    body.setAllowGravity(false);
-
-    // 일반 똥은 통과 (overlap 없음)
-    // 특수 똥은 분신이 닿으면 전체 수집 처리 (카운트++, 점수, 획득 텍스트)
-    const makeCollect = (
-      collectFn: (p: Phaser.Physics.Arcade.Sprite) => void,
-    ): Phaser.Types.Physics.Arcade.ArcadePhysicsCallback =>
-      (_, p) => {
-        const sp = p as Phaser.Physics.Arcade.Sprite;
-        if (!sp.active) return;
-        collectFn(sp);
-      };
-    this.colliders.push(
-      api.scene.physics.add.overlap(this.ghost, api.goldPoops,    makeCollect(p => api.collectGoldPoop(p))),
-      api.scene.physics.add.overlap(this.ghost, api.diamondPoops, makeCollect(p => api.collectDiamondPoop(p))),
-      api.scene.physics.add.overlap(this.ghost, api.topazPoops,   makeCollect(p => api.collectTopazPoop(p))),
-      api.scene.physics.add.overlap(this.ghost, api.rainbowPoops, makeCollect(p => api.collectRainbowPoop(p))),
+    // 판마다 새 인스턴스지만 상태는 여기서 명시적으로 처음으로 (규칙 1)
+    this.compressed = new Map();
+    this.pending = [];
+    this.fxQueue = [];
+    this.brackets = null;
+    this.outlinePool = [];
+    this.rifts = [];
+    this.sparks = [];
+    this.neon = [];
+    this.bits = [];
+    this.compressFired = 0;
+    this.compressedCount = 0;
+    this.compressLanded = 0;
+    this.riftFired = 0;
+    this.riftKills = 0;
+    const scene = api.scene;
+    this.bracketG = scene.add.graphics().setDepth(6);
+    for (let i = 0; i < GlitchAbility.OUTLINE_POOL; i++) this.outlinePool.push([0, 1].map(() => scene.add.image(0, 0, '__DEFAULT').setVisible(false)));
+    for (let i = 0; i < GlitchAbility.NEON_POOL; i++) {
+      this.neon.push([0, 1, 2].map(k => scene.add.image(0, 0, '__DEFAULT').setDepth(5.3 + k * 0.05).setVisible(false)));
+    }
+    this.loader = new StagedLoader(
+      scene,
+      GLITCH_DEFERRED_SHEETS.map(f => ({ key: fxPickSheetKey(f), enqueue: (sc: Phaser.Scene) => loadFxPickSheet(sc, f) })),
+      250, 600,
+      key => this.onSheetLoaded(scene, key),
     );
+    for (const f of GLITCH_DEFERRED_SHEETS) this.onSheetLoaded(scene, fxPickSheetKey(f));   // 다시 하기 — 이미 있는 시트
+    this.compressTimer = scene.time.addEvent({ delay: GLITCH_PARAMS.compressIntervalSec * 1000, loop: true, callback: () => this.compress(api) });
+    this.riftTimer = scene.time.addEvent({ delay: GLITCH_PARAMS.riftIntervalSec * 1000, loop: true, callback: () => this.openRifts(api) });
   }
 
-  override onScoreMilestone(score: number, api: GameSceneAPI): void {
-    if (score % GLITCH_PARAMS.collectInterval === 0) {
-      this.collectSpecialWithGhost(api, GLITCH_PARAMS.collectCount);
+  /** 시트 한 장이 올라왔다 — 애니메이션 · 그 시트를 쓰는 오브젝트를 만든다 (이미 있으면 건너뛴다) */
+  private onSheetLoaded(scene: Phaser.Scene, key: string): void {
+    if (!scene.textures.exists(key)) return;
+    const K = GlitchAbility.KEYS, A = GlitchAbility.ANIM;
+    const anim = (k: string, frames: number[], rate: number, repeat: number) => {
+      if (!scene.anims.exists(k)) scene.anims.create({ key: k, frames: frames.map(frame => ({ key, frame })), frameRate: rate, repeat });
+    };
+    if (key === K.rift && this.rifts.length === 0) {
+      anim(A.open, [1, 2, 3], 30, 0);
+      anim(A.hold, [3, 4], 12, -1);
+      anim(A.close, [5, 6, 7], 20, 0);
+      for (let i = 0; i < 3; i++) this.rifts.push(scene.add.sprite(0, 0, key, 0).setDepth(5).setVisible(false));
+    } else if (key === K.spark && this.sparks.length === 0) {
+      anim(A.spark, [0, 1, 2, 3], 24, -1);
+      for (let i = 0; i < GlitchAbility.NEON_POOL; i++) this.sparks.push(scene.add.sprite(0, 0, key, 0).setDepth(5.6).setVisible(false));
+    } else if (key === K.bits && this.bits.length === 0) {
+      for (let i = 0; i < GlitchAbility.BIT_POOL; i++) this.bits.push(scene.add.image(0, 0, key, i % 4).setDepth(5.7).setVisible(false));
     }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // 기본 「압축 오류」
+  // ─────────────────────────────────────────────────────────────
+
+  private compress(api: GameSceneAPI): void {
+    const P = GLITCH_PARAMS;
+    const px = api.player.x, head = api.player.y - 40;
+    const top = head - api.scene.cameras.main.height * P.compressHeightRatio;
+    const found: { p: PoolablePoopBase; d2: number }[] = [];
+    for (const obj of api.poops.getChildren()) {
+      const p = obj as PoolablePoopBase;
+      if (!p.active || this.compressed.has(p)) continue;
+      if (Math.abs(p.x - px) > P.compressHalfWidth || p.y < top || p.y > head) continue;
+      found.push({ p, d2: (p.x - px) ** 2 + (p.y - head) ** 2 });
+    }
+    if (found.length === 0) return;
+    found.sort((a, b) => a.d2 - b.d2);
+    const targets = found.slice(0, P.compressMax).map(f => f.p);
+    this.compressFired++;
+    this.brackets = { targets, t0: api.scene.time.now };
+    // 꺾쇠가 다 조여든 뒤(BRACKET_MS) 줄인다 — 씬 시계라 히트스톱과 같이 멈춘다
+    this.later(api, GlitchAbility.BRACKET_MS, () => {
+      this.brackets = null;
+      this.bracketG?.clear();
+      for (const p of targets) {
+        if (!p.active || this.compressed.has(p)) continue;
+        const outline = this.outlinePool.find(o => !o[0].visible) ?? null;
+        this.compressed.set(p, { sx: p.scaleX, sy: p.scaleY, y0: p.y, outline });
+        p.setScale(p.scaleX * P.compressScale, p.scaleY * P.compressScale).setDepth(1);
+        if (outline) {
+          outline[0].setTexture(p.texture.key, p.frame.name).setTintFill(GlitchAbility.INK).setDepth(0.8).setVisible(true);
+          outline[1].setTexture(p.texture.key, p.frame.name).setTintFill(GlitchAbility.CYAN).setDepth(0.9).setVisible(true);
+        }
+        this.compressedCount++;
+      }
+    });
+  }
+
+  /** 꺾쇠 — 대상마다 네 귀퉁이, 26 → 9px 로 조여든다 (분홍 2px + 진한 테). 조이는 동안만 다시 그린다 */
+  private drawBrackets(now: number): void {
+    const g = this.bracketG, b = this.brackets;
+    if (!g || !b) return;
+    const k = Phaser.Math.Clamp((now - b.t0) / GlitchAbility.BRACKET_MS, 0, 1);
+    const half = 26 - 17 * k, L = Math.max(5, half * 0.45);
+    g.clear();
+    for (const p of b.targets) {
+      if (!p.active) continue;
+      for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]] as const) {
+        const cx = p.x + sx * half, cy = p.y + sy * half;
+        for (const [c, w] of [[GlitchAbility.INK, 4], [GlitchAbility.PINK, 2]] as const) {
+          g.lineStyle(w, c, 1).beginPath().moveTo(cx - sx * L, cy).lineTo(cx, cy).lineTo(cx, cy - sy * L).strokePath();
+        }
+      }
+    }
+  }
+
+  /** 압축된 똥 따라가기 — 바닥에 닿으면 점수 + 조각, 사라졌거나(다른 경로) 풀에서 다시 나왔으면 원래 크기로 되돌린다 */
+  private updateCompressed(api: GameSceneAPI): void {
+    if (this.compressed.size === 0) return;
+    const ground = api.player.y + 38;
+    let landed = 0;
+    for (const [p, c] of this.compressed) {
+      const reused = p.active && p.y < c.y0 - 1;
+      if (!p.active || reused) { this.release(p, c); continue; }
+      if (p.y >= ground) {
+        this.scatterBits(api.scene, p.x, ground - 4, 3, 0.7);
+        p.recycle(true);
+        this.release(p, c);
+        landed++;
+        continue;
+      }
+      if (c.outline) {
+        c.outline[0].setPosition(p.x, p.y).setScale(p.scaleX * 1.62, p.scaleY * 1.62);
+        c.outline[1].setPosition(p.x, p.y).setScale(p.scaleX * 1.42, p.scaleY * 1.42);
+      }
+    }
+    if (landed > 0) {
+      this.compressLanded += landed;
+      this.award(api, landed * GLITCH_PARAMS.compressPoints, api.player.x, ground - 60);
+    }
+  }
+
+  private release(p: PoolablePoopBase, c: { sx: number; sy: number; outline: Phaser.GameObjects.Image[] | null }): void {
+    p.setScale(c.sx, c.sy).setDepth(0);
+    c.outline?.forEach(o => o.setVisible(false));
+    this.compressed.delete(p);
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // 특수 「얇은 틈」
+  // ─────────────────────────────────────────────────────────────
+
+  /** 같은 규칙으로 틈 3개 뽑기 — [cx, cy, 배율, 각도]. 화면 밖 6px 넘거나 · 교차 · 가까우면 다시 */
+  private layout(api: GameSceneAPI): [number, number, number, number][] {
+    const P = GLITCH_PARAMS, W = api.scene.cameras.main.width, H = api.scene.cameras.main.height;
+    const out: [number, number, number, number][] = [];
+    const ends = ([cx, cy, s, a]: [number, number, number, number]): number[][] => {
+      const h = GlitchAbility.RIFT_LEN * s / 2;
+      return [[cx - Math.cos(a) * h, cy - Math.sin(a) * h], [cx + Math.cos(a) * h, cy + Math.sin(a) * h]];
+    };
+    const d = (p: number[], q: number[], r: number[]) => (r[0] - p[0]) * (q[1] - p[1]) - (r[1] - p[1]) * (q[0] - p[0]);
+    const cross = (a: number[][], b: number[][]) => d(a[0], a[1], b[0]) * d(a[0], a[1], b[1]) < 0 && d(b[0], b[1], a[0]) * d(b[0], b[1], a[1]) < 0;
+    for (const s of P.riftScales) {
+      for (let tries = 0; tries < 300; tries++) {
+        const r: [number, number, number, number] = [30 + Math.random() * (W - 60), P.riftTopY + Math.random() * (H * P.riftBottomRatio - P.riftTopY), s, Math.random() * Math.PI];
+        const e = ends(r);
+        if (e.some(([x, y]) => x < -6 || x > W + 6 || y < P.riftTopY - 20)) continue;
+        if (out.some(o => Math.hypot(o[0] - r[0], o[1] - r[1]) < P.riftMinGap || cross(ends(o), e))) continue;
+        out.push(r);
+        break;
+      }
+    }
+    return out;
+  }
+
+  private openRifts(api: GameSceneAPI): void {
+    const lay = this.layout(api);
+    if (lay.length === 0) return;
+    this.riftFired++;
+    let budget: number = GLITCH_PARAMS.riftMax;
+    lay.forEach((r, i) => {
+      const spr = this.rifts[i];
+      const t0 = i * GlitchAbility.RIFT_STAGGER_MS;
+      this.later(api, t0, () => {
+        if (!spr) return;
+        api.scene.tweens.killTweensOf(spr);
+        spr.anims.stop();
+        spr.setFrame(0).setPosition(r[0], r[1]).setRotation(r[3]).setScale(r[2]).setAlpha(1).setVisible(true);
+      });
+      this.later(api, t0 + GlitchAbility.RIFT_TELE_MS, () => {
+        budget -= this.cutRift(api, r, budget);
+        if (!spr) return;
+        spr.play(GlitchAbility.ANIM.open);
+        spr.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => spr.play(GlitchAbility.ANIM.hold));
+      });
+      this.later(api, t0 + GlitchAbility.RIFT_TELE_MS + GlitchAbility.RIFT_HOLD_MS, () => {
+        if (!spr) return;
+        spr.off(Phaser.Animations.Events.ANIMATION_COMPLETE);
+        spr.play(GlitchAbility.ANIM.close);
+        api.scene.tweens.add({ targets: spr, alpha: 0, delay: 150, duration: 150, onComplete: () => spr.setVisible(false) });
+      });
+    });
+  }
+
+  /** 틈이 열리는 순간 — 틈에 걸린 일반 똥을 이 프레임에 지우고 점수. 연출은 좌표만 담는다. 지운 수를 돌려준다 */
+  private cutRift(api: GameSceneAPI, [cx, cy, s, a]: [number, number, number, number], budget: number): number {
+    if (budget <= 0) return 0;
+    const halfL = GlitchAbility.RIFT_LEN * s / 2, halfV = GlitchAbility.RIFT_HALF * s + 18;
+    const c = Math.cos(a), sn = Math.sin(a);
+    let n = 0;
+    for (const obj of api.poops.getChildren()) {
+      if (n >= budget) break;
+      const p = obj as PoolablePoopBase;
+      if (!p.active) continue;
+      const dx = p.x - cx, dy = p.y - cy, u = dx * c + dy * sn, v = -dx * sn + dy * c;
+      if (Math.abs(u) > halfL || Math.abs(v) > halfV) continue;
+      const comp = this.compressed.get(p);
+      if (comp) this.release(p, comp);
+      this.fxQueue.push({ x: p.x, y: p.y, key: p.texture.key, frame: p.frame.name, scale: p.scaleX, disp: p.displayWidth });
+      p.recycle(true);
+      n++;
+    }
+    if (n > 0) {
+      this.riftKills += n;
+      this.award(api, n * GLITCH_PARAMS.riftPoints, cx, cy - 26);
+    }
+    return n;
+  }
+
+  /** 걸린 똥 연출 — 네온 윤곽(청록 그림자 · 분홍 테 · 짙은 보라 속) + 지글 → 140ms 뒤 네온 선 조각. 프레임당 FX_PER_FRAME */
+  private drainFx(api: GameSceneAPI): void {
+    const scene = api.scene;
+    for (let i = 0; i < GlitchAbility.FX_PER_FRAME && this.fxQueue.length > 0; i++) {
+      const slot = this.neon.findIndex(set => !set[1].visible);
+      if (slot < 0) break;   // 풀이 다 찼다 — 다음 프레임에
+      const f = this.fxQueue.shift()!;
+      const [shadow, rim, inner] = this.neon[slot];
+      shadow.setTexture(f.key, f.frame).setTintFill(GlitchAbility.CYAN).setPosition(f.x + 2, f.y - 1).setScale(f.scale * 1.2).setAlpha(0.9).setVisible(true);
+      rim.setTexture(f.key, f.frame).setTintFill(GlitchAbility.PINK).setPosition(f.x, f.y).setScale(f.scale * 1.2).setAlpha(1).setVisible(true);
+      inner.setTexture(f.key, f.frame).setTintFill(GlitchAbility.BACK).setPosition(f.x, f.y).setScale(f.scale * 0.98).setAlpha(0.85).setVisible(true);
+      const spark = this.sparks[slot];
+      spark?.setPosition(f.x, f.y).setScale(f.disp / GlitchAbility.SPARK_FOR).setVisible(true).play(GlitchAbility.ANIM.spark);
+      this.later(api, 140, () => {
+        [shadow, rim, inner].forEach(o => o.setVisible(false));
+        spark?.stop().setVisible(false);
+        this.scatterBits(scene, f.x, f.y, GlitchAbility.BITS_PER_POOP, 1);
+      });
+    }
+  }
+
+  /** 네온 선 조각 n 개 — 무작위 방향 · 회전 · 약한 낙하 (고른 바퀴살 아님). 풀이 비면 그만큼 건너뛴다 */
+  private scatterBits(scene: Phaser.Scene, x: number, y: number, n: number, size: number): void {
+    for (let i = 0; i < n; i++) {
+      const b = this.bits.find(o => !o.visible);
+      if (!b) return;
+      const ang = Math.random() * Math.PI * 2, d = 20 + Math.random() * 26;
+      b.setFrame(Math.floor(Math.random() * 4)).setPosition(x, y).setRotation(Math.random() * 6.28).setScale(size * (0.8 + Math.random() * 0.4)).setAlpha(1).setVisible(true);
+      scene.tweens.add({
+        targets: b, x: x + Math.cos(ang) * d, y: y + Math.sin(ang) * d + 14, rotation: b.rotation + (Math.random() - 0.5) * 3, alpha: 0,
+        duration: 350, ease: 'Quad.easeOut', onComplete: () => b.setVisible(false),
+      });
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // 공통
+  // ─────────────────────────────────────────────────────────────
+
+  /** 점수 — addAbilityBonus(→ updateScore, 규칙 3) + '+N' 글자 */
+  private award(api: GameSceneAPI, pts: number, x: number, y: number): void {
+    if (pts <= 0) return;
+    api.addAbilityBonus(pts);
+    const txt = api.scene.add.text(x, y, `+${pts}`, {
+      fontSize: '20px', fontFamily: 'Arial Black, sans-serif', color: '#ff8ac4', stroke: '#000000', strokeThickness: 4,
+    }).setOrigin(0.5).setDepth(200);
+    api.scene.tweens.add({ targets: txt, y: y - 40, alpha: 0, duration: 700, ease: 'Quad.easeOut', onComplete: () => txt.destroy() });
+  }
+
+  /** 예약 타이머 — 씬 시계(히트스톱 · 일시정지와 같이 멈춤), onDestroy 에서 전부 뗀다 */
+  private later(api: GameSceneAPI, ms: number, fn: () => void): void {
+    const t = api.scene.time.delayedCall(ms, () => {
+      const i = this.pending.indexOf(t);
+      if (i >= 0) this.pending.splice(i, 1);
+      fn();
+    });
+    this.pending.push(t);
   }
 
   override onUpdate(api: GameSceneAPI): void {
-    if (!this.ghost) return;
-    // 현재 플레이어 위치를 히스토리에 기록
-    this.posHistory.push({ x: api.player.x, y: api.player.y });
-    if (this.posHistory.length > this.TRAIL_FRAMES) {
-      // TRAIL_FRAMES 이전의 위치로 이동 → 약 0.2초 지연 잔상 효과
-      const target = this.posHistory.shift()!;
-      this.ghost.x = target.x;
-      this.ghost.y = target.y;
-    } else {
-      // 히스토리가 쌓이기 전까지는 플레이어 위치 유지
-      this.ghost.x = api.player.x;
-      this.ghost.y = api.player.y;
-    }
+    this.loader?.step();
+    if (this.brackets) this.drawBrackets(api.scene.time.now);
+    this.updateCompressed(api);
+    this.drainFx(api);
   }
 
   override onDestroy(_api: GameSceneAPI): void {
-    // ghost 파괴 전에 collider부터 제거 — 죽은 body를 매 스텝 검사하는 잔여 collider 방지
-    this.colliders.forEach(c => c.destroy());
-    this.colliders = [];
-    this.ghost?.destroy();
-    this.attackTimers.forEach(t => t.remove());
-  }
-
-  private collectSpecialWithGhost(api: GameSceneAPI, count: number): void {
-    if (!this.ghost) return;
-
-    const allSpecial = [
-      ...api.goldPoops.getChildren(),
-      ...api.diamondPoops.getChildren(),
-      ...api.topazPoops.getChildren(),
-      ...api.rainbowPoops.getChildren(),
-    ].filter(p => (p as Phaser.GameObjects.GameObject).active) as Phaser.Physics.Arcade.Sprite[];
-
-    if (allSpecial.length === 0) return;
-
-    const targets = allSpecial.slice(0, count);
-
-    targets.forEach(target => {
-      const attackGhost = api.scene.add
-        .image(target.x, target.y, 'glitch_front')
-        .setDisplaySize(60, 80)
-        .setAlpha(1.0)
-        .setDepth(6);
-
-      const timer = api.scene.time.delayedCall(1000, () => {
-        attackGhost.destroy();
-        // 완료된 타이머를 배열에서 제거 (메모리 누적 방지)
-        const idx = this.attackTimers.indexOf(timer);
-        if (idx !== -1) this.attackTimers.splice(idx, 1);
-        if (!target.active) return;
-        if (api.goldPoops.contains(target))         api.collectGoldPoop(target);
-        else if (api.diamondPoops.contains(target)) api.collectDiamondPoop(target);
-        else if (api.topazPoops.contains(target))   api.collectTopazPoop(target);
-        else if (api.rainbowPoops.contains(target)) api.collectRainbowPoop(target);
-      });
-      this.attackTimers.push(timer);
-    });
+    this.compressTimer?.remove();
+    this.riftTimer?.remove();
+    this.compressTimer = null;
+    this.riftTimer = null;
+    this.pending.forEach(t => t.remove());
+    this.pending = [];
+    this.loader?.stop();
+    this.loader = null;
+    // 압축된 똥은 원래 크기로 — 판이 끝나도 풀의 똥은 다음 판에 다시 쓰인다
+    for (const [p, c] of this.compressed) this.release(p, c);
+    this.fxQueue = [];
+    this.brackets = null;
+    const all: Phaser.GameObjects.GameObject[] = [
+      ...(this.bracketG ? [this.bracketG] : []), ...this.outlinePool.flat(), ...this.rifts, ...this.sparks, ...this.neon.flat(), ...this.bits,
+    ];
+    for (const o of all) { o.scene?.tweens.killTweensOf(o); o.destroy(); }
+    this.bracketG = null;
+    this.outlinePool = [];
+    this.rifts = [];
+    this.sparks = [];
+    this.neon = [];
+    this.bits = [];
   }
 }
