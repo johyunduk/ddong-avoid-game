@@ -151,9 +151,6 @@ const FX_SHEETS: FxSheetAsset[] = [
   // '착색된 외곽 + 흰 심지' 를 만든다 (회색조를 통째로 착색하면 심지까지 물든다)
   { fxKey: 'foxFireCore', file: 'foxfirecore_128x192.png', frameCount: 8, frameRate: 14,
     defaultScale: 1, defaultDepth: 202, blend: 'add', maxConcurrent: 16, preload: true },
-  // 구미호 꼬리 — 털이 살랑이는 루프. 9개가 각각 다른 색으로 착색된다
-  { fxKey: 'foxTail', file: 'foxtail_256x96.png', frameCount: 8, frameRate: 10,
-    defaultScale: 1, defaultDepth: 3, blend: 'add', maxConcurrent: 12, preload: true },
   // K 에너지파 — 기본 / 초사이언. 초사이언 쪽은 전기 갈래가 프레임마다 다르다
   { fxKey: 'kBeam', file: 'kbeam_512x64.png', frameCount: 6, frameRate: 18,
     defaultScale: 1, defaultDepth: 315, blend: 'normal', maxConcurrent: 6, preload: true },
@@ -320,7 +317,6 @@ export type FxKey =
   | 'kaiten'                             // 시트 — 회천 (몸을 감싸고 도는 차크라 구, 루프)
   | 'lotusBloom'                         // 시트 — 부활 연꽃 (봉오리 → 만개 → 흩어짐)
   | 'foxFire' | 'foxFireCore'            // 시트 — 여우불 (착색 외곽 + 흰 심지 두 겹)
-  | 'foxTail'                            // 시트 — 구미호 꼬리 (털이 살랑이는 루프)
   | 'kBeam' | 'kBeamSs'                  // 시트 — K 에너지파 (기본 / 초사이언, 전기 포함)
   | 'legacyFlame' | 'legacyBurn'         // 시트 — 레거시 불꽃 / 소각 폭발
   | 'cubeWave';                          // 절차 생성 — 테드 퍼짐 파동 (흑백 반투명 에너지 띠)
@@ -453,11 +449,6 @@ const FX_REGISTRY: Record<FxKey, FxDefinition> = {
     textureKey: 'fxsheet_foxFireCore',
     frameWidth: 128, frameHeight: 192, frameCount: 8, frameRate: 14,
     defaultScale: 1, defaultDepth: 202, blend: 'add', maxConcurrent: 16,
-  },
-  foxTail: {
-    textureKey: 'fxsheet_foxTail',
-    frameWidth: 256, frameHeight: 96, frameCount: 8, frameRate: 10,
-    defaultScale: 1, defaultDepth: 3, blend: 'add', maxConcurrent: 12,
   },
   kBeam: {
     textureKey: 'fxsheet_kBeam',

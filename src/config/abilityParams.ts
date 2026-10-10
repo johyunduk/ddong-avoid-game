@@ -254,11 +254,13 @@ export const GUMI_PARAMS = {
   bowPoints:          100,
 } as const;
 
-/** 구미 여우비 시트 (builder 후보 b → fx 가공 ability-mock/v8/proc_foxrain_sheets.py) — 판 시작 뒤 나눠 올린다 */
+/** 구미 시트 (무지개 여우비 · 꼬리 — builder → fx 가공 ability-mock/v8/proc_*_sheets.py) — 판 시작 뒤 나눠 올린다 */
 export const GUMI_DEFERRED_SHEETS = [
   'gumi_rain_128x256.png',      // 금빛 빗줄기 4칸 — 화면 전체에 이어 깐다 (칸 경계에 잘린 줄은 지웠다)
   'gumi_melt_64x96.png',        // 똥 녹음 4칸 — 금빛 물듦 → 주르륵 → 물방울. 똥 자리 = (32, 27)
   'gumi_rainbow_430x215.png',   // 무지개 호 1장 (빛살 없음)
+  'gumi_tail_91x65.png',        // 꼬리 몸 8칸 — 흰 여우 꼬리 살랑임 (builder 후보 c, fx 가공 proc_tail_sheets.py). 밑동 = 칸 (0.044, 0.508)
+  'gumi_tailtip_91x65.png',     // 꼬리 끝 마스크 8칸 — 몸과 같은 칸, 9색 틴트
 ] as const;
 
 export const GUMI_DESC = {

@@ -9,26 +9,24 @@ import { StagedLoader } from './stagedLoader';
 
 const HIT_R = 32;
 
-// 꼬리가 시작되는 Y 오프셋 (플레이어 중심 기준, 양수=아래=발 쪽)
-const TAIL_ORIGIN_Y = 10;
+// 꼬리 밑동 — 몸 가운데에서 아래로 (허리 뒤). 밑동은 꼬리 방향으로 TAIL_BASE_PUSH 만큼 밀어 아홉 밑동이 한 점에 겹치지 않게
+const TAIL_ORIGIN_Y = 14;
+const TAIL_BASE_PUSH = 9;
 const SWAY_AMP      = 0.50; // 흔들림 진폭 (radians)
 
 // ── 꼬리 ────────────────────────────────────────────────────────────────
 // 원본은 꼬리 하나를 발광 점 14개로 이었다 — 9개면 **가산 스프라이트 126장을
 // 매 프레임 재배치**하는 것이라 게임에서 가장 무거운 상시 비용이었다. 지금은 9장이다.
 //
-// 시트라 **털이 프레임마다 살랑인다**. 다만 흔들림 자체는 시트에 굽지 않는다 —
-// 꼬리마다 위상·주기가 다르고 플레이어가 움직이면 반대쪽으로 쏠려야 하는데(트레일링),
-// 그건 baked 로는 안 된다. 시트는 털의 결만 맡고, 흔들림은 회전이 맡는다.
-// 대신 꼬리마다 **시작 프레임을 어긋나게** 줘서 결까지 한 박자로 놀지 않게 한다.
-const TAIL_SHEET   = 'foxTail' as const;
-const TAIL_FRAME_W = 256;
-const TAIL_FRAME_H = 96;
-const TAIL_LEN     = 70;  // 표시 길이(px) — 원본 14 × 5px 과 같다
-const TAIL_WIDTH   = 26;  // 표시 폭(px)
+// v8 새 꼬리 (대표 요청) — 흰 여우 꼬리 시트(gumi_tail · 8칸 살랑임) + 같은 칸의 끝 마스크(gumi_tailtip)에 9색 틴트.
+// 예전 foxtail 은 흰 깃을 통째로 틴트해 **가산**으로 그려 불꽃 · 깃털 다발로 읽혔고, 겹치면 노랗게 날아가 덤불이 됐다 → normal 블렌드.
+// 흔들림은 시트에 굽지 않는다 (꼬리마다 위상 · 트레일링이 달라서) — 시트는 휘어짐 · 털결만, 큰 흔들림은 회전.
+// 꼬리마다 **시작 프레임을 어긋나게** 줘서 결까지 한 박자로 놀지 않게 한다. 끝 마스크는 몸 칸을 매 프레임 따라간다
+const TAIL_SHEETS = GUMI_DEFERRED_SHEETS.slice(3, 5) as readonly string[];   // [몸, 끝]
+const TAIL_ORIGIN_X = 0.044;   // 칸 안 밑동 (가공 때 칸마다 맞춤 — proc_tail_sheets.py)
+const TAIL_ORIGIN_YR = 0.508;
+const TAIL_GROW_MS = 300;
 const TRAIL_MAX  = 0.45;  // 플레이어 이동 방향 트레일링 최대 각도 (radians)
-/** 꼬리는 게임이 끝날 때까지 산다. vfx 보험 타이머는 그보다 길게 */
-const PERSIST_MS = 20 * 60 * 1000;
 
 // ── 여우불 ──────────────────────────────────────────────────────────────
 // 무채색 8프레임 루프. 9색으로 착색되므로 색을 굽지 않는다.
@@ -78,9 +76,9 @@ const TAIL_COLORS = [
   0xcccccc,  // 9번째: 검
 ];
 
-// 꼬리 배치 각도: 생성 순서에 대응하는 시각적 위치
-// 최종 시각 배치(왼→오): 흰(190°) 빨(210°) 주(230°) 노(250°) 초(270°) 파(290°) 남(310°) 보(330°) 검(350°)
-const TAIL_ANGLE_ORDER = [210, 330, 230, 310, 250, 290, 270, 190, 350]
+// 꼬리 배치 각도 (v8): 생성 순서대로 왼 · 오 번갈아 바깥쪽으로 퍼진다. 머리 위(250~290°)는 비운다 — 9번째만 머리 뒤 270°
+// (몸에 가려 끝만 보인다). 왼쪽으로 뻗는 꼬리는 위아래로 뒤집어 '위로 휜' 끝이 왼쪽에서도 위로 가게 한다
+const TAIL_ANGLE_ORDER = [244, 296, 226, 314, 208, 332, 190, 350, 270]
   .map(deg => deg * Math.PI / 180);
 
 interface FoxFire {
@@ -98,7 +96,9 @@ interface FoxFire {
 }
 
 interface TailObj {
-  img: Phaser.GameObjects.Image;
+  img: Phaser.GameObjects.Sprite;
+  /** 끝 색 — 몸과 같은 칸 · 같은 변환, 9색 틴트 */
+  tip: Phaser.GameObjects.Sprite;
   baseAngle: number;
   swayPhase: number;
   swayFreq: number;
@@ -154,6 +154,8 @@ export class GumiAbility extends BaseAbility {
     rain: fxPickSheetKey(GUMI_DEFERRED_SHEETS[0]),
     melt: fxPickSheetKey(GUMI_DEFERRED_SHEETS[1]),
     bow: fxPickSheetKey(GUMI_DEFERRED_SHEETS[2]),
+    tail: fxPickSheetKey(TAIL_SHEETS[0]),
+    tip: fxPickSheetKey(TAIL_SHEETS[1]),
   } as const;
 
   /** 여우불이 바꾼 금똥의 abilityTag (v6 G0) — 주운 점수는 자기 보너스, 판정 카운터에 안 센다. 회수 · 재사용 때 지워진다 */
@@ -173,7 +175,10 @@ export class GumiAbility extends BaseAbility {
   private tailProgress = 0;
   private invincibleActive = false;
   private invincibleElapsed = 0;
+  /** 지금 보이는 꼬리 (생성 순서) — tailPool 의 앞 tailCount 개 */
   private tails: TailObj[] = [];
+  /** 꼬리 9쌍 (몸 + 끝) — 시트가 올라오면 판에 한 번 만들고 재사용한다 */
+  private tailPool: TailObj[] = [];
 
   // ── 꼬리별 누적 효과 ──────────────────────────────────────────────
   // index % 3 === 0 (1,4,7번): 특수 똥 수집 +5점
@@ -190,6 +195,7 @@ export class GumiAbility extends BaseAbility {
   override onCreate(api: GameSceneAPI): void {
     // 씬 재시작 시 onDestroy가 호출되지 않으므로 stale 참조를 여기서 정리
     this.tails = [];
+    this.tailPool = [];
     this.tailCount = 0;
     this.foxProgress = 0;
     this.tailProgress = 0;
@@ -221,52 +227,9 @@ export class GumiAbility extends BaseAbility {
 
   // ── 꼬리 추가 ─────────────────────────────────────────────────────
   private _addTail(api: GameSceneAPI): void {
-    const { scene, player } = api;
-
-    const i         = this.tailCount;
-    const color     = TAIL_COLORS[i] ?? 0xffffff;
-    const baseAngle = TAIL_ANGLE_ORDER[i] ?? (270 * Math.PI / 180);
-
-    // 흰색(0xffffff)은 ADD 블렌드 시 RGB 3채널 전부 최대라 실제 크기보다 넓어 보임
-    // → alpha를 낮춰 다른 색상과 시각적 균형 맞춤
-    const alpha = color === 0xffffff ? 0.52 : 0.92;
-
-    // 먼저 생성된 꼬리(빨강 등)가 나중 꼬리(흰색 등) 위에 렌더링되도록
-    // index가 낮을수록(앞쪽 꼬리) depth를 높게 설정
-    const segDepth = TAIL_DEPTH + (GUMI_PARAMS.maxTails - i) * 0.1;
-
-    const sx = TAIL_LEN / TAIL_FRAME_W;
-    const sy = TAIL_WIDTH / TAIL_FRAME_H;
-
-    // 원점을 밑동에 둔다 — 여기가 회전축이자 몸에 붙는 지점이다
-    const img = fxSprite(scene, player.x, player.y + TAIL_ORIGIN_Y, '', {
-      sheet: TAIL_SHEET,
-      sheetStart: Math.random(),
-      rotation: baseAngle,
-      scale: [sx * 0.05, sy],
-      origin: [0, 0.5],
-      tint: color,
-      alpha,
-      depth: segDepth,
-      blend: 'add',
-      // 블룸 레이어에 올리지 않는다 — depth 를 잃어 캐릭터 앞으로 튀어나오고,
-      // 9개가 상시 살아 있으면 전체 화면 블룸 패스가 영구히 켜진다
-      bloom: false,
-      lifeMs: PERSIST_MS,
-      slot: 'gumi_tail',
-      maxConcurrent: 12,
-    });
-    if (img) {
-      // 밑동에서 끝으로 뻗어 나온다
-      scene.tweens.add({ targets: img, scaleX: sx, duration: 300, ease: 'Back.easeOut' });
-      this.tails.push({
-        img,
-        baseAngle,
-        swayPhase: Phaser.Math.FloatBetween(0, Math.PI * 2),
-        swayFreq:  Phaser.Math.FloatBetween(2.2, 4.2),
-        color,
-      });
-    }
+    const { player } = api;
+    const i = this.tailCount;
+    this.showTail(api.scene, i, true);
 
     if (i % 3 === 0) {
       this.specialBonus += GUMI_PARAMS.tailSpecialBonus;
@@ -298,13 +261,14 @@ export class GumiAbility extends BaseAbility {
     const velRatio = body ? Phaser.Math.Clamp(body.velocity.x / maxSpeed, -1, 1) : 0;
     const trailOffset = velRatio * TRAIL_MAX;
 
-    // 좌표·각도만 갱신한다. 원본의 지렁이 파동은 **밑동을 축으로 한 흔들림**으로 대신한다 —
-    // 세그먼트가 없으니 마디마다 위상을 어긋나게 줄 대상도 없다.
+    // 좌표 · 각도만 갱신한다 — 밑동을 축으로 한 흔들림 + 이동 트레일링. 밑동은 그 방향으로 TAIL_BASE_PUSH 밀린다
     for (const tail of this.tails) {
-      if (!tail.img.active) continue;
+      if (!tail.img.visible) continue;
       const sway = Math.sin(time * tail.swayFreq + tail.swayPhase) * SWAY_AMP;
-      tail.img.setPosition(originX, originY);
-      tail.img.setRotation(tail.baseAngle + sway + trailOffset);
+      const r = tail.baseAngle + sway + trailOffset;
+      const x = originX + Math.cos(r) * TAIL_BASE_PUSH, y = originY + Math.sin(r) * TAIL_BASE_PUSH;
+      tail.img.setPosition(x, y).setRotation(r);
+      tail.tip.setPosition(x, y).setRotation(r).setFrame(tail.img.frame.name);
     }
   }
 
@@ -338,13 +302,8 @@ export class GumiAbility extends BaseAbility {
 
     // 꼬리 확대 — 밑동을 축으로 길고 두껍게 부푼다
     this.tails.forEach(tl => {
-      if (!tl.img.active) return;
-      scene.tweens.add({
-        targets: tl.img,
-        scaleX: (TAIL_LEN * 1.45) / TAIL_FRAME_W,
-        scaleY: (TAIL_WIDTH * 1.45) / TAIL_FRAME_H,
-        duration: 320, ease: 'Back.easeOut',
-      });
+      scene.tweens.killTweensOf([tl.img, tl.tip]);
+      scene.tweens.add({ targets: [tl.img, tl.tip], scaleX: 1.45, scaleY: 1.45, duration: 320, ease: 'Back.easeOut' });
     });
 
     this._createAura(api);
@@ -389,11 +348,11 @@ export class GumiAbility extends BaseAbility {
 
     // 꼬리 사라짐
     this.tails.forEach(tl => {
-      if (!tl.img.active) return;
+      scene.tweens.killTweensOf([tl.img, tl.tip]);
       scene.tweens.add({
-        targets: tl.img, alpha: 0, scaleX: 0, scaleY: 0,
+        targets: [tl.img, tl.tip], alpha: 0, scaleX: 0, scaleY: 0,
         duration: 380, ease: 'Quad.easeIn',
-        onComplete: () => tl.img.destroy(),
+        onComplete: () => { tl.img.anims.stop(); tl.img.setVisible(false); tl.tip.setVisible(false); },
       });
     });
     this.tails       = [];
@@ -664,7 +623,8 @@ export class GumiAbility extends BaseAbility {
     api.player.setDepth(0); // player depth 원복
     this.foxFires.forEach(f => { f.img.destroy(); f.core.destroy(); });
     this.foxFires = [];
-    this.tails.forEach(tl => tl.img.destroy());
+    this.tailPool.forEach(tl => { tl.img.scene?.tweens.killTweensOf([tl.img, tl.tip]); tl.img.destroy(); tl.tip.destroy(); });
+    this.tailPool = [];
     this.tails = [];
     this._destroyAura();
     this.rainLoader?.stop();
@@ -689,12 +649,45 @@ export class GumiAbility extends BaseAbility {
     const K = GumiAbility.K, cam = scene.cameras.main;
     if (key === K.rain && !this.rainFull) {
       this.rainFull = scene.add.tileSprite(0, 0, cam.width, cam.height, key, 2).setOrigin(0, 0).setDepth(6).setAlpha(GumiAbility.RAIN_ALPHA).setVisible(false);
+    } else if ((key === K.tail || key === K.tip) && this.tailPool.length === 0 && scene.textures.exists(K.tail) && scene.textures.exists(K.tip)) {
+      this.buildTails(scene);
+      for (let i = 0; i < this.tailCount; i++) this.showTail(scene, i, false);
     } else if (key === K.melt && this.melts.length === 0) {
       if (!scene.anims.exists('gumi_melt')) scene.anims.create({ key: 'gumi_melt', frames: scene.anims.generateFrameNumbers(key, { start: 0, end: 3 }), frameRate: 13, repeat: 0 });
       for (let i = 0; i < GumiAbility.MELT_POOL; i++) this.melts.push(scene.add.sprite(0, 0, key, 0).setOrigin(0.5, 27 / 96).setDepth(6.3).setVisible(false));
     } else if (key === K.bow && !this.bow) {
       this.bow = scene.add.image(cam.width / 2, 0, key).setOrigin(0.5, 1).setDepth(5.9).setVisible(false);
     }
+  }
+
+  /** 꼬리 9쌍 — 몸 Sprite (살랑임 반복) + 끝 Sprite (몸 칸을 따라감 · 9색 틴트). 블렌드 normal */
+  private buildTails(scene: Phaser.Scene): void {
+    const K = GumiAbility.K;
+    if (!scene.anims.exists('gumi_tail')) scene.anims.create({ key: 'gumi_tail', frames: scene.anims.generateFrameNumbers(K.tail, { start: 0, end: 7 }), frameRate: 10, repeat: -1 });
+    for (let i = 0; i < GUMI_PARAMS.maxTails; i++) {
+      const ang = TAIL_ANGLE_ORDER[i] ?? Math.PI * 1.5;
+      const left = Math.cos(ang) < -0.05;   // 왼쪽으로 뻗는 꼬리는 위아래 뒤집기 — 시트의 '위로 휜' 끝이 왼쪽에서도 위로
+      const oy = left ? 1 - TAIL_ORIGIN_YR : TAIL_ORIGIN_YR;
+      // 겹침 — 바깥 꼬리 먼저, 가운데(270°)에 가까울수록 위. 모두 몸(depth 5) 뒤
+      const depth = TAIL_DEPTH + (1 - Math.abs(Phaser.Math.Angle.Wrap(ang - Math.PI * 1.5)) / Math.PI) * 0.5;
+      const img = scene.add.sprite(0, 0, K.tail, 0).setOrigin(TAIL_ORIGIN_X, oy).setFlipY(left).setDepth(depth).setVisible(false);
+      const tip = scene.add.sprite(0, 0, K.tip, 0).setOrigin(TAIL_ORIGIN_X, oy).setFlipY(left).setDepth(depth + 0.005)
+        .setTint(TAIL_COLORS[i] ?? 0xffffff).setVisible(false);
+      this.tailPool.push({ img, tip, baseAngle: ang, swayPhase: Phaser.Math.FloatBetween(0, Math.PI * 2), swayFreq: Phaser.Math.FloatBetween(2.2, 4.2), color: TAIL_COLORS[i] ?? 0xffffff });
+    }
+  }
+
+  /** i 번째 꼬리를 보이게 — grow 면 밑동에서 끝으로 뻗어 나온다 (무적 중이면 1.45배) */
+  private showTail(scene: Phaser.Scene, i: number, grow: boolean): void {
+    const tl = this.tailPool[i];
+    if (!tl || this.tails.includes(tl)) return;
+    const k = this.invincibleActive ? 1.45 : 1;
+    scene.tweens.killTweensOf([tl.img, tl.tip]);
+    for (const o of [tl.img, tl.tip]) o.setAlpha(1).setScale(grow ? 0.05 : k, k).setVisible(true);
+    tl.img.play('gumi_tail');
+    tl.img.anims.setProgress(Math.random());
+    if (grow) scene.tweens.add({ targets: [tl.img, tl.tip], scaleX: k, duration: TAIL_GROW_MS, ease: 'Back.easeOut' });
+    this.tails.push(tl);
   }
 
   private _updateRain(api: GameSceneAPI): void {
