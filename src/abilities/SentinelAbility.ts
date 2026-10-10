@@ -36,6 +36,11 @@ export class SentinelAbility extends BaseAbility {
   private chargeTimer: Phaser.Time.TimerEvent | null = null;
   /** 방전 타이머 — 충전 타이머와 같은 규칙: scene.time, onCreate 에서 만들고 onDestroy 에서 뗀다 */
   private pulseTimer: Phaser.Time.TimerEvent | null = null;
+  /** 보유 중 초당 보너스 타이머 (v6 B⁗) — 같은 규칙: scene.time 1초 루프(히트스톱 · 일시정지와 같이 멈춤), onCreate 에서 걸고 onDestroy 에서 뗀다 */
+  private holdTimer: Phaser.Time.TimerEvent | null = null;
+  /** 초당 보너스 표시 — 작은 '+N' 하나를 만들어 두고 매초 글자 · 위치만 바꿔 깜빡인다 (매초 생성 없음) */
+  private holdText: Phaser.GameObjects.Text | null = null;
+  private holdTween: Phaser.Tweens.Tween | null = null;
   /**
    * 측정용 누계 (밸런스 하네스가 읽는다 — 화면 · 저장에는 안 쓴다):
    * 방전 횟수 · 방전으로 지운 똥 · 방전이 쓴 한 프레임 처리 시간(ms) 최댓값 · 판 시간(게임 시계 — 히트스톱 제외) · 가득 찬 시간 · 보호막 개수별(0~maxShields) 머문 시간
@@ -45,6 +50,9 @@ export class SentinelAbility extends BaseAbility {
   /** 측정용 — 약한 방전(보호막 1개 이상 · 가득 아님) 횟수 · 지운 똥. 위 pulsesFired · pulseKills 는 가득 방전만 센다 (v6 B″) */
   weakPulsesFired = 0;
   weakPulseKills = 0;
+  /** 측정용 — 초당 보너스 지급 횟수 · 그 점수 합 (v6 B⁗) */
+  holdTicks = 0;
+  holdPoints = 0;
   /** performance.now 로 잰다 — 실시간 판에서만 뜻이 있다 (빨리 감기 하네스는 performance.now 가 가상 시계라 늘 0) */
   pulseMaxMs = 0;
   /** 측정용 — 자리가 끝내 안 나서 그리지 못하고 버린 방전 파괴 이펙트 수 (판 도중에만 센다 — 게임오버 때 남은 큐는 onDestroy 가 세지 않고 버린다) */
@@ -123,6 +131,9 @@ export class SentinelAbility extends BaseAbility {
     this.pulseKills = 0;
     this.weakPulsesFired = 0;
     this.weakPulseKills = 0;
+    this.holdTicks = 0;
+    this.holdPoints = 0;
+    this.holdTween = null;
     this.pulseMaxMs = 0;
     this.pulseFxDropped = 0;
     this.aliveMs = 0;
@@ -141,6 +152,10 @@ export class SentinelAbility extends BaseAbility {
     this.pulseTimer = api.scene.time.addEvent({
       delay: SENTINEL_PARAMS.pulseIntervalSec * 1000, loop: true, callback: () => this.pulse(api),
     });
+    this.holdTimer = api.scene.time.addEvent({ delay: 1000, loop: true, callback: () => this.holdBonusTick(api) });
+    this.holdText = api.scene.add.text(0, 0, '', {
+      fontSize: '13px', fontFamily: 'Arial Black, sans-serif', color: '#ffd0d0', stroke: '#000000', strokeThickness: 3,
+    }).setOrigin(0, 0.5).setDepth(199).setAlpha(0);
     this.spawnDroplets(api, SENTINEL_PARAMS.startShields);
     this.sparkGfx = api.scene.add.graphics().setDepth(96).setAlpha(0);
   }
@@ -201,6 +216,24 @@ export class SentinelAbility extends BaseAbility {
     if (full) this.pulsesFired++; else this.weakPulsesFired++;
     this.playPulseEffect(api, cx, cy, radius);
     this.pulseMaxMs = Math.max(this.pulseMaxMs, performance.now() - t0);
+  }
+
+  /**
+   * 보유 중 초당 보너스 (v6 B⁗) — 지금 보호막 개수로 고른 점수를 awardBonus(→ addAbilityBonus → updateScore) 로 한 번.
+   * 표시는 미리 만든 작은 글자 하나를 플레이어 오른쪽 위에 잠깐 띄운다
+   */
+  private holdBonusTick(api: GameSceneAPI): void {
+    const table = SENTINEL_PARAMS.holdBonusPerSec;
+    const amount = table[Math.min(this.shieldCount, table.length - 1)];
+    if (amount <= 0) return;
+    this.awardBonus(api, amount);
+    this.holdTicks++;
+    this.holdPoints += amount;
+    const txt = this.holdText;
+    if (!txt?.active) return;
+    this.holdTween?.stop();
+    txt.setText(`+${amount}`).setPosition(api.player.x + 24, api.player.y - 44).setAlpha(1);
+    this.holdTween = api.scene.tweens.add({ targets: txt, alpha: 0, y: txt.y - 10, delay: 250, duration: 400, ease: 'Quad.easeIn' });
   }
 
   /**
@@ -286,6 +319,12 @@ export class SentinelAbility extends BaseAbility {
   override onDestroy(_api: GameSceneAPI): void {
     this.chargeTimer?.remove();
     this.chargeTimer = null;
+    this.holdTimer?.remove();
+    this.holdTimer = null;
+    this.holdTween?.stop();
+    this.holdTween = null;
+    this.holdText?.destroy();
+    this.holdText = null;
     this.pulseTimer?.remove();
     this.pulseTimer = null;
     this.zapFxQueue = [];
