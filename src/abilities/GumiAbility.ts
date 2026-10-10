@@ -136,7 +136,8 @@ export class GumiAbility extends BaseAbility {
   /** 필살 단계 — idle · rain (화면 전체 비) · bow (무지개) — 시작 시각 bowT (gameMs) */
   private bowPhase: 'idle' | 'rain' | 'bow' = 'idle';
   private bowT = 0;
-  private meltQueue: { x: number; y: number }[] = [];
+  /** 녹는 연출 대기열 — 좌표 · 넣은 게임 시각. 풀 칸이 비면 꺼내고, MELT_STALE_MS 넘게 기다린 것은 버린다 */
+  private meltQueue: { x: number; y: number; t: number }[] = [];
   private rainLoader: StagedLoader | null = null;
   private rainBand: Phaser.GameObjects.TileSprite | null = null;
   private rainFull: Phaser.GameObjects.TileSprite | null = null;
@@ -157,6 +158,8 @@ export class GumiAbility extends BaseAbility {
 
   private static readonly FX_PER_FRAME = 4;
   private static readonly MELT_POOL = 30;
+  /** 녹는 연출이 자리 나기를 기다리는 한도 (게임 ms) — 넘으면 그 연출은 버린다 (회수 · 점수는 이미 끝났다) */
+  private static readonly MELT_STALE_MS = 600;
   private static readonly RAIN_FALL = 900;     // 빗줄기 내려가는 속도 (px/초 — 타일 스크롤)
   private static readonly RAIN_ALPHA = 0.85;
   private static readonly K = {
@@ -387,7 +390,9 @@ export class GumiAbility extends BaseAbility {
 
   // ── 무적 카운트다운 ───────────────────────────────────────────────
   private _updateInvincibility(api: GameSceneAPI): void {
-    this.invincibleElapsed += api.scene.game.loop.delta;
+    // 게임 시간으로 센다 (히트스톱 · 일시정지에 멈춤) — 무적 끝이 무지개 여우비 회수 · 득점을 부르므로 비 단계 시계와 맞춘다
+    const clock = api.scene.time;
+    this.invincibleElapsed += clock.paused ? 0 : api.scene.game.loop.delta * clock.timeScale;
     this._updateAura(api);
     if (this.invincibleElapsed >= GUMI_PARAMS.invincibleDuration) {
       this._endInvincibility(api);
@@ -765,10 +770,12 @@ export class GumiAbility extends BaseAbility {
       if (b) scene.tweens.add({ targets: b, alpha: 0, duration: 250, onComplete: () => b.setVisible(false) });
     }
     // 녹는 연출 — 프레임당 FX_PER_FRAME
+    // 빈 칸을 먼저 찾고 꺼낸다 — 시트가 아직 안 왔거나 풀이 다 차 있으면 남겨 둔다 (센티넬 drainZapFx 와 같은 규칙)
+    while (this.meltQueue.length > 0 && now - this.meltQueue[0].t > GumiAbility.MELT_STALE_MS) this.meltQueue.shift();
     for (let i = 0; i < GumiAbility.FX_PER_FRAME && this.meltQueue.length > 0; i++) {
-      const q = this.meltQueue.shift()!;
       const m = this.melts.find(o => !o.visible);
       if (!m) break;
+      const q = this.meltQueue.shift()!;
       m.setPosition(q.x, q.y).setAlpha(1).setVisible(true).play('gumi_melt');
       m.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => m.setVisible(false));
     }
@@ -808,7 +815,7 @@ export class GumiAbility extends BaseAbility {
     let n = 0;
     for (const { p } of cand) {
       if (n >= max) break;
-      this.meltQueue.push({ x: p.x, y: p.y });
+      this.meltQueue.push({ x: p.x, y: p.y, t: this.gameMs });
       p.recycle(true);
       n++;
     }
