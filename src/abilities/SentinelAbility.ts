@@ -41,6 +41,8 @@ export class SentinelAbility extends BaseAbility {
   pulsesFired = 0;
   pulseKills = 0;
   pulseMaxMs = 0;
+  /** 측정용 — 자리가 끝내 안 나서 그리지 못하고 버린 방전 파괴 이펙트 수 (0 이어야 정상) */
+  pulseFxDropped = 0;
   aliveMs = 0;
   fullMs = 0;
   shieldMs: number[] = [];
@@ -53,8 +55,8 @@ export class SentinelAbility extends BaseAbility {
   private shockRing: Phaser.GameObjects.Image | null = null;
   /** 공을 달아오른 모습으로 그렸는지 — 가득 참이 바뀐 프레임에만 다시 그린다 */
   private dropletsHot = false;
-  /** 방전으로 지운 자리 (거리순, 좌표만) — 파괴 이펙트를 프레임당 PULSE_FX_PER_FRAME 개씩 그린다. 게임 동작과 무관 */
-  private zapFxQueue: { x: number; y: number }[] = [];
+  /** 방전으로 지운 자리 (거리순, 좌표 · 지운 시각만) — 파괴 이펙트를 프레임당 PULSE_FX_PER_FRAME 개씩 그린다. 게임 동작과 무관 */
+  private zapFxQueue: { x: number; y: number; t: number }[] = [];
   private orbitDroplets: Phaser.GameObjects.Graphics[] = [];
   private orbitAngle = 0;
 
@@ -72,6 +74,11 @@ export class SentinelAbility extends BaseAbility {
 
   /** 방전 파괴 이펙트를 한 프레임에 그리는 상한 (측정에서 방전 프레임 끊김 후보가 펄스 없는 판의 약 4배) — 지우기 자체는 한 프레임 */
   private static readonly PULSE_FX_PER_FRAME = 4;
+  /**
+   * 파괴 이펙트를 기다려 주는 최대 시간 (ms). impactHit 은 동시 6개 상한이라(약 600ms 재생) 대상이 많으면 자리가 날 때까지
+   * 대기열에 남긴다 — 그래도 이만큼 지나면 지운 순간과 너무 벌어져 버린다
+   */
+  private static readonly PULSE_FX_MAX_WAIT_MS = 900;
   /** 범위 예고 고리가 뜨는 시간 (방전 전 ms) */
   private static readonly PULSE_TELE_MS = 450;
   /** 충격파: 몸에서 반경까지 퍼지는 시간 · 반경에 머무는 시간 · 사라지는 시간 (ms) */
@@ -91,6 +98,7 @@ export class SentinelAbility extends BaseAbility {
     this.pulsesFired = 0;
     this.pulseKills = 0;
     this.pulseMaxMs = 0;
+    this.pulseFxDropped = 0;
     this.aliveMs = 0;
     this.fullMs = 0;
     this.shieldMs = new Array(SENTINEL_PARAMS.maxShields + 1).fill(0);
@@ -143,7 +151,7 @@ export class SentinelAbility extends BaseAbility {
     const camH = api.scene.cameras.main.height;
     for (const { p } of found) {
       // 파괴 이펙트는 recycle() 이 그리는 조건(화면 안)과 같을 때만 좌표로 담는다 — 그리기는 drainZapFx 가 나눠서
-      if (p.y >= -POOP_CONFIG.destroyOffset && p.y <= camH) this.zapFxQueue.push({ x: p.x, y: p.y });
+      if (p.y >= -POOP_CONFIG.destroyOffset && p.y <= camH) this.zapFxQueue.push({ x: p.x, y: p.y, t: api.scene.time.now });
       p.recycle(true);
     }
     const n = found.length;
@@ -160,13 +168,20 @@ export class SentinelAbility extends BaseAbility {
     this.pulseMaxMs = Math.max(this.pulseMaxMs, performance.now() - t0);
   }
 
-  /** 방전 파괴 이펙트를 이번 프레임 몫(PULSE_FX_PER_FRAME)만 그린다 — 좌표만 쓰므로 똥 · 점수와 무관 */
+  /**
+   * 방전 파괴 이펙트를 이번 프레임 몫(PULSE_FX_PER_FRAME)만 그린다 — 좌표만 쓰므로 똥 · 점수와 무관.
+   * impactHit 동시 상한에 걸리면(playFx 가 null) 그 좌표는 버리지 않고 다음 프레임에 다시 — 대상이 많아도 연출이 빠지지 않게.
+   * 지운 지 PULSE_FX_MAX_WAIT_MS 가 지난 좌표만 버린다
+   */
   private drainZapFx(api: GameSceneAPI): void {
     if (this.zapFxQueue.length === 0) return;
     const t0 = performance.now();
+    const now = api.scene.time.now;
+    while (this.zapFxQueue.length > 0 && now - this.zapFxQueue[0].t > SentinelAbility.PULSE_FX_MAX_WAIT_MS) { this.zapFxQueue.shift(); this.pulseFxDropped++; }
     for (let i = 0; i < SentinelAbility.PULSE_FX_PER_FRAME && this.zapFxQueue.length > 0; i++) {
-      const { x, y } = this.zapFxQueue.shift()!;
-      playFx(api.scene, 'impactHit', x, y);
+      const { x, y } = this.zapFxQueue[0];
+      if (!playFx(api.scene, 'impactHit', x, y)) break;   // 상한 — 자리가 날 때까지 남겨 둔다
+      this.zapFxQueue.shift();
     }
     this.pulseMaxMs = Math.max(this.pulseMaxMs, performance.now() - t0);
   }
