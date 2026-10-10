@@ -45,6 +45,7 @@ export default class Poop extends PoolablePoopBase {
    * 풀에서 꺼내 사용할 때 호출 — 텍스처·크기·위치를 재설정하고 활성화
    */
   override reinit(x: number, y: number, difficulty?: Difficulty) {
+    this.markReused();   // 재사용 세대 — super.reinit 를 안 부르므로 여기서 (PoolablePoopBase.poolGen)
     const randomTexture = AVAILABLE_TEXTURES[
       Math.floor(Math.random() * AVAILABLE_TEXTURES.length)
     ];

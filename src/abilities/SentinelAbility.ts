@@ -51,9 +51,10 @@ export class SentinelAbility extends BaseAbility {
   private dropletsHot = false;
   /**
    * 방전으로 지울 똥 대기열 (거리순) — 프레임당 PULSE_KILLS_PER_FRAME 개씩 비운다.
-   * y0 = 잡을 때의 y. 똥은 아래로만 떨어지므로 지울 때 y 가 그보다 위면 풀에서 다시 나온 다른 똥이다 (생성 위치는 화면 위)
+   * gen = 잡을 때의 재사용 세대(PoolablePoopBase.poolGen). 지울 때 세대가 다르면 그사이 풀에서 다시 나온 다른 똥이다.
+   * 위치(y)로는 못 가른다 — 낮은 창에서는 잡을 때 y 가 음수라 다시 나온 똥(생성 y)이 그보다 아래일 수 있다 (d4465f48 리뷰)
    */
-  private zapQueue: { p: PoolablePoopBase; y0: number }[] = [];
+  private zapQueue: { p: PoolablePoopBase; gen: number }[] = [];
   /** 이번 방전에서 지금까지 준 점수 — 대기열이 비면 '+N' 글자 한 번 (점수 자체는 묶음마다 이미 줬다) */
   private zapBonus = 0;
   private orbitDroplets: Phaser.GameObjects.Graphics[] = [];
@@ -143,7 +144,7 @@ export class SentinelAbility extends BaseAbility {
     }
     found.sort((a, b) => a.d2 - b.d2);
     // 앞 방전의 대기열이 남아 있으면 뒤에 잇는다 (주기 4초라 실제로는 비어 있다)
-    for (const f of found) this.zapQueue.push({ p: f.p, y0: f.p.y });
+    for (const f of found) this.zapQueue.push({ p: f.p, gen: f.p.poolGen });
     this.pulsesFired++;
     this.playPulseEffect(api, cx, cy);
     this.pulseMaxMs = Math.max(this.pulseMaxMs, performance.now() - t0);
@@ -162,8 +163,8 @@ export class SentinelAbility extends BaseAbility {
     // (반경 재확인이 있던 3cce0183 은 펄스당 지운 똥 6.3 → 5.6, 점수 high −12% · mid −25% — 회귀 측정)
     let killed = 0;
     while (killed < SentinelAbility.PULSE_KILLS_PER_FRAME && this.zapQueue.length > 0) {
-      const { p, y0 } = this.zapQueue.shift()!;
-      if (!p.active || p.y < y0 - 1) continue;   // 이미 사라짐(플레이어에 닿음 · 바닥 등) · 풀에서 다시 나온 다른 똥
+      const { p, gen } = this.zapQueue.shift()!;
+      if (!p.active || p.poolGen !== gen) continue;   // 이미 사라짐(플레이어에 닿음 · 바닥 등) · 풀에서 다시 나온 다른 똥
       p.recycle();
       killed++;
     }
