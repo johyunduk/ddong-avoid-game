@@ -70,6 +70,8 @@ class Emitter {
     if (i >= 0) list.splice(i, 1);
     return this;
   }
+  /** Phaser EventEmitter 와 같은 이름 — 리스너 해제 검사에 쓴다 */
+  listenerCount(ev) { return this.#handlers.get(ev)?.length ?? 0; }
   emit(ev, ...a) {
     const list = this.#handlers.get(ev);
     if (!list) return false;

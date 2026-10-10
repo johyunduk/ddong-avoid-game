@@ -378,16 +378,14 @@ async function main() {
   // 여우불(onCreate 의 첫 소환)이 만든 스프라이트를 빼고 꼬리 풀만 센다
   console.log('구미 꼬리 풀: 18장 한 번 (%d) · 3회 쌓고 숨김 동안 새로 생김 %d · 최대 보임 %d · 숨김 %s · normal %s · bloomRefs=%d',
     poolSprites, poolGrew, visibleMax, hiddenAll, normalAll, tailSnap.bloomRefs);
+  // 리스너 해제 — onDestroy 앞뒤로 POST_UPDATE 리스너 수를 잰다 (syncTails 가 tailApi 로 막혀도 리스너가 남으면 잡힌다)
+  const postBefore = gScene.events.listenerCount(Phaser.Scenes.Events.POST_UPDATE);
   gumi.onDestroy(gApi);
+  const postAfter = gScene.events.listenerCount(Phaser.Scenes.Events.POST_UPDATE);
   await sleep(300);
   const tailGone = pool.every(t => !t.img.scene && !t.tip.scene);
-  // 해제 확인 — 파기 뒤 POST_UPDATE 를 쏴도 꼬리 동기화가 돌지 않는다 (돌면 파기된 스프라이트를 만진다)
-  let syncAfter = 0;
-  const origSync = (gumi as any)._updateTailPositions;
-  (gumi as any)._updateTailPositions = (...a) => { syncAfter++; return origSync.apply(gumi, a); };
-  gScene.events.emit(Phaser.Scenes.Events.POST_UPDATE);
-  const syncReleased = syncAfter === 0 && (gumi as any).tailApi === null;
-  console.log('구미 꼬리 풀 onDestroy: 전부 파기 %s · POST_UPDATE 해제 %s', tailGone, syncReleased);
+  const syncReleased = postBefore === 1 && postAfter === 0;
+  console.log('구미 꼬리 풀 onDestroy: 전부 파기 %s · POST_UPDATE 리스너 %d → %d', tailGone, postBefore, postAfter);
 
   // ── 잔상 누락 검사: 매화 1회 발동에서 sweep/잔상 요청 = 생성 이어야 한다 ──
   resetFxCounters();
