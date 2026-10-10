@@ -19,7 +19,8 @@ import { SENTINEL_PARAMS } from '../config/abilityParams';
  *   오브젝트는 판 시작에 한 번 만든 Image 4장(후광 · 섬광 · 예고 고리 · 충격파)을 숨겼다 켰다 한다 — 방전 1회가 새로 만드는 것은
  *   점수 글자 1개뿐이고, 똥 파괴 이펙트는 recycle() 의 impactHit(동시 6 상한)이 맡는다.
  * - 회수 분산: 방전 한 번에 지울 똥을 거리순으로 잡아 두고 **프레임당 PULSE_KILLS_PER_FRAME 개씩** 지운다 (한 프레임 몰림 → 끊김).
- *   지울 때 아직 살아 있고 방전 자리 반경 안인 똥만 친다 — 그 사이 풀에서 다시 나온 똥(화면 위쪽)은 건드리지 않는다
+ *   방전 순간 반경 안에서 잡은 대상은 그 사이 반경 밖으로 떨어져도 끝까지 지운다 (한 번에 지울 때와 같은 수).
+ *   지울 때는 '아직 활성(플레이어에 닿았으면 이미 회수돼 비활성) · 같은 똥(풀에서 다시 나오지 않음)' 만 본다
  */
 export class SentinelAbility extends BaseAbility {
   private shieldCount = 0;
@@ -48,10 +49,11 @@ export class SentinelAbility extends BaseAbility {
   private shockRing: Phaser.GameObjects.Image | null = null;
   /** 공을 달아오른 모습으로 그렸는지 — 가득 참이 바뀐 프레임에만 다시 그린다 */
   private dropletsHot = false;
-  /** 방전으로 지울 똥 대기열 (거리순) — 프레임당 PULSE_KILLS_PER_FRAME 개씩 비운다 */
-  private zapQueue: PoolablePoopBase[] = [];
-  private zapCx = 0;
-  private zapCy = 0;
+  /**
+   * 방전으로 지울 똥 대기열 (거리순) — 프레임당 PULSE_KILLS_PER_FRAME 개씩 비운다.
+   * y0 = 잡을 때의 y. 똥은 아래로만 떨어지므로 지울 때 y 가 그보다 위면 풀에서 다시 나온 다른 똥이다 (생성 위치는 화면 위)
+   */
+  private zapQueue: { p: PoolablePoopBase; y0: number }[] = [];
   /** 이번 방전에서 지금까지 준 점수 — 대기열이 비면 '+N' 글자 한 번 (점수 자체는 묶음마다 이미 줬다) */
   private zapBonus = 0;
   private orbitDroplets: Phaser.GameObjects.Graphics[] = [];
@@ -141,9 +143,7 @@ export class SentinelAbility extends BaseAbility {
     }
     found.sort((a, b) => a.d2 - b.d2);
     // 앞 방전의 대기열이 남아 있으면 뒤에 잇는다 (주기 4초라 실제로는 비어 있다)
-    for (const f of found) this.zapQueue.push(f.p);
-    this.zapCx = cx;
-    this.zapCy = cy;
+    for (const f of found) this.zapQueue.push({ p: f.p, y0: f.p.y });
     this.pulsesFired++;
     this.playPulseEffect(api, cx, cy);
     this.pulseMaxMs = Math.max(this.pulseMaxMs, performance.now() - t0);
@@ -158,13 +158,12 @@ export class SentinelAbility extends BaseAbility {
   private drainZapQueue(api: GameSceneAPI): void {
     if (this.zapQueue.length === 0) return;
     const t0 = performance.now();
-    // 방전 자리에서 반경 + 여유 안 — 잡아 둔 뒤 몇 프레임 떨어진 만큼. 풀에서 다시 나온 똥(화면 위쪽)은 여기서 걸러진다
-    const lim = SENTINEL_PARAMS.pulseRadius + 40;
-    const lim2 = lim * lim;
+    // 반경은 다시 보지 않는다 — 잡은 뒤 반경 밖으로 떨어진 대상까지 지워야 한 번에 지울 때와 수가 같다
+    // (반경 재확인이 있던 3cce0183 은 펄스당 지운 똥 6.3 → 5.6, 점수 high −12% · mid −25% — 회귀 측정)
     let killed = 0;
     while (killed < SentinelAbility.PULSE_KILLS_PER_FRAME && this.zapQueue.length > 0) {
-      const p = this.zapQueue.shift()!;
-      if (!p.active || (p.x - this.zapCx) ** 2 + (p.y - this.zapCy) ** 2 > lim2) continue;
+      const { p, y0 } = this.zapQueue.shift()!;
+      if (!p.active || p.y < y0 - 1) continue;   // 이미 사라짐(플레이어에 닿음 · 바닥 등) · 풀에서 다시 나온 다른 똥
       p.recycle();
       killed++;
     }
