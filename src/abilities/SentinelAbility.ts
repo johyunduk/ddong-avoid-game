@@ -40,8 +40,9 @@ export class SentinelAbility extends BaseAbility {
    */
   pulsesFired = 0;
   pulseKills = 0;
+  /** performance.now 로 잰다 — 실시간 판에서만 뜻이 있다 (빨리 감기 하네스는 performance.now 가 가상 시계라 늘 0) */
   pulseMaxMs = 0;
-  /** 측정용 — 자리가 끝내 안 나서 그리지 못하고 버린 방전 파괴 이펙트 수 (0 이어야 정상) */
+  /** 측정용 — 자리가 끝내 안 나서 그리지 못하고 버린 방전 파괴 이펙트 수 (판 도중에만 센다 — 게임오버 때 남은 큐는 onDestroy 가 세지 않고 버린다) */
   pulseFxDropped = 0;
   aliveMs = 0;
   fullMs = 0;
