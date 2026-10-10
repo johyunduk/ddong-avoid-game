@@ -479,7 +479,7 @@ export class NoiseAbility extends BaseAbility {
     if (this.frost === 'spread') {
       if (!this.frozeAll && t >= P.frostFillSec * 1000) {   // 안개가 다 찼다 — 화면의 일반 똥을 한꺼번에
         this.frozeAll = true;
-        this.freezeBelow(api, -20);
+        this.freezeOnScreen(api);
       }
       if (t >= (P.frostFillSec + P.frostFreezeSec) * 1000) {   // 언 채 frostFreezeSec 뒤 금이 간다 (멈춤 합계 = freeze + crack)
         this.frost = 'crack';
@@ -554,12 +554,21 @@ export class NoiseAbility extends BaseAbility {
     for (const o of objs) { o.setDepth(0); scene.children.moveAbove(o as Phaser.GameObjects.GameObject, below); below = o; }
   }
 
-  /** y 아래(화면 안)의 일반 똥을 얼린다 — 속도 0 · 표시 −발동 번호 · 덮개 (상한 frostMax) */
-  private freezeBelow(api: GameSceneAPI, y: number): void {
+  /**
+   * 화면 안(보이는) 일반 똥을 한꺼번에 얼린다 — 속도 0 · 표시 −발동 번호 · 덮개. 상한 frostMax 를 넘으면 노이즈에 가까운 것부터
+   * (화면 아래 0~50px 의 안 보이는 똥은 회수 전이라 활성이지만 고르지 않는다). 후보 배열은 이 함수 안에서만 쓰고 버린다
+   */
+  private freezeOnScreen(api: GameSceneAPI): void {
+    const P = NOISE_PARAMS, cam = api.scene.cameras.main, px = api.player.x, py = api.player.y;
+    const cand: { p: PoolablePoopBase; d: number }[] = [];
     for (const obj of api.poops.getChildren()) {
-      if (this.frozenNow >= NOISE_PARAMS.frostMax) return;
       const p = obj as PoolablePoopBase;
-      if (!p.active || p.y < y || p.abilityTag === -this.frostSerial) continue;
+      if (!p.active || p.y < -20 || p.y > cam.height || p.abilityTag === -this.frostSerial) continue;
+      cand.push({ p, d: (p.x - px) ** 2 + (p.y - py) ** 2 });
+    }
+    cand.sort((a, b) => a.d - b.d);
+    for (const { p } of cand) {
+      if (this.frozenNow >= P.frostMax) break;
       p.abilityTag = -this.frostSerial;
       (p.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
       this.shells[this.frozenNow]?.setFrame(this.frozenNow % 3).setPosition(p.x, p.y).setFlipX(this.frozenNow % 2 === 1).setAlpha(1).setVisible(true);
