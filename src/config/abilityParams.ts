@@ -116,7 +116,7 @@ export const SENTINEL_PARAMS = {
   startShields: 2,          // 시작 보호막 개수
   chargeIntervalSec: 20,    // 보호막 충전 간격 (게임 시간 초) — 예전 '300점마다'
   maxShields: 2,            // 동시에 들 수 있는 최대 보호막 개수. 3 → 2 (2026-10 밸런스 v6) — 시작 2개가 곧 '가득'
-  maxChargesPerRun: 3,      // 한 판에 충전되는 총량 — 실제로 찬 횟수만 센다 (가득 찬 상태의 주기는 안 센다). 8 → 3 (2026-10 밸런스 v6)
+  maxChargesPerRun: 1,      // 한 판에 충전되는 총량 — 실제로 찬 횟수만 센다 (가득 찬 상태의 주기는 안 센다). 8 → 3 (2026-10 밸런스 v6) → 1 (v6 B′)
   blockZapPoints: 0,        // 막을 때 지운 똥 1개당 점수 — 예전 10. 맞는 것이 점수가 되지 않게
   blockZapRadius: 320,      // 막을 때 똥을 지우는 반경 (px)
   // 방전: 보호막이 가득(maxShields) 찼을 때만 — 안 맞을수록 점수
@@ -223,7 +223,7 @@ export const K_DESC = {
 
 // ── 테드 (R) — 하늘에서 떨어지는 체스 말 ─────────────────────
 export const TED_PARAMS = {
-  chessInterval:  38,   // 체스 말 낙하 점수 간격. 60 → 38 (2026-10 밸런스)
+  chessInterval:  60,   // 체스 말 낙하 점수 간격. 60 → 38 (2026-10 밸런스) → 60 (v6 B′)
   chessPieces:    10,   // 시트 프레임 수 (흑/백 × 폰·나이트·비숍·퀸·킹)
   chessSpread:    35,   // 수직에서 기울일 수 있는 최대 각도(도)
   chessSpeed:     1900, // 낙하 속도 (px/s) — 꽂히는 느낌이 나려면 눈이 못 따라갈 만큼 빨라야 한다
@@ -312,7 +312,7 @@ export const TED_PARAMS = {
   chessBowBoostMs: 120, // 소닉붐 뒤 길어지기까지
   chessBowGlow: [0.11, 0.14] as readonly number[],     // 열기 점 배율 (평소, 소닉붐 뒤) — proc-glow 192px
   chessBowGlowAlpha: [0.45, 0.75] as readonly number[], // 열기 점 알파 (평소, 소닉붐 뒤)
-  chessPoopPoints: 37,  // 낙하 경로에서 깨뜨린 똥 하나당 점수 20 → 37 (2026-10 밸런스 v6)
+  chessPoopPoints: 55,  // 낙하 경로에서 깨뜨린 똥 하나당 점수 20 → 37 (2026-10 밸런스 v6) → 55 (v6 B′)
   spreadBonusPoints: 185, // 퍼짐 발동 **정액** 보너스. 지운 똥 개수와 무관하다. 100 → 185 (2026-10 밸런스 v6)
                         // 이 점수로 다시 낙하가 걸리지 않게 TedAbility 가 먼저
                         // lastChessScore 를 올린 뒤 준다 (smashPoops 와 같은 가드)
