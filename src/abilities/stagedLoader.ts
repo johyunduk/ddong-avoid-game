@@ -76,9 +76,28 @@ export class StagedLoader {
     this.scene.load.start();
   }
 
-  /** 판이 끝났다 — 큐를 버린다. 받는 중이던 한 장은 도착하는 대로 지운다 */
+  /**
+   * 판이 끝났다 — 큐를 버리고, **받는 중이던 한 장도 취소한다** (캐시에 안 넣고 요청을 끊는다).
+   * 도착을 기다렸다 지우는 것만으로는 모자라다: 씬이 끝나면 로더가 COMPLETE 리스너를 떼어 버려 위의 '도착하면 지운다'가
+   * 안 돌고, 진행 중이던 파일은 끝나는 대로 캐시에 들어가 다음 판(같은 캐릭터 재시작 · 캐릭터 해제)과 엇갈린다 (0ab5f2a8 리뷰 1).
+   * characterAssets.discardPendingLoads 와 같은 방법이지만 **이 로더가 건 키 하나만** — 같은 씬 로더로 받는 다른 파일은 건드리지 않는다
+   */
   stop(): void {
     this.stopped = true;
     this.queue = [];
+    if (this.inflight !== null) discardPendingFile(this.scene, this.inflight);
+  }
+}
+
+/** 씬 로더에서 키가 key 인 아직 안 끝난 파일만 — 캐시에 넣지 않게 하고 요청을 끊는다 */
+function discardPendingFile(scene: Phaser.Scene, key: string): void {
+  type Pending = { key: string; addToCache: () => void; xhrLoader?: XMLHttpRequest };
+  const load = scene.load as unknown as Record<'list' | 'inflight' | 'queue', { entries: Pending[] } | undefined>;
+  for (const set of [load.list, load.inflight, load.queue]) {
+    for (const f of set?.entries ?? []) {
+      if (f.key !== key) continue;
+      f.addToCache = () => {};
+      try { f.xhrLoader?.abort(); } catch { /* 이미 끝났으면 그만 */ }
+    }
   }
 }

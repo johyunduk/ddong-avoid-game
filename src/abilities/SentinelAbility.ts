@@ -60,6 +60,8 @@ export class SentinelAbility extends BaseAbility {
    */
   private domeHidden = false;
   private domeBackTimer: Phaser.Time.TimerEvent | null = null;
+  /** 큰 돔이 반경에 머무는 HOLD_MS 타이머 — 들고 있다가 다음 방전 · onDestroy 에서 뗀다 (0ab5f2a8 리뷰 2) */
+  private domeHoldTimer: Phaser.Time.TimerEvent | null = null;
   /** 공을 달아오른 모습으로 그렸는지 — 가득 참이 바뀐 프레임에만 다시 그린다 */
   private dropletsHot = false;
   /** 방전으로 지운 자리 (거리순, 좌표 · 지운 시각만) — 파괴 이펙트를 프레임당 PULSE_FX_PER_FRAME 개씩 그린다. 게임 동작과 무관 */
@@ -125,6 +127,7 @@ export class SentinelAbility extends BaseAbility {
     this.zapFxQueue = [];
     this.domeHidden = false;
     this.domeBackTimer = null;
+    this.domeHoldTimer = null;
     this.createPulseVisuals(api.scene);
     this.chargeTimer = api.scene.time.addEvent({
       delay: SENTINEL_PARAMS.chargeIntervalSec * 1000, loop: true, callback: () => this.tryCharge(api),
@@ -279,6 +282,8 @@ export class SentinelAbility extends BaseAbility {
     this.domeLoader = null;
     this.domeBackTimer?.remove();
     this.domeBackTimer = null;
+    this.domeHoldTimer?.remove();
+    this.domeHoldTimer = null;
     for (const o of [this.smallDome, this.bigDome, ...this.shards]) {
       if (!o) continue;
       o.scene?.tweens.killTweensOf(o);
@@ -476,6 +481,8 @@ export class SentinelAbility extends BaseAbility {
     if (!big) return;   // 시트가 아직 안 올라옴 — 게임 동작(지우기 · 점수)은 이미 끝났다
     const x = cx, y = api.player.y + D.big.dy;
     scene.tweens.killTweensOf(big);
+    this.domeHoldTimer?.remove();
+    this.domeHoldTimer = null;
     big.anims.stop();
     big.off(Phaser.Animations.Events.ANIMATION_COMPLETE);
     big.setFrame(0).setPosition(x, y).setAlpha(D.big.alpha).setVisible(true).setScale(D.small.scale * D.small.r / D.big.r);
@@ -483,7 +490,8 @@ export class SentinelAbility extends BaseAbility {
       targets: big, scale: D.big.scale, duration: SentinelAbility.GROW_MS, ease: 'Expo.easeOut',
       onComplete: () => {
         // 반경에 HOLD_MS 머문다 — 범위가 읽히는 순간. 시계는 씬 시계(히트스톱 · 일시정지와 같이 멈춤)
-        scene.time.delayedCall(SentinelAbility.HOLD_MS, () => {
+        this.domeHoldTimer = scene.time.delayedCall(SentinelAbility.HOLD_MS, () => {
+          this.domeHoldTimer = null;
           if (!big.active || !big.visible) return;
           big.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => big.setVisible(false));
           big.play(D.big.breakAnim);
