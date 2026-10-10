@@ -156,21 +156,17 @@ export class GumiAbility extends BaseAbility {
     bow: fxPickSheetKey(GUMI_DEFERRED_SHEETS[2]),
   } as const;
 
-  /** 여우불이 바꾼 금똥의 abilityTag (v6 G0) — 주운 점수는 자기 보너스, 판정 카운터에 안 센다. 회수 · 재사용 때 지워진다 */
-  private static readonly FOX_GOLD_TAG = 1;
-
   // ── 여우불 (특수 능력) ─────────────────────────────────────────────
   /**
-   * 다음 여우불까지 쌓인 '플레이 점수' (v6 G0, 매화 v3.3 과 같은 방식) — 자기 보너스(여우불 금똥 수집)는 세지 않는다.
-   * 예전 score % foxFireInterval 판정은 보너스가 배수를 넘기면 그 차례를 삼켰다
+   * 여우불 · 꼬리 타이머 (v6 G3) — 점수가 아니라 **생존 시간**. scene.time 이라 히트스톱 · 일시정지와 같이 멈춘다.
+   * 꼬리 타이머는 9꼬리 무적 동안 멈추고, 무적이 끝나면 처음부터 센다. onCreate 에서 걸고 onDestroy 에서 뗀다
    */
-  private foxProgress = 0;
+  private foxTimer: Phaser.Time.TimerEvent | null = null;
+  private tailTimer: Phaser.Time.TimerEvent | null = null;
   private foxFires: FoxFire[] = [];
 
   // ── 꼬리 스택 (기본 효과) ─────────────────────────────────────────
   private tailCount = 0;
-  /** 다음 꼬리까지 쌓인 플레이 점수 (v6 G0) — 무적 중에는 세지 않고, 무적이 끝나면 0 부터 */
-  private tailProgress = 0;
   private invincibleActive = false;
   private invincibleElapsed = 0;
   private tails: TailObj[] = [];
@@ -191,8 +187,6 @@ export class GumiAbility extends BaseAbility {
     // 씬 재시작 시 onDestroy가 호출되지 않으므로 stale 참조를 여기서 정리
     this.tails = [];
     this.tailCount = 0;
-    this.foxProgress = 0;
-    this.tailProgress = 0;
     this.specialBonus = 0;
     this.speedBonus = 0;
     this.spawnReduction = 0;
@@ -215,8 +209,10 @@ export class GumiAbility extends BaseAbility {
 
     api.player.setDepth(5);
 
-    // UR 인데 첫 여우불까지 200점을 기다려야 했다 — 시작하자마자 한 번 보여준다
+    // UR 인데 첫 여우불까지 한참 기다려야 했다 — 시작하자마자 한 번 보여준다
     this.summonFoxFires(api);
+    this.foxTimer = scene.time.addEvent({ delay: GUMI_PARAMS.foxFireEverySec * 1000, loop: true, callback: () => this.summonFoxFires(api) });
+    this.tailTimer = scene.time.addEvent({ delay: GUMI_PARAMS.tailEverySec * 1000, loop: true, callback: () => this._addTail(api) });
   }
 
   // ── 꼬리 추가 ─────────────────────────────────────────────────────
@@ -308,32 +304,12 @@ export class GumiAbility extends BaseAbility {
     }
   }
 
-  // ── 점수 마일스톤 ─────────────────────────────────────────────────
-  override onScoreMilestone(_score: number, api: GameSceneAPI): void {
-    // 점수 1점마다 불린다. 판정은 점수 배수가 아니라 '플레이 점수' 카운터 (v6 G0) — 자기 보너스(여우불 금똥)는 세지 않는다
-    if (this.awarding) return;
-    // 여우불 (특수)
-    if (++this.foxProgress >= GUMI_PARAMS.foxFireInterval) {
-      this.foxProgress = 0;
-      this.summonFoxFires(api);
-    }
-    // 꼬리 추가 (기본) — 무적 중에는 세지도 않는다 (예전 '무적 중 누적 금지')
-    if (!this.invincibleActive && ++this.tailProgress >= GUMI_PARAMS.tailInterval) {
-      this.tailProgress = 0;
-      this._addTail(api);
-    }
-  }
-
-  /** 여우불이 바꾼 금똥이면 그 수집 점수는 자기 보너스 (광부 비와 같은 원칙). 하늘 금똥은 그대로 센다 */
-  override isSelfBonusPoop(poop: Phaser.GameObjects.GameObject): boolean {
-    return (poop as PoolablePoopBase).abilityTag === GumiAbility.FOX_GOLD_TAG;
-  }
-
   // ── 무적 발동 ─────────────────────────────────────────────────────
   private _triggerInvincibility(api: GameSceneAPI): void {
     const { player, scene } = api;
     this.invincibleActive  = true;
     this.invincibleElapsed = 0;
+    if (this.tailTimer) this.tailTimer.paused = true;   // 무적 중에는 꼬리 시간을 안 센다 (v6 G3)
     this.tailTriggers++;
 
     // 꼬리 확대 — 밑동을 축으로 길고 두껍게 부푼다
@@ -398,7 +374,8 @@ export class GumiAbility extends BaseAbility {
     });
     this.tails       = [];
     this.tailCount   = 0;
-    this.tailProgress = 0; // 무적이 끝나면 꼬리 카운터는 0 부터
+    // 무적이 끝나면 꼬리 시간은 처음부터 (v6 G3)
+    if (this.tailTimer) { this.tailTimer.elapsed = 0; this.tailTimer.paused = false; }
 
     // 꼬리별 누적 효과 초기화 — speedBonus는 원복 후 초기화
     const speedToRemove = this.speedBonus;
@@ -586,7 +563,6 @@ export class GumiAbility extends BaseAbility {
     this._updateTailPositions(api);
     if (this.invincibleActive) this._updateInvincibility(api);
     this._updateRain(api);
-    this._checkFoxGoldFloor(api);
 
     if (this.foxFires.length === 0) return;
 
@@ -596,6 +572,7 @@ export class GumiAbility extends BaseAbility {
     ) as Phaser.Physics.Arcade.Sprite[];
 
     const remaining: FoxFire[] = [];
+    let converted = 0;
 
     for (const fire of this.foxFires) {
       fire.trailTimer++;
@@ -620,11 +597,8 @@ export class GumiAbility extends BaseAbility {
           const px = poop.x;
           const py = poop.y;
           (poop as unknown as PoolablePoopBase).recycle();
-          // 만든 금똥에 표시 — 그 자리에서만 찾고 참조는 들고 있지 않는다 (광부 비와 같은 방식)
-          const before = new Set(api.goldPoops.getChildren().filter(o => o.active));
           api.spawnGoldPoopAt(px, py);
-          const gold = api.goldPoops.getChildren().find(o => o.active && !before.has(o)) as PoolablePoopBase | undefined;
-          if (gold) gold.abilityTag = GumiAbility.FOX_GOLD_TAG;
+          converted++;
           this.spawnHitFlash(px, py, scene);
           fire.img.destroy();
           fire.core.destroy();
@@ -637,6 +611,8 @@ export class GumiAbility extends BaseAbility {
     }
 
     this.foxFires = remaining;
+    // 바꾼 순간 개당 foxConvertPoints — 금똥을 줍든 안 줍든 같이 받는다 (v6 G3, 자기 보너스)
+    if (converted > 0) this.awardBonus(api, converted * GUMI_PARAMS.foxConvertPoints);
   }
 
   private spawnHitFlash(x: number, y: number, scene: Phaser.Scene): void {
@@ -659,6 +635,9 @@ export class GumiAbility extends BaseAbility {
   }
 
   override onDestroy(api: GameSceneAPI): void {
+    this.foxTimer?.remove(false);
+    this.tailTimer?.remove(false);
+    this.foxTimer = this.tailTimer = null;
     if (this.invincibleActive) {
       api.player.setAlpha(1);
     }
@@ -765,23 +744,6 @@ export class GumiAbility extends BaseAbility {
     const n = this.meltWhere(api, () => true, P.bowMax, api.player.x, api.player.y);
     // 발동당 정액 + 개당 — 한 번에 awardBonus (자기 보너스라 여우불 · 꼬리 카운터에 안 들어간다, v6 G1)
     this.award(api, P.bowFlatPoints + n * P.bowPoints, api.scene.cameras.main.width / 2, 260);
-  }
-
-  /**
-   * 여우불 금똥이 줍지 못한 채 화면 바닥(카메라 아래 끝)에 닿으면 한 번 foxGoldFloorPoints (v6 G1, 자기 보너스).
-   * 표시(abilityTag)를 지워 같은 금똥이 두 번 받지 않게 한다 — 그 뒤 화면 밖에서 평소처럼 회수된다.
-   * 참조는 들고 있지 않는다 (매 프레임 금똥 그룹에서 지금 표시가 달린 것만 본다)
-   */
-  private _checkFoxGoldFloor(api: GameSceneAPI): void {
-    const floor = api.scene.cameras.main.height;
-    let n = 0;
-    for (const obj of api.goldPoops.getChildren()) {
-      const g = obj as PoolablePoopBase;
-      if (!g.active || g.abilityTag !== GumiAbility.FOX_GOLD_TAG || g.y < floor) continue;
-      g.abilityTag = 0;
-      n++;
-    }
-    if (n > 0) this.awardBonus(api, n * GUMI_PARAMS.foxGoldFloorPoints);
   }
 
   /** 점수 — awardBonus(→ addAbilityBonus → updateScore, 규칙 3 · 자기 보너스로는 여우불 · 꼬리가 차지 않음) + '+N' 글자 */
