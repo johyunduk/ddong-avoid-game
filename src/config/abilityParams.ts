@@ -69,7 +69,7 @@ export const GLITCH_PARAMS = {
   compressIntervalSec: 4,     // 발동 주기 (게임 시간 초)
   compressHalfWidth: 100,     // 기둥 폭 — 글리치 x ± (px)
   compressHeightRatio: 0.45,  // 기둥 높이 — 머리 위로 화면 높이의 비율
-  compressScale: 0.35,        // 줄인 크기 (판정도 같이)
+  compressScale: 0.55,        // 줄인 크기 (판정도 같이). 0.35 → 0.55 — 15px 는 너무 작아 다이아똥처럼 보였다 (대표 피드백)
   compressMax: 5,             // 한 번에 줄이는 최대 수 (가까운 순)
   compressPoints: 45,         // 압축된 똥이 바닥에 닿을 때 개당 점수
   // 특수 「얇은 틈」 — 화면이 얇게 찢어진 틈 3개(큰 · 중 · 작)가 랜덤 각도로 열리고, 걸린 일반 똥을 지운다

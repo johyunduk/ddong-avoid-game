@@ -203,8 +203,10 @@ export class GlitchAbility extends BaseAbility {
         continue;
       }
       if (c.outline) {
-        c.outline[0].setPosition(p.x, p.y).setScale(p.scaleX * 1.62, p.scaleY * 1.62);
-        c.outline[1].setPosition(p.x, p.y).setScale(p.scaleX * 1.42, p.scaleY * 1.42);
+        // 테 두께를 px 로 고정 (진한 테 4 · 분홍 2.5) — 배율로 키우면 압축 크기가 바뀔 때 테가 같이 굵어진다
+        const k = (pad: number) => (p.displayWidth + pad * 2) / p.displayWidth;
+        c.outline[0].setPosition(p.x, p.y).setScale(p.scaleX * k(4), p.scaleY * k(4));
+        c.outline[1].setPosition(p.x, p.y).setScale(p.scaleX * k(2.5), p.scaleY * k(2.5));
       }
     }
     if (landed > 0) {
