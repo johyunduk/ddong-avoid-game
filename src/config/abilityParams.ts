@@ -111,7 +111,7 @@ export const NOISE_PARAMS = {
   gustSpeed: 1400,          // 돌풍 속도 (px/초, 게임 시간) — 발밑에서 화면 위까지 약 0.55초
   gustBand: 110,            // (v6 N: 90 → 110) 돌풍이 지우는 세로 띠 폭 (px) — 발사 자리에서 화면 위 끝까지
   gustMax: 8,               // (v6 N: 6 → 8) 돌풍 하나가 지우는 상한 (일반 똥만)
-  gustPoints: 140,          // (v6 N: 85 → 140) 돌풍으로 지운 똥 개당 점수
+  gustPoints: 185,          // (v6 N: 85 → 140 → N′ 185) 돌풍으로 지운 똥 개당 점수
   // 특수 (옛 것 그대로) — 점수 reductionInterval 의 배수마다 다음 소환 reductionAmount 개 감소
   reductionInterval: 200,
   reductionAmount: 2,
