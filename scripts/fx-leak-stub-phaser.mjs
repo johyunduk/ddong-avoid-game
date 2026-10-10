@@ -53,7 +53,11 @@ export const beamSpawns = [];
 
 class Emitter {
   #handlers = new Map();
-  on(ev, fn) { (this.#handlers.get(ev) ?? this.#handlers.set(ev, []).get(ev)).push(fn); return this; }
+  /** ctx 가 있으면 그 this 로 부른다 (Phaser 와 같다 — scene.events.on(POST_UPDATE, this.sync, this)) */
+  on(ev, fn, ctx) {
+    const h = ctx ? Object.assign((...a) => fn.apply(ctx, a), { _orig: fn }) : fn;
+    (this.#handlers.get(ev) ?? this.#handlers.set(ev, []).get(ev)).push(h); return this;
+  }
   once(ev, fn) {
     const wrap = (...a) => { this.off(ev, wrap); fn(...a); };
     wrap._orig = fn;
@@ -134,7 +138,7 @@ class Sprite extends GameObj {
   setSize(w, h) { this.width = w; this.height = h; return this; }
   /** 시트 재생 위상 — sheetStart 로 루프를 어긋나게 하는 경로가 여기를 탄다 */
   anims = {
-    setProgress() {}, currentFrame: null, currentAnim: null, timeScale: 1, isPaused: false,
+    setProgress() {}, stop() { return this; }, currentFrame: null, currentAnim: null, timeScale: 1, isPaused: false,
     pause() { this.isPaused = true; return this; },
     resume() { this.isPaused = false; return this; },
   };
@@ -470,6 +474,12 @@ export function createFakeScene() {
   scene.add = {
     sprite: (x, y, key, frame) => spawn(x, y, key, frame),
     image: (x, y, key, frame) => spawn(x, y, key, frame),
+    // 구미 무지개 여우비의 화면 전체 빗줄기 — 타일 스크롤만 흉내 낸다
+    tileSprite: (x, y, w, h, key, frame) => {
+      const o = spawn(x, y, key, frame);
+      o.width = w; o.height = h; o.tilePositionX = 0; o.tilePositionY = 0;
+      return o;
+    },
     particles: (_x, _y, key) => {
       const k = String(key ?? '?');
       emitterTex.set(k, (emitterTex.get(k) ?? 0) + 1);
@@ -525,7 +535,7 @@ const Phaser = {
   WEBGL: 2,
   CANVAS: 1,
   BlendModes: { NORMAL: 0, ADD: 1 },
-  Scenes: { Events: { SHUTDOWN: 'shutdown', DESTROY: 'destroy' } },
+  Scenes: { Events: { SHUTDOWN: 'shutdown', DESTROY: 'destroy', POST_UPDATE: 'postupdate' } },
   GameObjects: { Events: { DESTROY } },
   Animations: { Events: { ANIMATION_COMPLETE: ANIM_COMPLETE } },
   Utils: { Array: {

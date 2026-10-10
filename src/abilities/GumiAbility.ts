@@ -26,6 +26,12 @@ const TAIL_SHEETS = GUMI_DEFERRED_SHEETS.slice(3, 5) as readonly string[];   // 
 const TAIL_ORIGIN_X = 0.044;   // 칸 안 밑동 (가공 때 칸마다 맞춤 — proc_tail_sheets.py)
 const TAIL_ORIGIN_YR = 0.508;
 const TAIL_GROW_MS = 300;
+// v8-2 (대표 플레이 피드백 '꼬리가 좀 크다'): 평소 84 → 약 67px, 9꼬리 무적 1.45 → 1.2
+const TAIL_SCALE = 0.8;
+const TAIL_INV_SCALE = 0.8 * 1.2;
+// '움직임이 버벅거린다': 시트 8칸을 끝 높이 순으로 다시 늘어놓고 오가기(yoyo)로 돈다 — 예전엔 칸 순서가 움직임 순서가 아니어서
+// 끝이 ±7px 씩 튀었다. 칸이 한 방향으로 이어지니 프레임레이트를 올려 더 매끄럽게
+const TAIL_FPS = 14;
 const TRAIL_MAX  = 0.45;  // 플레이어 이동 방향 트레일링 최대 각도 (radians)
 
 // ── 여우불 ──────────────────────────────────────────────────────────────
@@ -220,6 +226,10 @@ export class GumiAbility extends BaseAbility {
     for (const f of GUMI_DEFERRED_SHEETS) this.onRainSheet(scene, fxPickSheetKey(f));   // 다시 하기 — 이미 있는 시트
 
     api.player.setDepth(5);
+    // 꼬리 자리는 물리가 몸을 옮긴 **뒤**(POST_UPDATE)에 맞춘다 — onUpdate 는 물리 이동 전이라 걸을 때 꼬리가 한 프레임 늦게
+    // 따라가 덜컹였다 (대표 '버벅거린다', 글리치 외곽선 29c778e2 와 같은 원인)
+    this.tailApi = api;
+    api.scene.events.on(Phaser.Scenes.Events.POST_UPDATE, this.syncTails, this);
 
     // UR 인데 첫 여우불까지 200점을 기다려야 했다 — 시작하자마자 한 번 보여준다
     this.summonFoxFires(api);
@@ -248,6 +258,9 @@ export class GumiAbility extends BaseAbility {
   }
 
   // ── 꼬리 지렁이 파동 업데이트 (매 프레임) ────────────────────────
+  private tailApi: GameSceneAPI | null = null;
+  private syncTails(): void { if (this.tailApi) this._updateTailPositions(this.tailApi); }
+
   private _updateTailPositions(api: GameSceneAPI): void {
     if (this.tails.length === 0) return;
     const { player, scene } = api;
@@ -303,7 +316,7 @@ export class GumiAbility extends BaseAbility {
     // 꼬리 확대 — 밑동을 축으로 길고 두껍게 부푼다
     this.tails.forEach(tl => {
       scene.tweens.killTweensOf([tl.img, tl.tip]);
-      scene.tweens.add({ targets: [tl.img, tl.tip], scaleX: 1.45, scaleY: 1.45, duration: 320, ease: 'Back.easeOut' });
+      scene.tweens.add({ targets: [tl.img, tl.tip], scaleX: TAIL_INV_SCALE, scaleY: TAIL_INV_SCALE, duration: 320, ease: 'Back.easeOut' });
     });
 
     this._createAura(api);
@@ -542,7 +555,6 @@ export class GumiAbility extends BaseAbility {
 
   // ── 매 프레임 ─────────────────────────────────────────────────────
   override onUpdate(api: GameSceneAPI): void {
-    this._updateTailPositions(api);
     if (this.invincibleActive) this._updateInvincibility(api);
     this._updateRain(api);
 
@@ -621,6 +633,8 @@ export class GumiAbility extends BaseAbility {
       api.player.setAlpha(1);
     }
     api.player.setDepth(0); // player depth 원복
+    api.scene.events.off(Phaser.Scenes.Events.POST_UPDATE, this.syncTails, this);
+    this.tailApi = null;
     this.foxFires.forEach(f => { f.img.destroy(); f.core.destroy(); });
     this.foxFires = [];
     this.tailPool.forEach(tl => { tl.img.scene?.tweens.killTweensOf([tl.img, tl.tip]); tl.img.destroy(); tl.tip.destroy(); });
@@ -663,7 +677,7 @@ export class GumiAbility extends BaseAbility {
   /** 꼬리 9쌍 — 몸 Sprite (살랑임 반복) + 끝 Sprite (몸 칸을 따라감 · 9색 틴트). 블렌드 normal */
   private buildTails(scene: Phaser.Scene): void {
     const K = GumiAbility.K;
-    if (!scene.anims.exists('gumi_tail')) scene.anims.create({ key: 'gumi_tail', frames: scene.anims.generateFrameNumbers(K.tail, { start: 0, end: 7 }), frameRate: 10, repeat: -1 });
+    if (!scene.anims.exists('gumi_tail')) scene.anims.create({ key: 'gumi_tail', frames: scene.anims.generateFrameNumbers(K.tail, { start: 0, end: 7 }), frameRate: TAIL_FPS, repeat: -1, yoyo: true });
     for (let i = 0; i < GUMI_PARAMS.maxTails; i++) {
       const ang = TAIL_ANGLE_ORDER[i] ?? Math.PI * 1.5;
       const left = Math.cos(ang) < -0.05;   // 왼쪽으로 뻗는 꼬리는 위아래 뒤집기 — 시트의 '위로 휜' 끝이 왼쪽에서도 위로
@@ -677,11 +691,11 @@ export class GumiAbility extends BaseAbility {
     }
   }
 
-  /** i 번째 꼬리를 보이게 — grow 면 밑동에서 끝으로 뻗어 나온다 (무적 중이면 1.45배) */
+  /** i 번째 꼬리를 보이게 — grow 면 밑동에서 끝으로 뻗어 나온다 (무적 중이면 무적 배율) */
   private showTail(scene: Phaser.Scene, i: number, grow: boolean): void {
     const tl = this.tailPool[i];
     if (!tl || this.tails.includes(tl)) return;
-    const k = this.invincibleActive ? 1.45 : 1;
+    const k = this.invincibleActive ? TAIL_INV_SCALE : TAIL_SCALE;
     scene.tweens.killTweensOf([tl.img, tl.tip]);
     for (const o of [tl.img, tl.tip]) o.setAlpha(1).setScale(grow ? 0.05 : k, k).setVisible(true);
     tl.img.play('gumi_tail');
