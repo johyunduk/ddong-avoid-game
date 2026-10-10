@@ -362,8 +362,9 @@ export class GlitchAbility extends BaseAbility {
 
   override onUpdate(api: GameSceneAPI): void {
     this.loader?.step();
-    if (this.brackets) this.drawBrackets(api.scene.time.now);
+    // 압축 상태를 먼저 정리한다 — 회수 · 재사용된 똥이 compressed 에서 빠진 뒤 꺾쇠를 그려야 그 똥에 한 프레임 남지 않는다 (fa1353b1 리뷰)
     this.updateCompressed(api);
+    if (this.brackets) this.drawBrackets(api.scene.time.now);
     this.drainFx(api);
   }
 
