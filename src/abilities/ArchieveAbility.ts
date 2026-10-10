@@ -293,7 +293,8 @@ export class ArchieveAbility extends BaseAbility {
     if (!popNow) return;
     this.giantPhase = 'idle';
     this.giantHeld += n;
-    if (n > 0) this.award(api, n * P.giantPoints, g.x, Math.max(120, g.y - 60));
+    // 발동당 정액 + 개당 — 한 번에 awardBonus (자기 보너스라 거대 거품 카운터에 안 들어간다, v6 A′)
+    this.award(api, P.giantFlatPoints + n * P.giantPoints, g.x, Math.max(120, g.y - 60));
     g.play('archive_giant_pop');
     g.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => g.setVisible(false));
   }
