@@ -87,7 +87,7 @@ export const ARCHIEVE_PARAMS = {
   bubbleCount: 4,             // (v6 A′ 3 → 4) 한 번에 감싸는 수 (머리 위 가까운 화면 안 일반 똥)
   bubbleRadius: 240,          // 머리 위 반경. 200 → 240 (v6 A′)
   bubbleRise: 300,            // 감싼 똥이 떠오르는 속도 (px/초)
-  bubblePoints: 130,          // 화면 위에서 '퐁' 할 때 개당. 145 → 130 (v6 A′)
+  bubblePoints: 180,          // 화면 위에서 '퐁' 할 때 개당. 145 → 130 (v6 A′) → 180 (A″)
   // 필살 「거대 거품」
   giantInterval: 2000,        // 플레이 점수(자기 보너스 제외) 이만큼마다
   giantSwellSec: 0.5,         // 부풂 — 다 부푼 순간 안의 똥을 담는다
