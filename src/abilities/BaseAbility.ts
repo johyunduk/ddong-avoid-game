@@ -54,7 +54,6 @@ export class BaseAbility implements CharacterAbility {
   passesThrough(_poop: Phaser.GameObjects.GameObject, _api: GameSceneAPI): boolean { return false; }
   // 액티브 스킬 — 기본은 '없음'. 충전 점수가 0 이면 GameScene 이 버튼을 그리지 않는다
   getActiveChargeScore(): number { return 0; }
-  getActiveChargeMs(): number { return 0; }
   getActiveMaxCharges(): number { return 0; }
   getActiveStartCharges(): number { return 0; }
   onActiveChargeGained(_api: GameSceneAPI): void {}

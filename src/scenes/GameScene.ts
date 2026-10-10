@@ -92,8 +92,6 @@ export default class GameScene extends BaseScene {
   private activeCharges: number = 0;
   /** 마지막으로 칸을 채운 점수 기준선 (화면 점수) */
   private lastChargeScore: number = 0;
-  /** 시간 충전 액티브(getActiveChargeMs > 0)의 다음 칸까지 쌓인 게임 시간(ms) */
-  private activeChargeElapsedMs: number = 0;
   private activeBtn?: Phaser.GameObjects.Arc;
   private activeBtnLabel?: Phaser.GameObjects.Text;
   /** 테두리·링 굵기 배율 — 판 반지름 / 처음 설계 반지름 */
@@ -187,7 +185,6 @@ export default class GameScene extends BaseScene {
     // 씬 재시작 후에도 클래스 프로퍼티는 남는다 — 액티브 충전도 반드시 여기서 초기화
     this.activeCharges = 0;
     this.lastChargeScore = 0;
-    this.activeChargeElapsedMs = 0;
     this.activeBtn = undefined;
     this.activeBtnLabel = undefined;
     this.activeBtnScale = 1;
@@ -630,8 +627,6 @@ export default class GameScene extends BaseScene {
 
       // 캐릭터 능력 프레임 업데이트 (글리치 분신 추적 등)
       this.ability.onUpdate(this.abilityAPI);
-      // 시간 충전 액티브 (노이즈 등) — 점수가 아니라 게임 시간으로 칸을 채운다
-      this.tickActiveChargeTime();
       // 발동 가능 여부는 점수와 무관하게 바뀐다 (연출·소환이 끝날 때) — 바뀐 프레임에만 버튼을 다시 그린다
       if (this.activeBtn && this.ability.canUseActive(this.abilityAPI) !== this.activeUsable) this.refreshActiveBtn();
 
@@ -934,7 +929,6 @@ export default class GameScene extends BaseScene {
    * 스킬 점수가 충전에 되돌아오는 몫은 스킬의 똥 개당 점수로 조절한다.
    */
   private checkActiveCharge(): void {
-    if (this.ability.getActiveChargeMs() > 0) return;   // 시간 충전 액티브 — tickActiveChargeTime 이 센다
     const step = this.ability.getActiveChargeScore();
     if (step <= 0) return;                       // 액티브 없는 캐릭터
     const max = this.ability.getActiveMaxCharges();
@@ -947,52 +941,6 @@ export default class GameScene extends BaseScene {
       // 꽉 찼으면 기준선만 넘긴다 — 쌓아 두지 않는다 (쓰면 바로 다시 차는 것 방지)
     }
     this.refreshActiveBtn();
-  }
-
-  /** 이 캐릭터에 액티브가 있는가 — 점수 충전이든 시간 충전이든 */
-  private hasActive(): boolean {
-    return this.ability.getActiveChargeScore() > 0 || this.ability.getActiveChargeMs() > 0;
-  }
-
-  /** 다음 칸까지의 진행 0~1 — 시간 충전이면 쌓인 게임 시간, 아니면 점수 */
-  private activeProgress(max: number): number {
-    if (this.activeCharges >= max) return 1;
-    const ms = this.ability.getActiveChargeMs();
-    if (ms > 0) return Phaser.Math.Clamp(this.activeChargeElapsedMs / ms, 0, 1);
-    const step = this.ability.getActiveChargeScore();
-    return step > 0 ? Phaser.Math.Clamp((this.score - this.lastChargeScore) / step, 0, 1) : 0;
-  }
-
-  /**
-   * 시간 충전 — 매 프레임 delta × time.timeScale 을 쌓는다 (time.paused · 히트스톱(timeScale 0) 이면 0).
-   * update 는 게임오버 · 씬 일시정지 때 여기까지 오지 않는다.
-   * 꽉 찼으면 쌓지 않는다 — 점수 충전과 같이 '쓰면 바로 다시 차는 것' 방지.
-   * 칸이 찰 때만 버튼 전체를 다시 그리고, 그 사이에는 링(1% 단위로만 다시 그림)과 능력 표시만
-   */
-  private tickActiveChargeTime(): void {
-    const ms = this.ability.getActiveChargeMs();
-    if (ms <= 0 || !this.activeBtn) return;
-    const max = this.ability.getActiveMaxCharges();
-    if (this.activeCharges >= max) { this.activeChargeElapsedMs = 0; return; }
-    const dt = this.time.paused ? 0 : this.game.loop.delta * this.time.timeScale;
-    if (dt <= 0) return;
-    this.activeChargeElapsedMs += dt;
-    let gained = false;
-    while (this.activeChargeElapsedMs >= ms && this.activeCharges < max) {
-      this.activeChargeElapsedMs -= ms;
-      this.activeCharges++;
-      this.ability.onActiveChargeGained(this.abilityAPI);
-      gained = true;
-    }
-    if (this.activeCharges >= max) this.activeChargeElapsedMs = 0;
-    if (gained) { this.refreshActiveBtn(); return; }
-    const before = this.lastRingPct;
-    this.drawActiveRing();
-    if (this.lastRingPct !== before) {
-      this.ability.updateActiveChargeView(this.abilityAPI, {
-        charges: this.activeCharges, max, usable: this.activeUsable, progress: this.activeProgress(max),
-      });
-    }
   }
 
   /** 버튼 눌림 — 칸을 먼저 깎고 능력에 넘긴다 */
@@ -1017,11 +965,13 @@ export default class GameScene extends BaseScene {
     if (this.activeBtnLabel.text !== label) this.activeBtnLabel.setText(label);
     this.activeBtnLabel.setColor(ready ? '#ffd166' : '#555a63');
     this.drawActiveRing();
+    const step = this.ability.getActiveChargeScore();
     const max = this.ability.getActiveMaxCharges();
     this.drawActiveDots(max);
     this.setActiveFull(this.activeCharges >= max && usable);
     this.ability.updateActiveChargeView(this.abilityAPI, {
-      charges: this.activeCharges, max, usable, progress: this.activeProgress(max),
+      charges: this.activeCharges, max, usable,
+      progress: this.activeCharges >= max ? 1 : Phaser.Math.Clamp((this.score - this.lastChargeScore) / step, 0, 1),
     });
   }
 
@@ -1066,7 +1016,11 @@ export default class GameScene extends BaseScene {
     const ring = this.activeRing;
     const btn = this.activeBtn;
     if (!ring || !btn) return;
-    const frac = this.activeProgress(this.ability.getActiveMaxCharges());
+    const step = this.ability.getActiveChargeScore();
+    const max = this.ability.getActiveMaxCharges();
+    const frac = this.activeCharges >= max
+      ? 1
+      : Phaser.Math.Clamp((this.score - this.lastChargeScore) / step, 0, 1);
     const pct = Math.floor(frac * 100);
     if (pct === this.lastRingPct) return;
     this.lastRingPct = pct;
@@ -1091,7 +1045,7 @@ export default class GameScene extends BaseScene {
    * 오른쪽으로 걷는다.
    */
   private createActiveSkillButton(): void {
-    if (!this.hasActive()) return;      // 액티브 없는 캐릭터
+    if (this.ability.getActiveChargeScore() <= 0) return;      // 액티브 없는 캐릭터
     // 시작 칸 — init() 에서 0 으로 돌린 뒤 여기서 채운다 (재시작해도 다시 채워진다)
     this.activeCharges = Math.min(this.ability.getActiveStartCharges(), this.ability.getActiveMaxCharges());
     for (let i = 0; i < this.activeCharges; i++) this.ability.onActiveChargeGained(this.abilityAPI);

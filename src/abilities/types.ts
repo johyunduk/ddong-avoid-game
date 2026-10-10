@@ -89,14 +89,8 @@ export interface CharacterAbility {
   // 스킬의 똥 개당 점수로 조절한다 (기본 점수로만 세던 때는 보너스가 많은 캐릭터가
   // 화면 5,000점을 넘겨도 한 칸이 안 찼다).
 
-  /** 충전 한 칸에 필요한 점수. `0` 이면 점수로는 안 찬다 (아래 시간 충전도 0 이면 이 캐릭터는 액티브가 없다) */
+  /** 충전 한 칸에 필요한 점수. `0` 이면 이 캐릭터는 액티브가 없다 */
   getActiveChargeScore(): number;
-
-  /**
-   * 충전 한 칸에 필요한 **게임 시간**(ms). `0` 이면 점수 충전(위). 0 보다 크면 점수 대신 이것으로 센다 —
-   * GameScene 이 판 시간(delta × timeScale — 일시정지 · 히트스톱 · 게임오버 제외)을 쌓아 칸을 채운다
-   */
-  getActiveChargeMs(): number;
 
   /** 쌓아 둘 수 있는 최대 칸 수 */
   getActiveMaxCharges(): number;
