@@ -117,42 +117,30 @@ interface AuraParticle {
  * 수치: GUMI_PARAMS 참조
  */
 /**
- * 「여우비」 (v8, 기존 능력에 더함 — 값 GUMI_PARAMS):
- * - 기본: rainEverySec 마다 rainLastSec 동안 구미 머리 위 폭 rainBandW 세로 띠에 해 뜬 금빛 비. 띠 = 꼭대기 금빛 구름 ·
- *   양옆 진한 경계 빗줄기 · 바닥 금빛 튐 한 줄. 띠 안 화면 안 일반 똥을 **들어온 그 프레임에** 녹여 회수 (한 번에 rainMax · 개당 rainPoints)
+ * 「무지개 여우비」 (v8, 기존 능력에 더함 — 값 GUMI_PARAMS). 기본 여우비(머리 위 띠)는 대표 플레이 피드백으로 뺐다:
  * - 필살 「무지개 여우비」: 아홉 꼬리 무적이 끝나는 순간 (예전 반경 정리를 바꾼다) — 화면 전체 비 bowRainSec 동안,
  *   시작 프레임에 화면 안 일반 똥을 구미에 가까운 것부터 bowMax 개 녹이고 → 비가 그친 뒤 무지개 호 bowSec. 동시에 내지 않는다
  * - 녹는 연출(시트 4칸)만 프레임당 FX_PER_FRAME. 똥 참조는 들고 있지 않는다 (좌표만). 점수는 awardBonus (자기 보너스 — 카운터 제외)
- * - 시트 6장은 판 시작 뒤 StagedLoader. 오브젝트는 판 시작에 한 번: 빗줄기 TileSprite 2 (띠 · 화면) · 경계 TileSprite 2 ·
- *   구름 Image · 튐 Sprite · 무지개 Image · 녹음 Sprite 풀 MELT_POOL
+ * - 시트 3장은 판 시작 뒤 StagedLoader. 오브젝트는 판 시작에 한 번: 빗줄기 TileSprite 1 (화면) · 무지개 Image · 녹음 Sprite 풀 MELT_POOL
  */
 export class GumiAbility extends BaseAbility {
   // ── 여우비 ──
-  /** 게임 시계 (delta × timeScale) — 여우비 주기. scene.time.now 는 히트스톱 동안에도 흐른다 */
+  /** 게임 시계 (delta × timeScale) — 무지개 여우비 단계. scene.time.now 는 히트스톱 동안에도 흐른다 */
   private gameMs = 0;
-  private lastRainAt = 0;
-  private raining = false;
-  private rainMelted = 0;
   /** 필살 단계 — idle · rain (화면 전체 비) · bow (무지개) — 시작 시각 bowT (gameMs) */
   private bowPhase: 'idle' | 'rain' | 'bow' = 'idle';
   private bowT = 0;
   /** 녹는 연출 대기열 — 좌표 · 넣은 게임 시각. 풀 칸이 비면 꺼내고, MELT_STALE_MS 넘게 기다린 것은 버린다 */
   private meltQueue: { x: number; y: number; t: number }[] = [];
   private rainLoader: StagedLoader | null = null;
-  private rainBand: Phaser.GameObjects.TileSprite | null = null;
   private rainFull: Phaser.GameObjects.TileSprite | null = null;
-  private edgeL: Phaser.GameObjects.TileSprite | null = null;
-  private edgeR: Phaser.GameObjects.TileSprite | null = null;
-  private cloud: Phaser.GameObjects.Image | null = null;
-  private splash: Phaser.GameObjects.Sprite | null = null;
   private bow: Phaser.GameObjects.Image | null = null;
   private melts: Phaser.GameObjects.Sprite[] = [];
   private rainTexts = new Set<Phaser.GameObjects.Text>();
 
-  /** 측정용 (밸런스 하네스 — 화면 · 저장 X): 여우불 발동 · 9꼬리 무적 발동 · 여우비 발동 · 녹인 수 · 무지개 여우비 */
+  /** 측정용 (밸런스 하네스 — 화면 · 저장 X): 여우불 발동 · 9꼬리 무적 발동 · 녹인 수 (무지개 여우비) · 무지개 여우비 발동 */
   foxFireCasts = 0;
   tailTriggers = 0;
-  rainCasts = 0;
   rainMelts = 0;
   bowCasts = 0;
 
@@ -164,11 +152,8 @@ export class GumiAbility extends BaseAbility {
   private static readonly RAIN_ALPHA = 0.85;
   private static readonly K = {
     rain: fxPickSheetKey(GUMI_DEFERRED_SHEETS[0]),
-    edge: fxPickSheetKey(GUMI_DEFERRED_SHEETS[1]),
-    cloud: fxPickSheetKey(GUMI_DEFERRED_SHEETS[2]),
-    splash: fxPickSheetKey(GUMI_DEFERRED_SHEETS[3]),
-    melt: fxPickSheetKey(GUMI_DEFERRED_SHEETS[4]),
-    bow: fxPickSheetKey(GUMI_DEFERRED_SHEETS[5]),
+    melt: fxPickSheetKey(GUMI_DEFERRED_SHEETS[1]),
+    bow: fxPickSheetKey(GUMI_DEFERRED_SHEETS[2]),
   } as const;
 
   /** 여우불이 바꾼 금똥의 abilityTag (v6 G0) — 주운 점수는 자기 보너스, 판정 카운터에 안 센다. 회수 · 재사용 때 지워진다 */
@@ -212,17 +197,13 @@ export class GumiAbility extends BaseAbility {
     this.speedBonus = 0;
     this.spawnReduction = 0;
     this.gameMs = 0;
-    this.lastRainAt = 0;
-    this.raining = false;
-    this.rainMelted = 0;
     this.bowPhase = 'idle';
     this.meltQueue = [];
     this.melts = [];
     this.rainTexts = new Set();
-    this.rainBand = this.rainFull = this.edgeL = this.edgeR = null;
-    this.cloud = this.bow = null;
-    this.splash = null;
-    this.foxFireCasts = this.tailTriggers = this.rainCasts = this.rainMelts = this.bowCasts = 0;
+    this.rainFull = null;
+    this.bow = null;
+    this.foxFireCasts = this.tailTriggers = this.rainMelts = this.bowCasts = 0;
     const scene = api.scene;
     this.rainLoader = new StagedLoader(
       scene,
@@ -689,14 +670,12 @@ export class GumiAbility extends BaseAbility {
     this.rainLoader?.stop();
     this.rainLoader = null;
     this.meltQueue = [];
-    this.raining = false;
     this.bowPhase = 'idle';
-    const all = [this.rainBand, this.rainFull, this.edgeL, this.edgeR, this.cloud, this.splash, this.bow, ...this.melts, ...this.rainTexts];
+    const all = [this.rainFull, this.bow, ...this.melts, ...this.rainTexts];
     this.rainTexts.clear();
     for (const o of all) { if (!o) continue; o.scene?.tweens.killTweensOf(o); o.destroy(); }
-    this.rainBand = this.rainFull = this.edgeL = this.edgeR = null;
-    this.cloud = this.bow = null;
-    this.splash = null;
+    this.rainFull = null;
+    this.bow = null;
     this.melts = [];
   }
 
@@ -708,17 +687,8 @@ export class GumiAbility extends BaseAbility {
   private onRainSheet(scene: Phaser.Scene, key: string): void {
     if (!scene.textures.exists(key)) return;
     const K = GumiAbility.K, cam = scene.cameras.main;
-    if (key === K.rain && !this.rainBand) {
-      this.rainBand = scene.add.tileSprite(0, 0, GUMI_PARAMS.rainBandW, 10, key, 0).setOrigin(0.5, 0).setDepth(6).setAlpha(GumiAbility.RAIN_ALPHA).setVisible(false);
+    if (key === K.rain && !this.rainFull) {
       this.rainFull = scene.add.tileSprite(0, 0, cam.width, cam.height, key, 2).setOrigin(0, 0).setDepth(6).setAlpha(GumiAbility.RAIN_ALPHA).setVisible(false);
-    } else if (key === K.edge && !this.edgeL) {
-      this.edgeL = scene.add.tileSprite(0, 0, 26, 10, key, 0).setOrigin(0.5, 0).setDepth(6.1).setVisible(false);
-      this.edgeR = scene.add.tileSprite(0, 0, 26, 10, key, 0).setOrigin(0.5, 0).setDepth(6.1).setFlipX(true).setVisible(false);
-    } else if (key === K.cloud && !this.cloud) {
-      this.cloud = scene.add.image(0, 0, key).setOrigin(0.5, 0).setDepth(6.2).setVisible(false);
-    } else if (key === K.splash && !this.splash) {
-      if (!scene.anims.exists('gumi_splash')) scene.anims.create({ key: 'gumi_splash', frames: scene.anims.generateFrameNumbers(key, { start: 0, end: 3 }), frameRate: 10, repeat: -1 });
-      this.splash = scene.add.sprite(0, 0, key, 0).setOrigin(0.5, 1).setDepth(6.2).setVisible(false);
     } else if (key === K.melt && this.melts.length === 0) {
       if (!scene.anims.exists('gumi_melt')) scene.anims.create({ key: 'gumi_melt', frames: scene.anims.generateFrameNumbers(key, { start: 0, end: 3 }), frameRate: 13, repeat: 0 });
       for (let i = 0; i < GumiAbility.MELT_POOL; i++) this.melts.push(scene.add.sprite(0, 0, key, 0).setOrigin(0.5, 27 / 96).setDepth(6.3).setVisible(false));
@@ -733,22 +703,6 @@ export class GumiAbility extends BaseAbility {
     const dt = clock.paused ? 0 : scene.game.loop.delta * clock.timeScale;
     this.gameMs += dt;
     const P = GUMI_PARAMS, now = this.gameMs;
-    // 기본 — 주기 · 지속 (필살 중에는 쉰다)
-    if (!this.raining && this.bowPhase === 'idle' && now - this.lastRainAt >= P.rainEverySec * 1000 && this.rainBand) {
-      this.raining = true; this.lastRainAt = now; this.rainMelted = 0; this.rainCasts++;
-      this.showBand(true);
-    }
-    if (this.raining && (now - this.lastRainAt >= P.rainLastSec * 1000 || this.bowPhase !== 'idle')) {
-      this.raining = false; this.showBand(false);
-    }
-    if (this.raining) {
-      this.placeBand(api, dt);
-      if (this.rainMelted < P.rainMax) {
-        const cx = api.player.x, top = this.bandTop(), bot = this.bandBottom(api);
-        const n = this.meltWhere(api, p => Math.abs(p.x - cx) <= P.rainBandW / 2 && p.y >= top && p.y <= bot, P.rainMax - this.rainMelted);
-        if (n > 0) { this.rainMelted += n; this.award(api, n * P.rainPoints, cx, Math.max(90, top + 40)); }
-      }
-    }
     // 필살 — 비 → 그침 → 무지개
     if (this.bowPhase === 'rain') {
       if (this.rainFull) this.rainFull.tilePositionY -= GumiAbility.RAIN_FALL * dt / 1000;
@@ -765,7 +719,6 @@ export class GumiAbility extends BaseAbility {
       }
     } else if (this.bowPhase === 'bow' && now - this.bowT >= P.bowSec * 1000) {
       this.bowPhase = 'idle';
-      this.lastRainAt = now;   // 필살 뒤 기본 여우비는 주기를 새로 센다
       const b = this.bow;
       if (b) scene.tweens.add({ targets: b, alpha: 0, duration: 250, onComplete: () => b.setVisible(false) });
     }
@@ -779,27 +732,6 @@ export class GumiAbility extends BaseAbility {
       m.setPosition(q.x, q.y).setAlpha(1).setVisible(true).play('gumi_melt');
       m.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => m.setVisible(false));
     }
-  }
-
-  private bandTop(): number { return 40 + (this.cloud ? this.cloud.height * 0.6 : 60); }
-  private bandBottom(api: GameSceneAPI): number { return api.player.y - 40 - GUMI_PARAMS.rainHeadGap; }
-
-  private showBand(on: boolean): void {
-    for (const o of [this.rainBand, this.edgeL, this.edgeR, this.cloud, this.splash]) o?.setVisible(on);
-    if (on) this.splash?.play('gumi_splash'); else this.splash?.anims.stop();
-  }
-
-  /** 띠를 구미 머리 위에 — 꼭대기 구름 · 양옆 경계 · 바닥 튐 */
-  private placeBand(api: GameSceneAPI, dt: number): void {
-    const P = GUMI_PARAMS, cx = api.player.x, top = this.bandTop(), bot = this.bandBottom(api), h = Math.max(10, bot - top);
-    const fall = GumiAbility.RAIN_FALL * dt / 1000;
-    if (this.rainBand) { this.rainBand.setPosition(cx, top).setSize(P.rainBandW, h); this.rainBand.tilePositionY -= fall; this.rainBand.tilePositionX = -cx; }
-    for (const [e, sx] of [[this.edgeL, -1], [this.edgeR, 1]] as const) {
-      if (!e) continue;
-      e.setPosition(cx + sx * P.rainBandW / 2, top).setSize(26, h); e.tilePositionY -= fall;
-    }
-    this.cloud?.setPosition(cx, 40);
-    this.splash?.setPosition(cx, bot + 14);
   }
 
   /** 조건에 맞는 화면 안 일반 똥을 **이 프레임에** 최대 max 개 녹여 회수 — 녹는 연출은 대기열로. 후보 배열은 함수 안에서만 */
@@ -827,7 +759,6 @@ export class GumiAbility extends BaseAbility {
   private _startBowRain(api: GameSceneAPI): void {
     const P = GUMI_PARAMS;
     this.bowPhase = 'rain'; this.bowT = this.gameMs; this.bowCasts++;
-    if (this.raining) { this.raining = false; this.showBand(false); }
     const f = this.rainFull;
     if (f) { api.scene.tweens.killTweensOf(f); f.setAlpha(GumiAbility.RAIN_ALPHA).setVisible(true); }
     const n = this.meltWhere(api, () => true, P.bowMax, api.player.x, api.player.y);
