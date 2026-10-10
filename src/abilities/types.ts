@@ -73,6 +73,12 @@ export interface CharacterAbility {
   /** 피격 시 호출. true → 보호막 소모, 게임오버 방지 (센티넬) */
   onHitPoop(api: GameSceneAPI): boolean;
 
+  /**
+   * 플레이어 몸에 닿은 똥(일반 · 특수)이 **그냥 지나가는가** — true 면 GameScene 은 맞음 · 수집을 둘 다 건너뛴다 (똥은 그대로 떨어진다).
+   * 무적(getIsInvincible) 다음, 보호막(onHitPoop) 앞에서 본다. 노이즈 안개 통과
+   */
+  passesThrough(poop: Phaser.GameObjects.GameObject, api: GameSceneAPI): boolean;
+
   // ── 액티브 스킬 (누르는 스킬) ──────────────────────────────────────
   //
   // **게임의 첫 액티브 스킬은 테드지만, 틀은 캐릭터를 모른다.** 충전은 GameScene 이

@@ -882,6 +882,7 @@ export default class GameScene extends BaseScene {
     _player: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile,
     _topazPoop: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile
   ) {
+    if (this.ability.passesThrough(_topazPoop as unknown as Phaser.GameObjects.GameObject, this.abilityAPI)) return;   // 노이즈 안개: 줍지도 않는다
     this.handleTopazCollected(_topazPoop as TopazPoop);
   }
 
@@ -893,6 +894,7 @@ export default class GameScene extends BaseScene {
     _player: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile,
     _rainbowPoop: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile
   ) {
+    if (this.ability.passesThrough(_rainbowPoop as unknown as Phaser.GameObjects.GameObject, this.abilityAPI)) return;   // 노이즈 안개: 줍지도 않는다
     this.handleRainbowCollected(_rainbowPoop as RainbowPoop);
   }
 
@@ -1613,6 +1615,8 @@ export default class GameScene extends BaseScene {
   ) {
     if (this.gameOver) return;
     if (this.player.getIsInvincible()) return;
+    // 노이즈 안개: 통과 — 맞지 않고 똥은 그대로 떨어진다 (수동 AABB 경로도 여기를 지난다)
+    if (this.ability.passesThrough(poop as unknown as Phaser.GameObjects.GameObject, this.abilityAPI)) return;
 
     // 센티넬: 보호막이 있으면 게임오버 대신 보호막 소모 + 똥 반환
     if (this.ability.onHitPoop(this.abilityAPI)) {
@@ -1668,6 +1672,7 @@ export default class GameScene extends BaseScene {
     _player: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile,
     _goldPoop: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile
   ) {
+    if (this.ability.passesThrough(_goldPoop as unknown as Phaser.GameObjects.GameObject, this.abilityAPI)) return;   // 노이즈 안개: 줍지도 않는다
     this.handleGoldCollected(_goldPoop as GoldPoop);
   }
 
@@ -1679,6 +1684,7 @@ export default class GameScene extends BaseScene {
     _player: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile,
     _diamondPoop: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile
   ) {
+    if (this.ability.passesThrough(_diamondPoop as unknown as Phaser.GameObjects.GameObject, this.abilityAPI)) return;   // 노이즈 안개: 줍지도 않는다
     this.handleDiamondCollected(_diamondPoop as DiamondPoop);
   }
 

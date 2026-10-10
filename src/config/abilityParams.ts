@@ -69,7 +69,7 @@ export const GLITCH_PARAMS = {
   compressIntervalSec: 4,     // 발동 주기 (게임 시간 초)
   compressHalfWidth: 100,     // 기둥 폭 — 글리치 x ± (px)
   compressHeightRatio: 0.45,  // 기둥 높이 — 머리 위로 화면 높이의 비율
-  compressScale: 0.35,        // 줄인 크기 (판정도 같이)
+  compressScale: 0.55,        // 줄인 크기 (판정도 같이). 0.35 → 0.55 — 15px 는 너무 작아 다이아똥처럼 보였다 (대표 피드백)
   compressMax: 5,             // 한 번에 줄이는 최대 수 (가까운 순)
   compressPoints: 45,         // 압축된 똥이 바닥에 닿을 때 개당 점수
   // 특수 「얇은 틈」 — 화면이 얇게 찢어진 틈 3개(큰 · 중 · 작)가 랜덤 각도로 열리고, 걸린 일반 똥을 지운다
@@ -95,17 +95,41 @@ export const GLITCH_DESC = {
 } as const;
 
 // ── 노이즈 (Noise / SR) ───────────────────────────────────────────────
+/**
+ * 노이즈 (SR) v4 — 기본 「흐린 발자국」 (대표 설계 · planner noise_v4.md 1차 값, v6 는 balance 에서).
+ * 특수는 대표가 아직 안 골라 **옛 특수(소환 감소)를 그대로 둔다** — 옛 기본(특수 똥 주기 단축)은 이 기본으로 바꿨다
+ */
 export const NOISE_PARAMS = {
-  spawnShortening: 0.25,    // 특수 똥 생성 주기 단축 비율 (25%)
-  reductionInterval: 200,   // 소환 감소 점수 간격
-  reductionAmount: 2,       // 소환 감소 개수
-  goldInterval: 30,         // 금똥 생성 간격 (기본 40의 75%)
-  diamondInterval: 75,      // 다이아똥 생성 간격 (기본 100의 75%)
-  topazInterval: 135,       // 토파즈똥 생성 간격 (기본 180의 75%)
+  // 기본 「흐린 발자국」
+  fogMinMove: 60,           // 직전 안개 자리에서 이만큼(px) 움직였을 때만 새 안개
+  fogCooldownSec: 3,        // 직전 안개가 생긴 뒤 이만큼(게임 시간 초) 지나야 새 안개 (동시 1개)
+  fogLifeSec: 1.6,          // 안개 유지 (통과 판정이 켜진 시간). 그 뒤 뭉침 0.2 · 압축 0.15 → 돌풍 (안개 전체 약 2초)
+  fogRx: 33,                // 통과 판정 타원 — 노이즈 표시(50×80)의 1.3배 (반폭 · 반높이)
+  fogRy: 52,
+  passMax: 6,               // 안개 하나당 통과 상한 (일반 + 특수 합). 다 쓰면 노이즈가 또렷해지고 통과 꺼짐
+  passPoints: 20,           // 통과한 똥 개당 점수
+  gustSpeed: 1400,          // 돌풍 속도 (px/초, 게임 시간) — 발밑에서 화면 위까지 약 0.55초
+  gustBand: 90,             // 돌풍이 지우는 세로 띠 폭 (px) — 발사 자리에서 화면 위 끝까지
+  gustMax: 6,               // 돌풍 하나가 지우는 상한 (일반 똥만)
+  gustPoints: 85,           // 돌풍으로 지운 똥 개당 점수
+  // 특수 (옛 것 그대로) — 점수 reductionInterval 의 배수마다 다음 소환 reductionAmount 개 감소
+  reductionInterval: 200,
+  reductionAmount: 2,
 } as const;
 
+/** 노이즈 v4 연출 시트 (builder 원본 → fx 가공 ability-mock/noise/proc_noise_sheets.py) — 판 시작 뒤 나눠 올린다 */
+export const NOISE_DEFERRED_SHEETS = [
+  'noise_fog_152x209.png',        // 안개 6칸 — f0 · f1 피어남, f2~f5 유지 반복
+  'noise_gather_128x170.png',     // 뭉침 4칸
+  'noise_gustcharge_104x185.png', // 압축 3칸 (안개가 돌풍으로 굳음)
+  'noise_gust_92x299.png',        // 돌풍 비행 6칸 반복 (아래 절반이 꼬리와 교차 페이드)
+  'noise_gusttail_92x192.png',    // 돌풍 꼬리 6칸 — 같은 비행 칸 아래 1/3 을 가늘게 · 세로로 늘려 쓴다
+  'noise_twistend_144x526.png',   // 꼭대기 흩어짐 4칸
+  'noise_mote_28x22.png',         // 안개 입자 4종
+] as const;
+
 export const NOISE_DESC = {
-  basicEffect: `특수 똥 생성 주기 ${NOISE_PARAMS.spawnShortening * 100}% 단축`,
+  basicEffect: `움직인 자리에 안개 — 안에 있으면 똥 통과 (안개당 ${NOISE_PARAMS.passMax}개). 안개가 사라질 때 돌풍이 위로 솟아 지나가는 일반 똥 제거 (+${NOISE_PARAMS.gustPoints}점/개)`,
   specialAbility: `${NOISE_PARAMS.reductionInterval}점마다 다음 소환 ${NOISE_PARAMS.reductionAmount}개 감소`,
 } as const;
 
