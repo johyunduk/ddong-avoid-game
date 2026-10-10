@@ -9,20 +9,29 @@ import { HACKER_PARAMS } from '../config/abilityParams';
  * 수치: HACKER_PARAMS 참조
  */
 export class HackerAbility extends BaseAbility {
-  private lastHackerScore = 0;
+  /**
+   * 다음 삭제까지 쌓인 '플레이 점수' — 자기 삭제 보너스를 뺀 점수만 센다 (2026-10 밸런스 v6, 매화 v3.3 과 같은 방식).
+   * 예전에는 score % deleteInterval 로 판정해서, 삭제 보너스가 배수를 넘겨 버리면 다음 삭제가 통째로 삼켜졌다 (계단)
+   */
+  private deleteProgress = 0;
+
+  override onCreate(_api: GameSceneAPI): void {
+    // 판마다 새 인스턴스지만 상태는 여기서 명시적으로 처음으로 (규칙 1)
+    this.deleteProgress = 0;
+  }
 
   override specialPoopSpeedReduction(_type: 'gold' | 'diamond'): number {
     return HACKER_PARAMS.specialPoopSlowdown;
   }
 
-  override onScoreMilestone(score: number, api: GameSceneAPI): void {
+  override onScoreMilestone(_score: number, api: GameSceneAPI): void {
     // **자기 보너스로 들어온 마일스톤은 삼킨다** (레드·테드·하이디와 같은 규칙). 삭제 점수가
     // 생기면서 보너스 한 번이 발동 간격을 넘길 수 있게 됐다 — 이 줄이 없으면 발동이 연쇄로 번진다
+    // 판정은 점수 배수가 아니라 '플레이 점수' 카운터라, 보너스가 배수를 넘겨도 삭제가 삼켜지지 않는다
     if (this.awarding) return;
-    if (score % HACKER_PARAMS.deleteInterval === 0 && score > this.lastHackerScore) {
-      this.lastHackerScore = score;
-      this.removeRandomPoops(HACKER_PARAMS.deleteCount, api);
-    }
+    if (++this.deleteProgress < HACKER_PARAMS.deleteInterval) return;
+    this.deleteProgress = 0;
+    this.removeRandomPoops(HACKER_PARAMS.deleteCount, api);
   }
 
   private removeRandomPoops(count: number, api: GameSceneAPI): void {

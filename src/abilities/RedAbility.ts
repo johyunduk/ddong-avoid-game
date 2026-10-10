@@ -179,8 +179,11 @@ export class RedAbility extends BaseAbility {
   private shots: Shot[] = [];
   private tracked = new Set<Phaser.GameObjects.GameObject>();
   private timers: Phaser.Time.TimerEvent[] = [];
-  /** 마지막으로 발사를 건 점수 — 보너스 점수로 재진입하는 것을 막는다 */
-  private lastLaunchScore = 0;
+  /**
+   * 다음 발사까지 쌓인 '플레이 점수' — 자기 보너스를 뺀 점수만 센다 (2026-10 밸런스 v6, 매화 v3.3 과 같은 방식).
+   * 예전에는 score % sparrowInterval 로 판정해서, 참새·마무리 보너스가 배수를 넘기면 다음 발사가 통째로 삼켜졌다 (계단)
+   */
+  private launchProgress = 0;
   /** 마무리 연출이 도는 중. 이 동안에는 발사도 재보충도 하지 않는다 */
   private finishing = false;
   /** 씬이 내려간 뒤 예약이 깨어나도 아무 일도 안 하게 하는 빗장 */
@@ -189,6 +192,7 @@ export class RedAbility extends BaseAbility {
   // ── 수명 ────────────────────────────────────────────────────────────
   override onCreate(api: GameSceneAPI): void {
     this.dead = false;
+    this.launchProgress = 0;
     this.registerAnims(api.scene);
     this.refillOrbit(api);
   }
@@ -205,13 +209,13 @@ export class RedAbility extends BaseAbility {
     this.tracked.clear();
   }
 
-  override onScoreMilestone(score: number, api: GameSceneAPI): void {
-    if (score % RED_PARAMS.sparrowInterval !== 0) return;
-    // **자기 보너스로 들어온 마일스톤은 삼킨다.** 이게 재진입 가드의 본체다 —
-    // 기준선(lastLaunchScore)만으로는 보너스가 다음 배수를 넘길 때 못 막는다
+  override onScoreMilestone(_score: number, api: GameSceneAPI): void {
+    // **자기 보너스로 들어온 점수는 세지 않는다.** 이게 재진입 가드의 본체다.
+    // 판정은 점수 배수가 아니라 '플레이 점수' 카운터라, 보너스가 배수를 넘겨도 발사가 삼켜지지 않는다.
+    // 마무리 중이거나 궤도가 비었을 때 찬 차례는 예전처럼 그냥 넘긴다 (발사도 재보충도 안 한다)
     if (this.awarding) return;
-    if (score <= this.lastLaunchScore) return;
-    this.lastLaunchScore = score;
+    if (++this.launchProgress < RED_PARAMS.sparrowInterval) return;
+    this.launchProgress = 0;
     if (this.finishing || this.orbit.length === 0) return;
     this.launch(api);
   }
