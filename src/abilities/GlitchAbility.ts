@@ -11,7 +11,7 @@ import { StagedLoader } from './stagedLoader';
  *
  * - 기본 「압축 오류」: compressIntervalSec 마다 머리 위 기둥(± compressHalfWidth, 화면 높이 compressHeightRatio) 안 일반 똥을
  *   가까운 순 compressMax 개까지 크기 · 판정 compressScale 로 줄인다 — 지우지 않는다. 분홍 꺾쇠가 조여들고, 줄어든 똥에는
- *   청록 외곽선이 붙어 작아도 보인다. 압축된 똥이 바닥(발밑 높이)에 닿으면 가는 네온 조각으로 '틱' 흩어지고 개당 compressPoints.
+ *   분홍 외곽선이 붙어 작아도 보인다 (청록이면 하늘색 다이아똥으로 보여 분홍 — 대표 피드백). 압축된 똥이 바닥(발밑 높이)에 닿으면 가는 네온 조각으로 '틱' 흩어지고 개당 compressPoints.
  * - 특수 「얇은 틈」: riftIntervalSec 마다 화면이 얇게 찢어진 틈 3개(큰 · 중 · 작)가 랜덤 각도로 열린다.
  *   틈 중심은 화면 위쪽(riftTopY ~ 높이 × riftBottomRatio), 서로 교차하지 않고 중심끼리 riftMinGap 이상.
  *   열리는 순간 틈에 걸린 일반 똥을 **그 프레임에** 지우고 점수(개당 riftPoints, 최대 riftMax)를 그 자리에서 준다 (센티넬 23b71887 과 같은 규칙).
@@ -29,7 +29,7 @@ export class GlitchAbility extends BaseAbility {
 
   /** 압축된 똥 — 원래 배율 · 잡을 때 y(아래로만 떨어지므로 지금 y 가 더 위면 풀에서 다시 나온 다른 똥) · 외곽선 */
   private compressed = new Map<PoolablePoopBase, { sx: number; sy: number; y0: number; outline: Phaser.GameObjects.Image[] | null }>();
-  /** 압축 똥 외곽선 한 벌 = [진한 테 · 청록] — 15px 로 작아진 똥이 밝은 배경에서 묻히지 않게 두 겹 */
+  /** 압축 똥 외곽선 한 벌 = [진한 테 · 분홍] — 15px 로 작아진 똥이 밝은 배경에서 묻히지 않게 두 겹 */
   private outlinePool: Phaser.GameObjects.Image[][] = [];
   private bracketG: Phaser.GameObjects.Graphics | null = null;
   /**
@@ -163,7 +163,7 @@ export class GlitchAbility extends BaseAbility {
       p.setScale(p.scaleX * P.compressScale, p.scaleY * P.compressScale).setDepth(1);
       if (outline) {
         outline[0].setTexture(p.texture.key, p.frame.name).setTintFill(GlitchAbility.INK).setDepth(0.8).setVisible(true);
-        outline[1].setTexture(p.texture.key, p.frame.name).setTintFill(GlitchAbility.CYAN).setDepth(0.9).setVisible(true);
+        outline[1].setTexture(p.texture.key, p.frame.name).setTintFill(GlitchAbility.PINK).setDepth(0.9).setVisible(true);
       }
       this.compressedCount++;
     }
