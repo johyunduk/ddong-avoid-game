@@ -224,15 +224,36 @@ export const GUMI_PARAMS = {
   tailInterval:       150,  // 꼬리 1개 추가 점수 간격
   maxTails:           9,    // 최대 꼬리 수 (9개 = 무적 발동)
   invincibleDuration: 3000, // 무적 지속 시간 (ms)
-  zapRadius:          320,  // 무적 종료 시 똥 제거 반경
   tailSpecialBonus:   5,    // 1,4,7번 꼬리: 특수 똥 수집 추가 점수
   tailSpeedBonus:     5,    // 2,5,8번 꼬리: 이동 속도 증가 (px/s)
   tailSpawnReduction: 1,    // 3,6,9번 꼬리: 일반 똥 소환 감소 개수
+  // 「여우비」 (v8 — 기존 능력에 더함) — planner proposal_v8_gumi_archive.md §1
+  rainEverySec:       5,    // 기본 여우비 주기 (게임 시간 초)
+  rainLastSec:        2.5,  // 내리는 시간
+  rainBandW:          220,  // 구미 머리 위 세로 띠 폭 (화면 꼭대기 → 머리 위 rainHeadGap)
+  rainHeadGap:        60,
+  rainMax:            6,    // 한 번 내릴 때 녹이는 상한 (화면 안 일반 똥만)
+  rainPoints:         100,  // 녹인 똥 개당
+  // 「무지개 여우비」 — 아홉 꼬리 무적이 끝나는 순간 (예전 반경 320 정리를 바꾼다)
+  bowRainSec:         0.8,  // 화면 전체 비
+  bowSec:             0.6,  // 비가 그친 뒤 무지개 호
+  bowMax:             30,   // 녹이는 상한 (화면 안 일반 똥, 구미에 가까운 것부터)
+  bowPoints:          100,
 } as const;
+
+/** 구미 여우비 시트 (builder 후보 b → fx 가공 ability-mock/v8/proc_foxrain_sheets.py) — 판 시작 뒤 나눠 올린다 */
+export const GUMI_DEFERRED_SHEETS = [
+  'gumi_rain_128x256.png',      // 금빛 빗줄기 4칸 — 위아래 · 좌우로 이어 깐다 (칸 경계에 잘린 줄은 지웠다)
+  'gumi_rainedge_26x256.png',   // 띠 경계 빗줄기 4칸 (진하게) — 오른쪽은 좌우 뒤집음
+  'gumi_suncloud_210x126.png',  // 해 비치는 금빛 구름 — 띠 꼭대기
+  'gumi_splash_224x58.png',     // 띠 바닥 금빛 튐 한 줄 4칸
+  'gumi_melt_64x96.png',        // 똥 녹음 4칸 — 금빛 물듦 → 주르륵 → 물방울. 똥 자리 = (32, 27)
+  'gumi_rainbow_430x215.png',   // 무지개 호 1장 (빛살 없음)
+] as const;
 
 export const GUMI_DESC = {
   basicEffect:    `${GUMI_PARAMS.tailInterval}점마다 꼬리 추가 (1,4,7번: 특수 똥 +${GUMI_PARAMS.tailSpecialBonus}점 / 2,5,8번: 속도 +${GUMI_PARAMS.tailSpeedBonus} / 3,6,9번: 소환 -1개) — 9개 시 3초 무적`,
-  specialAbility: `시작 시 + ${GUMI_PARAMS.foxFireInterval}점마다 여우불 ${GUMI_PARAMS.foxFireCount}개 소환 — 꼬리마다 금똥 1개`,
+  specialAbility: `시작 시 + ${GUMI_PARAMS.foxFireInterval}점마다 여우불 ${GUMI_PARAMS.foxFireCount}개 소환 — 꼬리마다 금똥 1개 · ${GUMI_PARAMS.rainEverySec}초마다 머리 위 여우비 (일반 똥을 녹임 +${GUMI_PARAMS.rainPoints}점/개) · 9꼬리 무적이 끝나면 무지개 여우비`,
 } as const;
 
 // ── 레거시 (Legacy / UR) ──────────────────────────────────────────────
