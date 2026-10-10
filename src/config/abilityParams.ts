@@ -79,15 +79,34 @@ export const MAEHWA_DESC = {
 } as const;
 
 // ── 아카이브 (Archieve / SR) ──────────────────────────────────────────
+// v8 — 배율 1.1 그대로 (생존 틱만), 200점마다 +20 은 뺐다. 「비눗방울」 · 「거대 거품」 — planner proposal_v8_gumi_archive.md §2
 export const ARCHIEVE_PARAMS = {
-  scoreMultiplierExtra: 0.10, // 점수 배율 추가분 (base의 10% → 1.1배)
-  bonusInterval: 200,         // 보너스 점수 간격
-  bonusScore: 20,             // 보너스 점수
+  scoreMultiplierExtra: 0.10, // 점수 배율 추가분 (base의 10% → 1.1배) — 생존 틱에만 (능력 점수엔 안 곱함)
+  // 기본 「비눗방울」
+  bubbleEverySec: 4,          // 주기 (게임 시간 초)
+  bubbleCount: 3,             // 한 번에 감싸는 수 (머리 위 가까운 화면 안 일반 똥)
+  bubbleRadius: 200,          // 머리 위 반경
+  bubbleRise: 300,            // 감싼 똥이 떠오르는 속도 (px/초)
+  bubblePoints: 145,          // 화면 위에서 '퐁' 할 때 개당
+  // 필살 「거대 거품」
+  giantInterval: 2000,        // 플레이 점수(자기 보너스 제외) 이만큼마다
+  giantSwellSec: 0.5,         // 부풂 — 다 부푼 순간 안의 똥을 담는다
+  giantHoldSec: 0.3,          // 유지 뒤 '퐁' — 담긴 똥을 그 프레임에 회수
+  giantFloorGap: 80,          // 거품 아래 가장자리 = 바닥 위 이만큼 (위로는 화면 높이 약 75%, 좌우는 화면 폭을 넘친다)
+  giantMax: 30,               // 담는 상한 (화면 안 일반 똥, 아카이브에 가까운 것부터)
+  giantPoints: 100,           // 개당
 } as const;
 
+/** 아카이브 비눗방울 시트 (builder 후보 b → fx 가공 ability-mock/v8/proc_bubble_sheets.py) — 판 시작 뒤 나눠 올린다 */
+export const ARCHIEVE_DEFERRED_SHEETS = [
+  'archive_bubble_72x96.png',   // 작은 방울 4칸 — f0 · f1 떠오름 반복, f2 · f3 퐁 (방울 지름 약 59, 칸 가운데)
+  'archive_tag_30x21.png',      // 번호표 1장 — 숫자는 글자로
+  'archive_giant_480x560.png',  // 거대 거품 6칸 — f0 40% · f1 80% · f2 · f3 유지 반복 · f4 · f5 퐁 (테 반지름 219 × 265, 칸 가운데)
+] as const;
+
 export const ARCHIEVE_DESC = {
-  basicEffect: `점수 획득 속도 ${1 + ARCHIEVE_PARAMS.scoreMultiplierExtra}배`,
-  specialAbility: `${ARCHIEVE_PARAMS.bonusInterval}점마다 +${ARCHIEVE_PARAMS.bonusScore}점 보너스`,
+  basicEffect: `점수 획득 속도 ${1 + ARCHIEVE_PARAMS.scoreMultiplierExtra}배 · ${ARCHIEVE_PARAMS.bubbleEverySec}초마다 비눗방울 ${ARCHIEVE_PARAMS.bubbleCount}개가 머리 위 똥을 감싸 띄워 보냄 (+${ARCHIEVE_PARAMS.bubblePoints}점/개)`,
+  specialAbility: `${ARCHIEVE_PARAMS.giantInterval}점마다 「거대 거품」 — 화면을 덮어 안의 똥을 담고 '퐁' (최대 ${ARCHIEVE_PARAMS.giantMax} · +${ARCHIEVE_PARAMS.giantPoints}점/개)`,
 } as const;
 
 // ── 글리치 (Glitch / SR) ──────────────────────────────────────────────
