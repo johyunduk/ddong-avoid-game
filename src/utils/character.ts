@@ -1,6 +1,6 @@
 import {
   HACKER_DESC, MINER_DESC, MAEHWA_DESC,
-  ARCHIEVE_DESC, GLITCH_DESC, GLITCH_DEFERRED_SHEETS, NOISE_DESC,
+  ARCHIEVE_DESC, GLITCH_DESC, GLITCH_DEFERRED_SHEETS, NOISE_DESC, NOISE_DEFERRED_SHEETS,
   SENTINEL_DESC, SENTINEL_DEFERRED_SHEETS, LEGACY_DESC, KNIGHT_DESC,
   GUMI_DESC, MUGI_DESC, K_DESC, TED_DESC, RED_DESC, RED_SHEETS, HEIDI_DESC, HEIDI_PRELOAD_SHEETS, HEIDI_DEFERRED_SHEETS,
 } from '../config/abilityParams';
@@ -442,6 +442,8 @@ export const CHARACTERS: CharacterDef[] = [
     videoPath: 'assets/vids/noise.mp4',
     basicEffect: NOISE_DESC.basicEffect,
     specialAbility: NOISE_DESC.specialAbility,
+    // v4 연출 시트 — 판 시작 뒤 NoiseAbility 가 나눠 올린다. 캐릭터를 바꾸면 같이 내린다
+    deferredFxSheets: [...NOISE_DEFERRED_SHEETS],
   },
   // ── R등급 ──────────────────────────────────────────────────────────────
   {
