@@ -120,7 +120,7 @@ export const NOISE_PARAMS = {
   frostFreezeSec: 0.6,      // 얼어 멈춘 뒤 금이 가기까지 (멈춤 합계 = freeze + crack = 1.0초)
   frostCrackSec: 0.4,       // 다 얼고 금이 간 채 멈춰 있는 시간 (멈춤 합계 = freeze + crack)
   frostMax: 25,             // 한 번에 얼리는 상한 (일반 똥만)
-  frostPoints: 100,         // 깨진 똥 개당 점수
+  frostPoints: 280,         // 깨진 똥 개당 점수. 100 → 280 (v6 N‴)
 } as const;
 
 /** 노이즈 v4 연출 시트 (builder 원본 → fx 가공 ability-mock/noise/proc_noise_sheets.py) — 판 시작 뒤 나눠 올린다 */
