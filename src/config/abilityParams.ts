@@ -122,7 +122,10 @@ export const SENTINEL_PARAMS = {
   // 방전: 보호막이 가득(maxShields) 찼을 때만 — 안 맞을수록 점수
   pulseIntervalSec: 4,      // 방전 주기 (게임 시간 초)
   pulseRadius: 190,         // 방전 반경 (px, 플레이어 중심) — 일반 똥만 지운다
-  pulsePointsPerPoop: 150,   // 방전으로 지운 똥 1개당 점수. 40 → 150 (2026-10 밸런스 v6)
+  pulsePointsPerPoop: 165,   // 방전으로 지운 똥 1개당 점수. 40 → 150 (2026-10 밸런스 v6) → 165 (v6 B″)
+  // 약한 방전 (v6 B″): 보호막이 1개 이상이지만 가득은 아닐 때 — 같은 방전 주기(pulseIntervalSec)에 작은 반경 · 낮은 점수. 보호막 0 이면 없음
+  weakPulseRadius: 130,     // 약한 방전 반경 (px, 플레이어 중심)
+  weakPulsePointsPerPoop: 120, // 약한 방전으로 지운 똥 1개당 점수
 } as const;
 
 /**
@@ -137,7 +140,7 @@ export const SENTINEL_DEFERRED_SHEETS = [
 
 export const SENTINEL_DESC = {
   basicEffect: `시작 시 보호막 ${SENTINEL_PARAMS.startShields}개 보유 (피격 흡수 시 주변 똥 전기로 제거${SENTINEL_PARAMS.blockZapPoints > 0 ? `, 제거된 똥 1개당 +${SENTINEL_PARAMS.blockZapPoints}점` : ''})`,
-  specialAbility: `${SENTINEL_PARAMS.chargeIntervalSec}초마다 보호막 1개 충전 (최대 ${SENTINEL_PARAMS.maxShields}개 · 한 판 ${SENTINEL_PARAMS.maxChargesPerRun}번까지) · 보호막이 가득 차 있으면 ${SENTINEL_PARAMS.pulseIntervalSec}초마다 방전 — 주변 똥 제거 (+${SENTINEL_PARAMS.pulsePointsPerPoop}점/개)`,
+  specialAbility: `${SENTINEL_PARAMS.chargeIntervalSec}초마다 보호막 1개 충전 (최대 ${SENTINEL_PARAMS.maxShields}개 · 한 판 ${SENTINEL_PARAMS.maxChargesPerRun}번까지) · 보호막이 가득 차 있으면 ${SENTINEL_PARAMS.pulseIntervalSec}초마다 방전 — 주변 똥 제거 (+${SENTINEL_PARAMS.pulsePointsPerPoop}점/개) · 가득이 아니어도 보호막이 있으면 약한 방전 (좁은 범위, +${SENTINEL_PARAMS.weakPulsePointsPerPoop}점/개)`,
 } as const;
 
 // ── 나이트 (Knight / SR) ──────────────────────────────────────────────

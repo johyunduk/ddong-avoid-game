@@ -42,6 +42,9 @@ export class SentinelAbility extends BaseAbility {
    */
   pulsesFired = 0;
   pulseKills = 0;
+  /** 측정용 — 약한 방전(보호막 1개 이상 · 가득 아님) 횟수 · 지운 똥. 위 pulsesFired · pulseKills 는 가득 방전만 센다 (v6 B″) */
+  weakPulsesFired = 0;
+  weakPulseKills = 0;
   /** performance.now 로 잰다 — 실시간 판에서만 뜻이 있다 (빨리 감기 하네스는 performance.now 가 가상 시계라 늘 0) */
   pulseMaxMs = 0;
   /** 측정용 — 자리가 끝내 안 나서 그리지 못하고 버린 방전 파괴 이펙트 수 (판 도중에만 센다 — 게임오버 때 남은 큐는 onDestroy 가 세지 않고 버린다) */
@@ -118,6 +121,8 @@ export class SentinelAbility extends BaseAbility {
     this.chargesGiven = 0;
     this.pulsesFired = 0;
     this.pulseKills = 0;
+    this.weakPulsesFired = 0;
+    this.weakPulseKills = 0;
     this.pulseMaxMs = 0;
     this.pulseFxDropped = 0;
     this.aliveMs = 0;
@@ -153,17 +158,22 @@ export class SentinelAbility extends BaseAbility {
   }
 
   /**
-   * 과충전 방전 — 보호막이 가득 찼을 때만. 아니면 그 주기는 건너뛴다 (횟수에도 안 넣는다).
+   * 과충전 방전 — 보호막이 가득 찼으면 센 방전(pulseRadius · pulsePointsPerPoop),
+   * 가득은 아니지만 1개 이상이면 약한 방전(weakPulseRadius · weakPulsePointsPerPoop, v6 B″).
+   * 보호막 0 이면 그 주기는 건너뛴다 (횟수에도 안 넣는다). 둘 다 같은 규칙이다 —
    * 반경 안 일반 똥을 **이 프레임에** 전부 지우고(이펙트 없이) 점수를 한 번에 addAbilityBonus(→ updateScore).
    * 파괴 이펙트만 좌표로 담아 drainZapFx 가 프레임마다 나눠 그린다.
    * pulseMaxMs = 방전이 쓴 **한 프레임** 처리 시간의 최댓값 (지우기 프레임 · 이펙트 프레임 각각)
    */
   private pulse(api: GameSceneAPI): void {
-    if (this.shieldCount < SENTINEL_PARAMS.maxShields) return;
+    if (this.shieldCount <= 0) return;
+    const full = this.shieldCount >= SENTINEL_PARAMS.maxShields;
+    const radius = full ? SENTINEL_PARAMS.pulseRadius : SENTINEL_PARAMS.weakPulseRadius;
+    const perPoop = full ? SENTINEL_PARAMS.pulsePointsPerPoop : SENTINEL_PARAMS.weakPulsePointsPerPoop;
     const t0 = performance.now();
     const cx = api.player.x;
     const cy = api.player.y;
-    const r2 = SENTINEL_PARAMS.pulseRadius * SENTINEL_PARAMS.pulseRadius;
+    const r2 = radius * radius;
     const found: { p: PoolablePoopBase; d2: number }[] = [];
     for (const obj of api.poops.getChildren()) {
       const p = obj as PoolablePoopBase;
@@ -180,15 +190,15 @@ export class SentinelAbility extends BaseAbility {
     }
     const n = found.length;
     if (n > 0) {
-      const bonus = n * SENTINEL_PARAMS.pulsePointsPerPoop;
-      this.pulseKills += n;
+      const bonus = n * perPoop;
+      if (full) this.pulseKills += n; else this.weakPulseKills += n;
       if (bonus > 0) {
         api.addAbilityBonus(bonus);
         this.showZapBonusText(api, bonus);
       }
     }
-    this.pulsesFired++;
-    this.playPulseEffect(api, cx, cy);
+    if (full) this.pulsesFired++; else this.weakPulsesFired++;
+    this.playPulseEffect(api, cx, cy, radius);
     this.pulseMaxMs = Math.max(this.pulseMaxMs, performance.now() - t0);
   }
 
@@ -470,16 +480,20 @@ export class SentinelAbility extends BaseAbility {
    * 방전 한 번 — 작은 돔을 숨기고 큰 돔을 작은 돔 크기에서 반경까지 부풀렸다(GROW) 잠깐 머물고(HOLD) 깨짐 5칸을 재생한다.
    * 깨지는 순간 파편 풀을 돔 위쪽 테두리에서 흩뿌린다. 재사용 Sprite 2 · Image 풀에 트윈만 건다
    */
-  private playPulseEffect(api: GameSceneAPI, cx: number, _cy: number): void {
+  /**
+   * 큰 돔이 반경 radius 까지 부풀었다 깨진다. 약한 방전은 같은 시트 · 같은 동작을 반경 비율로 줄여 쓴다 (새 그림 없음, v6 B″)
+   */
+  private playPulseEffect(api: GameSceneAPI, cx: number, _cy: number, radius: number): void {
     const scene = api.scene;
     const D = SentinelAbility.DOME;
+    const scale = radius / D.big.r;
     const big = this.bigDome;
     this.domeHidden = true;
     this.domeBackTimer?.remove();
     this.domeBackTimer = scene.time.delayedCall(SentinelAbility.DOME_BACK_MS, () => { this.domeHidden = false; this.domeBackTimer = null; });
     if (this.smallDome) { scene.tweens.killTweensOf(this.smallDome); this.smallDome.anims.stop(); this.smallDome.setVisible(false); }
     if (!big) return;   // 시트가 아직 안 올라옴 — 게임 동작(지우기 · 점수)은 이미 끝났다
-    const x = cx, y = api.player.y + D.big.dy;
+    const x = cx, y = api.player.y + 38 - 20 * scale;   // DOME.big.dy 와 같은 식 — 반경에 따라 바닥선을 맞춘다
     scene.tweens.killTweensOf(big);
     this.domeHoldTimer?.remove();
     this.domeHoldTimer = null;
@@ -487,7 +501,7 @@ export class SentinelAbility extends BaseAbility {
     big.off(Phaser.Animations.Events.ANIMATION_COMPLETE);
     big.setFrame(0).setPosition(x, y).setAlpha(D.big.alpha).setVisible(true).setScale(D.small.scale * D.small.r / D.big.r);
     scene.tweens.add({
-      targets: big, scale: D.big.scale, duration: SentinelAbility.GROW_MS, ease: 'Expo.easeOut',
+      targets: big, scale, duration: SentinelAbility.GROW_MS, ease: 'Expo.easeOut',
       onComplete: () => {
         // 반경에 HOLD_MS 머문다 — 범위가 읽히는 순간. 시계는 씬 시계(히트스톱 · 일시정지와 같이 멈춤)
         this.domeHoldTimer = scene.time.delayedCall(SentinelAbility.HOLD_MS, () => {
@@ -495,15 +509,14 @@ export class SentinelAbility extends BaseAbility {
           if (!big.active || !big.visible) return;
           big.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => big.setVisible(false));
           big.play(D.big.breakAnim);
-          this.throwShards(scene, x, y);
+          this.throwShards(scene, x, y, radius);
         });
       },
     });
   }
 
   /** 파편 — 돔 위쪽 테두리(반경 pulseRadius)에서 바깥으로 조금 밀리며 떨어진다. 풀을 돌려 쓴다 (동시 SHARD_COUNT) */
-  private throwShards(scene: Phaser.Scene, x: number, y: number): void {
-    const R = SENTINEL_PARAMS.pulseRadius;
+  private throwShards(scene: Phaser.Scene, x: number, y: number, R: number): void {
     const n = this.shards.length;
     this.shards.forEach((s, i) => {
       scene.tweens.killTweensOf(s);
