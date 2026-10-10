@@ -16,7 +16,7 @@ import { LegacyAbility } from '../src/abilities/LegacyAbility';
 import { TedAbility, HEAD_ORIGIN_Y } from '../src/abilities/TedAbility';
 import { RedAbility, ROAR_RING_LIFE_MS } from '../src/abilities/RedAbility';
 import { HeidiAbility } from '../src/abilities/HeidiAbility';
-import { LEGACY_PARAMS, K_PARAMS, TED_PARAMS, RED_PARAMS, RED_SHEETS, HEIDI_PARAMS, HEIDI_SHEETS, HEIDI_WEAPON_SHEET } from '../src/config/abilityParams';
+import { MAEHWA_PARAMS, LEGACY_PARAMS, K_PARAMS, TED_PARAMS, RED_PARAMS, RED_SHEETS, HEIDI_PARAMS, HEIDI_SHEETS, HEIDI_WEAPON_SHEET } from '../src/config/abilityParams';
 import { beam, fxSprite, getFxStats, preloadFxAssets, preloadFxSheet, playFx, getFxCounters, resetFxCounters, fxPickSheetKey, FX_PARTICLE_ASSETS, FX_ASSET_DIR } from '../src/utils/vfx';
 
 const VOLLEYS = 20;
@@ -187,6 +187,15 @@ async function main() {
 
   const ability = new MaehwaAbility(0);
   const { api, refillPoops, stopFall } = makeApi(scene);
+  /**
+   * 매화 베기 한 번 — 46d48ac2 부터 베기는 '점수 100의 배수'가 아니라 자기 보너스를 뺀 **플레이 점수 slashInterval 점마다**다.
+   * GameScene 처럼 비보너스 마일스톤을 1점씩 slashInterval 번 불러야 한 번 벤다 (예전 검사의 i×100 한 번 호출로는 카운터가 1 오를 뿐이라
+   * [9] 는 대상 0 으로 실패하고 [10] 은 요청 0 = 생성 0 으로 빈 통과했다)
+   */
+  let maehwaScore = 0;
+  const maehwaSlash = (a: MaehwaAbility, ap: ReturnType<typeof makeApi>['api']) => {
+    for (let k = 0; k < MAEHWA_PARAMS.slashInterval; k++) a.onScoreMilestone(++maehwaScore, ap);
+  };
 
   const baseline = snapshot(scene);
   console.log('\n=== VFX 누수 계측 (매화 %d회 발동, 대상 3마리/회) ===\n', VOLLEYS);
@@ -201,7 +210,7 @@ async function main() {
 
   for (let i = 1; i <= VOLLEYS; i++) {
     refillPoops();
-    ability.onScoreMilestone(i * 100, api);
+    maehwaSlash(ability, api);
     commonFx(scene, 10); // 상한(6)을 넘겨 호출 — 초과분이 조용히 무시되는지도 함께 본다
     await sleep(VOLLEY_GAP_MS);
   }
@@ -359,7 +368,7 @@ async function main() {
   recycleLog.length = 0;
   arcSpawns.length = 0;
   refillPoops();
-  ability.onScoreMilestone((VOLLEYS + 3) * 100, api);
+  maehwaSlash(ability, api);
   await sleep(500); // 스태거(0/55/110) + 예고→베기(90) 가 전부 끝날 때까지
   const single = getFxCounters();
   const cutOffset = maxCutOffset();
@@ -379,7 +388,7 @@ async function main() {
 
   // ── 히트스톱 지속 중 회수 (timeScale=0 에서도 회수가 도는지) ──────────
   refillPoops();
-  ability.onScoreMilestone((VOLLEYS + 1) * 100, api);
+  maehwaSlash(ability, api);
   commonFx(scene, 6);
   await sleep(400); // 3단계(예고·베기·잔향)가 전부 스폰될 때까지
   const midFlight = snapshot(scene);
@@ -397,7 +406,7 @@ async function main() {
 
   // ── 씬 재시작 (발동 도중 shutdown) ───────────────────────────────────
   refillPoops();
-  ability.onScoreMilestone((VOLLEYS + 2) * 100, api);
+  maehwaSlash(ability, api);
   commonFx(scene, 6);
   await sleep(150); // 이펙트가 아직 살아 있는 시점
   const beforeRestart = snapshot(scene);
@@ -2022,7 +2031,9 @@ async function main() {
     ['[8] 단발 발동 sweep 누락 0', single.sweepCreated === single.sweepRequested],
     ['[9] 단발 발동 잔상 누락 0 (대상 3 전부)',
       single.trailCreated === single.trailRequested && single.trailCreated === 3],
+    // 요청이 0 이면 '누락 0' 이 빈 통과가 된다 — 실제로 베었는지(요청 > 0)도 같이 본다
     ['[10] 스트레스 구간에서도 sweep/잔상 누락 0',
+      stress.sweepRequested > 0 && stress.trailRequested > 0 &&
       stress.sweepCreated === stress.sweepRequested && stress.trailCreated === stress.trailRequested],
     ['[11] 이펙트가 똥의 현재 위치에 난다 (오차 ≤ 30px)', cutOffset <= 30],
     [`[T1] 말 ${TED_PARAMS.chessStackMax}개가 전부 사방으로 퍼짐`,
