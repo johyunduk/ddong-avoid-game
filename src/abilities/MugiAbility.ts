@@ -54,7 +54,20 @@ const ORBIT_CONFIGS: { speed: number; radius: number; tiltCos: number; startAngl
 ];
 
 export class MugiAbility extends BaseAbility {
-  private lastYeoijuScore    = 0;
+  /**
+   * 여의주 공급 타이머 (밸런스 v6) — **게임 시간**(scene.time) 기준이라 히트스톱 · 일시정지와 같이 멈춘다.
+   * 점수와 무관하다 — 특수 똥을 많이 주워도 여의주가 더 나오지 않는다. 형태가 바뀌면 간격을 바꿔 다시 건다
+   */
+  private yeoijuTimer: Phaser.Time.TimerEvent | null = null;
+  /** 측정용 누계 (밸런스 하네스가 읽는다 — 화면 · 저장에는 안 쓴다) — 여의주 생성 · 번개로 지운 똥 · 황금 번개로 지운 똥 */
+  yeoijuSpawned = 0;
+  lightningKills = 0;
+  goldLightningKills = 0;
+  /** 측정용 (v4.1) — 처음 황금 변신한 시각(판 시작 뒤 ms, 안 했으면 −1) · 황금 변신 횟수 · 황금 번개 횟수 */
+  goldFormAtMs = -1;
+  goldTransforms = 0;
+  goldStrikes = 0;
+  private startMs = 0;
   private yeoijuCount        = 0;
   private yeoijus: YeoijuOrb[] = [];
   private orbitOrbs: OrbitOrb[] = [];
@@ -70,7 +83,14 @@ export class MugiAbility extends BaseAbility {
   private revivalChargeCount = 0;   // yeoijus collected toward recharge
 
   override onCreate(api: GameSceneAPI): void {
-    this.lastYeoijuScore    = 0;
+    this.yeoijuTimer        = null;
+    this.yeoijuSpawned      = 0;
+    this.lightningKills     = 0;
+    this.goldLightningKills = 0;
+    this.goldFormAtMs       = -1;
+    this.goldTransforms     = 0;
+    this.goldStrikes        = 0;
+    this.startMs            = api.scene.time.now;
     this.yeoijuCount        = 0;
     this.yeoijus            = [];
     this.orbitOrbs          = [];
@@ -84,14 +104,20 @@ export class MugiAbility extends BaseAbility {
     this.revivalChargeCount = 0;
     ensureGlowDot(api.scene);
     this._createRevivalHalo(api);
+    this._startYeoijuTimer(api);
   }
 
-  override onScoreMilestone(score: number, api: GameSceneAPI): void {
-    const interval = this.isGoldForm ? MUGI_PARAMS.yeoijuGoldInterval : MUGI_PARAMS.yeoijuInterval;
-    if (score % interval === 0 && score > this.lastYeoijuScore) {
-      this.lastYeoijuScore = score;
-      this._spawnYeoiju(api);
-    }
+  /** 지금 형태의 간격으로 여의주 타이머를 (다시) 건다. 이전 타이머는 떼어 낸다 */
+  private _startYeoijuTimer(api: GameSceneAPI): void {
+    this.yeoijuTimer?.remove(false);
+    this.yeoijuTimer = api.scene.time.addEvent({
+      delay: this.isGoldForm ? MUGI_PARAMS.yeoijuGoldIntervalMs : MUGI_PARAMS.yeoijuIntervalMs,
+      loop: true,
+      callback: () => {
+        this.yeoijuSpawned++;
+        this._spawnYeoiju(api);
+      },
+    });
   }
 
   override onUpdate(api: GameSceneAPI): void {
@@ -162,7 +188,7 @@ export class MugiAbility extends BaseAbility {
     this._spawnCollectEffect(orb.x, orb.y, api.scene);
     api.scene.tweens.killTweensOf(orb.gfx);
     orb.gfx.destroy();
-    api.addAbilityBonus(80);
+    this.awardBonus(api, 80);   // 자기 보너스 — 여의주 카운터에 안 센다
 
     // Revival recharge: runs regardless of gold form
     if (this.revivalCharges === 0 && this.totalRevivalsUsed < 3) {
@@ -296,8 +322,11 @@ export class MugiAbility extends BaseAbility {
 
   private _transformGold(api: GameSceneAPI): void {
     this.isGoldForm = true;
+    this.goldTransforms++;
+    if (this.goldFormAtMs < 0) this.goldFormAtMs = api.scene.time.now - this.startMs;
     this.yeoijus.forEach(orb => { api.scene.tweens.killTweensOf(orb.gfx); orb.gfx.destroy(); });
     this.yeoijus = [];
+    this._startYeoijuTimer(api);
     this._strikeThunder(api, true);
   }
 
@@ -305,17 +334,19 @@ export class MugiAbility extends BaseAbility {
     this.isGoldForm = false;
     this.yeoijuCount = 0;
     api.player.setTexturePrefix(this.normalPrefix);
+    this._startYeoijuTimer(api);
   }
 
   // ── 번개 ─────────────────────────────────────────────────────────────
   //
   // 이전엔 Graphics 하나를 4~5회 지우고 폴리라인 13줄씩(본줄기 4 + 가지 3×3) 다시 그렸다.
-  // 여의주는 50점마다 떨어지므로 이 경로가 가장 자주 도는 곳이었다.
+  // 여의주가 자주 떨어지므로(지금은 0.6초마다) 이 경로가 가장 자주 도는 곳이었다.
   // 지금은 갈래가 그려진 텍스처를 회전·신축해 쓴다 — 그리는 비용이 없다.
   //
   // 텍스처는 무채색이라 **착색만으로 금색/검붉은 성격이 갈린다.**
 
   private _strikeThunder(api: GameSceneAPI, applyGoldSprite: boolean): void {
+    this.goldStrikes++;
     const { scene, player } = api;
     const tx = player.x;
     const ty = player.y;
@@ -331,7 +362,7 @@ export class MugiAbility extends BaseAbility {
       if (!scene.sys.isActive()) return;
       // 변신 도중 부활로 isGoldForm이 해제됐을 수 있으므로 확인
       if (applyGoldSprite && this.isGoldForm) api.player.setTexturePrefix('gold_mugi_');
-      this._clearPoops(api, () => true, 20);
+      this._clearPoops(api, () => true, MUGI_PARAMS.goldLightningPoints, true);
     });
   }
 
@@ -346,7 +377,7 @@ export class MugiAbility extends BaseAbility {
 
     scene.time.delayedCall(180, () => {
       if (!scene.sys.isActive()) return;
-      this._clearPoops(api, p => Math.abs(p.x - tx) <= 60, 10);
+      this._clearPoops(api, p => Math.abs(p.x - tx) <= 60, MUGI_PARAMS.lightningPoints);
     });
   }
 
@@ -374,6 +405,7 @@ export class MugiAbility extends BaseAbility {
     api: GameSceneAPI,
     filter: (p: Phaser.Physics.Arcade.Sprite) => boolean,
     pointsPerPoop: number,
+    gold = false,   // 황금 번개(전체 삭제)인가 — 측정 누계만 가른다
   ): void {
     const { poops, scene } = api;
     const targets = (poops.getChildren() as Phaser.Physics.Arcade.Sprite[])
@@ -385,13 +417,15 @@ export class MugiAbility extends BaseAbility {
     // 특수 똥으로 변환하는 race condition을 원천 차단
     const positions = targets.map(p => ({ x: p.x, y: p.y }));
     targets.forEach(p => (p as unknown as PoolablePoopBase).recycle());
+    if (gold) this.goldLightningKills += targets.length;
+    else this.lightningKills += targets.length;
 
     // 타격 이펙트는 recycle() 안에서 이미 나간다. 여기서 또 깔면 대상당 이펙트가
     // 두 겹이 되는데, 황금 번개는 화면의 똥을 전부 지우므로 그 배가 그대로 부하가 된다.
 
     scene.time.delayedCall(450, () => {
       if (!scene.sys.isActive()) return;
-      api.addAbilityBonus(positions.length * pointsPerPoop);
+      this.awardBonus(api, positions.length * pointsPerPoop);   // 자기 보너스 — 여의주 카운터에 안 센다
     });
   }
 
@@ -509,6 +543,8 @@ export class MugiAbility extends BaseAbility {
   // ── 정리 ─────────────────────────────────────────────────────────────
 
   override onDestroy(api: GameSceneAPI): void {
+    this.yeoijuTimer?.remove(false);
+    this.yeoijuTimer = null;
     this.yeoijus.forEach(orb => { api.scene.tweens.killTweensOf(orb.gfx); orb.gfx.destroy(); });
     this.yeoijus = [];
     this.orbitOrbs.forEach(o => { api.scene.tweens.killTweensOf(o.gfx); o.gfx.destroy(); });

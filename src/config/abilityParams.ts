@@ -174,32 +174,38 @@ export const GUMI_DESC = {
 // ── 레거시 (Legacy / UR) ──────────────────────────────────────────────
 export const LEGACY_PARAMS = {
   feverDuration: 6000,        // 시작 피버 지속 시간 (ms)
-  legacyInterval: 600,        // 레거시 모드 발동 점수 간격
+  legacyInterval: 900,        // 레거시 모드 발동 간격 — 자기 보너스를 뺀 '플레이 점수' 900점마다 (v4: 점수 600 배수 → 카운터 450, v4.1 L1: 450 → 900)
   legacyDuration: 4000,      // 레거시 모드 지속 시간 (ms)
-  scoreExtra: 0.20,           // 레거시 모드 점수 추가분 (1.2배)
-  burnChanceNormal: 0.40,     // 일반 불태우기 확률
-  burnChanceLegacy: 0.90,     // 레거시 불태우기 확률
+  scoreExtra: 0.10,           // 레거시 모드 점수 추가분 (1.1배, v4.1 L1: 0.20 → 0.10)
+  burnChanceNormal: 0.60,     // 일반 불태우기 확률 (v4.1 L1: 0.40 → 0.60)
+  burnChanceLegacy: 0.75,     // 레거시 불태우기 확률 (v4.1 L1: 0.90 → 0.75)
   burnCountNormal: 2,         // 일반 불태우기 개수
-  burnCountLegacy: 4,         // 레거시 불태우기 개수
+  burnCountLegacy: 3,         // 레거시 불태우기 개수 (v4.1 L1: 4 → 3)
+  burnPoints: 75,             // 불태운 똥 1개당 점수 (하드코딩 10 → 35, 밸런스 v4 → 40, v4.1 L1 → 75, v6). 대상은 플레이어 머리 위에서 가까운 순
 } as const;
 
 export const LEGACY_DESC = {
-  basicEffect: `시작 ${LEGACY_PARAMS.feverDuration / 1000}초 금똥 피버 + 황금 빗줄기 / 스폰마다 ${LEGACY_PARAMS.burnChanceNormal * 100}% 확률로 똥 ${LEGACY_PARAMS.burnCountNormal}개 불태워 소멸 (+10점)`,
+  basicEffect: `시작 ${LEGACY_PARAMS.feverDuration / 1000}초 금똥 피버 + 황금 빗줄기 / 스폰마다 ${LEGACY_PARAMS.burnChanceNormal * 100}% 확률로 머리 위 가까운 똥 ${LEGACY_PARAMS.burnCountNormal}개 불태워 소멸 (+${LEGACY_PARAMS.burnPoints}점/개)`,
   specialAbility: `${LEGACY_PARAMS.legacyInterval}점마다 ${LEGACY_PARAMS.legacyDuration / 1000}초간 레거시 모드: 점수 ${1 + LEGACY_PARAMS.scoreExtra}배 · 황금 빗줄기 강화 · 불태우기 ${LEGACY_PARAMS.burnChanceLegacy * 100}% 확률 ${LEGACY_PARAMS.burnCountLegacy}개 소멸`,
 } as const;
 
 // ── 무기 (Mugi / UR) — 검붉은 여의주 & 황금 변신 ──────────────────────
 export const MUGI_PARAMS = {
-  yeoijuInterval:       50,   // 여의주 생성 점수 간격 (변신 전)
-  yeoijuGoldInterval:   200,  // 여의주 생성 점수 간격 (변신 후)
+  // 여의주 공급은 **게임 시간** 기준 (밸런스 v6) — 점수 카운터였을 때는 특수 똥 수집 점수까지 세어 여의주를 더 줬다
+  // (수집 → 점수 → 여의주 → 번개 → 생존 · 황금 번개 → 다시 수집). 시간으로 두면 수집을 많이 해도 여의주가 늘지 않는다
+  yeoijuIntervalMs:     600,  // 여의주 생성 간격 (변신 전, ms). v4 카운터 50 → v4.1 M1 카운터 20 → v6 시간 0.6초
+  yeoijuGoldIntervalMs: 2400, // 여의주 생성 간격 (황금 변신 후, ms). v4.1 M1 카운터 80 → v6 시간 2.4초
   yeoijuCollectRadius:  40,   // 여의주 수집 반경 (px) — 버프: 28→40, 쫓는 리스크 완화
   goldThreshold:        30,   // 황금 변신 필요 여의주 수 — 버프: 50→30
   yeoijuFallFactor:     0.75, // 여의주 낙하 속도 배율 — 버프: 후반 수집 난이도 완화
   revivalRechargeCount: 20,   // 부활 재충전 필요 여의주 — 버프: goldThreshold와 분리(50→20)
+  // 밸런스 v4 (balance/exp2, proposal_v4 §1 무기) — 하드코딩이던 번개 점수를 꺼냄. 모자란 건 점수율뿐이라 개당 점수를 올린다
+  lightningPoints:      70,   // 검붉은 번개로 지운 똥 1개당 점수 (10 → 30 → 70, 밸런스 v6)
+  goldLightningPoints:  90,   // 황금 번개(전체 삭제)로 지운 똥 1개당 점수 (20 → 40 → 90, 밸런스 v6)
 } as const;
 
 export const MUGI_DESC = {
-  basicEffect:    `${MUGI_PARAMS.yeoijuInterval}점마다 검붉은 여의주 낙하 — 매 수집마다 검붉은 번개 (경로 위 똥 제거 +10점) · ${MUGI_PARAMS.goldThreshold}개 달성 시 황금 변신 (이후 여의주마다 황금 번개, 전체 삭제 +20점)`,
+  basicEffect:    `${MUGI_PARAMS.yeoijuIntervalMs / 1000}초마다 검붉은 여의주 낙하 — 매 수집마다 검붉은 번개 (경로 위 똥 제거 +${MUGI_PARAMS.lightningPoints}점) · ${MUGI_PARAMS.goldThreshold}개 달성 시 황금 변신 (이후 ${MUGI_PARAMS.yeoijuGoldIntervalMs / 1000}초마다 여의주 · 여의주마다 황금 번개, 전체 삭제 +${MUGI_PARAMS.goldLightningPoints}점)`,
   specialAbility: `부활 최대 1회 보유 / 총 3회 사용 · 게임 시작 시 1회 충전 · 여의주 ${MUGI_PARAMS.revivalRechargeCount}개로 재충전 · 피격 시 연꽃 발현 후 소생 (변신 중이면 변신 해제)`,
 } as const;
 

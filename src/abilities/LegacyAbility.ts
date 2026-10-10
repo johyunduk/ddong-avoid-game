@@ -17,7 +17,22 @@ export class LegacyAbility extends BaseAbility {
   private startFeverActive = false;
   private legacyModeActive = false;
   private accum           = 0;
-  private lastLegacyScore = 0;
+  /**
+   * 다음 레거시 모드까지 쌓인 '플레이 점수' (밸런스 v4, 매화 v3.3 방식) — 자기 보너스는 세지 않는다:
+   * 불태우기 점수(awardBonus 의 awarding 동안)와, 레거시 모드의 틱 배율 초과분(tickExtraToSkip 만큼 건너뜀)
+   */
+  private legacyProgress = 0;
+  /** getTickScore 가 이번 틱에 얹은 초과 점수 — GameScene 이 곧바로 그만큼 마일스톤을 부르면 그 수만큼 세지 않는다 */
+  private tickExtraToSkip = 0;
+  /** 측정용 누계 (밸런스 하네스가 읽는다 — 화면 · 저장에는 안 쓴다) — 불태우기 발동 · 불태운 똥 · 레거시 모드 발동 */
+  burnsFired = 0;
+  burnKills = 0;
+  legacyActivations = 0;
+  /** 측정용 (v4.1) — 레거시 모드가 덮은 게임 시간(ms, 히트스톱 · 일시정지 제외) · 모드 안 / 밖 불태우기 점수 · 모드 틱 배율 초과분 */
+  legacyMs = 0;
+  burnPointsInMode = 0;
+  burnPointsOutMode = 0;
+  tickExtraPoints = 0;
 
   private legacyTopGlow?:       Phaser.GameObjects.Image;
   private legacyPulseTween?:    Phaser.Tweens.Tween;
@@ -40,6 +55,16 @@ export class LegacyAbility extends BaseAbility {
   // ─────────────────────────────────────────────────────────────────
 
   override onCreate(api: GameSceneAPI): void {
+    // 판마다 새 인스턴스지만 카운터 · 누계는 여기서 명시적으로 처음으로 (규칙 1)
+    this.legacyProgress = 0;
+    this.tickExtraToSkip = 0;
+    this.burnsFired = 0;
+    this.burnKills = 0;
+    this.legacyActivations = 0;
+    this.legacyMs = 0;
+    this.burnPointsInMode = 0;
+    this.burnPointsOutMode = 0;
+    this.tickExtraPoints = 0;
     this.startFeverActive = true;
     this.startFeverRain(api);
     this.startFeverEndTimer = api.scene.time.delayedCall(LEGACY_PARAMS.feverDuration, () => {
@@ -49,6 +74,11 @@ export class LegacyAbility extends BaseAbility {
 
   override onUpdate(api: GameSceneAPI): void {
     const delta = api.scene.game.loop.delta;
+    // 측정용 — 레거시 모드가 덮은 시간. 프레임 delta × scene.time.timeScale (히트스톱 · 시계 일시정지 동안은 안 흐른다)
+    if (this.legacyModeActive) {
+      const clock = api.scene.time;
+      this.legacyMs += clock.paused ? 0 : delta * clock.timeScale;
+    }
     this.oraTimer += delta;
     const interval = this.legacyModeActive
       ? LegacyAbility.ORA_INTERVAL_LEGACY
@@ -64,6 +94,8 @@ export class LegacyAbility extends BaseAbility {
     this.accum += base * LEGACY_PARAMS.scoreExtra;
     const bonus = Math.floor(this.accum);
     this.accum -= bonus;
+    this.tickExtraToSkip += bonus;   // 자기 보너스(배율 초과분) — 레거시 카운터에 안 센다
+    this.tickExtraPoints += bonus;
     return base + bonus;
   }
 
@@ -80,15 +112,19 @@ export class LegacyAbility extends BaseAbility {
     const chance = this.legacyModeActive ? LEGACY_PARAMS.burnChanceLegacy : LEGACY_PARAMS.burnChanceNormal;
     const count  = this.legacyModeActive ? LEGACY_PARAMS.burnCountLegacy  : LEGACY_PARAMS.burnCountNormal;
     if (Math.random() < chance) {
-      this.burnRandomPoops(api, count);
+      this.burnOverheadPoops(api, count);
     }
   }
 
-  override onScoreMilestone(score: number, api: GameSceneAPI): void {
-    if (score % LEGACY_PARAMS.legacyInterval === 0 && score > this.lastLegacyScore) {
-      this.lastLegacyScore = score;
-      this.activateLegacyMode(api);
-    }
+  override onScoreMilestone(_score: number, api: GameSceneAPI): void {
+    // GameScene 은 점수 1점마다 부른다. 자기 보너스는 세지 않는다 — 불태우기 점수(awarding)와 레거시 틱 배율 초과분.
+    // 배수 판정이 아니라서 보너스가 발동을 삼키지도, 연쇄로 부르지도 않는다
+    if (this.awarding) return;
+    if (this.tickExtraToSkip > 0) { this.tickExtraToSkip--; return; }
+    if (++this.legacyProgress < LEGACY_PARAMS.legacyInterval) return;
+    this.legacyProgress = 0;
+    this.legacyActivations++;
+    this.activateLegacyMode(api);
   }
 
   // ─────────────────────────────────────────────────────────────────
@@ -352,21 +388,22 @@ export class LegacyAbility extends BaseAbility {
   // 불태우기 로직
   // ─────────────────────────────────────────────────────────────────
 
-  private burnRandomPoops(api: GameSceneAPI, count: number): void {
-    const visible = api.poops.getChildren().filter(
-      c => c.active && (c as Phaser.Physics.Arcade.Sprite).y > -10,
-    ) as Phaser.Physics.Arcade.Sprite[];
+  /**
+   * 불태우기 — 플레이어 **머리 위에서 가까운 순**으로 count 개 (밸런스 v4: 무작위 → 머리 위).
+   * 무작위 · 먼 곳 정리는 생존에 안 듣는다 — 같은 양을 머리 위로 옮기면 덜 맞는다
+   */
+  private burnOverheadPoops(api: GameSceneAPI, count: number): void {
+    const px = api.player.x, py = api.player.y;
+    const above = api.poops.getChildren().filter(c => {
+      const p = c as Phaser.Physics.Arcade.Sprite;
+      return p.active && p.y > -10 && p.y < py;
+    }) as Phaser.Physics.Arcade.Sprite[];
 
-    if (visible.length === 0) return;
+    if (above.length === 0) return;
 
-    // Partial Fisher-Yates: count개만 앞으로 뽑아내고 나머지 순회 생략
-    const pool = visible.slice();
-    const take = Math.min(count, pool.length);
-    for (let i = 0; i < take; i++) {
-      const j = i + Math.floor(Math.random() * (pool.length - i));
-      [pool[i], pool[j]] = [pool[j], pool[i]];
-    }
-    const targets = pool.slice(0, take);
+    const d2 = (p: Phaser.Physics.Arcade.Sprite) => (p.x - px) ** 2 + (p.y - py) ** 2;
+    const targets = above.sort((a, b) => d2(a) - d2(b)).slice(0, count);
+    this.burnsFired++;
 
     this.drawFireTrail(
       api.scene,
@@ -378,7 +415,10 @@ export class LegacyAbility extends BaseAbility {
       if (!poop.active) continue;
       this.playBurnEffect(api.scene, poop.x, poop.y);
       (poop as PoolablePoopBase).recycle();
-      api.addAbilityBonus(10);
+      this.burnKills++;
+      if (this.legacyModeActive) this.burnPointsInMode += LEGACY_PARAMS.burnPoints;
+      else this.burnPointsOutMode += LEGACY_PARAMS.burnPoints;
+      this.awardBonus(api, LEGACY_PARAMS.burnPoints);   // 자기 보너스 — 레거시 카운터에 안 센다
     }
   }
 
