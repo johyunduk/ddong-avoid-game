@@ -71,14 +71,14 @@ export const GLITCH_PARAMS = {
   compressHeightRatio: 0.45,  // 기둥 높이 — 머리 위로 화면 높이의 비율
   compressScale: 0.55,        // 줄인 크기 (판정도 같이). 0.35 → 0.55 — 15px 는 너무 작아 다이아똥처럼 보였다 (대표 피드백)
   compressMax: 5,             // 한 번에 줄이는 최대 수 (가까운 순)
-  compressPoints: 90,         // 압축된 똥이 바닥에 닿을 때 개당 점수. 45 → 90 (밸런스 v6 C)
+  compressPoints: 140,        // 압축된 똥이 바닥에 닿을 때 개당 점수. 45 → 90 (밸런스 v6 C) → 140 (C′)
   // 특수 「얇은 틈」 — 화면이 얇게 찢어진 틈 3개(큰 · 중 · 작)가 랜덤 각도로 열리고, 걸린 일반 똥을 지운다
   riftIntervalSec: 15,        // 발동 주기 (게임 시간 초). fx 가정 18 → 15 (밸런스 v6 C)
   riftScales: [1, 0.7, 0.45], // 큰 · 중 · 작 (시트 틈 길이 230px 기준 배율)
   riftTopY: 100,              // 틈 중심 범위 — 화면 위 (점수 표시 아래)
   riftBottomRatio: 2 / 3,     // 틈 중심 범위 — 화면 높이의 이 비율까지
   riftMinGap: 170,            // 틈 중심끼리 최소 거리 (px) · 서로 교차하지 않음
-  riftPoints: 80,             // 틈에 걸린 똥 개당 점수. fx 가정 40 → 80 (밸런스 v6 C)
+  riftPoints: 125,            // 틈에 걸린 똥 개당 점수. fx 가정 40 → 80 (밸런스 v6 C) → 125 (C′)
   riftMax: 12,                // 한 번에 지우는 최대 수
 } as const;
 
