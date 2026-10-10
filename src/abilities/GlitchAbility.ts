@@ -32,7 +32,10 @@ export class GlitchAbility extends BaseAbility {
   /** 압축 똥 외곽선 한 벌 = [진한 테 · 청록] — 15px 로 작아진 똥이 밝은 배경에서 묻히지 않게 두 겹 */
   private outlinePool: Phaser.GameObjects.Image[][] = [];
   private bracketG: Phaser.GameObjects.Graphics | null = null;
-  /** 조여드는 꺾쇠 — 대상 · 시작 시각. BRACKET_MS 동안만 다시 그린다 */
+  /**
+   * 조여드는 꺾쇠 — 대상 · 시작 시각. BRACKET_MS 동안만 다시 그린다. **연출일 뿐** — 압축은 고른 프레임에 이미 끝났다.
+   * 그리는 대상도 compressed 에 아직 있는 것만 (풀 재사용 · 다른 경로로 사라진 똥은 release 가 빼므로 따라가지 않는다)
+   */
   private brackets: { targets: PoolablePoopBase[]; t0: number } | null = null;
 
   private rifts: Phaser.GameObjects.Sprite[] = [];
@@ -41,6 +44,8 @@ export class GlitchAbility extends BaseAbility {
   private neon: Phaser.GameObjects.Image[][] = [];
   private bits: Phaser.GameObjects.Image[] = [];
   /** 틈에 걸려 지운 자리 — 좌표 · 텍스처 · 표시 크기만 (똥 참조 없음). 프레임당 FX_PER_FRAME 개씩 연출 */
+  /** 떠 있는 점수 글자 — onDestroy 에서 트윈과 같이 지운다 (2d5b6bca 리뷰 2) */
+  private texts = new Set<Phaser.GameObjects.Text>();
   private fxQueue: { x: number; y: number; key: string; frame: string | number; scale: number; disp: number }[] = [];
 
   /** 측정용 (밸런스 하네스) — 압축 발동 · 압축한 똥 · 압축 똥이 바닥에서 점수 받은 수 · 틈 발동 · 틈으로 지운 똥 */
@@ -78,6 +83,7 @@ export class GlitchAbility extends BaseAbility {
   override onCreate(api: GameSceneAPI): void {
     // 판마다 새 인스턴스지만 상태는 여기서 명시적으로 처음으로 (규칙 1)
     this.compressed = new Map();
+    this.texts = new Set();
     this.pending = [];
     this.fxQueue = [];
     this.brackets = null;
@@ -147,26 +153,23 @@ export class GlitchAbility extends BaseAbility {
     found.sort((a, b) => a.d2 - b.d2);
     const targets = found.slice(0, P.compressMax).map(f => f.p);
     this.compressFired++;
+    // **고른 프레임에 압축한다** (2d5b6bca 리뷰 1) — 예고 동안 똥 참조만 들고 있다가 줄이면, 그 사이 풀로 돌아가 다시 나온
+    // 다른 똥(기둥 밖일 수도)을 줄였다. 센티넬 23b71887 과 같은 규칙: 게임 동작은 그 자리에서, 꺾쇠는 연출로만
     this.brackets = { targets, t0: api.scene.time.now };
-    // 꺾쇠가 다 조여든 뒤(BRACKET_MS) 줄인다 — 씬 시계라 히트스톱과 같이 멈춘다
-    this.later(api, GlitchAbility.BRACKET_MS, () => {
-      this.brackets = null;
-      this.bracketG?.clear();
-      for (const p of targets) {
-        if (!p.active || this.compressed.has(p)) continue;
-        const outline = this.outlinePool.find(o => !o[0].visible) ?? null;
-        this.compressed.set(p, { sx: p.scaleX, sy: p.scaleY, y0: p.y, outline });
-        p.setScale(p.scaleX * P.compressScale, p.scaleY * P.compressScale).setDepth(1);
-        if (outline) {
-          outline[0].setTexture(p.texture.key, p.frame.name).setTintFill(GlitchAbility.INK).setDepth(0.8).setVisible(true);
-          outline[1].setTexture(p.texture.key, p.frame.name).setTintFill(GlitchAbility.CYAN).setDepth(0.9).setVisible(true);
-        }
-        this.compressedCount++;
+    this.later(api, GlitchAbility.BRACKET_MS, () => { this.brackets = null; this.bracketG?.clear(); });
+    for (const p of targets) {
+      const outline = this.outlinePool.find(o => !o[0].visible) ?? null;
+      this.compressed.set(p, { sx: p.scaleX, sy: p.scaleY, y0: p.y, outline });
+      p.setScale(p.scaleX * P.compressScale, p.scaleY * P.compressScale).setDepth(1);
+      if (outline) {
+        outline[0].setTexture(p.texture.key, p.frame.name).setTintFill(GlitchAbility.INK).setDepth(0.8).setVisible(true);
+        outline[1].setTexture(p.texture.key, p.frame.name).setTintFill(GlitchAbility.CYAN).setDepth(0.9).setVisible(true);
       }
-    });
+      this.compressedCount++;
+    }
   }
 
-  /** 꺾쇠 — 대상마다 네 귀퉁이, 26 → 9px 로 조여든다 (분홍 2px + 진한 테). 조이는 동안만 다시 그린다 */
+  /** 꺾쇠 — 압축된 똥마다 네 귀퉁이, 26 → 9px 로 조여든다 (분홍 2px + 진한 테). 조이는 동안만 다시 그린다 */
   private drawBrackets(now: number): void {
     const g = this.bracketG, b = this.brackets;
     if (!g || !b) return;
@@ -174,7 +177,7 @@ export class GlitchAbility extends BaseAbility {
     const half = 26 - 17 * k, L = Math.max(5, half * 0.45);
     g.clear();
     for (const p of b.targets) {
-      if (!p.active) continue;
+      if (!this.compressed.has(p)) continue;
       for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]] as const) {
         const cx = p.x + sx * half, cy = p.y + sy * half;
         for (const [c, w] of [[GlitchAbility.INK, 4], [GlitchAbility.PINK, 2]] as const) {
@@ -343,7 +346,8 @@ export class GlitchAbility extends BaseAbility {
     const txt = api.scene.add.text(x, y, `+${pts}`, {
       fontSize: '20px', fontFamily: 'Arial Black, sans-serif', color: '#ff8ac4', stroke: '#000000', strokeThickness: 4,
     }).setOrigin(0.5).setDepth(200);
-    api.scene.tweens.add({ targets: txt, y: y - 40, alpha: 0, duration: 700, ease: 'Quad.easeOut', onComplete: () => txt.destroy() });
+    this.texts.add(txt);
+    api.scene.tweens.add({ targets: txt, y: y - 40, alpha: 0, duration: 700, ease: 'Quad.easeOut', onComplete: () => { this.texts.delete(txt); txt.destroy(); } });
   }
 
   /** 예약 타이머 — 씬 시계(히트스톱 · 일시정지와 같이 멈춤), onDestroy 에서 전부 뗀다 */
@@ -377,9 +381,11 @@ export class GlitchAbility extends BaseAbility {
     this.fxQueue = [];
     this.brackets = null;
     const all: Phaser.GameObjects.GameObject[] = [
+      ...this.texts,
       ...(this.bracketG ? [this.bracketG] : []), ...this.outlinePool.flat(), ...this.rifts, ...this.sparks, ...this.neon.flat(), ...this.bits,
     ];
     for (const o of all) { o.scene?.tweens.killTweensOf(o); o.destroy(); }
+    this.texts.clear();
     this.bracketG = null;
     this.outlinePool = [];
     this.rifts = [];
