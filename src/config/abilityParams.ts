@@ -79,15 +79,34 @@ export const MAEHWA_DESC = {
 } as const;
 
 // ── 아카이브 (Archieve / SR) ──────────────────────────────────────────
+// v8 — 배율 1.1 그대로 (생존 틱만), 200점마다 +20 은 뺐다. 「비눗방울」 · 「거대 거품」 — planner proposal_v8_gumi_archive.md §2
 export const ARCHIEVE_PARAMS = {
-  scoreMultiplierExtra: 0.10, // 점수 배율 추가분 (base의 10% → 1.1배)
-  bonusInterval: 200,         // 보너스 점수 간격
-  bonusScore: 20,             // 보너스 점수
+  scoreMultiplierExtra: 0.10, // 점수 배율 추가분 (base의 10% → 1.1배) — 생존 틱에만 (능력 점수엔 안 곱함)
+  // 기본 「비눗방울」
+  bubbleEverySec: 4,          // 주기 (게임 시간 초)
+  bubbleCount: 3,             // 한 번에 감싸는 수 (머리 위 가까운 화면 안 일반 똥)
+  bubbleRadius: 200,          // 머리 위 반경
+  bubbleRise: 300,            // 감싼 똥이 떠오르는 속도 (px/초)
+  bubblePoints: 145,          // 화면 위에서 '퐁' 할 때 개당
+  // 필살 「거대 거품」
+  giantInterval: 2000,        // 플레이 점수(자기 보너스 제외) 이만큼마다
+  giantSwellSec: 0.5,         // 부풂 — 다 부푼 순간 안의 똥을 담는다
+  giantHoldSec: 0.3,          // 유지 뒤 '퐁' — 담긴 똥을 그 프레임에 회수
+  giantFloorGap: 80,          // 거품 아래 가장자리 = 바닥 위 이만큼 (위로는 화면 높이 약 75%, 좌우는 화면 폭을 넘친다)
+  giantMax: 30,               // 담는 상한 (화면 안 일반 똥, 아카이브에 가까운 것부터)
+  giantPoints: 100,           // 개당
 } as const;
 
+/** 아카이브 비눗방울 시트 (builder 후보 b → fx 가공 ability-mock/v8/proc_bubble_sheets.py) — 판 시작 뒤 나눠 올린다 */
+export const ARCHIEVE_DEFERRED_SHEETS = [
+  'archive_bubble_72x96.png',   // 작은 방울 4칸 — f0 · f1 떠오름 반복, f2 · f3 퐁 (방울 지름 약 59, 칸 가운데)
+  'archive_tag_30x21.png',      // 번호표 1장 — 숫자는 글자로
+  'archive_giant_480x560.png',  // 거대 거품 6칸 — f0 40% · f1 80% · f2 · f3 유지 반복 · f4 · f5 퐁 (테 반지름 219 × 265, 칸 가운데)
+] as const;
+
 export const ARCHIEVE_DESC = {
-  basicEffect: `점수 획득 속도 ${1 + ARCHIEVE_PARAMS.scoreMultiplierExtra}배`,
-  specialAbility: `${ARCHIEVE_PARAMS.bonusInterval}점마다 +${ARCHIEVE_PARAMS.bonusScore}점 보너스`,
+  basicEffect: `점수 획득 속도 ${1 + ARCHIEVE_PARAMS.scoreMultiplierExtra}배 · ${ARCHIEVE_PARAMS.bubbleEverySec}초마다 비눗방울 ${ARCHIEVE_PARAMS.bubbleCount}개가 머리 위 똥을 감싸 띄워 보냄 (+${ARCHIEVE_PARAMS.bubblePoints}점/개)`,
+  specialAbility: `${ARCHIEVE_PARAMS.giantInterval}점마다 「거대 거품」 — 화면을 덮어 안의 똥을 담고 '퐁' (최대 ${ARCHIEVE_PARAMS.giantMax} · +${ARCHIEVE_PARAMS.giantPoints}점/개)`,
 } as const;
 
 // ── 글리치 (Glitch / SR) ──────────────────────────────────────────────
@@ -230,15 +249,36 @@ export const GUMI_PARAMS = {
   tailInterval:       150,  // 꼬리 1개 추가 점수 간격
   maxTails:           9,    // 최대 꼬리 수 (9개 = 무적 발동)
   invincibleDuration: 3000, // 무적 지속 시간 (ms)
-  zapRadius:          320,  // 무적 종료 시 똥 제거 반경
   tailSpecialBonus:   5,    // 1,4,7번 꼬리: 특수 똥 수집 추가 점수
   tailSpeedBonus:     5,    // 2,5,8번 꼬리: 이동 속도 증가 (px/s)
   tailSpawnReduction: 1,    // 3,6,9번 꼬리: 일반 똥 소환 감소 개수
+  // 「여우비」 (v8 — 기존 능력에 더함) — planner proposal_v8_gumi_archive.md §1
+  rainEverySec:       5,    // 기본 여우비 주기 (게임 시간 초)
+  rainLastSec:        2.5,  // 내리는 시간
+  rainBandW:          220,  // 구미 머리 위 세로 띠 폭 (화면 꼭대기 → 머리 위 rainHeadGap)
+  rainHeadGap:        60,
+  rainMax:            6,    // 한 번 내릴 때 녹이는 상한 (화면 안 일반 똥만)
+  rainPoints:         100,  // 녹인 똥 개당
+  // 「무지개 여우비」 — 아홉 꼬리 무적이 끝나는 순간 (예전 반경 320 정리를 바꾼다)
+  bowRainSec:         0.8,  // 화면 전체 비
+  bowSec:             0.6,  // 비가 그친 뒤 무지개 호
+  bowMax:             30,   // 녹이는 상한 (화면 안 일반 똥, 구미에 가까운 것부터)
+  bowPoints:          100,
 } as const;
+
+/** 구미 여우비 시트 (builder 후보 b → fx 가공 ability-mock/v8/proc_foxrain_sheets.py) — 판 시작 뒤 나눠 올린다 */
+export const GUMI_DEFERRED_SHEETS = [
+  'gumi_rain_128x256.png',      // 금빛 빗줄기 4칸 — 위아래 · 좌우로 이어 깐다 (칸 경계에 잘린 줄은 지웠다)
+  'gumi_rainedge_26x256.png',   // 띠 경계 빗줄기 4칸 (진하게) — 오른쪽은 좌우 뒤집음
+  'gumi_suncloud_210x126.png',  // 해 비치는 금빛 구름 — 띠 꼭대기
+  'gumi_splash_224x58.png',     // 띠 바닥 금빛 튐 한 줄 4칸
+  'gumi_melt_64x96.png',        // 똥 녹음 4칸 — 금빛 물듦 → 주르륵 → 물방울. 똥 자리 = (32, 27)
+  'gumi_rainbow_430x215.png',   // 무지개 호 1장 (빛살 없음)
+] as const;
 
 export const GUMI_DESC = {
   basicEffect:    `${GUMI_PARAMS.tailInterval}점마다 꼬리 추가 (1,4,7번: 특수 똥 +${GUMI_PARAMS.tailSpecialBonus}점 / 2,5,8번: 속도 +${GUMI_PARAMS.tailSpeedBonus} / 3,6,9번: 소환 -1개) — 9개 시 3초 무적`,
-  specialAbility: `시작 시 + ${GUMI_PARAMS.foxFireInterval}점마다 여우불 ${GUMI_PARAMS.foxFireCount}개 소환 — 꼬리마다 금똥 1개`,
+  specialAbility: `시작 시 + ${GUMI_PARAMS.foxFireInterval}점마다 여우불 ${GUMI_PARAMS.foxFireCount}개 소환 — 꼬리마다 금똥 1개 · ${GUMI_PARAMS.rainEverySec}초마다 머리 위 여우비 (일반 똥을 녹임 +${GUMI_PARAMS.rainPoints}점/개) · 9꼬리 무적이 끝나면 무지개 여우비`,
 } as const;
 
 // ── 레거시 (Legacy / UR) ──────────────────────────────────────────────
