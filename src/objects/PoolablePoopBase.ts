@@ -12,6 +12,13 @@ import { playFx } from '../utils/vfx';
  */
 export default class PoolablePoopBase extends Phaser.Physics.Arcade.Sprite {
   /**
+   * 능력이 '이번 활성화'에 붙이는 번호 칸 (0 = 없음). 예: 노이즈가 통과시킨 똥에 안개 번호를 적는다.
+   * **recycle · reinit 에서 0 으로 지운다** — 풀에서 다시 나온 객체가 이전 활성화의 표시를 달고 오지 않게.
+   * 똥 참조를 들고 있지 않고도 '이미 처리한 똥'을 가를 수 있다 (y 비교로 가르면 재사용 객체를 못 가른다)
+   */
+  abilityTag = 0;
+
+  /**
    * 충돌 판정을 **몸통 기준**으로 — 폭 hitboxW(텍스처 px), 높이는 몸통 상자 비율, 자리는 몸통 가운데.
    * 캔버스 가운데가 아니라 몸통 가운데에 두므로 위로 나간 장식(모자·뿔·반짝이)은 판정에 안 들어간다.
    * 크기·오프셋은 텍스처 px 이라 표시 크기(setDisplaySize)를 바꿔도 같은 비율로 따라간다
@@ -30,6 +37,7 @@ export default class PoolablePoopBase extends Phaser.Physics.Arcade.Sprite {
   }
 
   reinit(x: number, y: number) {
+    this.abilityTag = 0;
     this.setActive(true).setVisible(true);
     const body = this.body as Phaser.Physics.Arcade.Body;
     if (body) {
@@ -45,6 +53,7 @@ export default class PoolablePoopBase extends Phaser.Physics.Arcade.Sprite {
    */
   recycle(silent: boolean = false) {
     if (!silent && this.active) this.playDestroyFx();
+    this.abilityTag = 0;
     this.setActive(false).setVisible(false);
     const body = this.body as Phaser.Physics.Arcade.Body;
     if (body) {
