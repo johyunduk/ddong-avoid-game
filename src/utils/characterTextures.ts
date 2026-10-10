@@ -33,6 +33,8 @@ const BAKED_PREFIXES: Record<string, string[]> = {
   ted: ['ted_land_mound_', 'ted_land_crack_', 'ted_sonic_rim', 'ted_ink_iris_haze_', 'ted_ink_iris_core_', 'ted_ink_burst'],
   // 압축 똥 외곽선 (똥 텍스처 · 크기마다) — GlitchAbility.OUTLINE_PREFIX
   glitch: ['glitch_outline_'],
+  // 다이너마이트 (코드로 한 번 굽는다) — MinerAbility.DYNAMITE_KEY
+  miner: ['miner_dynamite'],
 };
 
 /** GameScene.preload 규칙을 따라 한 캐릭터의 키를 모은다 (공유 판정 전) */
