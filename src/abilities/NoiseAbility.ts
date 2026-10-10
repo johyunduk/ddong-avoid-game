@@ -17,14 +17,16 @@ import { StagedLoader } from './stagedLoader';
  *   fogLifeSec 뒤 안개가 뭉치고(gather) 압축돼(gustcharge) 돌풍이 위로 발사된다 — 지나가는 세로 띠(gustBand)의 일반 똥을
  *   **지나가는 그 프레임에** 지우고 점수(개당 gustPoints, 상한 gustMax). 뒤에는 늘인 꼬리 한 장, 화면 위에서 흩어짐(twistend).
  * - 특수 「서리 안개」 (자동 — 플레이 점수 frostInterval 마다. 자기 보너스(통과 · 돌풍 · 서리)는 세지 않는다, 매화 · 레드와 같은 가드):
- *   모으기 frostGatherSec (무적, 노이즈 발밑에 찬 안개) → 서리 막이 바닥에서 화면 위까지 frostFreezeSec 동안 번지며
- *   막이 지나간 **일반 똥**을 얼음 덮개에 가둬 그 자리에 멈춘다 (속도 0, 상한 frostMax) → 금이 간 채 frostCrackSec →
+ *   모으기 frostGatherSec (무적, 노이즈 발밑에 찬 안개) → 화면 전체에 뿌연 서리 안개가 frostFillSec 동안 차오르고,
+ *   다 차는 순간 화면의 **일반 똥**을 한꺼번에 얼음 덮개에 가둬 그 자리에 멈춘다 (속도 0, 상한 frostMax · 무적은 이때까지).
+ *   안개는 결이 보이게 안개 칸을 화면에 겹쳐 깔고 — 가장자리 · 위가 조금 짙고 노이즈 둘레는 옅다. 최대 알파는 낮게 (배경 밝게)
+ *   → 얼린 채 frostFreezeSec 까지 · 금이 간 채 frostCrackSec →
  *   **한 프레임에** 언 똥을 전부 회수하고 점수(개당 frostPoints). 조각이 아래로 떨어지는 연출만 프레임당 FX_PER_FRAME 개씩.
  *   언 똥은 abilityTag = −발동 번호 로 가린다 (안개 통과의 +안개 번호와 겹치지 않게). 언 똥은 노이즈 몸을 그냥 지나간다
  *
  * 성능 · 정리 (센티넬 · 글리치와 같은 규칙): 시트 10장은 판 시작 뒤 StagedLoader 로 한 장씩. 오브젝트는 판 시작에 한 번 —
  * 안개 Sprite 2(뒤 · 앞) · 뭉침/압축 Sprite 1 · 돌풍 Sprite 1 · 꼬리 Sprite 1 · 흩어짐 Sprite 1 · 입자 Image 40 ·
- * 서리: 모으기 Sprite 1 · 막 Image 3 + 몸 Rectangle 1 · 덮개 Image frostMax · 깨짐 Sprite frostMax.
+ * 서리: 모으기 Sprite 1 · 안개 Sprite VEIL_COLS×VEIL_ROWS + 위 결 Image 3 + 엷은 바탕 Rectangle 1 · 덮개 Image frostMax · 깨짐 Sprite frostMax.
  * 똥 참조는 들고 있지 않는다 — 통과는 똥의 abilityTag 에 이번 안개 번호(1부터)를 적어 중복을 막고(회수 · 재사용 때 0 으로 지워진다), 지운 자리는 좌표로만 연출.
  * 블렌드 전부 normal. 타이머는 씬 시계 · onDestroy 에서 정리. 점수는 addAbilityBonus(→ updateScore)
  */
@@ -37,14 +39,16 @@ export class NoiseAbility extends BaseAbility {
   private frostSerial = 0;
   /** 다음 발동까지 쌓인 플레이 점수 (자기 보너스 제외 — 계단 없음) */
   private frostProgress = 0;
-  /** 이번 발동에 언 수 · 막 윗선 y */
+  /** 이번 발동에 언 수 · 이번 발동에 이미 얼렸는지 */
   private frozenNow = 0;
-  private filmTop = 0;
+  private frozeAll = false;
   /** 깨짐 연출 대기열 (좌표 · 조각 번호만) — 프레임당 FX_PER_FRAME */
   private shardQueue: { x: number; y: number; i: number }[] = [];
   private frostGather: Phaser.GameObjects.Sprite | null = null;
   private films: Phaser.GameObjects.Image[] = [];
   private filmBody: Phaser.GameObjects.Rectangle | null = null;
+  /** 화면을 덮는 서리 안개 — 안개 칸을 격자로 겹쳐 깐다 */
+  private veil: Phaser.GameObjects.Sprite[] = [];
   private shells: Phaser.GameObjects.Image[] = [];
   private shards: Phaser.GameObjects.Sprite[] = [];
 
@@ -120,8 +124,10 @@ export class NoiseAbility extends BaseAbility {
   } as const;
   /** 서리 연출 — 시안(frost_preview) 값. 막 칸 182×163 · 알파 0.85, 몸 #E2F2FF 0.16 · 깨짐 원점 = 덮개 가운데 */
   private static readonly FROST = {
-    filmW: 182, filmH: 163, filmAlpha: 0.85, filmFps: 8, bodyColor: 0xe2f2ff, bodyAlpha: 0.16,
-    tint: 0xdcefff, shardFps: 16, shardOriginX: 0.5, shardOriginY: 0.401, fadeMs: 400, crackAlpha: 0.5,
+    filmW: 182, filmH: 163, filmAlpha: 0.6, bodyColor: 0xe2f2ff, bodyAlpha: 0.1,
+    /** 안개 격자 — 칸(152×209) 을 veilScale 배로 cols × rows 겹쳐 깜. 알파 = base + edge·가장자리 + top·위쪽, 노이즈 둘레 nearR 안은 nearK 배 */
+    veilCols: 4, veilRows: 5, veilScale: 1.6, veilBase: 0.16, veilEdge: 0.12, veilTop: 0.12, nearR: 170, nearK: 0.35,
+    tint: 0xdcefff, shardFps: 16, shardOriginX: 0.5, shardOriginY: 0.401, fadeMs: 400, crackAlpha: 0.5, invMarginMs: 100,
   } as const;
   private static readonly ANIM = {
     fogIn: 'noise_fog_in', fogLoop: 'noise_fog_loop', gather: 'noise_gather', charge: 'noise_gustcharge',
@@ -143,6 +149,8 @@ export class NoiseAbility extends BaseAbility {
     this.frostGather = null;
     this.filmBody = null;
     this.films = [];
+    this.veil = [];
+    this.frozeAll = false;
     this.shells = [];
     this.shards = [];
     this.frostUses = 0;
@@ -209,7 +217,8 @@ export class NoiseAbility extends BaseAbility {
     } else if (key === K.film && this.films.length === 0) {
       const F = NoiseAbility.FROST, cam = scene.cameras.main;
       const n = Math.ceil(cam.width / F.filmW) + 1;
-      for (let i = 0; i < n; i++) this.films.push(scene.add.image(i * F.filmW, 0, key, 0).setOrigin(0, 0).setDepth(4).setAlpha(F.filmAlpha).setVisible(false));
+      // 위 가장자리 결 — 윗선이 아래로 늘어지게 뒤집어 화면 위에 건다 (위쪽이 조금 짙게)
+      for (let i = 0; i < n; i++) this.films.push(scene.add.image(i * F.filmW, 0, key, i % 4).setOrigin(0, 0).setFlipY(true).setDepth(4).setVisible(false));
       this.filmBody = scene.add.rectangle(0, 0, cam.width, cam.height, F.bodyColor, F.bodyAlpha).setOrigin(0, 0).setDepth(3.9).setVisible(false);
     } else if (key === K.shell && this.shells.length === 0) {
       for (let i = 0; i < NOISE_PARAMS.frostMax; i++) this.shells.push(scene.add.image(0, 0, key, i % 3).setDepth(4.5).setVisible(false));
@@ -217,6 +226,16 @@ export class NoiseAbility extends BaseAbility {
       anim(A.shatter, [1, 2, 3, 4], NoiseAbility.FROST.shardFps, 0);
       const F = NoiseAbility.FROST;
       for (let i = 0; i < NOISE_PARAMS.frostMax; i++) this.shards.push(scene.add.sprite(0, 0, key, 0).setOrigin(F.shardOriginX, F.shardOriginY).setDepth(5.4).setVisible(false));
+    }
+    if (key === K.fog && this.veil.length === 0) {
+      const F = NoiseAbility.FROST, cam = scene.cameras.main;
+      for (let r = 0; r < F.veilRows; r++) {
+        for (let c = 0; c < F.veilCols; c++) {
+          const x = (c + 0.5) * cam.width / F.veilCols + (r % 2 ? 24 : -24), y = (r + 0.5) * cam.height / F.veilRows;
+          this.veil.push(scene.add.sprite(x, y, key, 2 + (r * F.veilCols + c) % 4).setScale(F.veilScale).setFlipX((r + c) % 2 === 1)
+            .setTint(F.tint).setDepth(3.95).setVisible(false));
+        }
+      }
     }
     if (key === K.gather && !this.frostGather) {
       this.frostGather = scene.add.sprite(0, 0, key, 0).setOrigin(0.5, 1).setDepth(5).setTint(NoiseAbility.FROST.tint).setVisible(false);
@@ -235,7 +254,7 @@ export class NoiseAbility extends BaseAbility {
     this.frost = 'idle';
     this.shardQueue = [];
     const all = [this.fogBack, this.fogFront, this.burstSpr, this.gust, this.tail, this.top, ...this.motes, ...this.texts,
-      this.frostGather, this.filmBody, ...this.films, ...this.shells, ...this.shards];
+      this.frostGather, this.filmBody, ...this.films, ...this.veil, ...this.shells, ...this.shards];
     this.texts.clear();
     for (const o of all) { if (!o) continue; o.scene?.tweens.killTweensOf(o); o.destroy(); }
     this.fogBack = this.fogFront = this.burstSpr = this.gust = this.tail = this.top = null;
@@ -243,6 +262,7 @@ export class NoiseAbility extends BaseAbility {
     this.filmBody = null;
     this.motes = [];
     this.films = [];
+    this.veil = [];
     this.shells = [];
     this.shards = [];
   }
@@ -426,8 +446,10 @@ export class NoiseAbility extends BaseAbility {
     this.frostT = this.gameMs;
     this.frostSerial++;
     this.frozenNow = 0;
+    this.frozeAll = false;
     this.frostUses++;
-    api.player.setInvincibleBriefly(P.frostGatherSec * 1000);
+    // 무적은 모으기 + 안개가 차서 똥이 얼 때까지 (+ 여유 한두 프레임 — 물리 겹침이 얼리기보다 먼저 돈다)
+    api.player.setInvincibleBriefly((P.frostGatherSec + P.frostFillSec) * 1000 + NoiseAbility.FROST.invMarginMs);
     const g = this.frostGather, x = api.player.x, base = api.player.y + 44;
     if (g) {
       api.scene.tweens.killTweensOf(g);
@@ -443,47 +465,96 @@ export class NoiseAbility extends BaseAbility {
   }
 
   private stepFrost(api: GameSceneAPI): void {
-    const P = NOISE_PARAMS, F = NoiseAbility.FROST, scene = api.scene;
-    const t = this.gameMs - this.frostT, H = scene.cameras.main.height;
+    const P = NOISE_PARAMS, scene = api.scene;
+    const t = this.gameMs - this.frostT;
     if (this.frost === 'gather') {
       if (t < P.frostGatherSec * 1000) return;
       this.frost = 'spread';
       this.frostT = this.gameMs;
       const g = this.frostGather;
       if (g) scene.tweens.add({ targets: g, alpha: 0, duration: 200, onComplete: () => { g.anims.stop(); g.setVisible(false); } });
-      for (const f of this.films) { scene.tweens.killTweensOf(f); f.setAlpha(F.filmAlpha).setVisible(true); }
-      if (this.filmBody) { scene.tweens.killTweensOf(this.filmBody); this.filmBody.setAlpha(1).setVisible(true); }
-      this.filmTop = H;
+      this.showVeil(api);
       return;
     }
     if (this.frost === 'spread') {
-      const k = Math.min(1, t / (P.frostFreezeSec * 1000));
-      this.filmTop = H - (H + F.filmH * 0.5) * k;
-      this.freezeBelow(api, this.filmTop + 20);
-      if (k >= 1) {
+      if (!this.frozeAll && t >= P.frostFillSec * 1000) {   // 안개가 다 찼다 — 화면의 일반 똥을 한꺼번에
+        this.frozeAll = true;
+        this.freezeBelow(api, -20);
+      }
+      if (t >= (P.frostFillSec + P.frostFreezeSec) * 1000) {   // 언 채 frostFreezeSec 뒤 금이 간다 (멈춤 합계 = freeze + crack)
         this.frost = 'crack';
         this.frostT = this.gameMs;
-        this.shells.forEach((s, i) => {   // 덮개 위에 금 간 덮개(깨짐 f0)를 엷게 — f0 은 속이 차 있어 그대로 덮으면 똥이 가려진다
-          if (!s.visible) return;
-          this.shards[i]?.setFrame(0).setPosition(s.x, s.y).setFlipX(s.flipX).setAlpha(NoiseAbility.FROST.crackAlpha).setVisible(true);
-        });
       }
-    } else if (this.frost === 'crack' && t >= P.frostCrackSec * 1000) {
-      this.shatterAll(api);
-      return;
     }
-    // 막 — 윗선 자리 · 칸 반복
-    const fr = Math.floor(this.gameMs / (1000 / F.filmFps)) % 4;
-    for (const f of this.films) f.setY(this.filmTop).setFrame(fr);
-    this.filmBody?.setY(this.filmTop + F.filmH * 0.55);
-    // 언 똥은 그 자리에 — 다른 경로(피버 등)가 속도를 다시 넣어도 이 단계 동안은 0
+    this.syncFrozen(api);
+    if (this.frost === 'crack' && this.gameMs - this.frostT >= P.frostCrackSec * 1000) this.shatterAll(api);
+  }
+
+  /**
+   * 매 프레임 — 지금 언 표시가 달린 똥만 기준으로 덮개(· 금 간 덮개)를 다시 깐다. 다른 경로(피버 변환 등)가 언 똥을
+   * 회수하면 태그가 0 으로 지워져 여기서 빠지고, 그 칸의 덮개도 꺼진다 (허공에 남지 않음 · 상한도 실제 수).
+   * 언 똥 속도는 다시 0 으로 (피버 등이 속도를 넣어도). 똥 참조는 프레임을 넘겨 들지 않는다
+   */
+  private syncFrozen(api: GameSceneAPI): void {
+    const crack = this.frost === 'crack', F = NoiseAbility.FROST;
+    let i = 0;
     for (const obj of api.poops.getChildren()) {
       const p = obj as PoolablePoopBase;
-      if (p.active && this.isFrozen(p)) (p.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
+      if (!p.active || !this.isFrozen(p)) continue;
+      (p.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
+      this.shells[i]?.setPosition(p.x, p.y).setVisible(true);
+      const sh = this.shards[i];
+      // 금 간 단계 — 덮개 위에 깨짐 f0 을 엷게 (f0 은 속이 차 있어 그대로 덮으면 똥이 가려진다)
+      if (sh) { if (crack) sh.setFrame(0).setPosition(p.x, p.y).setFlipX(i % 2 === 1).setAlpha(F.crackAlpha).setVisible(true); else sh.setVisible(false); }
+      i++;
+    }
+    for (let k = i; k < this.shells.length; k++) { this.shells[k].setVisible(false); this.shards[k]?.setVisible(false); }
+    this.frozenNow = i;
+  }
+
+  /**
+   * 서리 안개가 화면에 차오른다 (frostFillSec) — 칸마다 목표 알파로 페이드 인. 가장자리 · 위가 짙고 노이즈 둘레는 옅다.
+   * 안개 칸은 제 반복(fogLoop)으로 천천히 일렁인다
+   */
+  private showVeil(api: GameSceneAPI): void {
+    const F = NoiseAbility.FROST, scene = api.scene, cam = scene.cameras.main;
+    const dur = NOISE_PARAMS.frostFillSec * 1000, px = api.player.x, py = api.player.y;
+    this.veilUnderPoops(api);
+    for (const v of this.veil) {
+      const edge = Math.abs(v.x - cam.width / 2) / (cam.width / 2), top = 1 - v.y / cam.height;
+      let a = F.veilBase + F.veilEdge * edge + F.veilTop * top;
+      if (Math.hypot(v.x - px, v.y - py) < F.nearR) a *= F.nearK;
+      scene.tweens.killTweensOf(v);
+      v.setAlpha(0).setVisible(true).play(NoiseAbility.ANIM.fogLoop);
+      scene.tweens.add({ targets: v, alpha: a, duration: dur, ease: 'Sine.easeOut' });
+    }
+    for (const f of this.films) {
+      scene.tweens.killTweensOf(f);
+      f.setAlpha(0).setVisible(true);
+      scene.tweens.add({ targets: f, alpha: F.filmAlpha, duration: dur, ease: 'Sine.easeOut' });
+    }
+    const body = this.filmBody;
+    if (body) {
+      scene.tweens.killTweensOf(body);
+      body.setAlpha(0).setVisible(true);
+      scene.tweens.add({ targets: body, alpha: 1, duration: dur, ease: 'Sine.easeOut' });
     }
   }
 
-  /** 막 윗선 아래의 일반 똥을 얼린다 — 속도 0 · 표시 −발동 번호 · 덮개 (상한 frostMax) */
+  /**
+   * 안개는 배경 바로 위 · 똥 아래에 — 똥이 안개에 묻히지 않게 (배경 밝게 원칙). 일반 똥 · 노이즈는 깊이 0 이라
+   * 깊이로는 못 가르고 표시 순서로 배경 이미지 바로 위에 옮긴다. 깊이는 배경과 같은 0
+   */
+  private veilUnderPoops(api: GameSceneAPI): void {
+    const scene = api.scene;
+    const bg = scene.children.list.find(o => o instanceof Phaser.GameObjects.Image && o.texture.key === api.backgroundKey);
+    if (!bg) return;
+    const objs = [this.filmBody, ...this.veil, ...this.films].filter((o): o is NonNullable<typeof o> => !!o);
+    let below: Phaser.GameObjects.GameObject = bg;
+    for (const o of objs) { o.setDepth(0); scene.children.moveAbove(o as Phaser.GameObjects.GameObject, below); below = o; }
+  }
+
+  /** y 아래(화면 안)의 일반 똥을 얼린다 — 속도 0 · 표시 −발동 번호 · 덮개 (상한 frostMax) */
   private freezeBelow(api: GameSceneAPI, y: number): void {
     for (const obj of api.poops.getChildren()) {
       if (this.frozenNow >= NOISE_PARAMS.frostMax) return;
@@ -514,6 +585,7 @@ export class NoiseAbility extends BaseAbility {
     this.frostFrozenTotal += n;
     if (n > 0 && P.frostPoints > 0) this.award(api, n * P.frostPoints, scene.cameras.main.width / 2, Math.max(120, sy / n - 60));
     for (const f of this.films) scene.tweens.add({ targets: f, alpha: 0, duration: F.fadeMs, onComplete: () => f.setVisible(false) });
+    for (const v of this.veil) { scene.tweens.killTweensOf(v); scene.tweens.add({ targets: v, alpha: 0, duration: F.fadeMs, onComplete: () => { v.anims.stop(); v.setVisible(false); } }); }
     const body = this.filmBody;
     if (body) scene.tweens.add({ targets: body, alpha: 0, duration: F.fadeMs, onComplete: () => body.setVisible(false) });
   }

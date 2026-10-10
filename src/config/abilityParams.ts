@@ -115,7 +115,8 @@ export const NOISE_PARAMS = {
   // 특수 「서리 안개」 (자동) — planner v6 (proposal_v6_values.md §14)
   frostInterval: 2000,      // 플레이 점수(자기 보너스 제외) 이만큼마다 발동 — 첫 발동 약 60초 · 이후 약 50초
   frostGatherSec: 0.6,      // 모으기 — 그동안 무적
-  frostFreezeSec: 0.6,      // 서리 막이 바닥에서 화면 위까지 번지는 시간 — 막이 지나간 일반 똥이 얼어 그 자리에 멈춤
+  frostFillSec: 0.35,       // 서리 안개가 화면 전체에 차오르는 시간 — 다 차는 순간 화면의 일반 똥이 한꺼번에 얼어 멈춤 (무적은 이때까지)
+  frostFreezeSec: 0.6,      // 얼어 멈춘 뒤 금이 가기까지 (멈춤 합계 = freeze + crack = 1.0초)
   frostCrackSec: 0.4,       // 다 얼고 금이 간 채 멈춰 있는 시간 (멈춤 합계 = freeze + crack)
   frostMax: 25,             // 한 번에 얼리는 상한 (일반 똥만)
   frostPoints: 100,         // 깨진 똥 개당 점수
