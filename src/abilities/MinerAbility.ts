@@ -26,6 +26,14 @@ import { StagedLoader } from './stagedLoader';
  * 타이머는 씬 시계 (히트스톱 · 일시정지와 같이 멈춤) · onDestroy 에서 정리. 점수는 awardBonus(→ addAbilityBonus → updateScore)
  */
 export class MinerAbility extends BaseAbility {
+  /** 대발파 비로 뿌린 특수 똥의 abilityTag (v6 M′) — 광부만 쓰는 판이라 다른 능력의 표시와 겹치지 않는다 */
+  private static readonly RAIN_TAG = 1;
+
+  /** 비로 뿌린 특수 똥이면 그 수집 점수는 자기 보너스 — 대발파 플레이 점수 카운터를 안 채운다. 하늘에서 온 특수 똥은 그대로 센다 */
+  override isSelfBonusPoop(poop: Phaser.GameObjects.GameObject): boolean {
+    return (poop as PoolablePoopBase).abilityTag === MinerAbility.RAIN_TAG;
+  }
+
   /** 게임 시계 (delta × timeScale) — 작은 발파 주기. scene.time.now 는 히트스톱 동안에도 흐른다 */
   private gameMs = 0;
   private lastSmallAt = 0;
@@ -239,6 +247,9 @@ export class MinerAbility extends BaseAbility {
     else api.spawnRainbowPoop();
     const p = group.getChildren().find(o => o.active && !before.has(o)) as PoolablePoopBase | undefined;
     if (!p) return;
+    // 비로 뿌린 표시 — 주우면 GameScene 이 isSelfBonusPoop 로 보고 자기 보너스로 준다 (대발파 카운터에 안 셈).
+    // 회수 · 재사용 때 PoolablePoopBase 가 0 으로 지운다
+    p.abilityTag = MinerAbility.RAIN_TAG;
     const body = p.body as Phaser.Physics.Arcade.Body;
     const vy = body.velocity.y * MINER_PARAMS.rainSpeed;
     body.reset(x, y);

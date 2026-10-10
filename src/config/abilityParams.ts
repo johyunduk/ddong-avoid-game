@@ -31,7 +31,7 @@ export const MINER_PARAMS = {
   smallFuseSec: 0.35,       // 던지고 터지기까지
   smallRadius: 110,         // 폭발 반경
   smallMax: 5,              // 한 번에 지우는 상한 (화면 안 일반 똥만)
-  smallPoints: 105,         // 개당 점수
+  smallPoints: 185,         // 개당 점수. 105 → 185 (v6 M′)
   smallScale: 0.45,         // 연기 크기 (폭발 시트 기준 배율)
   // 필살 「대발파」
   bigInterval: 2000,        // 플레이 점수(자기 보너스 제외) 이만큼마다

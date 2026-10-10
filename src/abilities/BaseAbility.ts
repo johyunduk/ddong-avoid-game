@@ -45,6 +45,8 @@ export class BaseAbility implements CharacterAbility {
   getSpawnIntervals() { return { gold: 40, diamond: 100, topaz: 180 }; }
   onScoreMilestone(_score: number, _api: GameSceneAPI): void {}
   onCollectSpecial(_type: SpecialPoopType): number { return 0; }
+  isSelfBonusPoop(_poop: Phaser.GameObjects.GameObject): boolean { return false; }
+  awardSelfBonus(api: GameSceneAPI, amount: number): void { this.awardBonus(api, amount); }
   specialPoopSpeedReduction(_type: 'gold' | 'diamond'): number { return 0; }
   isSpawnBlocked(): boolean { return false; }
   getSpawnCountReduction(): number { return 0; }
