@@ -2,10 +2,12 @@
 -- 실행: Supabase Dashboard > SQL Editor에 붙여넣기
 -- 앞에 적용돼 있어야 하는 것: 20261011000003 (극한 캐릭터 점수 클라이언트 쓰기 차단 — 지난달 순위가 굳어 있어야 한다)
 --                            20261011000005 (season_reward_history_char 표 정의)
+--                            20261011000006 (잔액 원자적 가감 skor_credit — 지급이 이걸로 더한다)
+-- 스케줄(pg_cron)은 여기서 켜지 않는다 — Edge Function 배포 뒤 20261011000008 에서
 --
 -- 그전에는 다음 달에 랭킹 → EXTREME → 바로 그 캐릭터를 골라야만 '캐릭터 보상' 버튼이 보였고, 직전 달만 받을 수 있었다.
 -- 2026-05~09 대상 73칸이 한 번도 수령되지 않았다 (pg_stat_statements 로 서버 수령 분기가 0회였음을 확인, 2026-10-11).
--- 이제 달이 바뀌면 pg_cron 이 직전 달 캐릭터별 1~3위에게 지급하고, 다음 접속 때 클라이언트가 '보상 도착'을 띄운다.
+-- 이제 달이 바뀌면 pg_cron(000008)이 직전 달 캐릭터별 1~3위에게 지급하고, 다음 접속 때 클라이언트가 '보상 도착'을 띄운다.
 --
 -- 수령 버튼 경로(claim-season-reward { characterType })와 랭킹 표시(leaderboard-top)도 아래 함수를 쓴다
 -- — 자격 기준 · 금액이 이 파일의 설정 한 곳에서 나오고, cron 이 늦으면 버튼이 같은 지급을 대신한다.
@@ -55,7 +57,7 @@ $$;
 
 -- 4. 지급 — 대상에게 기록을 넣고, 새로 넣은 몫만 잔액에 더한다.
 --    UNIQUE (year_month, user_id, character_type) 로 두 번 돌아도(cron 재시도 · 버튼 경로와 겹침) 한 번만 지급된다.
---    잔액 · 주간 집계는 claim-season-reward 의 updateUserSkor 와 같게 (내림 · 월요일 시작 UTC 주)
+--    잔액은 skor_credit(…, true) 로 더한다 — 다른 쓰기와 겹쳐도 덮이지 않고, 셈은 updateUserSkor 와 같다 (000006)
 CREATE OR REPLACE FUNCTION public.grant_char_season_rewards(p_year_month TEXT DEFAULT NULL)
 RETURNS INTEGER
 LANGUAGE plpgsql
@@ -65,8 +67,8 @@ AS $$
 DECLARE
   v_now TIMESTAMP := now() AT TIME ZONE 'UTC';
   v_ym TEXT := coalesce(p_year_month, to_char(v_now - INTERVAL '1 month', 'YYYY-MM'));
-  v_week DATE := date_trunc('week', v_now)::DATE;
-  v_granted INTEGER;
+  v_users UUID[];
+  v_amounts NUMERIC[];
 BEGIN
   IF v_ym !~ '^[0-9]{4}-[0-9]{2}$' THEN
     RAISE EXCEPTION 'bad year_month: %', v_ym;
@@ -76,33 +78,22 @@ BEGIN
     RAISE EXCEPTION 'season % is not over yet', v_ym;
   END IF;
 
+  -- 새로 들어간 기록만 돌려받는다 (이미 있던 것은 ON CONFLICT 로 빠진다)
   WITH granted AS (
     INSERT INTO public.season_reward_history_char (year_month, user_id, character_type, rank, skor_awarded)
     SELECT v_ym, w.user_id, w.character_type, w.rank, w.skor_awarded
     FROM public.char_season_winners(v_ym) w
     ON CONFLICT (year_month, user_id, character_type) DO NOTHING
     RETURNING user_id, skor_awarded
-  ), per_user AS (
-    SELECT g.user_id, sum(g.skor_awarded) AS total, count(*) AS n
-    FROM granted g GROUP BY g.user_id
-  ), credited AS (
-    INSERT INTO public.user_skor AS us (user_id, balance, weekly_earned, week_start, updated_at)
-    SELECT p.user_id, floor(p.total), floor(p.total), v_week, now()
-    FROM per_user p
-    ON CONFLICT (user_id) DO UPDATE SET
-      balance       = floor(us.balance + EXCLUDED.balance),
-      weekly_earned = CASE WHEN us.week_start = EXCLUDED.week_start
-                           THEN floor(coalesce(us.weekly_earned, 0) + EXCLUDED.weekly_earned)
-                           ELSE EXCLUDED.weekly_earned END,
-      week_start    = EXCLUDED.week_start,
-      updated_at    = EXCLUDED.updated_at
-    RETURNING 1
   )
-  SELECT coalesce((SELECT sum(p.n) FROM per_user p), 0)::INTEGER
-  INTO v_granted
-  FROM (SELECT count(*) FROM credited) c;
+  SELECT array_agg(g.user_id), array_agg(g.skor_awarded) INTO v_users, v_amounts FROM granted g;
 
-  RETURN v_granted;
+  -- 같은 트랜잭션에서 잔액에 더한다 — 여기서 실패하면 기록도 함께 되돌아간다
+  FOR i IN 1 .. coalesce(array_length(v_users, 1), 0) LOOP
+    PERFORM public.skor_credit(v_users[i], v_amounts[i], true);
+  END LOOP;
+
+  RETURN coalesce(array_length(v_users, 1), 0);
 END;
 $$;
 
@@ -167,8 +158,3 @@ REVOKE EXECUTE ON FUNCTION public.get_season_reward_notices() FROM PUBLIC, anon;
 REVOKE EXECUTE ON FUNCTION public.ack_season_reward_notices(UUID[]) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.get_season_reward_notices() TO authenticated;
 GRANT EXECUTE ON FUNCTION public.ack_season_reward_notices(UUID[]) TO authenticated;
-
--- 7. 스케줄 — 매달 1일(UTC) 매시 5분에 직전 달을 지급한다.
---    지급이 멱등이라 24번 돌아도 한 번만 들어가고, 그날 한 번이라도 성공하면 된다. 하루 내내 실패하면 수령 버튼이 대신한다
-CREATE EXTENSION IF NOT EXISTS pg_cron;
-SELECT cron.schedule('grant-char-season-rewards', '5 * 1 * *', 'SELECT public.grant_char_season_rewards()');

@@ -127,30 +127,18 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // ── 3. 잔액 조회 및 합산 ────────────────────────────────────────
-    const { data: existingSkor } = await supabaseAdmin
-      .from('user_skor')
-      .select('*')
-      .eq('user_id', user.id)
-      .single();
-
-    const now = new Date();
-
+    // ── 3. 잔액에 더하기 ────────────────────────────────────────────
+    // 한 문장 가산 (DB skor_credit, 20261011000006) — 읽고 절대값을 쓰면 같은 때의 뽑기 · 시즌 지급이 덮였다.
+    // 셈은 전과 같다: 잔액 · 주간 집계 모두 내림해 더하고, week_start 는 비어 있을 때만 채운다
     const totalSkorAdded = gameSkor + questSkor;
 
-    const currentBalance = existingSkor?.balance ?? 0;
-    const newBalance = currentBalance + totalSkorAdded;
-
-    // ── 4. DB 업데이트 ──────────────────────────────────────────────
-    await supabaseAdmin
-      .from('user_skor')
-      .upsert({
-        user_id: user.id,
-        balance: Math.floor(newBalance),
-        weekly_earned: Math.floor((existingSkor?.weekly_earned ?? 0) + totalSkorAdded),
-        week_start: existingSkor?.week_start ?? getWeekStart(now),
-        updated_at: now.toISOString(),
-      }, { onConflict: 'user_id' });
+    const { data: creditedBalance, error: creditError } = await supabaseAdmin.rpc('skor_credit', {
+      p_user_id: user.id, p_amount: totalSkorAdded, p_reset_week: false,
+    });
+    if (creditError) {
+      console.error('skor_credit 실패:', creditError);
+    }
+    const newBalance = Number(creditedBalance ?? 0);
 
     await supabaseAdmin
       .from('quest_progress')
@@ -178,11 +166,3 @@ Deno.serve(async (req: Request) => {
   }
 });
 
-// 해당 날짜가 속한 주의 월요일(YYYY-MM-DD) 반환
-function getWeekStart(date: Date): string {
-  const d = new Date(date);
-  const day = d.getDay(); // 0=일, 1=월 ... 6=토
-  const diff = (day === 0 ? -6 : 1 - day); // 월요일로 이동
-  d.setDate(d.getDate() + diff);
-  return d.toISOString().split('T')[0];
-}

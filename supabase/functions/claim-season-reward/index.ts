@@ -42,41 +42,24 @@ function getPrevYearMonth(current: string): string {
   return `${prev.getUTCFullYear()}-${String(prev.getUTCMonth() + 1).padStart(2, '0')}`;
 }
 
-/** user_skor 잔액 + 주간 집계 업데이트 (캐릭터/난이도 보상 공통) */
+/**
+ * user_skor 잔액 + 주간 집계 업데이트 (난이도 보상 — 캐릭터 보상은 DB grant_char_season_rewards 가 같은 함수로 더한다)
+ * 한 문장 가산 (DB skor_credit, 20261011000006) — 읽고 절대값을 쓰면 같은 때의 정산 · 뽑기 · 시즌 지급이 덮였다.
+ * 셈은 전과 같다: 내림해 더하고, 주간 집계는 같은 UTC 주(월요일 시작)면 더하고 아니면 보상액으로 새로 시작한다
+ */
 async function updateUserSkor(
   // deno-lint-ignore no-explicit-any
   supabaseAdmin: any,
   userId: string,
   reward: number
 ): Promise<number> {
-  const { data: existingSkor } = await supabaseAdmin
-    .from('user_skor')
-    .select('balance, weekly_earned, week_start')
-    .eq('user_id', userId)
-    .single();
-
-  const newBalance = Math.floor((existingSkor?.balance ?? 0) + reward);
-  const now = new Date();
-  const dayOfWeek = now.getUTCDay();
-  const daysFromMonday = (dayOfWeek + 6) % 7;
-  const weekStart = new Date(Date.UTC(
-    now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - daysFromMonday
-  ));
-  const weekStartStr = weekStart.toISOString().slice(0, 10);
-  const isSameWeek = existingSkor?.week_start === weekStartStr;
-  const newWeeklyEarned = isSameWeek
-    ? Math.floor((existingSkor?.weekly_earned ?? 0) + reward)
-    : Math.floor(reward);
-
-  await supabaseAdmin.from('user_skor').upsert({
-    user_id: userId,
-    balance: newBalance,
-    weekly_earned: newWeeklyEarned,
-    week_start: weekStartStr,
-    updated_at: new Date().toISOString(),
-  }, { onConflict: 'user_id' });
-
-  return newBalance;
+  const { data, error } = await supabaseAdmin.rpc('skor_credit', {
+    p_user_id: userId, p_amount: reward, p_reset_week: true,
+  });
+  if (error) {
+    console.error('skor_credit 실패:', error);
+  }
+  return Number(data ?? 0);
 }
 
 Deno.serve(async (req: Request) => {

@@ -182,8 +182,28 @@ Deno.serve(async (req: Request) => {
       dupCountMap.set(c.id, (dupCountMap.get(c.id) ?? 0) + 1);
     });
 
-    const newBalance = balance - cost;
-    const [charResult, , wpResult, skorResult] = await Promise.all([
+    // SKOR 차감 — 아이템을 쓰기 전에, 한 문장으로 (DB skor_spend, 20261011000006).
+    // 위 잔액 조회는 빠른 거절용이다. 그사이 다른 뽑기 · 정산 · 시즌 지급이 잔액을 바꿔도 여기서 덮지 않고,
+    // 두 탭에서 동시에 뽑아도 비용이 각각 빠진다 (그전에는 읽은 값에서 뺀 절대값을 써서 한 번만 빠질 수 있었다)
+    const { data: spentBalance, error: spendError } = await supabaseAdmin.rpc('skor_spend', {
+      p_user_id: user.id, p_cost: cost,
+    });
+    if (spendError) {
+      console.error('skor_spend 실패:', spendError);
+      return new Response(
+        JSON.stringify({ error: 'Failed to spend SKOR' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    if (spentBalance === null) {
+      return new Response(
+        JSON.stringify({ error: 'Insufficient SKOR', balance }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    const newBalance = Number(spentBalance);
+
+    const [charResult, , wpResult] = await Promise.all([
       newChars.length > 0
         ? supabaseAdmin.from('user_characters').upsert(newChars, { onConflict: 'user_id,character_id' })
         : Promise.resolve({ error: null }),
@@ -201,10 +221,6 @@ Deno.serve(async (req: Request) => {
       newWps.length > 0
         ? supabaseAdmin.from('user_wallpapers').upsert(newWps, { onConflict: 'user_id,wallpaper_id' })
         : Promise.resolve({ error: null }),
-      supabaseAdmin.from('user_skor').upsert(
-        { user_id: user.id, balance: newBalance, updated_at: new Date().toISOString() },
-        { onConflict: 'user_id' }
-      ),
     ]);
 
     if (charResult && 'error' in charResult && charResult.error) {
@@ -220,9 +236,6 @@ Deno.serve(async (req: Request) => {
         JSON.stringify({ error: 'Failed to save wallpapers', detail: wpResult.error }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
-    }
-    if (skorResult && 'error' in skorResult && skorResult.error) {
-      console.error('user_skor upsert 실패:', skorResult.error);
     }
 
     // ── 6. 응답 ───────────────────────────────────────────────────────
