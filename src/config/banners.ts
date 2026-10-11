@@ -104,10 +104,19 @@ export const DEFAULT_CHARACTER_ID = 'chibi';
 export const PULL_COUNT: Readonly<Record<PullType, number>> = { single: 1, multi: 10 };
 
 /**
- * 배너 목록. **화면의 넘기기 순서가 이 배열 순서다** (상시 · 구미 픽업 · 무기 픽업 · 이벤트 — 정의서 v2 §5).
+ * 배너 목록. **화면의 넘기기 순서가 이 배열 순서다** (이벤트 · 상시 · 구미 픽업 · 무기 픽업 — 대표 결정 2026-10-11,
+ * 정의서 v2 §5 의 상시 먼저를 바꿨다). 화면은 들어올 때마다 열린 것 중 첫 배너를 연다 — 이벤트가 닫히면 상시가 첫 배너다.
  * id 는 서버 요청 · 로그 · 천장 줄에 그대로 남는다 — 바꾸지 않는다
  */
 export const BANNERS: readonly BannerDef[] = [
+  {
+    id: 'event_trio', kind: 'event',
+    pickupUR: null, pickupSR: ['ted', 'heidi', 'red'], pickupWP: ['wp_ted', 'wp_heidi', 'wp_red'],
+    pity: { track: 'event_trio', threshold: 100, exchange: 'chooseSR' },
+    price: { single: 100, multi: 900 },
+    starter: null,
+    opensAt: null, closesAt: null,
+  },
   {
     id: 'standard', kind: 'standard',
     pickupUR: null, pickupSR: [], pickupWP: [],
@@ -128,14 +137,6 @@ export const BANNERS: readonly BannerDef[] = [
     id: 'pickup_mugi', kind: 'pickup',
     pickupUR: 'mugi', pickupSR: ['k', 'maehwa'], pickupWP: ['wp_k', 'wp_maehwa'],
     pity: { track: 'pickup_mugi', threshold: 200, exchange: 'pickupUR' },
-    price: { single: 100, multi: 900 },
-    starter: null,
-    opensAt: null, closesAt: null,
-  },
-  {
-    id: 'event_trio', kind: 'event',
-    pickupUR: null, pickupSR: ['ted', 'heidi', 'red'], pickupWP: ['wp_ted', 'wp_heidi', 'wp_red'],
-    pity: { track: 'event_trio', threshold: 100, exchange: 'chooseSR' },
     price: { single: 100, multi: 900 },
     starter: null,
     opensAt: null, closesAt: null,

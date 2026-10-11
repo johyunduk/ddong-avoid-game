@@ -337,7 +337,7 @@ export async function fetchGachaState(): Promise<GachaState | null> {
 }
 
 /**
- * 넘기기에 보일 배너 — BANNERS 순서 그대로(상시 · 구미 · 무기 · 이벤트), 열린 것만.
+ * 넘기기에 보일 배너 — BANNERS 순서 그대로, 열린 것만. 화면은 들어올 때마다 이 첫 배너를 연다.
  * v2 에서 초보자 배너가 없어져 상태는 보지 않는다 (인자는 v1 호환으로 남겼다). 초보자 줄은 starterWindowOf
  */
 export function visibleBanners(_state?: GachaState | null, nowMs: number = Date.now()): BannerDef[] {
