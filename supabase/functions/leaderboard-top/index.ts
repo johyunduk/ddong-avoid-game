@@ -133,24 +133,18 @@ Deno.serve(async (req: Request) => {
       } | null = null;
 
       if (currentUserId && isCurrentSeason) {
-        const [prevRankResult, claimResult] = await Promise.all([
-          supabaseAdmin.rpc('get_extreme_char_leaderboard_with_rank', {
-            p_year_month: prevYearMonth, p_character_type: characterType,
-            p_limit: 0, p_user_id: currentUserId,
-          }),
-          supabaseAdmin.from('season_reward_history_char').select('id')
-            .eq('user_id', currentUserId).eq('year_month', prevYearMonth)
-            .eq('character_type', characterType).single(),
-        ]);
-
-        const prevMyRow = (prevRankResult.data ?? []).find((r: { is_mine: boolean }) => r.is_mine);
-        if (prevMyRow) {
-          const CHAR_REWARDS: Record<number, number> = { 1: 5000, 2: 3000, 3: 1500 };
+        // 직전 달 내 캐릭터 보상 — 받음 / 받을 몫(월초 자동 지급 전) / 없음(행 없음 = 대상 아님).
+        // 자격 기준 · 금액은 DB 설정 한 곳 (char_season_reward_settings, 20261011000006) — 여기 베끼지 않는다
+        const { data: statusRows } = await supabaseAdmin.rpc('get_char_season_reward_status', {
+          p_year_month: prevYearMonth, p_character_type: characterType, p_user_id: currentUserId,
+        });
+        const status = (statusRows ?? [])[0] as { rank: number; skor_awarded: number; claimed: boolean } | undefined;
+        if (status) {
           charPrevSeasonReward = {
             yearMonth: prevYearMonth,
-            rank: prevMyRow.rank,
-            skorAwarded: CHAR_REWARDS[prevMyRow.rank] ?? 0,
-            alreadyClaimed: !!claimResult.data,
+            rank: status.rank,
+            skorAwarded: Number(status.skor_awarded),
+            alreadyClaimed: status.claimed,
           };
         }
       }

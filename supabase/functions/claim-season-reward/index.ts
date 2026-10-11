@@ -79,8 +79,6 @@ async function updateUserSkor(
   return newBalance;
 }
 
-const CHAR_REWARDS: Record<number, number> = { 1: 5000, 2: 3000, 3: 1500 };
-
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -119,16 +117,20 @@ Deno.serve(async (req: Request) => {
     const currentYearMonth = getCurrentYearMonth();
     const prevYearMonth = getPrevYearMonth(currentYearMonth);
 
-    // ── 캐릭터별 보상 수령 ─────────────────────────────────────────────────
+    // ── 캐릭터별 보상 ─────────────────────────────────────────────────────
+    // 지급은 월초 자동이다 — DB grant_char_season_rewards 를 pg_cron 이 매달 1일에 돌린다 (20261011000006).
+    // 이 경로는 '캐릭터 보상' 버튼(구 클라이언트 포함)과 cron 이 아직 안 돈 때를 위해 남긴다.
+    // 같은 지급 함수를 부르므로 자격 기준 · 금액이 같고, UNIQUE 로 두 번 지급되지 않는다.
     if (characterType) {
-      const { data: existingCharReward } = await supabaseAdmin
+      const myCharReward = () => supabaseAdmin
         .from('season_reward_history_char')
-        .select('skor_awarded, rank')
+        .select('id, rank, skor_awarded')
         .eq('year_month', prevYearMonth)
         .eq('user_id', user.id)
         .eq('character_type', characterType)
-        .single();
+        .maybeSingle();
 
+      const { data: existingCharReward } = await myCharReward();
       if (existingCharReward) {
         return new Response(
           JSON.stringify({
@@ -139,55 +141,39 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      const { data: userPrevEntry } = await supabaseAdmin
-        .from('leaderboard_extreme_char')
-        .select('score')
-        .eq('user_id', user.id).eq('year_month', prevYearMonth)
-        .eq('character_type', characterType).single();
-
-      if (!userPrevEntry) {
-        return new Response(
-          JSON.stringify({ success: true, alreadyClaimed: false, rank: null, skorAwarded: 0 }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
-      const { count: above } = await supabaseAdmin
-        .from('leaderboard_extreme_char')
-        .select('*', { count: 'exact', head: true })
-        .eq('year_month', prevYearMonth).eq('character_type', characterType)
-        .gt('score', userPrevEntry.score);
-
-      const rank = (above ?? 0) + 1;
-      const reward = CHAR_REWARDS[rank] ?? 0;
-
-      if (reward === 0) {
-        return new Response(
-          JSON.stringify({ success: true, alreadyClaimed: false, rank, skorAwarded: 0 }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
-      const { error: charHistoryError } = await supabaseAdmin
-        .from('season_reward_history_char')
-        .insert({ year_month: prevYearMonth, user_id: user.id, character_type: characterType, rank, skor_awarded: reward });
-
-      if (charHistoryError) {
-        if (charHistoryError.code === '23505') {
-          return new Response(
-            JSON.stringify({ success: true, alreadyClaimed: true, rank, skorAwarded: reward }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
+      // 직전 달 전체를 지급한다 (멱등) — 이 유저가 대상이면 여기서 기록 · 잔액이 들어간다
+      const { error: grantError } = await supabaseAdmin
+        .rpc('grant_char_season_rewards', { p_year_month: prevYearMonth });
+      if (grantError) {
+        console.error('grant_char_season_rewards error:', grantError);
         return new Response(
           JSON.stringify({ error: 'Failed to record reward' }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
-      const newBalance = await updateUserSkor(supabaseAdmin, user.id, reward);
+      const { data: granted } = await myCharReward();
+      if (!granted) {
+        return new Response(
+          JSON.stringify({ success: true, alreadyClaimed: false, rank: null, skorAwarded: 0 }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // 버튼으로 받은 몫은 그 자리에서 '+N SKOR' 를 띄우므로 다음 접속의 '보상 도착' 알림에서 뺀다
+      await supabaseAdmin
+        .from('season_reward_history_char')
+        .update({ notified_at: new Date().toISOString() })
+        .eq('id', granted.id)
+        .is('notified_at', null);
+
+      const { data: skorRow } = await supabaseAdmin
+        .from('user_skor').select('balance').eq('user_id', user.id).maybeSingle();
       return new Response(
-        JSON.stringify({ success: true, alreadyClaimed: false, rank, skorAwarded: reward, newBalance }),
+        JSON.stringify({
+          success: true, alreadyClaimed: false,
+          rank: granted.rank, skorAwarded: granted.skor_awarded, newBalance: skorRow?.balance ?? null,
+        }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
