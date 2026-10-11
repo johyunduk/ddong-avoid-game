@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import {
   gachaPull, gachaExchange, syncOwnedCharacters, syncOwnedWallpapers, formatRate, GachaError,
   fetchGachaState, getCachedGachaState, visibleBanners, ratesOf, exchangeChoicesOf, standardGachaPool,
+  starterWindowOf, pullPriceOf, multiDiscountOf,
   type GachaState, type GachaStarterState, type PulledCharacter, type PulledWallpaper, type PullGuarantee,
 } from '../utils/gacha';
 import {
@@ -44,7 +45,7 @@ const SLIDE_MS = 3000;
 /** 마지막에 보던 배너 — 기기에 기억한다 */
 const TAB_KEY = 'ddong_gacha_tab';
 /**
- * 초보자 50번째 보장으로 골라 둔 UR (토글 값). 서버에는 다음 초보자 뽑기의 starterPick 으로 저장된다 (§3 · §6-2).
+ * 초보자 50번째 보장으로 골라 둔 UR (상시 초보자 줄의 얼굴 토글). 서버에는 다음 상시 10연의 starterPick 으로 저장된다 (v2 §3 · §6-2).
  * 뽑기 전에 화면을 나가도 고른 값이 남게 기기에 적어 둔다
  */
 const STARTER_PICK_KEY = 'ddong_gacha_starter_pick';
@@ -90,7 +91,6 @@ const EXCHANGE_TAG = '교환';
 const LOBBY = {
   faces: 268, pity: 236, pityCaption: 216, rates: 192, name: 160,
   pull: 98, pullH: 76, dots: 47, foot1: 30, foot2: 12,
-  starterBadge: 270, starterLine: 238, starterNote: 206, starterToggle: 174,
   bodyTop: 72, bodyBottom: 290, arrowY: 0.38,
 } as const;
 
@@ -118,22 +118,22 @@ function objectJosa(word: string): string {
 
 /** 탭 이름 — 픽업은 픽업 UR 이름에서 */
 function bannerTitle(b: BannerDef): string {
-  switch (b.kind) {
-    case 'starter': return '초보자';
-    case 'standard': return '상시';
-    case 'pickup': return b.pickupUR ? `${nameOf(b.pickupUR)} 픽업` : '픽업';
-    case 'event': return '이벤트';
-  }
+  if (b.kind === 'pickup') return b.pickupUR ? `${nameOf(b.pickupUR)} 픽업` : '픽업';
+  if (b.kind === 'event') return '이벤트';
+  return '상시';
 }
 
 /** 뽑기 버튼 위 큰 배너 이름 */
 function bannerHeadline(b: BannerDef): string {
-  switch (b.kind) {
-    case 'starter': return '초보자 뽑기';
-    case 'standard': return '상시 뽑기';
-    case 'pickup': return bannerTitle(b);
-    case 'event': return '이벤트 픽업';
-  }
+  if (b.kind === 'pickup') return bannerTitle(b);
+  if (b.kind === 'event') return '이벤트 픽업';
+  return '상시 뽑기';
+}
+
+/** 주격 · 보조 조사 '은/는' — 끝 글자에 받침이 있으면 '은' (한글이 아니면 '는') */
+function topicJosa(word: string): string {
+  const c = word.charCodeAt(word.length - 1);
+  return c >= 0xac00 && c <= 0xd7a3 && (c - 0xac00) % 28 !== 0 ? '은' : '는';
 }
 
 /** 천장 막대 아래 글 (§5 표) */
@@ -142,7 +142,7 @@ function pityCaption(b: BannerDef): string {
   if (!p) return '';
   switch (p.exchange) {
     case 'pickupUR': return `${p.threshold}이면 ${b.pickupUR ? nameOf(b.pickupUR) : '픽업 UR'} 교환`;
-    case 'chooseUR': return `${p.threshold}이면 상시 UR 중 1명 선택`;
+    case 'chooseUR': return `${p.threshold}이면 ${exchangeChoicesOf(b).map(nameOf).join(' · ')} 중 선택`;
     case 'chooseSR': return `${p.threshold}이면 ${exchangeChoicesOf(b).map(nameOf).join(' · ')} 중 1명 선택`;
   }
 }
@@ -236,7 +236,6 @@ export default class GachaScene extends BaseScene {
   private slideshowIsA = true; // true → bgA가 현재 레이어
   private slideshowBgA: Phaser.GameObjects.Image | null = null;
   private slideshowBgB: Phaser.GameObjects.Image | null = null;
-  private slideshowRateText: Phaser.GameObjects.Text | null = null;
   private slideshowActive = false;
   private slideTimer: Phaser.Time.TimerEvent | null = null;
   /** 얼굴 줄 (상시 = 진열 얼굴, 픽업 = 함께 픽업 SR) */
@@ -344,7 +343,7 @@ export default class GachaScene extends BaseScene {
     const W = this.scale.width;
     const H = this.scale.height;
     const cx = W / 2;
-    const showcase = banner.kind === 'standard' || banner.kind === 'starter';
+    const showcase = banner.kind === 'standard';
 
     // ── 본문 뒤 — 상시 · 초보자 = 진열 일러스트, 픽업 = 픽업 UR 일러스트, 이벤트 = 셋 일러스트 세 줄기 ──
     if (showcase) this.buildShowcase();
@@ -365,11 +364,8 @@ export default class GachaScene extends BaseScene {
     if (banner.kind === 'event') this.buildEventNames(banner);
 
     // ── 정보 · 천장 · 뽑기 버튼 · 페이지 점 · 확률 줄 ──
-    if (banner.kind === 'starter') this.buildStarterInfo(banner);
-    else {
-      this.buildInfo(banner);
-      this.buildPity(banner);
-    }
+    this.buildInfo(banner);
+    this.buildPity(banner);
     this.buildPullButtons(banner);
     this.buildDots(visible, banner);
     this.buildRateFooter();
@@ -381,7 +377,6 @@ export default class GachaScene extends BaseScene {
     for (const nb of [visible[i - 1], visible[i + 1]]) if (nb?.kind === 'event') this.prepareEventStrips(nb);
 
     if (showcase) {
-      this.updateSlideshowText(this.featured[0]);
       // ── 슬라이드쇼 타이머 (자동 전환) ──
       this.slideshowActive = true;
       this.restartSlideTimer();
@@ -390,11 +385,17 @@ export default class GachaScene extends BaseScene {
     if (refresh) void this.refreshLobby();
   }
 
-  /** 그릴 배너 — 사람이 고른(넘긴) 배너가 보이면 그것, 아니면 초보자가 남았으면 초보자, 아니면 상시 (§5) */
+  /**
+   * 그릴 배너 — 사람이 고른(넘긴) 배너가 보이면 그것 (없어진 id 는 getBanner 가 BANNER_ALIASES 로 옮긴다 — 예전 초보자 배너 → 상시).
+   * 기억이 없으면 초보자 구간이 남았을 때 상시, 아니면 첫 픽업 (정의서 v2 §5). 상태를 아직 모르면(처음 오는 사람) 상시
+   */
   private pickBanner(visible: BannerDef[]): BannerDef {
-    return visible.find(b => b.id === this.chosenTab)
-      ?? visible.find(b => b.kind === 'starter')
-      ?? visible.find(b => b.id === DEFAULT_BANNER_ID)
+    const want = this.chosenTab ? getBanner(this.chosenTab)?.id : undefined;
+    const standard = visible.find(b => b.id === DEFAULT_BANNER_ID);
+    const starterLeft = !this.gstate || (!!standard && starterWindowOf(standard, this.gstate) !== null);
+    return visible.find(b => b.id === want)
+      ?? (starterLeft ? standard : visible.find(b => b.kind === 'pickup'))
+      ?? standard
       ?? visible[0]
       ?? getBanner(DEFAULT_BANNER_ID)
       ?? BANNERS[0];
@@ -683,6 +684,9 @@ export default class GachaScene extends BaseScene {
         box.add(this.add.graphics().fillStyle(0xff5a3a).fillCircle(dx, -29, 4).lineStyle(1.2, 0xffffff).strokeCircle(dx, -29, 4));
       }
       wireButton(this, box, 28, 64, () => this.stepBanner(dir), true);
+      // 눌리는 폭 44 를 화면 안에서 다 받게 안쪽으로 민다 — 판(28)이 가장자리에 붙어 있어 가운데로 넓히면
+      // 5px 이 화면 밖으로 나가 실제로는 39px 였다 (리뷰 2335cf00 P3). 히트 영역은 판 왼쪽 위 기준
+      box.input?.hitArea.setTo(dir < 0 ? -3 : 28 + 3 - 44, 0, 44, 64);
     }
 
     // 좌우 밀기 — 본문(위 막대 아래 ~ 얼굴 줄 위)에서, 눌리는 것이 없는 자리에서 시작한 끌기만 본다
@@ -820,34 +824,12 @@ export default class GachaScene extends BaseScene {
     // 상태 + 텍스트를 일러스트 전환 시작과 동시에 즉시 교체
     this.slideshowIsA = !this.slideshowIsA;
     this.slideshowIndex = index;
-    this.updateSlideshowText(nextDef);
     this.refreshFaces();
     if (byUser) this.restartSlideTimer();
 
     // crossfade: 현재 fade-out, 다음 fade-in
     this.tweens.add({ targets: current,  alpha: 0, duration: 600, ease: 'Sine.easeInOut' });
     this.tweens.add({ targets: incoming, alpha: 1, duration: 600, ease: 'Sine.easeInOut' });
-  }
-
-  /** 상시 — 슬라이드의 캐릭터 이름 · 한 칸 확률 (큰 이름은 배너 이름이다. 초보자는 이 줄이 없어 그림만 넘어간다) */
-  private updateSlideshowText(def: CharacterDef) {
-    const rates = this.lobbyRates;
-    if (this.slideshowRateText?.active && rates) {
-      const each = rates.entries.find(e => e.kind === 'character' && e.id === def.id)?.rate.slot ?? 0;
-      const total = (rates.byGrade as Partial<Record<string, RateCell>>)[def.grade]?.slot ?? 0;
-      this.slideshowRateText.setText(`${def.name} ${formatRate(each)}%  ·  ${def.grade} 전체 ${formatRate(total)}%`);
-    }
-  }
-
-  /** 빨간 배지 (픽업 · 이벤트 픽업 · 초보자 전용) — x 는 왼쪽 끝 */
-  private badge(x: number, y: number, label: string) {
-    const t = this.add.text(0, y, label, { fontSize: '12px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5);
-    const w = Math.ceil(t.width) + 26;
-    t.setX(x + w / 2);
-    const g = this.add.graphics();
-    g.fillStyle(0xe8261a).fillRoundedRect(x, y - 12, w, 24, 12);
-    g.lineStyle(1.5, 0x5a0a00).strokeRoundedRect(x, y - 12, w, 24, 12);
-    this.children.bringToTop(t);
   }
 
   /** [확률 보기] — 그 배너의 전체 확률표 창 */
@@ -899,16 +881,19 @@ export default class GachaScene extends BaseScene {
 
   /**
    * 상시 · 픽업 · 이벤트 정보 (니케식) — 얼굴 줄, 한 칸 확률 한 줄 + [확률 보기], 뽑기 버튼 바로 위 큰 배너 이름.
-   * 천장은 buildPity (얼굴 줄과 확률 줄 사이)
+   * 천장은 buildPity (얼굴 줄과 확률 줄 사이). 상시는 초보자 구간이 남았으면 얼굴 줄 자리에 초보자 줄 (v2 §5)
    */
   private buildInfo(b: BannerDef) {
     const W = this.scale.width, H = this.scale.height;
-    if (b.kind !== 'event') this.buildFaceRow(b);
+    if (b.kind !== 'event') {
+      const st = starterWindowOf(b, this.gstate);
+      if (st) this.buildStarterRow(b, st);
+      else this.buildFaceRow(b);
+    }
 
-    const rateText = this.add.text(20, H - LOBBY.rates, this.infoRateLine(b), {
+    this.add.text(20, H - LOBBY.rates, this.infoRateLine(b), {
       fontSize: '12px', color: '#ffe58a', fontStyle: 'bold', stroke: '#000000', strokeThickness: 4,
     }).setOrigin(0, 0.5);
-    if (b.kind === 'standard') this.slideshowRateText = rateText;
     this.ratesButton(W - 16 - 42, H - LOBBY.rates, b);
 
     // 큰 배너 이름 — 픽업은 픽업 UR 등급 그림을 앞에
@@ -924,16 +909,17 @@ export default class GachaScene extends BaseScene {
     }).setOrigin(0, 0.5);
   }
 
-  /** 정보 블록의 확률 한 줄 — 픽업 · 이벤트는 픽업 몫. 상시는 슬라이드마다 updateSlideshowText 가 채운다 */
+  /** 정보 블록의 확률 한 줄 — 픽업 · 이벤트는 픽업 몫, 상시는 'UR 레거시 · 센티넬 각 0.449%' (v2 §5 표) */
   private infoRateLine(b: BannerDef): string {
     const rows = this.lobbyRates?.rows ?? [];
-    const pick = (grade: GachaGrade) => rows.find(r => r.kind === 'character' && r.grade === grade && r.pickup);
-    const ur = pick('UR'), sr = pick('SR');
+    const row = (grade: GachaGrade, pickup: boolean) => rows.find(r => r.kind === 'character' && r.grade === grade && r.pickup === pickup);
+    const ur = row('UR', true), sr = row('SR', true);
     if (b.kind === 'pickup') {
       return [ur && `픽업 UR ${formatRate(ur.each.slot)}%`, sr && `픽업 SR 각 ${formatRate(sr.each.slot)}%`].filter(Boolean).join('  ·  ');
     }
-    if (b.kind === 'event' && sr) return `이벤트 픽업 SR 각 ${formatRate(sr.each.slot)}%`;
-    return '';
+    if (b.kind === 'event') return sr ? `이벤트 픽업 SR 각 ${formatRate(sr.each.slot)}%` : '';
+    const std = row('UR', false);
+    return std ? `UR ${std.ids.map(nameOf).join(' · ')} 각 ${formatRate(std.each.slot)}%` : '';
   }
 
   /**
@@ -983,76 +969,55 @@ export default class GachaScene extends BaseScene {
   }
 
   /**
-   * 초보자 탭 정보 — '초보자 뽑기 n / 50 · 10회 720 SKOR (20% 할인)', 보장 문장, [레거시 | 센티넬] 토글 (§5).
-   * 막대 대신 'n / 50'. 이미 UR 을 뽑았으면 토글을 흐리게 + 'UR 획득 — 보장 없이 진행'
+   * 상시의 초보자 줄 (구간이 남았을 때만, 얼굴 줄 자리 — 정의서 v2 §5):
+   * '초보자 n / 50 · 50번째 보장' + [레거시 | 센티넬] 얼굴 토글 (누른 얼굴이 곧 고르기). 그 위에 한 줄 설명.
+   * 이미 UR 을 뽑았으면(urHit) 토글을 흐리게 + 'UR 획득 — 보장 없이 진행'. 10회 버튼의 할인가는 pullPriceOf 가 정한다
    */
-  private buildStarterInfo(b: BannerDef) {
-    const W = this.scale.width, H = this.scale.height;
-    const st = this.gstate?.starter;
-    if (!st || !b.starter) return;
-    this.badge(20, H - LOBBY.starterBadge, '초보자 전용');
-    this.ratesButton(W - 16 - 42, H - LOBBY.starterBadge, b);
-
-    const price = pullPrice(b, 'multi') ?? 0;
-    this.richLine(20, H - LOBBY.starterLine, [
-      ['초보자 뽑기 ', '#ffffff'], [`${st.pullsDone} / ${st.max}`, '#ffd34d'],
-      ['  ·  10회 ', '#ffffff'], [`${price} SKOR`, '#ffd34d'], [` (${this.discountPct(b)}% 할인)`, '#ff9a8a'],
-    ], 15, W - 40);
-    this.add.text(20, H - LOBBY.starterNote, st.urHit ? 'UR 획득 — 보장 없이 진행' : `${st.max}회 안에 UR이 없으면 ${st.max}번째에 고른 UR 확정`, {
-      fontSize: '12px', color: st.urHit ? '#b9a3d6' : '#ffe58a', fontStyle: 'bold', stroke: '#000000', strokeThickness: 4,
-    }).setOrigin(0, 0.5);
-    this.buildStarterToggle(b, st, H - LOBBY.starterToggle);
-  }
-
-  /** 여러 색 글자를 한 줄로 — 폭이 maxW 를 넘으면 줄인다 */
-  private richLine(x: number, y: number, parts: [string, string][], px: number, maxW: number) {
-    const line = this.add.container(x, y);
-    let cx = 0;
-    for (const [s, color] of parts) {
-      const t = this.add.text(cx, 0, s, { fontSize: `${px}px`, color, fontStyle: 'bold', stroke: '#000000', strokeThickness: 4 }).setOrigin(0, 0.5);
-      line.add(t);
-      cx += t.width - 4;   // 외곽선(4)은 폭에 들어간다 — 그만큼 겹쳐 붙인다
+  private buildStarterRow(b: BannerDef, st: GachaStarterState) {
+    const y = this.scale.height - LOBBY.faces;
+    this.faceChips = [];
+    this.faceRowSlides = false;
+    const textStyle = (color: string, px = 12) => ({ fontSize: `${px}px`, color, fontStyle: 'bold', stroke: '#000000', strokeThickness: 3 });
+    this.add.text(20, y - 26, st.urHit ? 'UR 획득 — 보장 없이 진행' : `${st.max}회 안에 UR이 없으면 ${st.max}번째에 고른 UR 확정`,
+      textStyle(st.urHit ? '#b9a3d6' : '#ffe58a', 11)).setOrigin(0, 0.5);
+    let x = 20;
+    for (const [part, color] of [['초보자 ', '#ffffff'], [`${st.pullsDone} / ${st.max}`, '#ffd34d'], [`  ·  ${st.max}번째 보장`, '#d9c6f0']] as const) {
+      x += this.add.text(x, y, part, textStyle(color)).setOrigin(0, 0.5).width - 3;   // 외곽선(3)은 폭에 들어간다
     }
-    if (cx > maxW) line.setScale(maxW / cx);
-  }
-
-  /** 50번째 보장 토글 — 누르면 기기에 적어 두고 다음 초보자 뽑기가 starterPick 으로 보낸다 */
-  private buildStarterToggle(b: BannerDef, st: GachaStarterState, y: number) {
-    const ids = b.starter?.pickFrom ?? [];
-    const pick = this.starterPickOf(b);
-    const label = this.add.text(20, y, pick || st.urHit ? `${st.max}번째 보장` : '보장 UR 고르기', {
-      fontSize: '12px', color: pick || st.urHit ? '#d9c6f0' : '#ff9a8a', fontStyle: 'bold', stroke: '#000000', strokeThickness: 3,
-    }).setOrigin(0, 0.5);
-    const segW = 84, segH = 32;
-    let x = 20 + Math.max(label.width, 70) + 8;
-    const segs: { id: string; box: Phaser.GameObjects.Container; g: Phaser.GameObjects.Graphics; t: Phaser.GameObjects.Text }[] = [];
-    const paint = (cur: string | null) => segs.forEach(s => {
-      const on = s.id === cur;
-      s.g.clear()
-        .fillStyle(on ? 0xffd34d : 0x0a0618, on ? 1 : 0.82).fillRoundedRect(-segW / 2, -segH / 2, segW, segH, 10)
-        .lineStyle(1.5, on ? 0x7a4a00 : 0x8a7ab8).strokeRoundedRect(-segW / 2, -segH / 2, segW, segH, 10);
-      s.t.setColor(on ? '#3a1d00' : '#efe6ff');
-    });
-    for (const id of ids) {
-      const box = this.add.container(x + segW / 2, y);
-      const g = this.add.graphics();
-      const t = this.add.text(0, 0, nameOf(id), { fontSize: '14px', fontStyle: 'bold' }).setOrigin(0.5);
-      box.add([g, t]);
-      segs.push({ id, box, g, t });
-      if (!st.urHit) {
-        wireButton(this, box, segW, segH, () => {
-          writeStore(STARTER_PICK_KEY, id);
-          paint(id);
-          label.setText(`${st.max}번째 보장`).setColor('#d9c6f0');
-        }, true);
+    const d = 28, gap = 16;   // 얼굴 사이 16 — 손가락 영역(44)이 겹치지 않는다
+    x += 10;
+    const chips: { id: string; chip: Phaser.GameObjects.Container; ring: Phaser.GameObjects.Graphics }[] = [];
+    for (const id of b.starter?.pickFrom ?? []) {
+      const chip = this.add.container(x + d / 2, y);
+      chip.add(this.add.graphics().fillStyle(0x0a0618, 0.9).fillCircle(0, 0, d / 2 + 2));
+      chip.add(this.faceImage(id, d));
+      const ring = this.add.graphics();
+      chip.add(ring);
+      chips.push({ id, chip, ring });
+      x += d + gap;
+    }
+    const pickText = this.add.text(x - gap + 10, y, '', textStyle('#ffd34d')).setOrigin(0, 0.5);
+    const paint = (cur: string | null) => {
+      for (const c of chips) {
+        const on = c.id === cur;
+        c.ring.clear().lineStyle(on ? 2.5 : 2, on ? 0xffd34d : 0x8a7ab8).strokeCircle(0, 0, d / 2 + 1);
+        c.chip.setScale(on ? 1.15 : 1).setAlpha(st.urHit ? 0.4 : on || !cur ? 1 : 0.6);
       }
-      x += segW + 6;
+      if (st.urHit) pickText.setVisible(false);
+      else pickText.setText(cur ? nameOf(cur) : '골라 두세요').setColor(cur ? '#ffd34d' : '#ff9a8a');
+    };
+    if (!st.urHit) {
+      for (const c of chips) {
+        // 히트 영역은 왼쪽 위 기준 (buttonSkin.wireButton 주석 참고) — 손가락 크기(44)로 넓힌다
+        c.chip.setSize(d, d).setInteractive(touchArea(d, d), Phaser.Geom.Rectangle.Contains);
+        if (c.chip.input) c.chip.input.cursor = 'pointer';
+        c.chip.on('pointerdown', () => {
+          writeStore(STARTER_PICK_KEY, c.id);
+          paint(c.id);
+        });
+      }
     }
-    paint(pick);
-    if (st.urHit) {
-      segs.forEach(s => s.box.setAlpha(0.4));
-      label.setAlpha(0.6);
-    }
+    paint(this.starterPickOf(b));
   }
 
   /** 초보자 보장 UR — 토글로 고른 값(기기), 없으면 서버에 저장된 값. 후보 밖이면 없음 */
@@ -1064,21 +1029,12 @@ export default class GachaScene extends BaseScene {
     return server && from.includes(server) ? server : null;
   }
 
-  /** 10회 할인율 (%) — 보통 배너는 1회 × 10 대비, 초보자는 상시 10회 대비 (정의서 §0: 900 의 20% 할인) */
-  private discountPct(b: BannerDef): number {
-    const base = b.price.single !== null ? b.price.single * 10 : (getBanner(DEFAULT_BANNER_ID)?.price.multi ?? b.price.multi);
-    return Math.round((1 - b.price.multi / base) * 100);
-  }
 
-  /** 뽑기 버튼 — 1회 = 금 판, 10회 = 보라 판 금테 + 할인 리본. 1회가 없는 배너(초보자)는 10회 하나를 가운데 */
+  /** 뽑기 버튼 — 1회 = 금 판, 10회 = 보라 판 금테 + 할인 리본 (가격 · 할인은 초보자 구간이면 할인가 — pullPriceOf · multiDiscountOf) */
   private buildPullButtons(b: BannerDef) {
     const W = this.scale.width, H = this.scale.height;
     const gap = 10, h = LOBBY.pullH;
     const y = H - LOBBY.pull;
-    if (pullPrice(b, 'single') === null) {
-      this.addPullButton(W / 2, y, Math.min(260, W - 32), h, 'multi', b);
-      return;
-    }
     const w = Math.floor((W - 32 - gap) / 2);
     this.addPullButton(16 + w / 2, y, w, h, 'single', b);
     this.addPullButton(W - 16 - w / 2, y, w, h, 'multi', b);
@@ -1106,12 +1062,12 @@ export default class GachaScene extends BaseScene {
     if (multi) pg.lineStyle(1, 0xffd34d).strokeRoundedRect(-52, 7, 104, 24, 12);
     box.add([
       pg,
-      this.add.text(6, 19, String(pullPrice(b, type) ?? ''), { fontSize: '14px', color: '#fff0c2', fontStyle: 'bold' }).setOrigin(1, 0.5),
+      this.add.text(6, 19, String(pullPriceOf(b, type, this.gstate)), { fontSize: '14px', color: '#fff0c2', fontStyle: 'bold' }).setOrigin(1, 0.5),
       this.add.text(10, 19, 'SKOR', { fontSize: '10px', color: '#ffd34d', fontStyle: 'bold' }).setOrigin(0, 0.5),
     ]);
 
-    // 10회 할인 리본
-    const pct = multi ? this.discountPct(b) : 0;
+    // 10회 할인 리본 — '1회 × 10' 대비 (보통 10%, 초보자 구간 28%)
+    const pct = multi ? multiDiscountOf(b, this.gstate) : 0;
     if (pct > 0) {
       const rib = bakeButton(this, 'gacha_sale_ribbon', {
         w: 64, h: 22, radius: 8, top: '#ff6a5a', bottom: '#e8261a', border: '#5a0a00', borderW: 2, lip: '#5a0a00', lipH: 3, gloss: 0,
@@ -1217,8 +1173,8 @@ export default class GachaScene extends BaseScene {
     wireButton(this, box, w, h, onClick);
   }
 
-  /** 확인 창 — 본문 + [취소] [ok]. ok 를 누르면 창을 닫고 onOk */
-  private openDialog(title: string, body: string, okLabel: string, onOk: () => void) {
+  /** 확인 창 — 본문 + [취소] [ok]. ok 를 누르면 창을 닫고 onOk, 그 밖으로 닫히면(취소 · 바깥 · ×) onCancel */
+  private openDialog(title: string, body: string, okLabel: string, onOk: () => void, onCancel?: () => void) {
     const W = this.scale.width;
     const pw = Math.min(320, W - 40);
     const text = this.add.text(0, 0, body, {
@@ -1230,8 +1186,11 @@ export default class GachaScene extends BaseScene {
     text.setPosition(W / 2, ui.top + 52);
     ui.panel.add(text);
     const bw = Math.min(124, Math.floor((pw - 52) / 2)), by = ui.top + ph - 22 - 23;
+    let ok = false;
+    // 창을 닫는 중에 로비를 다시 그리지 않게 한 틱 미룬다
+    ui.onClose(() => { if (!ok && onCancel) this.time.delayedCall(1, onCancel); });
     this.panelButton(ui.panel, W / 2 - bw / 2 - 6, by, bw, 46, 'white', '취소', () => ui.close());
-    this.panelButton(ui.panel, W / 2 + bw / 2 + 6, by, bw, 46, 'gold', okLabel, () => { ui.close(); onOk(); });
+    this.panelButton(ui.panel, W / 2 + bw / 2 + 6, by, bw, 46, 'gold', okLabel, () => { ok = true; ui.close(); onOk(); });
   }
 
   /** 고르기 창 — 후보 초상 · 보유 여부 · 중복 수 (§5). 고르면 창을 닫고 onPick */
@@ -1364,11 +1323,19 @@ export default class GachaScene extends BaseScene {
     const std = BANNERS.find(x => x.kind === 'standard');
     const pick = BANNERS.find(x => x.kind === 'pickup');
     const ev = BANNERS.find(x => x.kind === 'event');
-    const starter = BANNERS.find(x => x.kind === 'starter');
+    const starter = BANNERS.find(x => x.starter !== null);
     const names = (x: BannerDef) => exchangeChoicesOf(x).map(nameOf).join(' · ');
+    const shown = (f: (c: CharacterDef) => boolean) => CHARACTERS.filter(c => !c.unreleased && f(c)).map(c => c.name).join(' · ');
+    const stdUR = standardGachaPool().filter(c => c.grade === 'UR').map(c => c.name).join(' · ');
+    const pickupOnly = shown(c => !!c.pickupOnly), eventOnly = shown(c => !!c.eventOnly);
     heading('확률 안내');
     para('• 표의 확률은 뽑기 한 칸마다 적용되며, 모든 칸은 서로 독립입니다. 한 칸에서는 캐릭터 또는 배경화면 중 하나만 나오며, 배경화면의 확률도 함께 표시합니다.');
-    para('• 픽업 배너에서 각 등급의 확률은 상시 뽑기와 같고, 그중 절반이 픽업 캐릭터에게 배정됩니다. 배경화면 확률의 절반은 픽업 캐릭터의 전용 배경화면에 배정됩니다.');
+    para(`• 상시 뽑기에서 나오는 UR 캐릭터는 ${stdUR}입니다.`
+      + (pickupOnly ? ` ${pickupOnly}${topicJosa(pickupOnly)} 각자의 픽업 배너에서만` : '')
+      + (pickupOnly && eventOnly ? ',' : '')
+      + (eventOnly ? ` ${eventOnly}${topicJosa(eventOnly)} 이벤트 픽업에서만` : '')
+      + (pickupOnly || eventOnly ? ' 나옵니다.' : ''));
+    para('• 픽업 배너에서 각 등급의 확률은 상시 뽑기와 같고, 그중 절반이 픽업 캐릭터에게 배정됩니다. 나머지 절반은 같은 등급의 상시 캐릭터가 나눕니다. 배경화면 확률의 절반은 픽업 캐릭터의 전용 배경화면에 배정됩니다.');
     para('• 10회 뽑기 확정: 10회 뽑기에서 앞의 9칸에 SR 이상 캐릭터가 없으면, 10번째 칸은 SR 이상 캐릭터 중에서 아래 \'확정 칸 확률\'로 결정됩니다(배경화면은 나오지 않습니다). 1회 뽑기에는 적용되지 않습니다. 이 규칙을 포함한 10회 뽑기의 칸당 실효 확률은 아래 표와 같습니다.');
     y += 2;
     put(x0 + 10, `확정 칸 확률 (SR 이상 = 100%) — 발동 확률 ${formatRate(rates.guaranteeTrigger)}%`, { fontSize: '12px', color: '#ffd34d', fontStyle: 'bold' });
@@ -1380,10 +1347,14 @@ export default class GachaScene extends BaseScene {
     if (std?.pity) para(`- 상시 뽑기: ${std.pity.threshold}포인트 → 상시 UR 캐릭터 중 1명 선택 (${names(std)})`, 12);
     if (pick?.pity) para(`- 픽업 뽑기: ${pick.pity.threshold}포인트 → 그 배너의 픽업 UR 캐릭터`, 12);
     if (ev?.pity) para(`- 이벤트 픽업: ${ev.pity.threshold}포인트 → 이벤트 픽업 캐릭터 중 1명 선택 (${names(ev)})`, 12);
-    para('천장 포인트는 확률을 바꾸지 않으며, 원하는 캐릭터가 뽑혀도 초기화되지 않습니다. 포인트는 배너마다 따로 쌓이며 다른 배너에서 쓸 수 없습니다. 초보자 뽑기에서는 천장 포인트가 쌓이지 않습니다.', 12);
+    para('천장 포인트는 확률을 바꾸지 않으며, 원하는 캐릭터가 뽑혀도 초기화되지 않습니다. 포인트는 배너마다 따로 쌓이며 다른 배너에서 쓸 수 없습니다.'
+      + (starter ? ' 상시 뽑기의 포인트에는 초보자 혜택 구간의 뽑기도 포함됩니다.' : ''), 12);
     if (starter?.starter) {
-      const max = starter.starter.maxPulls;
-      para(`• 초보자 뽑기: 계정당 최대 ${max}회(10회 뽑기 ${Math.round(max / PULL_COUNT.multi)}번)입니다. 초보자 뽑기 ${max - 1}회 안에 UR이 한 번도 나오지 않으면 ${max}번째 칸은 미리 선택한 UR(${starter.starter.pickFrom.map(nameOf).join(' 또는 ')})로 확정됩니다.`);
+      const { maxPulls: max, multiPrice, pickFrom } = starter.starter;
+      para(`• 초보자 혜택: 상시 뽑기의 처음 10회 뽑기 ${Math.round(max / PULL_COUNT.multi)}번(${max}칸)은 10회 뽑기가 ${multiPrice} SKOR입니다(계정당 한 번). `
+        + `이 구간의 앞 ${max - 1}칸에 UR이 한 번도 나오지 않으면 ${max}번째 칸은 미리 선택한 UR(${pickFrom.map(nameOf).join(' 또는 ')})로 확정됩니다. `
+        + `${max - 1}칸 안에 UR이 나왔다면 선택 없이 진행되며, ${max}번째 칸은 보통 확률(10회 뽑기 확정 포함)로 결정됩니다. `
+        + '1회 뽑기는 초보자 혜택 횟수에 포함되지 않습니다.');
     }
     para('• 이미 보유한 캐릭터가 나오거나 교환으로 받으면 중복으로 기록되어 각성에 쓰입니다. 이미 보유한 배경화면은 추가 효과가 없습니다.');
     para('• 확률은 반올림하여 표기합니다(1% 미만은 소수 셋째 자리, 10% 미만은 둘째 자리, 그 이상은 첫째 자리). 그래서 합이 100%와 조금 다를 수 있습니다.');
@@ -1583,9 +1554,11 @@ export default class GachaScene extends BaseScene {
    * requestId 는 'network' 오류 뒤 '다시 시도' 때만 넘긴다 (배너 서버는 같은 요청의 첫 결과를 돌려준다).
    * 배너 이전 서버는 requestId 를 몰라 다시 차감하므로 화면 문구에 '두 번 차감되지 않는다'고 적지 않는다 (gacha.ts invokeGacha)
    */
-  private async startPull(banner: BannerDef, type: PullType, requestId?: string) {
-    const cost = pullPrice(banner, type);
-    if (cost === null || this.modal) return;
+  private async startPull(banner: BannerDef, type: PullType, requestId?: string, expectedCost?: number) {
+    if (this.modal) return;
+    // 화면에 보인 가격 — 서버에 expectedCost 로 싣는다 (서버가 잠그고 정한 값과 다르면 차감 없이 price_changed).
+    // '다시 시도' · 가격 바뀜 확인은 그때의 가격을 그대로 넘긴다
+    const cost = expectedCost ?? pullPriceOf(banner, type, this.gstate);
     // '다시 시도'(같은 requestId)는 새 구매가 아니라 이미 보낸 뽑기의 결과 복구다 — 아래 사전 검사(잔액 · 초보자 보장)를
     // 건너뛰고 서버에 그대로 보낸다. 서버가 이미 차감했으면 지금 잔액은 그만큼 줄어 있어 '부족'으로 막히고 만다.
     // 판단은 서버가 한다 (배너 서버는 같은 requestId 의 첫 결과를 돌려준다 — 리뷰 7673febc P2)
@@ -1607,13 +1580,15 @@ export default class GachaScene extends BaseScene {
       return;
     }
 
+    // 초보자 보장 — 상시 10연이면 골라 둔 값을 싣는다 (구간 밖이면 서버가 무시한다, v2 §6-2)
     let starterPick: string | undefined;
-    if (banner.kind === 'starter') {
-      const st = this.gstate?.starter;
+    if (banner.starter && type === 'multi') {
       const pick = this.starterPickOf(banner);
-      // 마지막 10연인데 보장 UR 을 안 골랐다 — 고르기 창을 먼저 (서버는 고른 값이 없으면 거절한다, §3)
-      if (!recovery && st && !st.urHit && !pick && st.pullsDone + PULL_COUNT[type] >= st.max) {
-        this.openStarterPicker(banner, () => void this.startPull(banner, type, requestId));
+      const st = starterWindowOf(banner, this.gstate);
+      // 구간 10연(보인 가격이 할인가)의 마지막인데 보장 UR 을 안 골랐다 — 고르기 창을 먼저 (서버는 고른 값이 없으면 거절한다, §3)
+      const windowPull = cost !== pullPrice(banner, type);
+      if (!recovery && windowPull && st && !st.urHit && !pick && st.pullsDone + PULL_COUNT[type] >= st.max) {
+        this.openStarterPicker(banner, () => void this.startPull(banner, type, requestId, expectedCost));
         return;
       }
       starterPick = pick ?? undefined;
@@ -1630,7 +1605,7 @@ export default class GachaScene extends BaseScene {
       // API가 먼저 완료되면 videoSkipResolver가 있을 경우 영상을 즉시 스킵
       this.videoSkipResolver = null;
       this.skipToSummary = false;
-      const apiPromise = gachaPull(type, { bannerId: banner.id, starterPick, requestId }).then(r => {
+      const apiPromise = gachaPull(type, { bannerId: banner.id, starterPick, requestId, expectedCost: cost }).then(r => {
         // 영상이 아직 재생 중이면 스킵 버튼 표시 (씬을 나갔다 들어왔으면 새 실행의 화면이다 — 건드리지 않는다)
         if (run === this.runId && this.videoSkipResolver) {
           const resolver = this.videoSkipResolver;
@@ -1725,13 +1700,22 @@ export default class GachaScene extends BaseScene {
         return;
       case 'network':
         this.openDialog('연결이 끊겼어요', '뽑기 결과를 받지 못했어요.\n다시 시도하면 방금 뽑기의 결과를 받아 와요', '다시 시도',
-          () => void this.startPull(banner, type, err.requestId));
+          () => void this.startPull(banner, type, err.requestId, cost));
         return;
+      case 'price_changed': {
+        // 보인 가격과 서버가 정한 가격이 달랐다 (다른 기기에서 초보자 구간을 다 썼다 등) — 차감은 없었다. 새 가격을 보이고 다시 묻는다
+        const next = err.cost;
+        if (next === null) {
+          this.showToast('가격이 바뀌었어요 — 다시 눌러 주세요');
+          return;
+        }
+        this.openDialog('가격이 바뀌었어요', `${type === 'multi' ? '10회' : '1회'} 소환 가격이 ${cost} → ${next} SKOR 로 바뀌었어요.\nSKOR 는 아직 빠지지 않았어요.\n이 가격으로 뽑을까요?`, '뽑기',
+          () => void this.startPull(banner, type, undefined, next),
+          () => { if (this.inLobby && !this.modal) this.buildLobby(false); });   // 그사이 받은 상태(가격)로 버튼을 고친다
+        return;
+      }
       case 'banner_closed':
         this.showToast('이 배너는 지금 열려 있지 않아요');
-        return;
-      case 'starter_done':
-        this.showToast('초보자 뽑기를 모두 사용했어요');
         return;
       default:
         this.showToast('뽑기에 실패했어요 — 잠시 후 다시 시도해 주세요');
@@ -2223,17 +2207,15 @@ export default class GachaScene extends BaseScene {
 
   /**
    * 아래 줄 — SKOR 알약 + 1회 더 · 10회 더 · 닫기. 폭이 모자라면 뽑기 버튼만 줄인다.
-   * 뽑은 배너(pullBanner)로 다시 뽑는다 — 초보자는 1회가 없고, 50회를 다 쓰면 10회 더 도 없다 (닫으면 탭이 사라진다)
+   * 뽑은 배너(pullBanner)로 다시 뽑는다 — 가격은 지금 상태로 (초보자 구간이 남았으면 상시 10회 더 = 할인가)
    */
   private resultButtons(y: number) {
     const W = this.scale.width, cx = W / 2;
     const b = this.pullBanner;
-    const st = this.gstate?.starter;
-    const single = pullPrice(b, 'single'), multi = pullPrice(b, 'multi');
-    const multiLeft = b.kind !== 'starter' || (st !== undefined && st.pullsDone < st.max);
-    const pulls: { w: number; kind: 'gold' | 'purple'; label: string; price: number; type: PullType }[] = [];
-    if (single !== null) pulls.push({ w: 150, kind: 'gold', label: '1회 더', price: single, type: 'single' });
-    if (multi !== null && multiLeft) pulls.push({ w: 170, kind: 'purple', label: '10회 더', price: multi, type: 'multi' });
+    const pulls: { w: number; kind: 'gold' | 'purple'; label: string; price: number; type: PullType }[] = [
+      { w: 150, kind: 'gold', label: '1회 더', price: pullPriceOf(b, 'single', this.gstate), type: 'single' },
+      { w: 170, kind: 'purple', label: '10회 더', price: pullPriceOf(b, 'multi', this.gstate), type: 'multi' },
+    ];
     const gap = 8, h = 56;
     const closeW = pulls.length ? 56 : 140;
     const base = pulls.reduce((s, p) => s + p.w, 0);
@@ -2440,7 +2422,6 @@ export default class GachaScene extends BaseScene {
     this.slideshowActive = false;
     this.slideshowBgA = null;
     this.slideshowBgB = null;
-    this.slideshowRateText = null;
     this.slideTimer = null;
     this.faceChips = [];
     this.eventStripImgs = [];
