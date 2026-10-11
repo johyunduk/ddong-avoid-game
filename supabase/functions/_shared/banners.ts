@@ -93,7 +93,7 @@ export interface GachaWallpaperEntry {
 }
 
 /** 확률 계산이 바뀌면 올린다 — 응답의 ratesVersion · gacha_pull_log.rates_version */
-export const RATES_VERSION = '2026-10-11b';
+export const RATES_VERSION = '2026-10-11c';
 
 /**
  * 등급별 **종당** 가중치. 종이 늘거나 빠져도 종당 가중치는 그대로 두고 등급 합이 따라 변한다
@@ -118,9 +118,11 @@ export const PULL_COUNT: Readonly<Record<PullType, number>> = { single: 1, multi
  */
 export const BANNERS: readonly BannerDef[] = [
   {
-    id: 'event_trio', kind: 'event',
-    pickupUR: null, pickupSR: ['ted', 'heidi', 'red'], pickupWP: ['wp_ted', 'wp_heidi', 'wp_red'],
-    pity: { track: 'event_trio', threshold: 100, exchange: 'chooseSR' },
+    // K 는 이벤트 전용이 아니다 — 상시 풀 · 무기 픽업에도 그대로 있다 (대표 2026-10-11). 전용 배경은 이벤트 전용 것만.
+    // id 에 인원을 넣지 않는다 — 픽업 구성이 바뀌어도 id(요청 · 로그 · 천장 줄)는 못 바꾼다
+    id: 'event_1', kind: 'event',
+    pickupUR: null, pickupSR: ['ted', 'heidi', 'red', 'k'], pickupWP: ['wp_ted', 'wp_heidi', 'wp_red'],
+    pity: { track: 'event_1', threshold: 100, exchange: 'chooseSR' },
     price: { single: 100, multi: 900 },
     starter: null,
     opensAt: null, closesAt: null,
@@ -403,7 +405,7 @@ export function drawSlots(rates: BannerRates, count: number, rand: () => number)
  * 천장 교환 후보 (정의서 §4-2). 손으로 적지 않는다 — 상시 UR 구성이 바뀌면 후보도 따라 바뀐다.
  * - pickupUR: [그 배너의 픽업 UR]
  * - chooseUR: 상시 풀의 UR (픽업 전용 UR 은 빠진다 — 지금 레거시 · 센티넬)
- * - chooseSR: 그 배너의 픽업 SR (이벤트 셋). 전용 배경은 주지 않는다
+ * - chooseSR: 그 배너의 픽업 SR 전부 — 이벤트 전용이 아닌 픽업 SR(K)도 들어간다. 전용 배경은 주지 않는다
  * 천장이 없는 배너는 빈 배열
  */
 export function pityChoices(banner: BannerDef, roster: readonly GachaRosterEntry[]): string[] {

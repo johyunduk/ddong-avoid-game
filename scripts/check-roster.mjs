@@ -83,7 +83,7 @@ function subset(label, list, { allow = [] } = {}) {
 
 // ── 1. 생성물이 최신인가 ───────────────────────────────────────────────
 // 글자 단위로 비교한다 — id · 등급만 보던 때는 eventOnly 같은 표식이 낡아도 통과했다.
-// 등급이 낡으면 뽑기 가중치가 옛 등급으로, 표식이 낡으면 이벤트 셋이 상시 풀에 남는다
+// 등급이 낡으면 뽑기 가중치가 옛 등급으로, 표식이 낡으면 이벤트 전용 캐릭터가 상시 풀에 남는다
 for (const [path, next, what] of outputs()) {
   const rel = path.slice(ROOT.length + 1).split('\\').join('/');
   const label = `${rel} 가 정본과 일치`;
@@ -221,6 +221,14 @@ for (const [path, next, what] of outputs()) {
     else pass(label, `픽업 전용 ${roster.filter(c => c.pickupOnly).map(c => c.id).join(', ') || '없음'} · 상시 UR ${stdUR.join(', ')}`);
   }
   {
+    // 이벤트 전용(eventOnly) 캐릭터는 이벤트 배너의 픽업으로만 나온다 (bannerRates 의 '그 외' 는 상시 풀이라 빠진다)
+    const label = '이벤트 전용(eventOnly) 캐릭터가 뽑을 곳이 있다';
+    const picked = new Set(B.BANNERS.filter(b => b.kind === 'event').flatMap(b => b.pickupSR));
+    const orphan = roster.filter(c => c.eventOnly && !c.unreleased && !picked.has(c.id)).map(c => c.id);
+    if (orphan.length) fail(label, `어느 이벤트 배너의 픽업도 아니다 — 뽑을 곳이 없다: ${orphan.join(', ')}`);
+    else pass(label, roster.filter(c => c.eventOnly).map(c => c.id).join(', ') || '없음');
+  }
+  {
     // 초보자 혜택은 상시 배너 하나에만 — gacha_starter 가 계정당 한 줄이라 둘이면 횟수를 나눠 쓴다
     const label = '초보자 설정은 상시 배너 하나에만 있다';
     const withStarter = B.BANNERS.filter(b => b.starter);
@@ -241,12 +249,16 @@ for (const [path, next, what] of outputs()) {
     // 2. 픽업 id ⊆ 명단, 등급이 맞다
     if (b.pickupUR && byId.get(b.pickupUR)?.grade !== 'UR') errs.push(`pickupUR '${b.pickupUR}' 가 명단의 UR 이 아니다`);
     for (const id of b.pickupSR) if (byId.get(id)?.grade !== 'SR') errs.push(`pickupSR '${id}' 가 명단의 SR 이 아니다`);
-    // 3. 상시 · 픽업은 이벤트 전용이 없고, 이벤트 배너의 픽업은 전부 이벤트 전용이다
+    // 3. 상시 · 픽업은 이벤트 전용이 없다. 이벤트 배너의 픽업 캐릭터는 이벤트 전용이거나 상시 풀의 종이고
+    //    (대표 2026-10-11 — 픽업 전용 · 미공개는 안 된다), 픽업 배경은 전부 이벤트 전용이다
     const evChars = picks.filter(id => byId.get(id)?.eventOnly);
     const evWps = b.pickupWP.filter(id => wps.find(w => w.id === id)?.eventOnly);
     if (b.kind === 'event') {
       if (b.pickupUR) errs.push('이벤트 배너에 픽업 UR 이 있다');
-      if (evChars.length !== picks.length || picks.length === 0) errs.push('이벤트 배너의 픽업 캐릭터가 전부 eventOnly 가 아니다');
+      if (picks.length === 0) errs.push('이벤트 배너에 픽업 캐릭터가 없다');
+      const stdIds = new Set(B.standardPool(roster).map(c => c.id));
+      const stray = picks.filter(id => !evChars.includes(id) && !stdIds.has(id));
+      if (stray.length) errs.push(`이벤트 배너의 픽업이 eventOnly 도 상시 풀도 아니다: ${stray.join(', ')}`);
       if (evWps.length !== b.pickupWP.length) errs.push('이벤트 배너의 픽업 배경이 전부 eventOnly 가 아니다');
     } else if (evChars.length || evWps.length) {
       errs.push(`${b.kind} 배너에 eventOnly 가 있다: ${[...evChars, ...evWps].join(', ')}`);
