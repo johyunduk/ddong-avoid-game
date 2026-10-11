@@ -93,7 +93,7 @@ export interface GachaWallpaperEntry {
 }
 
 /** 확률 계산이 바뀌면 올린다 — 응답의 ratesVersion · gacha_pull_log.rates_version */
-export const RATES_VERSION = '2026-10-11c';
+export const RATES_VERSION = '2026-10-11d';
 
 /**
  * 등급별 **종당** 가중치. 종이 늘거나 빠져도 종당 가중치는 그대로 두고 등급 합이 따라 변한다
@@ -118,7 +118,7 @@ export const PULL_COUNT: Readonly<Record<PullType, number>> = { single: 1, multi
  */
 export const BANNERS: readonly BannerDef[] = [
   {
-    // K 는 이벤트 전용이 아니다 — 상시 풀 · 무기 픽업에도 그대로 있다 (대표 2026-10-11). 전용 배경은 이벤트 전용 것만.
+    // K 는 이벤트 전용이 아니다 — 상시 풀에도 그대로 있다 (대표 2026-10-11). 전용 배경은 이벤트 전용 것만.
     // id 에 인원을 넣지 않는다 — 픽업 구성이 바뀌어도 id(요청 · 로그 · 천장 줄)는 못 바꾼다
     id: 'event_1', kind: 'event',
     pickupUR: null, pickupSR: ['ted', 'heidi', 'red', 'k'], pickupWP: ['wp_ted', 'wp_heidi', 'wp_red'],
@@ -145,7 +145,7 @@ export const BANNERS: readonly BannerDef[] = [
   },
   {
     id: 'pickup_mugi', kind: 'pickup',
-    pickupUR: 'mugi', pickupSR: ['k', 'maehwa'], pickupWP: ['wp_k', 'wp_maehwa'],
+    pickupUR: 'mugi', pickupSR: ['hacker', 'maehwa'], pickupWP: ['wp_hacker', 'wp_maehwa'],
     pity: { track: 'pickup_mugi', threshold: 200, exchange: 'pickupUR' },
     price: { single: 100, multi: 900 },
     starter: null,
