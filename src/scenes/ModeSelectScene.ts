@@ -3,7 +3,7 @@ import { GameMode, GAME_MODES, type GameModeConfig } from '../types/GameMode';
 import { getSkorBalance, getCachedSkorBalance, cacheSkorBalance } from '../utils/skor';
 import { setBgmMuted, isFxBloomEnabled } from '../utils/settings';
 import { setBloomEnabled } from '../utils/vfx';
-import { getUserInitials, setUserInitials, getSeasonRewardNotices, ackSeasonRewardNotices } from '../utils/leaderboard';
+import { getUserInitials, setUserInitials, getSeasonRewardNotices, ackSeasonRewardNotices, type SeasonRewardNotice } from '../utils/leaderboard';
 import { RELEASE_NOTES } from '../data/releaseNotes';
 import BaseScene from './BaseScene';
 import { addBackground } from '../utils/background';
@@ -112,21 +112,27 @@ export default class ModeSelectScene extends BaseScene {
 
   /**
    * '보상 도착' — 월초에 서버가 자동 지급한 시즌 보상 중 아직 안 보여 준 것.
-   * 잔액에는 이미 들어가 있다. 닫으면 띄운 것만 본 것으로 돌려주고, 닫기 전에 씬을 떠나면 다음 접속 때 다시 띄운다
+   * 잔액에는 이미 들어가 있다. 한 장에 5줄씩 넘기며, 닫을 때 그 장에 띄운 것만 본 것으로 돌려준다.
+   * 닫기 전에 씬을 떠나면 남은 것은 다음 접속 때 다시 띄운다
    */
   private async showSeasonRewardNotices() {
     const notices = await getSeasonRewardNotices();
     if (notices.length === 0 || !this.scene.isActive() || this.settingsPanel || this.rewardNotice) return;
+    this.menuButtons.forEach(b => b.disableInteractive());
+    const total = notices.reduce((s, n) => s + Number(n.skor_awarded), 0);
+    this.openRewardNoticePage(notices, total);
+  }
 
+  /** 알림 한 장 — 5줄까지. 남으면 버튼이 '다음'이 되고 닫으면 다음 장을 연다. 마지막 장을 닫으면 메뉴 입력을 되살린다 */
+  private openRewardNoticePage(notices: SeasonRewardNotice[], total: number) {
     const SW = this.scale.width, SH = this.scale.height;
     const cx = SW / 2;
-    const MAX_ROWS = 5;
-    const shown = notices.slice(0, MAX_ROWS);
-    const more = notices.length - shown.length;
-    const total = notices.reduce((s, n) => s + Number(n.skor_awarded), 0);
+    const PAGE = 5;
+    const page = notices.slice(0, PAGE);
+    const rest = notices.slice(PAGE);
     const pw = Math.min(340, SW - 32);
     const rowH = 32, rowGap = 6;
-    const listH = shown.length * (rowH + rowGap) + (more > 0 ? 24 : 0);
+    const listH = page.length * (rowH + rowGap);
     const ph = 76 + listH + 40 + 66;
     const top = Math.round((SH - ph) / 2 + 10);
     const panelRect = new Phaser.Geom.Rectangle(cx - pw / 2, top - 26, pw, ph + 26);
@@ -134,7 +140,6 @@ export default class ModeSelectScene extends BaseScene {
     const overlay = this.add.rectangle(cx, SH / 2, SW, SH, 0x000000, 0.55).setDepth(60).setInteractive();
     const panel = this.add.container(0, 0).setDepth(61);
     this.rewardNotice = panel;
-    this.menuButtons.forEach(b => b.disableInteractive());
 
     const teardown = () => {
       overlay.destroy();
@@ -146,8 +151,12 @@ export default class ModeSelectScene extends BaseScene {
     const close = () => {
       if (this.rewardNotice !== panel) return;
       teardown();
+      void ackSeasonRewardNotices(page.map(n => n.id));
+      if (rest.length > 0) {
+        this.openRewardNoticePage(rest, total);
+        return;
+      }
       this.menuButtons.forEach(b => { if (b.active) b.setInteractive().setScale(1); });
-      void ackSeasonRewardNotices(notices.map(n => n.id));
     };
     overlay.on('pointerdown', (p: Phaser.Input.Pointer) => {
       if (!panelRect.contains(p.x, p.y)) close();
@@ -176,7 +185,7 @@ export default class ModeSelectScene extends BaseScene {
 
     // 줄마다: '9월 · 테드 1위' · '+5,000'
     const x0 = cx - pw / 2 + 16, rw = pw - 32;
-    shown.forEach((n, i) => {
+    page.forEach((n, i) => {
       const y = top + 76 + i * (rowH + rowGap) + rowH / 2;
       const month = Number(n.year_month.split('-')[1]);
       const name = CHARACTERS.find(c => c.id === n.character_type)?.name ?? n.character_type;
@@ -188,23 +197,21 @@ export default class ModeSelectScene extends BaseScene {
         fontSize: '16px', color: '#ffd34d', fontStyle: 'bold',
       }).setOrigin(1, 0.5));
     });
-    if (more > 0) {
-      panel.add(this.add.text(cx, top + 76 + shown.length * (rowH + rowGap) + 8, `외 ${more}개`, {
-        fontSize: '13px', color: '#b9a3d6',
-      }).setOrigin(0.5));
-    }
+    // 합계는 모든 장을 합친 값 (잔액에 들어간 총액)
     panel.add(this.add.text(cx, top + 76 + listH + 18, `합계 +${total.toLocaleString()} SKOR`, {
       fontSize: '18px', color: '#ffd34d', fontStyle: 'bold', stroke: '#000', strokeThickness: 3,
     }).setOrigin(0.5));
 
-    const okW = 140, okH = 46;
+    const okW = 170, okH = 46;
     const ok = this.add.container(cx, top + ph - 40);
     const okSkin = bakeButton(this, 'reward_ok_btn', {
       w: okW, h: okH, radius: 14, top: '#fff3a8', bottom: '#ffb81a', border: '#7a4a00', borderW: 2,
       lip: '#a8650a', lipH: 4, gloss: 0,
     });
     ok.add(this.add.image(0, 0, 'reward_ok_btn').setOrigin(0.5, okSkin.originY));
-    ok.add(this.add.text(0, 0, '확인', { fontSize: '17px', color: '#5b2e0e', fontStyle: 'bold' }).setOrigin(0.5));
+    ok.add(this.add.text(0, 0, rest.length > 0 ? `다음 (${rest.length}개 더)` : '확인', {
+      fontSize: '17px', color: '#5b2e0e', fontStyle: 'bold',
+    }).setOrigin(0.5));
     wireButton(this, ok, okW, okH, close);
     panel.add(ok);
   }
