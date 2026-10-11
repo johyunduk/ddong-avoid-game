@@ -14,7 +14,7 @@ import { getSkorBalance, getCachedSkorBalance, cacheSkorBalance } from '../utils
 import { destroyVideo } from '../utils/video';
 import BaseScene from './BaseScene';
 import { addBackground } from '../utils/background';
-import { bakeButton, bakeRadialGlow, bakeRoundedImage, clipToViewport, gradientText, setTouchInteractive, touchArea, wireButton } from '../utils/buttonSkin';
+import { bakeButton, bakeRadialGlow, bakeRoundedImage, gradientText, setTouchInteractive, touchArea, wireButton } from '../utils/buttonSkin';
 
 // 개인 영상이 있는 캐릭터 — **캐릭터 정의에서 그대로 읽는다.** 영상 유무는 이미
 // `videoKey`/`videoPath` 가 말하고 있어서, 목록을 따로 두면 캐릭터를 추가할 때
@@ -41,29 +41,30 @@ const SLIDE_MS = 3000;
 // 배너 정의 · 확률 · 교환 후보는 src/config/banners.ts 와 utils/gacha.ts 가 계산한다. 이 화면은 그리기만 한다 —
 // 이름과 숫자(확률 · 천장 기준 · 가격 · 후보)를 손으로 적지 않는다
 
-/** 마지막에 보던 배너 탭 — 기기에 기억한다 */
+/** 마지막에 보던 배너 — 기기에 기억한다 */
 const TAB_KEY = 'ddong_gacha_tab';
 /**
  * 초보자 50번째 보장으로 골라 둔 UR (토글 값). 서버에는 다음 초보자 뽑기의 starterPick 으로 저장된다 (§3 · §6-2).
  * 뽑기 전에 화면을 나가도 고른 값이 남게 기기에 적어 둔다
  */
 const STARTER_PICK_KEY = 'ddong_gacha_starter_pick';
-/** 탭 줄 · 확률 창 — 이만큼 움직이면 누름이 아니라 끌기 */
-const TAP_SLOP = 8;
+/** 좌우 밀기 — 가로로 이만큼(px) 밀고 세로보다 가로로 더 움직였으면 이웃 배너로 */
+const SWIPE_MIN = 48;
 
 /** 결과 카드의 작은 글자 — 연출(빛 · 테두리)은 fx 몫이라 글자만 단다 */
 const GUARANTEE_TAG: Record<PullGuarantee, string> = { srPlus: 'SR 확정', starterUR: '보장' };
 const EXCHANGE_TAG = '교환';
 
 /**
- * 로비 아래쪽 줄 — 화면 아래에서 잰 높이 (px). 정보 블록 · 천장 · 뽑기 버튼 · 확률 줄.
- * 위쪽은 탭 줄과 본문 위 끝. 본문(픽업 오른쪽 열 · 이벤트 카드)은 bodyTop ~ (H - bodyBottom) 안에 넣는다
+ * 로비 줄 — 화면 아래에서 잰 높이 (px). 니케식 (시안 ~/ddong-fx-work/dev2/mockups2/E.png):
+ * 얼굴 줄 → 천장 → 확률 한 줄 → 뽑기 버튼 바로 위 큰 배너 이름 → 뽑기 버튼 → 페이지 점 → 확률 줄.
+ * 본문(이벤트 카드)은 bodyTop ~ (H - bodyBottom), 가장자리 ‹ › 는 화면 높이의 arrowY 에 둔다
  */
 const LOBBY = {
-  badge: 274, name: 240, rates: 208, pity: 178, pityCaption: 158,
-  pull: 98, pullH: 76, foot1: 38, foot2: 20,
+  faces: 268, pity: 236, pityCaption: 216, rates: 192, name: 160,
+  pull: 98, pullH: 76, dots: 47, foot1: 30, foot2: 12,
   starterBadge: 270, starterLine: 238, starterNote: 206, starterToggle: 174,
-  tabY: 78, tabH: 32, bodyTop: 110, bodyBottom: 300,
+  bodyTop: 72, bodyBottom: 290, arrowY: 0.38,
 } as const;
 
 /**
@@ -95,6 +96,16 @@ function bannerTitle(b: BannerDef): string {
     case 'standard': return '상시';
     case 'pickup': return b.pickupUR ? `${nameOf(b.pickupUR)} 픽업` : '픽업';
     case 'event': return '이벤트';
+  }
+}
+
+/** 뽑기 버튼 위 큰 배너 이름 */
+function bannerHeadline(b: BannerDef): string {
+  switch (b.kind) {
+    case 'starter': return '초보자 뽑기';
+    case 'standard': return '상시 뽑기';
+    case 'pickup': return bannerTitle(b);
+    case 'event': return '이벤트 픽업';
   }
 }
 
@@ -187,27 +198,18 @@ export default class GachaScene extends BaseScene {
   /** 떠 있는 창 (확률 보기 · 고르기 · 확인) — 한 번에 하나 */
   private modal: { close: () => void } | null = null;
 
-  // ── 탭 줄 (가로 스크롤) ──
-  private tabScrollX = 0;
-  private tabMaxScroll = 0;
-  private tabStrip: Phaser.GameObjects.Container | null = null;
-  private tabMask: Phaser.GameObjects.Graphics | null = null;
-  private tabDrag: { x: number; scroll: number } | null = null;
-  private tabDragMoved = false;
-  private tabPressed: string | null = null;
-
   // ── 로비 슬라이드쇼 상태 ──
   private featured: CharacterDef[] = [];
   private slideshowIndex = 0;
   private slideshowIsA = true; // true → bgA가 현재 레이어
   private slideshowBgA: Phaser.GameObjects.Image | null = null;
   private slideshowBgB: Phaser.GameObjects.Image | null = null;
-  private slideshowGradeImg: Phaser.GameObjects.Image | null = null;
-  private slideshowNameText: Phaser.GameObjects.Text | null = null;
   private slideshowRateText: Phaser.GameObjects.Text | null = null;
   private slideshowActive = false;
   private slideTimer: Phaser.Time.TimerEvent | null = null;
-  private railChips: { chip: Phaser.GameObjects.Container; ring: Phaser.GameObjects.Graphics; color: number }[] = [];
+  /** 얼굴 줄 (상시 = 진열 얼굴, 픽업 = 함께 픽업 SR) */
+  private faceChips: { chip: Phaser.GameObjects.Container; ring: Phaser.GameObjects.Graphics; color: number }[] = [];
+  private faceRowSlides = false;
 
   constructor() {
     super('GachaScene');
@@ -218,7 +220,6 @@ export default class GachaScene extends BaseScene {
     this.skorBalance = -1;
     this.chosenTab = readStore(TAB_KEY);
     this.gstate = getCachedGachaState();
-    this.tabScrollX = 0;
     this.modal = null;
     this.inLobby = false;
     this.skorText = null;
@@ -253,8 +254,8 @@ export default class GachaScene extends BaseScene {
         this.load.image(def.illustKey, def.illustPath);
       }
     }
-    // 레일 얼굴 (얼굴 파일이 없는 캐릭터는 로드 실패로 넘어가고 스프라이트로 대신한다)
-    for (const id of featuredIds()) {
+    // 얼굴 줄 — 상시 UR 진열 · 픽업 SR (얼굴 파일이 없는 캐릭터는 로드 실패로 넘어가고 카드 · 스프라이트로 대신한다)
+    for (const id of new Set([...featuredIds(), ...BANNERS.filter(b => b.kind === 'pickup').flatMap(b => b.pickupSR)])) {
       if (!this.textures.exists(`gacha_facesrc_${id}`)) {
         this.load.image(`gacha_facesrc_${id}`, `assets/ui/collection/face/${id}.webp`);
       }
@@ -292,17 +293,17 @@ export default class GachaScene extends BaseScene {
   }
 
   // ═══════════════════════════════════════════════════
-  // LOBBY — 배너 탭 · 본문 · 정보 · 천장 · 뽑기 버튼
+  // LOBBY — 배너 고르기(니케식) · 본문 · 정보 · 천장 · 뽑기 버튼
   // ═══════════════════════════════════════════════════
 
-  /** 로비를 다시 그린다. refresh 면 서버에서 잔액 · 천장 · 초보자 상태를 다시 읽는다 (탭만 바꿀 때는 읽지 않는다) */
+  /** 로비를 다시 그린다. refresh 면 서버에서 잔액 · 천장 · 초보자 상태를 다시 읽는다 (배너만 넘길 때는 읽지 않는다) */
   private buildLobby(refresh = true) {
     this.clearUI();
     this.inLobby = true;
     this.drawnState = JSON.stringify(this.gstate);
 
     const visible = visibleBanners(this.gstate);
-    const banner = this.pickTab(visible);
+    const banner = this.pickBanner(visible);
     this.banner = banner;
     this.lobbyRates = ratesOf(banner);
 
@@ -318,28 +319,29 @@ export default class GachaScene extends BaseScene {
 
     // ── 위·아래 어둠 — 글자와 버튼이 일러스트 위에서 읽히게 (세로 그라데이션 한 장을 늘려 쓴다) ──
     const fade = this.bakeVFade();
-    this.add.image(cx, 0, fade).setOrigin(0.5, 0).setDisplaySize(W, 124).setFlipY(true).setAlpha(0.75);
-    this.add.image(cx, H, fade).setOrigin(0.5, 1).setDisplaySize(W, Math.min(360, H * 0.56));
+    this.add.image(cx, 0, fade).setOrigin(0.5, 0).setDisplaySize(W, 110).setFlipY(true).setAlpha(0.7);
+    this.add.image(cx, H, fade).setOrigin(0.5, 1).setDisplaySize(W, Math.min(400, H * 0.62));
 
-    // ── 위: 뒤로 · SKOR · 배너 탭 ──
+    // ── 위: 뒤로 · SKOR ──
     this.createBackButton(32, 32);
     const known = this.skorBalance >= 0 ? this.skorBalance : getCachedSkorBalance();
     this.skorText = this.createSkorPill(W - 80, 32, known !== null ? Math.floor(known).toLocaleString() : '--');
-    this.buildTabs(visible, banner);
 
-    // ── 본문 앞 — 상시 · 초보자 = 얼굴 레일, 픽업 = 픽업 SR · 전용 배경 열, 이벤트 = 셋 나란히 ──
-    if (showcase) this.createRail(W - 32, LOBBY.bodyTop + 22);
-    else if (banner.kind === 'pickup') this.buildPickupColumn(banner);
-    else this.buildEventCards(banner);
+    // ── 본문 앞 — 이벤트 = 셋 나란히 (상시 · 픽업의 얼굴은 정보 블록의 얼굴 줄) ──
+    if (banner.kind === 'event') this.buildEventCards(banner);
 
-    // ── 정보 · 천장 · 뽑기 버튼 · 확률 줄 ──
+    // ── 정보 · 천장 · 뽑기 버튼 · 페이지 점 · 확률 줄 ──
     if (banner.kind === 'starter') this.buildStarterInfo(banner);
     else {
       this.buildInfo(banner);
       this.buildPity(banner);
     }
     this.buildPullButtons(banner);
+    this.buildDots(visible, banner);
     this.buildRateFooter();
+
+    // ── 배너 고르기 — 가장자리 ‹ › · 좌우 밀기 ──
+    this.buildSwitcher(visible, banner);
 
     if (showcase) {
       this.updateSlideshowText(this.featured[0]);
@@ -351,8 +353,8 @@ export default class GachaScene extends BaseScene {
     if (refresh) void this.refreshLobby();
   }
 
-  /** 그릴 탭 — 사람이 고른 탭이 보이면 그것, 아니면 초보자가 남았으면 초보자, 아니면 상시 (§5) */
-  private pickTab(visible: BannerDef[]): BannerDef {
+  /** 그릴 배너 — 사람이 고른(넘긴) 배너가 보이면 그것, 아니면 초보자가 남았으면 초보자, 아니면 상시 (§5) */
+  private pickBanner(visible: BannerDef[]): BannerDef {
     return visible.find(b => b.id === this.chosenTab)
       ?? visible.find(b => b.kind === 'starter')
       ?? visible.find(b => b.id === DEFAULT_BANNER_ID)
@@ -361,7 +363,7 @@ export default class GachaScene extends BaseScene {
       ?? BANNERS[0];
   }
 
-  private selectTab(id: string) {
+  private selectBanner(id: string) {
     if (id === this.banner.id) return;
     this.chosenTab = id;
     writeStore(TAB_KEY, id);
@@ -482,120 +484,132 @@ export default class GachaScene extends BaseScene {
   }
 
   /**
-   * 배너 탭 — 위쪽 가로 줄, 순서 = BANNERS 배열 순서 (visibleBanners). 넘치면 손가락으로 끈다.
-   * 마스크는 그리기만 자르므로 탭 입력은 clipToViewport 로 보이는 창 안에서만 받는다.
-   * 탭은 떼었을 때 · 거의 안 움직였을 때만 바뀐다 (끌다가 놓은 탭이 눌리지 않게)
+   * 배너 고르기 — 니케식 (대표 결정 2026-10-11, 시안 ~/ddong-fx-work/dev2/mockups2/E.png). 탭 줄은 없다.
+   * 화면 가장자리 가운데 ‹ › (안쪽에 이웃 배너 이름 작게 — 대표 제안) · 본문을 좌우로 밀기 · 뽑기 버튼 아래 페이지 점(buildDots).
+   * 순서 = visibleBanners (BANNERS 배열 순서) — 배너가 7개든 4개든 그대로 돈다. 양 끝에서는 그쪽 화살표가 없다 (돌지 않는다)
    */
-  private buildTabs(visible: BannerDef[], cur: BannerDef) {
-    const W = this.scale.width;
-    const { tabY: y, tabH: h } = LOBBY;
-    const gap = 6, padX = 12;
-    const vp = new Phaser.Geom.Rectangle(0, y - h / 2 - 6, W, h + 12);
-    const strip = this.add.container(0, y);
-    this.tabStrip = strip;
-
-    let x = padX;
-    let curSpan: [number, number] | null = null;
-    for (const b of visible) {
-      const on = b.id === cur.id;
-      const label = this.add.text(0, 0, bannerTitle(b), {
-        fontSize: '13px', fontStyle: 'bold', color: on ? '#3a1d00' : '#efe6ff',
-      }).setOrigin(0.5);
-      const w = Math.ceil(label.width) + 26;
-      const box = this.add.container(x + w / 2, 0);
-      const g = this.add.graphics();
-      if (on) {
-        g.fillStyle(0xffd34d).fillRoundedRect(-w / 2, -h / 2, w, h, h / 2)
-          .lineStyle(2, 0x7a4a00).strokeRoundedRect(-w / 2, -h / 2, w, h, h / 2);
-      } else {
-        g.fillStyle(0x0a0618, 0.78).fillRoundedRect(-w / 2, -h / 2, w, h, h / 2)
-          .lineStyle(1.5, 0x8a7ab8).strokeRoundedRect(-w / 2, -h / 2, w, h, h / 2);
+  private buildSwitcher(visible: BannerDef[], cur: BannerDef) {
+    const W = this.scale.width, H = this.scale.height;
+    const i = visible.indexOf(cur);
+    const y = Math.round(H * LOBBY.arrowY);
+    for (const dir of [-1, 1] as const) {
+      const nb = visible[i + dir];
+      if (!nb) continue;
+      const box = this.add.container(dir < 0 ? 17 : W - 17, y);
+      box.add(this.add.graphics().fillStyle(0x0a0618, 0.5).fillRoundedRect(-14, -32, 28, 64, 10));
+      box.add(this.add.text(0, -3, dir < 0 ? '‹' : '›', {
+        fontSize: '36px', color: '#ffffff', fontStyle: 'bold', stroke: '#000000', strokeThickness: 4,
+      }).setOrigin(0.5));
+      wireButton(this, box, 28, 64, () => this.stepBanner(dir), true);
+      const t = this.add.text(dir < 0 ? 35 : W - 35, y, bannerTitle(nb), {
+        fontSize: '11px', color: '#ffffff', fontStyle: 'bold', stroke: '#000000', strokeThickness: 4,
+      }).setOrigin(dir < 0 ? 0 : 1, 0.5).setAlpha(0.9);
+      // 이웃 배너의 천장 교환이 되면 이름 옆 빨간 점 (탭 줄의 점을 옮겼다)
+      if (this.canExchangeOf(nb)) {
+        const dx = dir < 0 ? t.x + t.width + 6 : t.x - t.width - 6;
+        this.add.graphics().fillStyle(0xff5a3a).fillCircle(dx, y - 1, 4).lineStyle(1.2, 0xffffff).strokeCircle(dx, y - 1, 4);
       }
-      box.add([g, label]);
-      // 교환할 수 있는 배너 — 탭 오른쪽 위 금빛 점
-      const ps = b.pity ? this.gstate?.pity[b.pity.track] : undefined;
-      if (ps?.canExchange) {
-        box.add(this.add.graphics().fillStyle(0xff5a3a).fillCircle(w / 2 - 5, -h / 2 + 4, 4.5).lineStyle(1.5, 0xffffff).strokeCircle(w / 2 - 5, -h / 2 + 4, 4.5));
-      }
-      box.setSize(w, h);
-      box.setInteractive(clipToViewport(touchArea(w, h), vp));
-      box.on('pointerdown', () => { this.tabPressed = b.id; });
-      box.on('pointerup', () => {
-        if (this.tabPressed === b.id && !this.tabDragMoved && !this.modal) this.selectTab(b.id);
-        this.tabPressed = null;
-      });
-      strip.add(box);
-      if (on) curSpan = [x, x + w];
-      x += w + gap;
     }
-    this.tabMaxScroll = Math.max(0, x - gap + padX - W);
-    // 고른 탭이 창 밖이면 보이게 맞춘다
-    if (curSpan) {
-      if (curSpan[0] - padX < this.tabScrollX) this.tabScrollX = curSpan[0] - padX;
-      if (curSpan[1] + padX > this.tabScrollX + W) this.tabScrollX = curSpan[1] + padX - W;
-    }
-    this.tabScrollX = Phaser.Math.Clamp(this.tabScrollX, 0, this.tabMaxScroll);
-    strip.x = -this.tabScrollX;
 
-    const mask = this.make.graphics({ x: 0, y: 0 });
-    mask.fillRect(vp.x, vp.y, vp.width, vp.height);
-    strip.setMask(mask.createGeometryMask());
-    this.tabMask = mask;
-
-    // 끌기 — 씬 입력으로 받는다 (clearUI 가 지운다). 창이 떠 있으면 무시
+    // 좌우 밀기 — 본문(위 막대 아래 ~ 얼굴 줄 위)에서, 눌리는 것이 없는 자리에서 시작한 끌기만 본다
+    // (버튼 위에서 시작하면 그 버튼이 이미 눌린다 — wireButton 은 누를 때 동작한다)
+    const top = 60, bottom = H - LOBBY.faces - 20;
+    let start: { x: number; y: number } | null = null;
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
-      this.tabDragMoved = false;
-      if (this.modal || !vp.contains(p.x, p.y)) return;
-      this.tabDrag = { x: p.x, scroll: this.tabScrollX };
+      start = !this.modal && p.y > top && p.y < bottom && this.input.hitTestPointer(p).length === 0 ? { x: p.x, y: p.y } : null;
     });
-    this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
-      if (!this.tabDrag || !p.isDown) return;
-      const dx = p.x - this.tabDrag.x;
-      if (Math.abs(dx) > TAP_SLOP) this.tabDragMoved = true;
-      if (this.tabDragMoved) this.scrollTabs(this.tabDrag.scroll - dx);
-    });
-    this.input.on('pointerup', () => { this.tabDrag = null; });
-    this.input.on('wheel', (p: Phaser.Input.Pointer, _over: unknown, dx: number, dy: number) => {
-      if (!this.modal && vp.contains(p.x, p.y)) this.scrollTabs(this.tabScrollX + (dx || dy) * 0.6);
+    this.input.on('pointerup', (p: Phaser.Input.Pointer) => {
+      const s = start;
+      start = null;
+      if (!s || this.modal) return;
+      const dx = p.x - s.x, dy = p.y - s.y;
+      if (Math.abs(dx) >= SWIPE_MIN && Math.abs(dx) > Math.abs(dy) * 1.2) this.stepBanner(dx < 0 ? 1 : -1);
     });
   }
 
-  private scrollTabs(to: number) {
-    this.tabScrollX = Phaser.Math.Clamp(to, 0, this.tabMaxScroll);
-    if (this.tabStrip?.active) this.tabStrip.x = -this.tabScrollX;
+  /** 이웃 배너로 (‹ › · 밀기). 끝이면 그대로 */
+  private stepBanner(dir: -1 | 1) {
+    if (this.modal || !this.inLobby) return;
+    const visible = visibleBanners(this.gstate);
+    const next = visible[visible.indexOf(this.banner) + dir];
+    if (next) this.selectBanner(next.id);
   }
 
-  /** 오른쪽 얼굴 레일 — 진열 캐릭터 얼굴(ui/collection/face)을 원으로 구워 세로로 */
-  private createRail(x: number, top: number) {
-    this.railChips = [];
-    this.featured.forEach((def, i) => {
-      const y = top + i * 58;   // 고른 칩은 1.22배 — 54 면 아래 칩에 닿는다
-      const chip = this.add.container(x, y);
-      const src = `gacha_facesrc_${def.id}`;
-      if (this.textures.exists(src)) {
-        chip.add(this.add.image(0, 0, bakeRoundedImage(this, `gacha_face_${def.id}_36`, src, 36, 36, 18)).setDisplaySize(36, 36));
-      } else if (this.textures.exists(def.imageKey)) {
-        // 얼굴 그림이 없는 캐릭터 — 게임 스프라이트로 대신한다
-        const img = this.add.image(0, 0, def.imageKey);
-        chip.add(img.setScale(Math.min(32 / img.width, 32 / img.height)));
-      }
+  /** 페이지 점 — 뽑기 버튼 바로 아래. 지금 배너는 금빛 막대, 천장 교환이 되는 배너는 빨간 점 */
+  private buildDots(visible: BannerDef[], cur: BannerDef) {
+    const W = this.scale.width, y = this.scale.height - LOBBY.dots;
+    const gap = 13, x0 = W / 2 - gap * (visible.length - 1) / 2;
+    const g = this.add.graphics();
+    visible.forEach((b, i) => {
+      const x = x0 + i * gap;
+      if (b === cur) g.fillStyle(0xffd34d).fillRoundedRect(x - 8, y - 3.5, 16, 7, 3.5);
+      else if (this.canExchangeOf(b)) g.fillStyle(0xff5a3a).fillCircle(x, y, 3.6);
+      else g.fillStyle(0xffffff, 0.55).fillCircle(x, y, 3.2);
+    });
+  }
+
+  private canExchangeOf(b: BannerDef): boolean {
+    return !!(b.pity && this.gstate?.pity[b.pity.track]?.canExchange);
+  }
+
+  /**
+   * 얼굴 줄 (예전 오른쪽 SR 칸 대신) — 픽업 = '함께 픽업' 픽업 SR 얼굴 + 이름,
+   * 상시 = '상시 UR' 진열 얼굴 (누르면 그 진열로 — 예전 오른쪽 레일). 픽업 전용 배경화면은 확률 보기 창에서 보인다
+   */
+  private buildFaceRow(b: BannerDef) {
+    const y = this.scale.height - LOBBY.faces;
+    const slides = b.kind !== 'pickup';
+    const ids = slides ? this.featured.map(d => d.id) : [...b.pickupSR];
+    this.faceChips = [];
+    if (!ids.length) return;
+    const label = this.add.text(20, y, slides ? '상시 UR' : '함께 픽업', {
+      fontSize: '11px', color: '#d9c6f0', fontStyle: 'bold', stroke: '#000000', strokeThickness: 3,
+    }).setOrigin(0, 0.5);
+    const d = 28;
+    let x = 20 + Math.max(label.width, 52) + 8;
+    ids.forEach((id, i) => {
+      const def = getCharacterDef(id);
+      const chip = this.add.container(x + d / 2, y);
+      chip.add(this.add.graphics().fillStyle(0x0a0618, 0.9).fillCircle(0, 0, d / 2 + 2));
+      chip.add(this.faceImage(id, d));
       const ring = this.add.graphics();
       chip.add(ring);
-      // 히트 영역은 왼쪽 위 기준 (buttonSkin.wireButton 주석 참고)
-      chip.setSize(44, 44).setInteractive(new Phaser.Geom.Rectangle(0, 0, 44, 44), Phaser.Geom.Rectangle.Contains);
-      if (chip.input) chip.input.cursor = 'pointer';
-      chip.on('pointerdown', () => this.showSlide(i));
-      this.railChips.push({ chip, ring, color: getGradeColorInt(def) });
+      this.faceChips.push({ chip, ring, color: getGradeColorInt(def) });
+      if (slides) {
+        // 히트 영역은 왼쪽 위 기준 (buttonSkin.wireButton 주석 참고) — 손가락 크기(44)로 넓힌다
+        chip.setSize(d, d).setInteractive(touchArea(d, d), Phaser.Geom.Rectangle.Contains);
+        if (chip.input) chip.input.cursor = 'pointer';
+        chip.on('pointerdown', () => this.showSlide(i));
+      }
+      x += d + 6;
     });
-    this.refreshRail();
+    if (!slides) {
+      this.add.text(x + 2, y, ids.map(nameOf).join(' · '), {
+        fontSize: '12px', color: '#ffffff', fontStyle: 'bold', stroke: '#000000', strokeThickness: 3,
+      }).setOrigin(0, 0.5);
+    }
+    this.faceRowSlides = slides;
+    this.refreshFaces();
   }
 
-  /** 지금 보는 칩만 크게 · 금테 */
-  private refreshRail() {
-    this.railChips.forEach(({ chip, ring, color }, i) => {
-      const on = i === this.slideshowIndex;
-      ring.clear().lineStyle(on ? 3 : 2, on ? 0xffd34d : color).strokeCircle(0, 0, 18);
-      chip.setScale(on ? 44 / 36 : 1);
+  /** 얼굴 원 — 얼굴 그림(ui/collection/face)을 굽는다. 없으면 수집 카드 위쪽, 그것도 없으면 게임 스프라이트 */
+  private faceImage(id: string, d: number): Phaser.GameObjects.Image {
+    const def = getCharacterDef(id);
+    const src = `gacha_facesrc_${id}`;
+    if (this.textures.exists(src)) return this.add.image(0, 0, bakeRoundedImage(this, `gacha_face_${id}_${d}`, src, d, d, d / 2)).setDisplaySize(d, d);
+    if (this.textures.exists(`gacha_card_${id}`)) {
+      return this.add.image(0, 0, bakeRoundedImage(this, `gacha_facec_${id}_${d}`, `gacha_card_${id}`, d, d, d / 2, 0.12)).setDisplaySize(d, d);
+    }
+    const img = this.add.image(0, 0, def.imageKey);
+    return img.setScale(Math.min((d - 4) / img.width, (d - 4) / img.height));
+  }
+
+  /** 얼굴 테두리 — 상시는 지금 진열만 크게 · 금테, 픽업은 등급색 */
+  private refreshFaces() {
+    this.faceChips.forEach(({ chip, ring, color }, i) => {
+      const on = this.faceRowSlides && i === this.slideshowIndex;
+      ring.clear().lineStyle(on ? 2.5 : 2, on ? 0xffd34d : color).strokeCircle(0, 0, 15);
+      chip.setScale(on ? 1.15 : 1);
     });
   }
 
@@ -633,7 +647,7 @@ export default class GachaScene extends BaseScene {
     this.slideshowIsA = !this.slideshowIsA;
     this.slideshowIndex = index;
     this.updateSlideshowText(nextDef);
-    this.refreshRail();
+    this.refreshFaces();
     if (byUser) this.restartSlideTimer();
 
     // crossfade: 현재 fade-out, 다음 fade-in
@@ -641,26 +655,13 @@ export default class GachaScene extends BaseScene {
     this.tweens.add({ targets: incoming, alpha: 1, duration: 600, ease: 'Sine.easeInOut' });
   }
 
-  /** 상시 탭 — 슬라이드의 캐릭터 이름 · 등급 · 한 칸 확률 (초보자 탭은 이 글자들이 없어 그림만 넘어간다) */
+  /** 상시 — 슬라이드의 캐릭터 이름 · 한 칸 확률 (큰 이름은 배너 이름이다. 초보자는 이 줄이 없어 그림만 넘어간다) */
   private updateSlideshowText(def: CharacterDef) {
-    // 등급 이미지: 기존 Image 객체를 재사용해 GC 압박 방지 (destroy+recreate 대신 setTexture)
-    const gradeKey = getGradeImgKey(def.grade);
-    if (this.slideshowGradeImg?.active) {
-      this.slideshowGradeImg.setVisible(!!gradeKey);
-      if (gradeKey) {
-        this.slideshowGradeImg.setTexture(gradeKey).setDisplaySize(48, 48).setAlpha(0);
-        this.tweens.add({ targets: this.slideshowGradeImg, alpha: 1, duration: 150 });
-      }
-    }
-    if (this.slideshowNameText?.active) {
-      this.slideshowNameText.setText(def.name).setAlpha(0);
-      this.tweens.add({ targets: this.slideshowNameText, alpha: 1, duration: 150 });
-    }
     const rates = this.lobbyRates;
     if (this.slideshowRateText?.active && rates) {
       const each = rates.entries.find(e => e.kind === 'character' && e.id === def.id)?.rate.slot ?? 0;
       const total = (rates.byGrade as Partial<Record<string, RateCell>>)[def.grade]?.slot ?? 0;
-      this.slideshowRateText.setText(`이 캐릭터 ${formatRate(each)}%  ·  ${def.grade} 전체 ${formatRate(total)}%`);
+      this.slideshowRateText.setText(`${def.name} ${formatRate(each)}%  ·  ${def.grade} 전체 ${formatRate(total)}%`);
     }
   }
 
@@ -709,84 +710,60 @@ export default class GachaScene extends BaseScene {
     return box;
   }
 
-  /** 작은 배경화면 썸네일 — 청록 테두리 (배경화면 획득 카드와 같은 결) */
-  private miniWallpaper(x: number, y: number, w: number, h: number, id: string) {
-    this.add.graphics()
+  /** 작은 배경화면 썸네일 — 청록 테두리 (배경화면 획득 카드와 같은 결). 그린 것을 돌려준다 (확률 창 목록에 넣는다) */
+  private wallpaperThumb(x: number, y: number, w: number, h: number, id: string): Phaser.GameObjects.GameObject[] {
+    const out: Phaser.GameObjects.GameObject[] = [this.add.graphics()
       .fillStyle(0x06324a, 0.92).fillRoundedRect(x - w / 2 - 2, y - h / 2 - 2, w + 4, h + 4, 7)
-      .lineStyle(1.5, WP_CARD_TEAL).strokeRoundedRect(x - w / 2 - 2, y - h / 2 - 2, w + 4, h + 4, 7);
+      .lineStyle(1.5, WP_CARD_TEAL).strokeRoundedRect(x - w / 2 - 2, y - h / 2 - 2, w + 4, h + 4, 7)];
     const src = `gacha_wp_${id}`;
     if (this.textures.exists(src)) {
-      this.add.image(x, y, bakeRoundedImage(this, `gacha_wpR_${id}_${w}`, src, w, h, 5)).setDisplaySize(w, h);
+      out.push(this.add.image(x, y, bakeRoundedImage(this, `gacha_wpR_${id}_${w}`, src, w, h, 5)).setDisplaySize(w, h));
     }
+    return out;
   }
 
-  /** 픽업 오른쪽 열 — 픽업 SR 카드, 그 아래 픽업 전용 배경화면 썸네일. 본문 높이에 맞춰 줄인다 */
-  private buildPickupColumn(b: BannerDef) {
-    const W = this.scale.width, H = this.scale.height;
-    const top = LOBBY.bodyTop, bottom = H - LOBBY.bodyBottom, gap = 6;
-    const units = b.pickupSR.length * (4 / 3) + b.pickupWP.length * (233 / 360);
-    const n = b.pickupSR.length + b.pickupWP.length;
-    const cw = Math.max(36, Math.min(60, Math.floor((bottom - top - gap * (n - 1)) / Math.max(1, units))));
-    const ch = Math.round(cw * 4 / 3), wh = Math.round(cw * 233 / 360);
-    const x = W - 16 - cw / 2;
-    let y = top;
-    for (const id of b.pickupSR) {
-      this.miniCard(x, y + ch / 2, cw, ch, id);
-      y += ch + gap;
-    }
-    for (const id of b.pickupWP) {
-      this.miniWallpaper(x, y + wh / 2, cw, wh, id);
-      y += wh + gap;
-    }
-  }
-
-  /** 이벤트 본문 — 이벤트 픽업 셋을 나란히, 카드 아래에 그 캐릭터의 전용 배경화면 (pickupWP 는 pickupSR 과 같은 순서) */
+  /**
+   * 이벤트 본문 — 이벤트 픽업 셋을 나란히. 가장자리 ‹ › 와 그 옆 이웃 배너 이름에 걸리지 않게 화살표 줄 위에 둔다.
+   * 전용 배경화면은 확률 보기 창에서 보인다
+   */
   private buildEventCards(b: BannerDef) {
     const W = this.scale.width, H = this.scale.height;
-    const n = Math.max(1, b.pickupSR.length), gap = 10, wGap = 8;
-    const top = LOBBY.bodyTop + 6, bottom = H - LOBBY.bodyBottom;
-    const byW = Math.floor((W - 32 - gap * (n - 1)) / n);
-    const byH = Math.floor((bottom - top - wGap) / (4 / 3 + 233 / 360));
+    const n = Math.max(1, b.pickupSR.length), gap = 10;
+    const top = LOBBY.bodyTop, bottom = Math.min(H - LOBBY.bodyBottom, Math.round(H * LOBBY.arrowY) - 40);
+    const byW = Math.floor((W - 80 - gap * (n - 1)) / n);
+    const byH = Math.floor((bottom - top) * 3 / 4);
     const cw = Math.max(48, Math.min(108, byW, byH));
-    const ch = Math.round(cw * 4 / 3), wh = Math.round(cw * 233 / 360);
-    const total = ch + (b.pickupWP.length ? wGap + wh : 0);
-    const y0 = top + Math.max(0, (bottom - top - total) / 2);
+    const ch = Math.round(cw * 4 / 3);
+    const y = top + Math.max(0, (bottom - top - ch) / 2) + ch / 2;
     const x0 = W / 2 - (n * cw + (n - 1) * gap) / 2 + cw / 2;
-    b.pickupSR.forEach((id, i) => {
-      const x = x0 + i * (cw + gap);
-      this.miniCard(x, y0 + ch / 2, cw, ch, id, true);
-      const wp = b.pickupWP[i];
-      if (wp) this.miniWallpaper(x, y0 + ch + wGap + wh / 2, cw, wh, wp);
-    });
+    b.pickupSR.forEach((id, i) => this.miniCard(x0 + i * (cw + gap), y, cw, ch, id, true));
   }
 
-  /** 상시 · 픽업 · 이벤트 정보 블록 — 배지 · 이름 · 한 칸 확률 한 줄 + [확률 보기] */
+  /**
+   * 상시 · 픽업 · 이벤트 정보 (니케식) — 얼굴 줄, 한 칸 확률 한 줄 + [확률 보기], 뽑기 버튼 바로 위 큰 배너 이름.
+   * 천장은 buildPity (얼굴 줄과 확률 줄 사이)
+   */
   private buildInfo(b: BannerDef) {
     const W = this.scale.width, H = this.scale.height;
-    const ny = H - LOBBY.name;
-    if (b.kind !== 'standard') this.badge(20, H - LOBBY.badge, b.kind === 'event' ? '이벤트 픽업' : '픽업');
-
-    if (b.kind === 'event') {
-      this.add.text(20, ny + 4, b.pickupSR.map(nameOf).join(' · '), {
-        fontSize: '26px', color: '#ffffff', fontStyle: 'bold', stroke: '#000000', strokeThickness: 7,
-      }).setOrigin(0, 0.5);
-    } else {
-      const def = b.kind === 'pickup' && b.pickupUR ? getCharacterDef(b.pickupUR) : this.featured[0];
-      const img = this.add.image(42, ny + 4, getGradeImgKey(def.grade) ?? 'grade_r').setDisplaySize(48, 48);
-      const name = this.add.text(70, ny + 4, def.name, {
-        fontSize: '34px', color: '#ffffff', fontStyle: 'bold', stroke: '#000000', strokeThickness: 8,
-      }).setOrigin(0, 0.5);
-      if (b.kind === 'standard') {
-        this.slideshowGradeImg = img;
-        this.slideshowNameText = name;
-      }
-    }
+    if (b.kind !== 'event') this.buildFaceRow(b);
 
     const rateText = this.add.text(20, H - LOBBY.rates, this.infoRateLine(b), {
       fontSize: '12px', color: '#ffe58a', fontStyle: 'bold', stroke: '#000000', strokeThickness: 4,
     }).setOrigin(0, 0.5);
     if (b.kind === 'standard') this.slideshowRateText = rateText;
     this.ratesButton(W - 16 - 42, H - LOBBY.rates, b);
+
+    // 큰 배너 이름 — 픽업은 픽업 UR 등급 그림을 앞에
+    const ny = H - LOBBY.name;
+    let x = 20;
+    const gk = b.kind === 'pickup' && b.pickupUR ? getGradeImgKey(getCharacterDef(b.pickupUR).grade) : null;
+    if (gk) {
+      this.add.image(x + 20, ny, gk).setDisplaySize(40, 40);
+      x += 46;
+    }
+    this.add.text(x, ny, bannerHeadline(b), {
+      fontSize: '28px', color: '#ffffff', fontStyle: 'bold', stroke: '#000000', strokeThickness: 7,
+    }).setOrigin(0, 0.5);
   }
 
   /** 정보 블록의 확률 한 줄 — 픽업 · 이벤트는 픽업 몫. 상시는 슬라이드마다 updateSlideshowText 가 채운다 */
@@ -1202,6 +1179,21 @@ export default class GachaScene extends BaseScene {
       }
       y += 6;
     };
+
+    // ── 전용 배경화면 — 로비에는 오른쪽 칸이 없어(니케식) 썸네일을 여기서 보인다 ──
+    if (b.pickupWP.length) {
+      heading(b.kind === 'event' ? '이벤트 전용 배경화면' : '픽업 전용 배경화면');
+      const gap = 8, n = b.pickupWP.length;
+      const tw = Math.min(104, Math.floor((x1 - x0 - gap * (n - 1)) / n)), th = Math.round(tw * 233 / 360);
+      b.pickupWP.forEach((id, k) => {
+        const x = x0 + k * (tw + gap) + tw / 2;
+        list.add(this.wallpaperThumb(x, y + 2 + th / 2, tw, th, id));
+        list.add(this.add.text(x, y + th + 8, getWallpaperDef(id)?.name ?? id, {
+          fontSize: '10px', color: '#b9a3d6', fontStyle: 'bold', align: 'center', wordWrap: { width: tw, useAdvancedWrap: true },
+        }).setOrigin(0.5, 0));
+      });
+      y += th + 8 + 30;
+    }
 
     // ── 한 칸 확률 ──
     heading('한 칸 확률');
@@ -2290,16 +2282,9 @@ export default class GachaScene extends BaseScene {
     this.slideshowActive = false;
     this.slideshowBgA = null;
     this.slideshowBgB = null;
-    this.slideshowGradeImg = null;
-    this.slideshowNameText = null;
     this.slideshowRateText = null;
     this.slideTimer = null;
-    this.railChips = [];
-    this.tabStrip = null;
-    this.tabDrag = null;
-    this.tabPressed = null;
-    this.tabMask?.destroy();   // 마스크 그래픽은 화면 목록 밖이라 아래에서 안 지워진다
-    this.tabMask = null;
+    this.faceChips = [];
     this.toast = null;         // 아래에서 같이 부서진다
     this.tweens.killAll();
     this.time.removeAllEvents();
