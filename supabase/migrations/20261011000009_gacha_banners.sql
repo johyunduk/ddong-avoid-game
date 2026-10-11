@@ -5,9 +5,15 @@
 --   옛 함수는 bannerId · requestId 를 몰라 어느 탭에서든 상시로 뽑고, 같은 요청이 다시 와도 또 차감한다.
 --   같은 이유로 클라이언트가 나간 뒤 gacha-pull 만
 --   배너 이전으로 되돌리는 롤백도 하지 않는다 (되돌릴 때는 클라이언트도 같이).
---   초보자 뽑기(할인)가 열리므로 웰컴 보너스 서버 지급(20261011000001 · 000002)이 운영에 들어간 뒤에 연다 —
+--   초보자 혜택(할인)이 열리므로 웰컴 보너스 서버 지급(20261011000001 · 000002)이 운영에 들어간 뒤에 연다 —
 --   잔액을 클라이언트가 쓸 수 있으면 할인 뽑기를 무한히 산다 (정의서 §3)
--- 기준: ~/ddong-fx-work/gacha/banner_spec_v1.md §4-5 · §6-2. 배너 · 확률 정본은 src/config/banners.ts
+-- 기준: ~/ddong-fx-work/gacha/banner_spec_v1.md (정의서 v2) §3 · §4-5 · §6-2. 배너 · 확률 정본은 src/config/banners.ts
+--
+-- 정의서 v2 (2026-10-11 대표 결정): 초보자 배너를 상시에 합쳤다 — 상시 10연의 처음 50칸이 초보자 구간이다.
+-- 구간인지와 가격(720 / 900)은 이 파일의 gacha_pull_commit 이 초보자 행을 잠그고 정한다.
+-- 이 파일은 운영에 한 번도 적용되지 않은 채 v2 로 고쳐 썼다 (2026-10-11 운영 조회: 세 표 · gacha_pull_commit · gacha_exchange_commit 모두 없음) —
+-- 그래서 지운 배너(pickup_sentinel · pickup_legacy)의 천장 포인트는 옮길 것이 없다 (정의서 §4-4).
+-- v1 판을 적용해 본 DB 가 있으면 세 표와 세 함수를 지우고 이 판을 다시 적용한다 (함수 인자가 바뀌었다)
 --
 -- 추첨(난수)은 Edge Function 이 정본 확률표로 하고 결과만 넘긴다. 이 함수들은 그 결과를 받아
 -- 차감 · 천장 · 초보자 · 지급 · 기록을 한 트랜잭션에서 한다. 거절은 RAISE 'gacha:<code>' — 전부 되돌린다.
@@ -25,13 +31,13 @@ CREATE TABLE IF NOT EXISTS public.gacha_pity (
   PRIMARY KEY (user_id, track)
 );
 
--- ── 2. 초보자 뽑기 — 계정당 한 줄. 최대 횟수 · 보장 후보는 배너 정의가 정한다 (함수 인자) ──
+-- ── 2. 초보자 혜택 — 계정당 한 줄. 구간 길이 · 가격 · 보장 후보는 상시 배너 정의가 정한다 (함수 인자) ──
 CREATE TABLE IF NOT EXISTS public.gacha_starter (
   user_id      UUID        PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  pulls_done   INTEGER     NOT NULL DEFAULT 0 CHECK (pulls_done >= 0),
-  ur_hit       BOOLEAN     NOT NULL DEFAULT false,   -- 초보자 뽑기에서 UR 이 나왔다 → 50번째 보장이 필요 없다
+  pulls_done   INTEGER     NOT NULL DEFAULT 0 CHECK (pulls_done >= 0),   -- 구간 안 상시 10연의 칸 수 (10의 배수, 1회는 안 센다)
+  ur_hit       BOOLEAN     NOT NULL DEFAULT false,   -- 구간 10연에서 UR 이 나왔다 → 50번째 보장이 필요 없다
   pick         TEXT,                                 -- 50번째 보장으로 미리 고른 UR
-  completed_at TIMESTAMPTZ,                          -- 최대 횟수를 다 쓴 때
+  completed_at TIMESTAMPTZ,                          -- 구간을 다 쓴 때
   updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -43,9 +49,10 @@ CREATE TABLE IF NOT EXISTS public.gacha_pull_log (
   kind          TEXT        NOT NULL CHECK (kind IN ('pull', 'exchange')),
   request_id    UUID        NOT NULL,
   pulled_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
-  cost          INTEGER     NOT NULL DEFAULT 0,   -- 교환은 0
+  cost          INTEGER     NOT NULL DEFAULT 0,   -- 실제로 빠진 SKOR (초보자 구간 10연 720). 교환은 0
+  starter       BOOLEAN     NOT NULL DEFAULT false, -- 초보자 구간의 상시 10연이었다
   results       JSONB       NOT NULL,             -- 칸마다 {kind, id, grade, isNew, guaranteed} — 뽑은 순서
-  pity_before   INTEGER,                          -- 초보자 뽑기는 NULL (천장 없음)
+  pity_before   INTEGER,                          -- 천장 없는 배너는 NULL
   pity_after    INTEGER,
   balance_after NUMERIC(10, 1),                   -- 뽑은 뒤 잔액. 교환은 NULL
   rates_version TEXT        NOT NULL,
@@ -82,6 +89,7 @@ AS $$
     'replay',       p_replay,
     'kind',         l.kind,
     'bannerId',     l.banner_id,
+    'cost',         l.cost,
     'results',      l.results,
     'pityPoints',   l.pity_after,
     'balance',      l.balance_after,
@@ -94,12 +102,17 @@ AS $$
 $$;
 
 -- ── 6. 뽑기 ─────────────────────────────────────────────────────────────
--- p_slots      : Edge Function 이 뽑은 칸 [{kind, id, grade, guaranteed}] — 순서대로 (10연 확정은 이미 들어 있다)
--- p_pity_track : 천장 줄. 초보자 배너는 NULL (포인트 안 쌓임)
--- p_starter    : 초보자 배너만 {max, pick} — pick 은 이번 요청에 실린 값(없으면 null, 저장된 값을 쓴다)
+-- p_cost          : 보통 가격 (1회 100 · 10연 900). 초보자 구간이면 아래 multiPrice 로 바뀐다
+-- p_slots         : Edge Function 이 뽑은 칸 [{kind, id, grade, guaranteed}] — 순서대로 (10연 확정은 이미 들어 있다)
+-- p_pity_track    : 천장 줄 — 상시는 초보자 구간이어도 'standard' (정의서 §3). 천장 없는 배너는 NULL
+-- p_starter       : 상시 10연만 {max, multiPrice, pick} — pick 은 이번 요청에 실린 값(없으면 null, 저장된 값을 쓴다).
+--                   그 밖(1회 · 다른 배너 · 배너 이전 클라이언트)은 NULL
+-- p_expected_cost : 화면이 보인 가격. 실제 차감액과 다르면 차감 없이 price_changed 로 거절 (NULL 이면 보지 않는다)
 --
--- 초보자 50번째 보장은 여기서 넣는다 — 초보자 상태를 잠근 채로 봐야 두 번 누르기에 안 틀린다.
--- 이번 뽑기가 max 번째 칸을 품고, 그 앞 칸까지 초보자 UR 이 한 번도 없었으면 그 칸을 고른 UR 로 바꾼다
+-- 초보자 구간인지는 여기서 정한다 — 초보자 행을 잠근 채 pulls_done + 10 ≤ max 를 봐야 두 기기 동시 뽑기에 안 틀린다
+-- (둘 다 '40회 → 720' 으로 보고 눌러도 하나만 720, 다른 하나는 900 — expectedCost 720 이면 거절).
+-- 구간이면 multiPrice 로 차감하고 횟수 · ur_hit · pick 을 쓴다. 구간 밖이면 보통 상시라 초보자 상태를 건드리지 않는다.
+-- 구간의 max 번째 칸: 그 앞 칸까지 구간 UR 이 한 번도 없었으면 그 칸을 고른 UR 로 바꾼다
 -- ('SR 확정' 칸이었어도 바꾼다 — UR 이라 확정도 채운다, 정의서 §4-3)
 CREATE OR REPLACE FUNCTION public.gacha_pull_commit(
   p_user_id       UUID,
@@ -109,6 +122,7 @@ CREATE OR REPLACE FUNCTION public.gacha_pull_commit(
   p_slots         JSONB,
   p_pity_track    TEXT,
   p_starter       JSONB,
+  p_expected_cost INTEGER,
   p_rates_version TEXT
 ) RETURNS JSONB
 LANGUAGE plpgsql
@@ -127,9 +141,12 @@ DECLARE
   v_pity_after  INTEGER;
   v_st          public.gacha_starter;
   v_max         INTEGER;
+  v_multi_price INTEGER;
   v_pick        TEXT;
   v_idx         INTEGER;
   v_ur_before   BOOLEAN;
+  v_cost        INTEGER := p_cost;
+  v_in_starter  BOOLEAN := false;
 BEGIN
   -- 사용자 하나의 뽑기 · 교환은 한 줄로 선다 — 두 탭 동시 뽑기, 같은 requestId 재시도가 서로를 못 본 채 쓰지 않게
   PERFORM pg_advisory_xact_lock(hashtextextended('gacha:' || p_user_id::text, 0));
@@ -145,40 +162,46 @@ BEGIN
   END IF;
   v_count := jsonb_array_length(p_slots);
 
-  -- 초보자: 잠그고, 남은 횟수 · 보장 후보를 본다
+  -- 초보자: 잠그고, 이번 10연이 구간 안인지 본다
   IF p_starter IS NOT NULL THEN
     v_max := (p_starter->>'max')::INTEGER;
-    IF v_max IS NULL OR v_max <= 0 THEN
-      RAISE EXCEPTION 'gacha:bad_request' USING DETAIL = 'starter max';
+    v_multi_price := (p_starter->>'multiPrice')::INTEGER;
+    IF v_max IS NULL OR v_max <= 0 OR v_multi_price IS NULL OR v_multi_price <= 0 OR v_count <> 10 THEN
+      RAISE EXCEPTION 'gacha:bad_request' USING DETAIL = 'starter — max · multiPrice · 10연만';
     END IF;
     INSERT INTO public.gacha_starter (user_id) VALUES (p_user_id) ON CONFLICT (user_id) DO NOTHING;
     SELECT * INTO v_st FROM public.gacha_starter WHERE user_id = p_user_id FOR UPDATE;
-    IF v_st.pulls_done + v_count > v_max THEN
-      RAISE EXCEPTION 'gacha:starter_done' USING DETAIL = v_st.pulls_done::text;
-    END IF;
-    v_pick := coalesce(p_starter->>'pick', v_st.pick);
-    v_ur_before := v_st.ur_hit;
-    IF v_st.pulls_done + v_count >= v_max THEN
-      -- 이번이 마지막 — 아직 UR 이 없는데 고른 값도 없으면 거절 (화면이 고르기 창을 먼저 띄운다).
-      -- 초보자 UR 을 이미 뽑았으면(ur_hit) 보장이 쓰이지 않으므로 고르지 않아도 된다 — 화면은 토글을 흐리게 하고
-      -- 'UR 획득 — 보장 없이 진행' 으로 그대로 뽑는다 (dev2 화면 계획 §6, director 승인 2026-10-11).
-      -- 정의서 §3 · §6-2 의 'pick 없음 거절' 문장에는 이 예외가 아직 안 적혀 있다
-      IF NOT v_ur_before AND v_pick IS NULL THEN
-        RAISE EXCEPTION 'gacha:starter_pick_required';
-      END IF;
-      v_idx := v_max - v_st.pulls_done - 1;   -- 이번 칸 중 max 번째 (0부터)
-      IF NOT v_ur_before AND NOT EXISTS (
-        SELECT 1 FROM jsonb_array_elements(p_slots) WITH ORDINALITY AS e(slot, n)
-        WHERE e.n <= v_idx AND e.slot->>'kind' = 'character' AND e.slot->>'grade' = 'UR'
-      ) THEN
-        v_slots := jsonb_set(v_slots, ARRAY[v_idx::text],
-          jsonb_build_object('kind', 'character', 'id', v_pick, 'grade', 'UR', 'guaranteed', 'starterUR'));
+    IF v_st.pulls_done + v_count <= v_max THEN
+      v_in_starter := true;
+      v_cost := v_multi_price;
+      v_pick := coalesce(p_starter->>'pick', v_st.pick);
+      v_ur_before := v_st.ur_hit;
+      IF v_st.pulls_done + v_count = v_max THEN
+        -- 구간의 마지막 10연 — 아직 UR 이 없는데 고른 값도 없으면 거절 (화면이 고르기 창을 먼저 띄운다).
+        -- 구간에서 UR 을 이미 뽑았으면(ur_hit) 보장이 쓰이지 않으므로 고르지 않아도 된다 — 화면은 토글을 흐리게 하고
+        -- 'UR 획득 — 보장 없이 진행' 으로 그대로 뽑는다 (정의서 v2 §3 · 결정 #13)
+        IF NOT v_ur_before AND v_pick IS NULL THEN
+          RAISE EXCEPTION 'gacha:starter_pick_required';
+        END IF;
+        v_idx := v_max - v_st.pulls_done - 1;   -- 이번 칸 중 max 번째 (0부터)
+        IF NOT v_ur_before AND NOT EXISTS (
+          SELECT 1 FROM jsonb_array_elements(p_slots) WITH ORDINALITY AS e(slot, n)
+          WHERE e.n <= v_idx AND e.slot->>'kind' = 'character' AND e.slot->>'grade' = 'UR'
+        ) THEN
+          v_slots := jsonb_set(v_slots, ARRAY[v_idx::text],
+            jsonb_build_object('kind', 'character', 'id', v_pick, 'grade', 'UR', 'guaranteed', 'starterUR'));
+        END IF;
       END IF;
     END IF;
   END IF;
 
+  -- 화면이 본 가격과 다르면 거절 — 차감 전이라 아무것도 안 바뀐다. 같은 requestId 재시도는 위에서 첫 결과로 이미 돌아갔다
+  IF p_expected_cost IS NOT NULL AND p_expected_cost <> v_cost THEN
+    RAISE EXCEPTION 'gacha:price_changed' USING DETAIL = v_cost::text;
+  END IF;
+
   -- SKOR 차감 — 잔액이 비용 이상일 때만 (20261011000006)
-  v_balance := public.skor_spend(p_user_id, p_cost);
+  v_balance := public.skor_spend(p_user_id, v_cost);
   IF v_balance IS NULL THEN
     RAISE EXCEPTION 'gacha:insufficient_skor'
       USING DETAIL = coalesce((SELECT floor(balance)::text FROM public.user_skor WHERE user_id = p_user_id), '0');
@@ -205,8 +228,8 @@ BEGIN
       'kind', v_slot->>'kind', 'id', v_id, 'grade', v_slot->'grade', 'isNew', v_new, 'guaranteed', v_slot->'guaranteed');
   END LOOP;
 
-  -- 초보자 상태
-  IF p_starter IS NOT NULL THEN
+  -- 초보자 상태 — 구간 10연만
+  IF v_in_starter THEN
     UPDATE public.gacha_starter SET
       pulls_done   = pulls_done + v_count,
       ur_hit       = ur_hit OR EXISTS (SELECT 1 FROM jsonb_array_elements(v_results) r
@@ -217,7 +240,7 @@ BEGIN
     WHERE user_id = p_user_id;
   END IF;
 
-  -- 천장 — 뽑은 칸 수만큼 (배경 칸 · 확정 칸도 센다)
+  -- 천장 — 뽑은 칸 수만큼 (배경 칸 · 확정 칸 · 초보자 구간 칸도 센다, 정의서 §4-1)
   IF p_pity_track IS NOT NULL THEN
     INSERT INTO public.gacha_pity AS gp (user_id, track, points, total_pulls)
     VALUES (p_user_id, p_pity_track, v_count, v_count)
@@ -229,9 +252,9 @@ BEGIN
   END IF;
 
   INSERT INTO public.gacha_pull_log
-    (user_id, banner_id, kind, request_id, cost, results, pity_before, pity_after, balance_after, rates_version)
+    (user_id, banner_id, kind, request_id, cost, starter, results, pity_before, pity_after, balance_after, rates_version)
   VALUES
-    (p_user_id, p_banner_id, 'pull', p_request_id, p_cost, v_results,
+    (p_user_id, p_banner_id, 'pull', p_request_id, v_cost, v_in_starter, v_results,
      v_pity_after - v_count, v_pity_after, v_balance, p_rates_version)
   RETURNING id INTO v_log_id;
 
@@ -302,8 +325,8 @@ $$;
 
 -- 서버(Edge Function service role)만 부른다
 REVOKE EXECUTE ON FUNCTION public.gacha_log_response(BIGINT, BOOLEAN) FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.gacha_pull_commit(UUID, UUID, TEXT, INTEGER, JSONB, TEXT, JSONB, TEXT) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.gacha_pull_commit(UUID, UUID, TEXT, INTEGER, JSONB, TEXT, JSONB, INTEGER, TEXT) FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION public.gacha_exchange_commit(UUID, UUID, TEXT, TEXT, INTEGER, TEXT, TEXT, TEXT) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.gacha_log_response(BIGINT, BOOLEAN) TO service_role;
-GRANT EXECUTE ON FUNCTION public.gacha_pull_commit(UUID, UUID, TEXT, INTEGER, JSONB, TEXT, JSONB, TEXT) TO service_role;
+GRANT EXECUTE ON FUNCTION public.gacha_pull_commit(UUID, UUID, TEXT, INTEGER, JSONB, TEXT, JSONB, INTEGER, TEXT) TO service_role;
 GRANT EXECUTE ON FUNCTION public.gacha_exchange_commit(UUID, UUID, TEXT, TEXT, INTEGER, TEXT, TEXT, TEXT) TO service_role;

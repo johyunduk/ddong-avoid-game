@@ -3,12 +3,12 @@ import { supabase } from './supabase';
 import { CHARACTERS, setOwnedCharacters, getOwnedCharacters, setDuplicateCount, type CharacterDef } from './character';
 import { WALLPAPERS, GACHA_WP_IDS, setOwnedWallpapers, getOwnedWallpapers } from './wallpaper';
 import {
-  BANNERS, DEFAULT_BANNER_ID, WALLPAPER_SHARE, bannerRates, getBanner, isBannerOpen, pityChoices, standardPool,
-  type BannerDef, type BannerRates, type GachaGrade, type GachaWallpaperEntry, type PityExchange, type PullType,
+  BANNERS, DEFAULT_BANNER_ID, bannerRates, isBannerOpen, multiDiscountPct, pityChoices, pullPrice, standardPool,
+  type BannerDef, type BannerRates, type GachaWallpaperEntry, type PityExchange, type PullType,
 } from '../config/banners';
 
 // 배너 정의 · 확률 규칙의 정본은 src/config/banners.ts 다. 여기는 화면이 쓰는 호출 · 상태 · 표시 함수만 둔다.
-// 서버 계약 기준: ~/ddong-fx-work/gacha/banner_spec_v1.md §6-2
+// 서버 계약 기준: ~/ddong-fx-work/gacha/banner_spec_v1.md (정의서 v2) §6-2
 
 /** 확정 칸으로 나온 카드 — 'srPlus' = 10연 SR 이상 확정, 'starterUR' = 초보자 50번째 보장 */
 export type PullGuarantee = 'srPlus' | 'starterUR';
@@ -36,13 +36,17 @@ export interface GachaPityState {
   canExchange: boolean;
 }
 
-/** 초보자 뽑기 상태 */
+/**
+ * 초보자 혜택 상태 — 상시 배너의 처음 max 칸 (정의서 v2 §3). 상시 10연만 센다 (1회는 안 센다).
+ * pullsDone < max 인 동안 상시 10연이 할인가(starter.multiPrice)다 — starterWindowOf · pullPriceOf
+ */
 export interface GachaStarterState {
+  /** 초보자 구간에서 쓴 칸 수 — 10의 배수 */
   pullsDone: number;
   max: number;
-  /** 초보자 뽑기에서 UR 이 이미 나왔다 — 50번째 보장이 필요 없다 */
+  /** 초보자 구간 10연에서 UR 이 이미 나왔다 — 50번째 보장이 필요 없다 ('UR 획득 — 보장 없이 진행') */
   urHit: boolean;
-  /** 50번째 보장 UR 으로 골라 둔 것 (BANNERS 의 starter.pickFrom 중 하나). 안 골랐으면 null */
+  /** 50번째 보장 UR 으로 골라 둔 것 (상시 배너 starter.pickFrom 중 하나). 안 골랐으면 null */
   pick: string | null;
 }
 
@@ -54,9 +58,11 @@ export interface GachaPullResult {
   characters: PulledCharacter[];
   wallpapers: PulledWallpaper[];  // 없으면 빈 배열
   remainingSkor: number;
-  /** 이 뽑기 뒤의 천장. 초보자 배너는 null (천장 없음) */
+  /** 실제로 빠진 SKOR — 초보자 구간 상시 10연 720 · 보통 10연 900 · 1회 100 */
+  cost: number;
+  /** 이 뽑기 뒤의 천장. 상시는 초보자 구간이어도 'standard' 줄에 쌓인다 */
   pity: GachaPityState | null;
-  /** 이 뽑기 뒤의 초보자 상태 — 서버가 모든 배너 응답에 싣는다 */
+  /** 이 뽑기 뒤의 초보자 상태 — 상시 배너 응답에만 싣는다. 다른 배너는 null */
   starter: GachaStarterState | null;
   ratesVersion: string;
 }
@@ -78,10 +84,11 @@ export interface GachaExchangeResult {
  */
 export type GachaErrorCode =
   | 'insufficient_skor'      // SKOR 부족 (error.balance = 서버가 본 잔액)
-  | 'banner_closed'          // 닫힌 배너 · 모르는 배너
-  | 'starter_done'           // 초보자 50회를 다 썼다
-  | 'starter_pick_required'  // 초보자 마지막 10연인데 보장 UR 을 안 골랐다 → 고르기 창 뒤 starterPick 을 넣어 다시
-  | 'starter_single'         // 초보자는 1회 뽑기가 없다
+  | 'banner_closed'          // 닫힌 배너 · 모르는 배너 (지운 pickup_sentinel · pickup_legacy 포함)
+  | 'starter_pick_required'  // 초보자 다섯 번째 10연인데 보장 UR 을 안 골랐다 → 고르기 창 뒤 starterPick 을 넣어 다시
+  | 'price_changed'          // expectedCost 와 실제 차감액이 다르다 (다른 기기에서 초보자 구간을 다 썼다 등). error.cost = 실제 가격
+  | 'starter_done'           // @deprecated v2 서버는 보내지 않는다 — 구간이 끝나면 보통 상시가 된다. 화면이 case 를 지우면 뺀다
+  | 'starter_single'         // @deprecated v2 서버는 보내지 않는다 — 1회는 늘 보통 상시. 화면이 case 를 지우면 뺀다
   | 'pity_short'             // 교환: 포인트가 기준에 못 미친다
   | 'pity_target'            // 교환: 고를 수 있는 후보가 아니다 (chooseUR · chooseSR 은 targetId 가 꼭 있어야 한다)
   | 'network'                // 응답을 못 받았다 — 자동으로 다시 보내지 않는다 (invokeGacha 주석)
@@ -90,7 +97,7 @@ export type GachaErrorCode =
   | 'server';                // 그 밖 (5xx · 모르는 응답)
 
 const ERROR_CODES: readonly GachaErrorCode[] = [
-  'insufficient_skor', 'banner_closed', 'starter_done', 'starter_pick_required', 'starter_single',
+  'insufficient_skor', 'banner_closed', 'starter_pick_required', 'price_changed', 'starter_done', 'starter_single',
   'pity_short', 'pity_target', 'network', 'bad_request', 'unauthorized', 'server',
 ];
 
@@ -102,14 +109,20 @@ export class GachaError extends Error {
   readonly status: number | null;
   /** insufficient_skor 일 때 서버가 본 잔액 */
   readonly balance: number | null;
+  /** price_changed 일 때 서버가 매기려던 가격 */
+  readonly cost: number | null;
 
-  constructor(code: GachaErrorCode, message: string, requestId: string, status: number | null, balance: number | null = null) {
+  constructor(
+    code: GachaErrorCode, message: string, requestId: string, status: number | null,
+    balance: number | null = null, cost: number | null = null,
+  ) {
     super(message);
     this.name = 'GachaError';
     this.code = code;
     this.requestId = requestId;
     this.status = status;
     this.balance = balance;
+    this.cost = cost;
   }
 }
 
@@ -139,12 +152,13 @@ async function toGachaError(error: unknown, requestId: string): Promise<GachaErr
   }
   if (error instanceof FunctionsHttpError) {
     const res = error.context as Response;
-    const body = await res.json().catch(() => null) as { error?: string; code?: string; balance?: number } | null;
+    const body = await res.json().catch(() => null) as { error?: string; code?: string; balance?: number; cost?: number } | null;
     const known = ERROR_CODES.find(c => c === body?.code);
     // 옛 서버(배너 이전)는 code 없이 error 문장만 준다
     const code: GachaErrorCode = known
       ?? (body?.error === 'Insufficient SKOR' ? 'insufficient_skor' : res.status === 401 ? 'unauthorized' : 'server');
-    return new GachaError(code, body?.error ?? error.message, requestId, res.status, typeof body?.balance === 'number' ? body.balance : null);
+    const num = (v: unknown) => (typeof v === 'number' ? v : null);
+    return new GachaError(code, body?.error ?? error.message, requestId, res.status, num(body?.balance), num(body?.cost));
   }
   return new GachaError('server', error instanceof Error ? error.message : String(error), requestId, null);
 }
@@ -174,8 +188,16 @@ async function invokeGacha(
 export interface GachaPullOptions {
   /** 뽑을 배너 (BANNERS 의 id). 없으면 상시 */
   bannerId?: string;
-  /** 초보자 배너만 — 50번째 보장 UR 을 이 값으로 저장하고 뽑는다 */
+  /**
+   * 상시 10연만 — 초보자 구간이면 50번째 보장 UR 을 이 값으로 저장하고 뽑는다 (구간 밖이면 서버가 무시한다).
+   * 골라 둔 값이 있으면 구간 10연마다 실어 보낸다 — 다섯 번째 10연에 고른 값이 없으면 서버가 거절한다
+   */
   starterPick?: string;
+  /**
+   * 화면에 보인 가격 (pullPriceOf). 서버가 잠그고 정한 실제 차감액과 다르면 차감 없이 'price_changed' 로 거절한다 —
+   * 720 을 보고 눌렀는데 다른 기기에서 구간을 다 써 900 이 빠지는 일을 막는다. 넘기기를 권한다 (정의서 §3 · §6-2)
+   */
+  expectedCost?: number;
   /**
    * 보통은 넘기지 않는다 — 부를 때마다 gacha.ts 가 새로 만든다 (누를 때 하나).
    * 'network' 오류 뒤 화면의 '다시 시도'만 그 오류의 requestId 를 넘긴다 (재시도는 같은 값)
@@ -192,7 +214,7 @@ export async function gachaPull(pullType: PullType, opts: GachaPullOptions = {})
   const requestId = opts.requestId ?? newRequestId();
   const data = await invokeGacha(
     b => supabase.functions.invoke('gacha-pull', { body: b }),
-    { pullType, bannerId, starterPick: opts.starterPick },
+    { pullType, bannerId, starterPick: opts.starterPick, expectedCost: opts.expectedCost },
     requestId,
   );
   const result: GachaPullResult = {
@@ -202,6 +224,7 @@ export async function gachaPull(pullType: PullType, opts: GachaPullOptions = {})
     characters: ((data.characters ?? []) as PulledCharacter[]).map(c => ({ ...c, guaranteed: c.guaranteed ?? null })),
     wallpapers: (data.wallpapers ?? []) as PulledWallpaper[],
     remainingSkor: Number(data.remainingSkor ?? 0),
+    cost: Number(data.cost ?? 0),
     pity: (data.pity as GachaPityState | null | undefined) ?? null,
     starter: (data.starter as GachaStarterState | null | undefined) ?? null,
     ratesVersion: (data.ratesVersion as string | undefined) ?? '',
@@ -242,15 +265,16 @@ export interface GachaState {
 const STATE_CACHE_KEY = 'ddong_gacha_state_v1';
 let stateCache: GachaState | null = null;
 
-/** 배너 하나의 천장 — 천장이 없는 배너(초보자)는 null */
+/** 배너 하나의 천장 — 천장이 없는 배너는 null */
 export function pityStateOf(banner: BannerDef, points: number): GachaPityState | null {
   if (!banner.pity) return null;
   const { track, threshold, exchange } = banner.pity;
   return { track, points, threshold, exchange, canExchange: points >= threshold };
 }
 
+/** 초보자 설정이 있는 배너 — 상시 하나 (check-roster 가 지킨다) */
 function starterBanner(): BannerDef | undefined {
-  return BANNERS.find(b => b.kind === 'starter');
+  return BANNERS.find(b => b.starter !== null);
 }
 
 function buildState(points: Record<string, number>, starter: Omit<GachaStarterState, 'max'>): GachaState {
@@ -315,15 +339,34 @@ export async function fetchGachaState(): Promise<GachaState | null> {
 }
 
 /**
- * 탭에 보일 배너 — BANNERS 순서 그대로, 열린 것만. 초보자는 상태를 알고 50회가 남아 있을 때만.
- * 초보자를 여는 별도 스위치는 없다 — 배너가 운영에 나가는 것이 웰컴 보너스 서버 지급 뒤라 순서로 지킨다
+ * 넘기기에 보일 배너 — BANNERS 순서 그대로(상시 · 구미 · 무기 · 이벤트), 열린 것만.
+ * v2 에서 초보자 배너가 없어져 상태는 보지 않는다 (인자는 v1 호환으로 남겼다). 초보자 줄은 starterWindowOf
  */
-export function visibleBanners(state: GachaState | null, nowMs: number = Date.now()): BannerDef[] {
-  return BANNERS.filter(b => {
-    if (!isBannerOpen(b, nowMs)) return false;
-    if (b.kind !== 'starter') return true;
-    return state !== null && state.starter.pullsDone < state.starter.max;
-  });
+export function visibleBanners(_state?: GachaState | null, nowMs: number = Date.now()): BannerDef[] {
+  return BANNERS.filter(b => isBannerOpen(b, nowMs));
+}
+
+/**
+ * 이 배너의 초보자 구간 상태 — 상시 배너이고, 상태를 알고, 구간이 남았을 때만 (아니면 null).
+ * 상시 화면의 초보자 줄 · 50번째 보장 토글을 이걸로 켠다 (정의서 §5). 초보자를 여는 별도 스위치는 없다 —
+ * 배너가 운영에 나가는 것이 웰컴 보너스 서버 지급 뒤라 순서로 지킨다
+ */
+export function starterWindowOf(banner: BannerDef, state: GachaState | null): GachaStarterState | null {
+  if (!banner.starter || !state) return null;
+  return state.starter.pullsDone < state.starter.max ? state.starter : null;
+}
+
+/**
+ * 화면에 보일 가격 — 초보자 구간의 상시 10연이면 할인가. 상태를 모르면 보통 가격.
+ * 뽑기 요청의 expectedCost 로 이 값을 그대로 넘긴다 (서버가 다르게 정하면 price_changed)
+ */
+export function pullPriceOf(banner: BannerDef, pullType: PullType, state: GachaState | null): number {
+  return pullPrice(banner, pullType, state?.starter.pullsDone ?? null);
+}
+
+/** 10연 할인 배지 (%) — '1회 × 10' 대비 (보통 10, 초보자 구간 28 — 정의서 §5) */
+export function multiDiscountOf(banner: BannerDef, state: GachaState | null): number {
+  return multiDiscountPct(banner, state?.starter.pullsDone ?? null);
 }
 
 // ── 확률 · 후보 (화면용) ────────────────────────────────────────────────
@@ -334,7 +377,7 @@ export function gachaWallpapers(): GachaWallpaperEntry[] {
   return WALLPAPERS.filter(w => GACHA_WP_IDS.includes(w.id)).map(w => ({ id: w.id, eventOnly: w.eventOnly }));
 }
 
-/** 상시 풀 — 공개 − chibi − 이벤트 전용. 상시 진열 슬라이드쇼 · 상시 천장 후보와 같은 집합 */
+/** 상시 풀 — 공개 − chibi − 이벤트 전용 − 픽업 전용. 상시 진열 슬라이드쇼 · 상시 천장 후보와 같은 집합 (UR = 레거시 · 센티넬) */
 export function standardGachaPool(): CharacterDef[] {
   return standardPool(CHARACTERS);
 }
@@ -416,25 +459,4 @@ export function formatRate(percent: number): string {
   const r3 = percent.toFixed(3);
   if (Number(r3) < 1) return r3;
   return String(parseFloat(percent < 10 ? percent.toFixed(2) : percent.toFixed(1)));
-}
-
-// ── 배너 탭 이전 화면의 확률 표시 ────────────────────────────────────────
-// 서버는 배너로 바뀌었고, 탭 없는 지금 화면은 bannerId 없이 부르므로 상시 배너를 뽑는다. 그래서 아래도 상시 배너 값이다
-// (한 칸 기준, 정의서 §2-1). 화면이 ratesOf · standardGachaPool 로 옮기면 지운다
-
-/** @deprecated ratesOf(banner).byGrade.WP — 한 칸이 배경화면일 확률 (0~1) */
-export const GACHA_WP_DROP_CHANCE = WALLPAPER_SHARE / 100;
-
-/** @deprecated standardGachaPool() — 상시 풀 (이벤트 셋 제외) */
-export function gachaPool(): CharacterDef[] {
-  return standardGachaPool();
-}
-
-/** @deprecated ratesOf(banner) — 상시 배너의 등급 합(%)과 종당(%), 한 칸 기준 */
-export function gachaRates(): { byGrade: Record<GachaGrade, number>; perChar: (grade: string) => number } {
-  const r = ratesOf(getBanner(DEFAULT_BANNER_ID)!);
-  return {
-    byGrade: { UR: r.byGrade.UR.slot, SR: r.byGrade.SR.slot, R: r.byGrade.R.slot },
-    perChar: (grade: string) => r.rows.find(row => row.kind === 'character' && row.grade === grade)?.each.slot ?? 0,
-  };
 }

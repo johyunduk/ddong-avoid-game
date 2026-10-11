@@ -185,7 +185,7 @@ for (const [path, next, what] of outputs()) {
 }
 
 // ── 4-1. 뽑기 배너 (src/config/banners.ts) ───────────────────────────
-// 정의서 §6-1 의 검사. 정본 파일을 그대로 불러 같은 함수(bannerRates · pityChoices)로 잰다 —
+// 정의서 v2 §6-1 · §1-3 의 검사. 정본 파일을 그대로 불러 같은 함수(bannerRates · pityChoices)로 잰다 —
 // 화면과 서버가 쓰는 계산 그 자체를 검사해야 검사가 헛돌지 않는다
 {
   const B = await import(pathToFileURL(join(ROOT, 'src', 'config', 'banners.ts')).href);
@@ -200,6 +200,33 @@ for (const [path, next, what] of outputs()) {
   if (dupIds.length) fail('배너 id 가 겹치지 않는다', dupIds.join(', '));
   else pass('배너 id 가 겹치지 않는다', `${ids.length}개`);
   if (!B.getBanner(B.DEFAULT_BANNER_ID)) fail('기본 배너가 있다', `'${B.DEFAULT_BANNER_ID}' 가 BANNERS 에 없다`);
+  {
+    // 없어진 id 는 지금 배너를 가리키고, 지금 배너 id 와 겹치지 않는다 (겹치면 그 배너를 영영 못 부른다)
+    const label = '없어진 배너 id(BANNER_ALIASES)가 지금 배너로 이어진다';
+    const bad = [...B.BANNER_ALIASES].filter(([from, to]) => ids.includes(from) || !ids.includes(to)).map(([f, t]) => `${f} → ${t}`);
+    if (bad.length) fail(label, bad.join(', '));
+    else pass(label, [...B.BANNER_ALIASES].map(([f, t]) => `${f} → ${t}`).join(', '));
+  }
+  {
+    // 정의서 v2 §1-3 (가) — 픽업 전용(pickupOnly)
+    const label = '픽업 전용(pickupOnly) 캐릭터가 뽑을 곳이 있고, 상시 UR 이 남는다';
+    const errs = [];
+    const both = roster.filter(c => c.pickupOnly && c.eventOnly).map(c => c.id);
+    if (both.length) errs.push(`pickupOnly 와 eventOnly 가 함께 붙었다: ${both.join(', ')}`);
+    const picked = new Set(B.BANNERS.filter(b => b.kind === 'pickup').flatMap(b => [...(b.pickupUR ? [b.pickupUR] : []), ...b.pickupSR]));
+    const orphan = roster.filter(c => c.pickupOnly && !c.unreleased && !picked.has(c.id)).map(c => c.id);
+    if (orphan.length) errs.push(`어느 픽업 배너의 픽업도 아니다 — 뽑을 곳이 없다: ${orphan.join(', ')}`);
+    if (stdUR.length === 0) errs.push('상시 UR 이 하나도 없다');
+    if (errs.length) fail(label, errs.join(LF + '         '));
+    else pass(label, `픽업 전용 ${roster.filter(c => c.pickupOnly).map(c => c.id).join(', ') || '없음'} · 상시 UR ${stdUR.join(', ')}`);
+  }
+  {
+    // 초보자 혜택은 상시 배너 하나에만 — gacha_starter 가 계정당 한 줄이라 둘이면 횟수를 나눠 쓴다
+    const label = '초보자 설정은 상시 배너 하나에만 있다';
+    const withStarter = B.BANNERS.filter(b => b.starter);
+    if (withStarter.length > 1 || withStarter.some(b => b.kind !== 'standard')) fail(label, withStarter.map(b => `${b.id}(${b.kind})`).join(', '));
+    else pass(label, withStarter.map(b => b.id).join(', ') || '없음');
+  }
 
   // 정의서 §6-1 의 kind 별 천장 모양 (threshold 값은 정본이 정한다)
   const PITY_SHAPE = {
@@ -214,7 +241,7 @@ for (const [path, next, what] of outputs()) {
     // 2. 픽업 id ⊆ 명단, 등급이 맞다
     if (b.pickupUR && byId.get(b.pickupUR)?.grade !== 'UR') errs.push(`pickupUR '${b.pickupUR}' 가 명단의 UR 이 아니다`);
     for (const id of b.pickupSR) if (byId.get(id)?.grade !== 'SR') errs.push(`pickupSR '${id}' 가 명단의 SR 이 아니다`);
-    // 3. 상시 · 픽업 · 초보자는 이벤트 전용이 없고, 이벤트 배너의 픽업은 전부 이벤트 전용이다
+    // 3. 상시 · 픽업은 이벤트 전용이 없고, 이벤트 배너의 픽업은 전부 이벤트 전용이다
     const evChars = picks.filter(id => byId.get(id)?.eventOnly);
     const evWps = b.pickupWP.filter(id => wps.find(w => w.id === id)?.eventOnly);
     if (b.kind === 'event') {
@@ -224,35 +251,33 @@ for (const [path, next, what] of outputs()) {
     } else if (evChars.length || evWps.length) {
       errs.push(`${b.kind} 배너에 eventOnly 가 있다: ${[...evChars, ...evWps].join(', ')}`);
     }
-    if ((b.kind === 'standard' || b.kind === 'starter') && (picks.length || b.pickupWP.length)) errs.push(`${b.kind} 배너에 픽업이 있다`);
+    if (b.kind === 'standard' && (picks.length || b.pickupWP.length)) errs.push('상시 배너에 픽업이 있다');
     if (b.kind === 'pickup' && (!b.pickupUR || b.pickupSR.length === 0)) errs.push('픽업 배너에 픽업 UR · SR 이 없다');
     // 4. 배경 id ⊆ 뽑기 배경 (GACHA_WP_IDS), 전용 배경은 그 배너 픽업 SR 의 시너지 짝 (정의서 §2-2)
     for (const id of b.pickupWP) if (!wpIds.includes(id)) errs.push(`pickupWP '${id}' 가 뽑기 배경화면이 아니다`);
     const unpaired = b.pickupWP.filter(wp => !b.pickupSR.some(sr => SYNERGY_MAP[`${wp}:${sr}`]));
     if (unpaired.length) errs.push(`pickupWP 가 픽업 SR 의 시너지 짝이 아니다: ${unpaired.join(', ')}`);
-    // 6. 천장이 kind 와 맞고, 교환 후보가 비지 않았다
-    if (b.kind === 'starter') {
-      if (b.pity !== null) errs.push('초보자 배너에 천장이 있다');
-      if (!b.starter) errs.push('초보자 배너에 starter 설정이 없다');
-      else {
-        if (!(b.starter.maxPulls > 0 && b.starter.maxPulls % 10 === 0)) errs.push(`starter.maxPulls ${b.starter.maxPulls} 가 10연의 배수가 아니다`);
-        const bad = b.starter.pickFrom.filter(id => !stdUR.includes(id));
-        if (bad.length || b.starter.pickFrom.length === 0) errs.push(`starter.pickFrom 이 상시 UR 이 아니다: ${bad.join(', ') || '(비었다)'}`);
-      }
-      if (b.price.single !== null) errs.push('초보자 배너에 1회 가격이 있다');
-    } else {
-      const shape = PITY_SHAPE[b.kind];
-      if (b.starter) errs.push(`${b.kind} 배너에 starter 설정이 있다`);
-      if (!b.pity) errs.push('천장이 없다');
-      else {
-        if (b.pity.track !== shape.track(b)) errs.push(`pity.track '${b.pity.track}' ≠ '${shape.track(b)}'`);
-        if (b.pity.exchange !== shape.exchange) errs.push(`pity.exchange '${b.pity.exchange}' ≠ '${shape.exchange}'`);
-        if (!(Number.isInteger(b.pity.threshold) && b.pity.threshold > 0)) errs.push(`pity.threshold ${b.pity.threshold}`);
-        if (B.pityChoices(b, roster).length === 0) errs.push('pityChoices 가 비었다');
-      }
-      if (!(b.price.single > 0)) errs.push('1회 가격이 없다');
+    // 6. 천장이 kind 와 맞고, 교환 후보가 비지 않았다. 'starter' kind 는 v2 에서 없어졌다 (초보자 = 상시의 starter 설정)
+    const shape = PITY_SHAPE[b.kind];
+    if (!shape) errs.push(`kind '${b.kind}' 는 v2 에 없다 — 초보자는 상시 배너의 starter 설정이다`);
+    else if (!b.pity) errs.push('천장이 없다');
+    else {
+      if (b.pity.track !== shape.track(b)) errs.push(`pity.track '${b.pity.track}' ≠ '${shape.track(b)}'`);
+      if (b.pity.exchange !== shape.exchange) errs.push(`pity.exchange '${b.pity.exchange}' ≠ '${shape.exchange}'`);
+      if (!(Number.isInteger(b.pity.threshold) && b.pity.threshold > 0)) errs.push(`pity.threshold ${b.pity.threshold}`);
+      if (B.pityChoices(b, roster).length === 0) errs.push('pityChoices 가 비었다');
     }
-    if (!(b.price.multi > 0)) errs.push('10연 가격이 없다');
+    if (!(Number.isInteger(b.price.single) && b.price.single > 0)) errs.push(`1회 가격 ${b.price.single}`);
+    if (!(Number.isInteger(b.price.multi) && b.price.multi > 0)) errs.push(`10연 가격 ${b.price.multi}`);
+    // 7. 초보자 설정 (정의서 v2 §3 · §6-1): 10연만 세므로 maxPulls 는 10연의 배수, 할인가는 보통 10연보다 싸다,
+    //    보장 후보 ⊆ 상시 UR
+    if (b.starter) {
+      const s = b.starter;
+      if (!(Number.isInteger(s.maxPulls) && s.maxPulls > 0 && s.maxPulls % B.PULL_COUNT.multi === 0)) errs.push(`starter.maxPulls ${s.maxPulls} 가 10연의 배수가 아니다`);
+      if (!(Number.isInteger(s.multiPrice) && s.multiPrice > 0 && s.multiPrice < b.price.multi)) errs.push(`starter.multiPrice ${s.multiPrice} 가 보통 10연(${b.price.multi})보다 싼 양의 정수가 아니다`);
+      const bad = s.pickFrom.filter(id => !stdUR.includes(id));
+      if (bad.length || s.pickFrom.length === 0) errs.push(`starter.pickFrom 이 상시 UR 이 아니다: ${bad.join(', ') || '(비었다)'}`);
+    }
     // 5. 확률 합 = 100% — 한 칸 · 10연 확정 칸 · 10연 실효
     let sums = '';
     try {

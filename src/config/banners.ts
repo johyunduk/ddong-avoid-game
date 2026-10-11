@@ -1,6 +1,7 @@
 /**
  * 뽑기 배너 정의 — **정본.**
- * 기준 문서: ~/ddong-fx-work/gacha/banner_spec_v1.md (확정본 2026-10-11). 규칙의 근거는 거기 있다.
+ * 기준 문서: ~/ddong-fx-work/gacha/banner_spec_v1.md — **정의서 v2** (2026-10-11 대표 결정: 초보자를 상시에 합침 ·
+ * 상시 UR = 레거시 · 센티넬 · 배너 4개). 파일 이름은 v1 그대로다. 규칙의 근거는 거기 있다.
  *
  * ## 화면과 서버가 같은 함수를 쓴다
  *
@@ -19,6 +20,10 @@
  * 모든 확률은 **% (0~100)** 다.
  */
 
+/**
+ * 'starter' 는 v2 에서 없어졌다 — 초보자는 상시 배너의 `starter` 설정이다 (정의서 v2 §3).
+ * 어느 배너도 쓰지 않는다 (check-roster 가 막는다). 화면(GachaScene)이 'starter' 비교를 지우면 타입에서도 뺀다
+ */
 export type BannerKind = 'standard' | 'pickup' | 'event' | 'starter';
 export type PityExchange = 'pickupUR' | 'chooseUR' | 'chooseSR';
 export type GachaGrade = 'UR' | 'SR' | 'R';
@@ -43,13 +48,26 @@ export interface BannerDef {
   /** 픽업 SR 의 전용 배경화면 — 배경 몫의 절반을 나눈다 */
   pickupWP: readonly string[];
   pity: BannerPity | null;
-  /** SKOR. 초보자는 1회가 없다 (null) */
-  price: { single: number | null; multi: number };
-  /** 초보자 뽑기만 — 최대 횟수와 50번째 보장 UR 후보 */
-  starter: { maxPulls: number; pickFrom: readonly string[] } | null;
+  /** SKOR — 보통 가격. 초보자 구간의 10연은 starter.multiPrice (pullPrice) */
+  price: { single: number; multi: number };
+  /** 초보자 혜택 — 상시 배너만 (정의서 §3) */
+  starter: BannerStarter | null;
   /** ISO 시각. 지금은 모두 null — 동시에 열려 있다. 출시 때 배너마다 기간을 붙인다 */
   opensAt: string | null;
   closesAt: string | null;
+}
+
+/**
+ * 초보자 혜택 — 이 배너의 처음 maxPulls 칸(10연만 센다, 1회는 안 센다)은 10연이 multiPrice 고,
+ * 그 안에서 UR 이 한 번도 안 나오면 maxPulls 번째 칸이 미리 고른 UR(pickFrom 중 하나)이다 (정의서 §3)
+ */
+export interface BannerStarter {
+  /** 10의 배수 — 구간 = 10연 maxPulls / 10 번 */
+  maxPulls: number;
+  /** 구간 안의 10연 가격 */
+  multiPrice: number;
+  /** maxPulls 번째 보장 UR 후보 — 상시 UR 안에서. 상시 UR 이 바뀌어도 대표 결정대로 따로 둔다 */
+  pickFrom: readonly string[];
 }
 
 /** 캐릭터 명단 한 줄 — CharacterDef 를 그대로 넘겨도 맞는다 */
@@ -57,8 +75,10 @@ export interface GachaRosterEntry {
   id: string;
   grade: string;
   unreleased?: boolean;
-  /** 이벤트 픽업에서만 나온다 — 상시 풀에서 빠진다 */
+  /** 이벤트 픽업에서만 나온다 — 상시 풀에서도, 등급 합의 바탕에서도 빠진다 */
   eventOnly?: boolean;
+  /** 자기 픽업 배너에서만 나온다 — 상시 풀에서 빠지지만 등급 합의 바탕에는 남는다 (정의서 v2 §1, gradeBase) */
+  pickupOnly?: boolean;
 }
 
 /** 뽑기 배경화면 한 장 — 기본 제공 배경(DEFAULT_WP_IDS)은 빼고 넘긴다 */
@@ -68,7 +88,7 @@ export interface GachaWallpaperEntry {
 }
 
 /** 확률 계산이 바뀌면 올린다 — 응답의 ratesVersion · gacha_pull_log.rates_version */
-export const RATES_VERSION = '2026-10-11a';
+export const RATES_VERSION = '2026-10-11b';
 
 /**
  * 등급별 **종당** 가중치. 종이 늘거나 빠져도 종당 가중치는 그대로 두고 등급 합이 따라 변한다
@@ -87,46 +107,22 @@ export const DEFAULT_CHARACTER_ID = 'chibi';
 export const PULL_COUNT: Readonly<Record<PullType, number>> = { single: 1, multi: 10 };
 
 /**
- * 배너 목록. **화면의 탭 순서가 이 배열 순서다** (초보자 · 상시 · 픽업①~④ · 이벤트).
+ * 배너 목록. **화면의 넘기기 순서가 이 배열 순서다** (상시 · 구미 픽업 · 무기 픽업 · 이벤트 — 정의서 v2 §5).
  * id 는 서버 요청 · 로그 · 천장 줄에 그대로 남는다 — 바꾸지 않는다
  */
 export const BANNERS: readonly BannerDef[] = [
-  {
-    id: 'starter', kind: 'starter',
-    pickupUR: null, pickupSR: [], pickupWP: [],
-    pity: null,
-    price: { single: null, multi: 720 },
-    starter: { maxPulls: 50, pickFrom: ['legacy', 'sentinel'] },
-    opensAt: null, closesAt: null,
-  },
   {
     id: 'standard', kind: 'standard',
     pickupUR: null, pickupSR: [], pickupWP: [],
     pity: { track: 'standard', threshold: 200, exchange: 'chooseUR' },
     price: { single: 100, multi: 900 },
-    starter: null,
+    starter: { maxPulls: 50, multiPrice: 720, pickFrom: ['legacy', 'sentinel'] },
     opensAt: null, closesAt: null,
   },
   {
     id: 'pickup_gumi', kind: 'pickup',
     pickupUR: 'gumi', pickupSR: ['noise', 'miner'], pickupWP: ['wp_noise', 'wp_gold_mine'],
     pity: { track: 'pickup_gumi', threshold: 200, exchange: 'pickupUR' },
-    price: { single: 100, multi: 900 },
-    starter: null,
-    opensAt: null, closesAt: null,
-  },
-  {
-    id: 'pickup_sentinel', kind: 'pickup',
-    pickupUR: 'sentinel', pickupSR: ['glitch', 'archieve'], pickupWP: ['wp_glitch', 'wp_lake'],
-    pity: { track: 'pickup_sentinel', threshold: 200, exchange: 'pickupUR' },
-    price: { single: 100, multi: 900 },
-    starter: null,
-    opensAt: null, closesAt: null,
-  },
-  {
-    id: 'pickup_legacy', kind: 'pickup',
-    pickupUR: 'legacy', pickupSR: ['knight', 'hacker'], pickupWP: ['wp_fantasy', 'wp_hacker'],
-    pity: { track: 'pickup_legacy', threshold: 200, exchange: 'pickupUR' },
     price: { single: 100, multi: 900 },
     starter: null,
     opensAt: null, closesAt: null,
@@ -152,8 +148,16 @@ export const BANNERS: readonly BannerDef[] = [
 /** 옛 클라이언트(bannerId 없이 부름)가 뽑는 배너 */
 export const DEFAULT_BANNER_ID = 'standard';
 
+/**
+ * 없어진 배너 id → 지금 배너. v1 화면은 초보자를 'starter' 배너로 따로 불렀다 — 초보자 여부는 서버가 상태로
+ * 정하므로 상시로 받아도 결과가 같다 (정의서 v2 §6-2). 지운 픽업(pickup_sentinel · pickup_legacy)은 잇지 않는다 — 닫힌 배너다
+ */
+export const BANNER_ALIASES: ReadonlyMap<string, string> = new Map([['starter', 'standard']]);
+
+/** id 의 배너 — 없어진 id 는 BANNER_ALIASES 를 따라간다 (돌려준 배너의 id 가 넘긴 값과 다를 수 있다) */
 export function getBanner(id: string): BannerDef | undefined {
-  return BANNERS.find(b => b.id === id);
+  const real = BANNER_ALIASES.get(id) ?? id;
+  return BANNERS.find(b => b.id === real);
 }
 
 /** 지금 열려 있는가 — opensAt 이상, closesAt 미만. 둘 다 null 이면 늘 열림 */
@@ -163,16 +167,45 @@ export function isBannerOpen(banner: BannerDef, nowMs: number): boolean {
   return true;
 }
 
-/** 이 배너 · 이 횟수의 가격. 초보자 1회처럼 없는 조합이면 null */
-export function pullPrice(banner: BannerDef, pullType: PullType): number | null {
-  return pullType === 'multi' ? banner.price.multi : banner.price.single;
+/**
+ * 이번 뽑기가 초보자 구간인가 — 초보자 설정이 있는 배너(상시)의 10연이고, 이번 10칸이 maxPulls 안에 들어간다.
+ * 1회는 세지 않는다 (정의서 §3). starterPullsDone = gacha_starter.pulls_done — 모르면 null (구간 아님으로 본다).
+ * 화면 표시용이다 — 실제 판정은 초보자 행을 잠근 DB 함수(gacha_pull_commit)가 한다 (두 기기에서 동시에 눌러도 맞게)
+ */
+export function isStarterPull(banner: BannerDef, pullType: PullType, starterPullsDone: number | null | undefined): boolean {
+  return banner.starter !== null && pullType === 'multi' && typeof starterPullsDone === 'number'
+    && starterPullsDone + PULL_COUNT.multi <= banner.starter.maxPulls;
+}
+
+/**
+ * 이 배너 · 이 횟수의 가격 (SKOR). 초보자 구간의 10연이면 starter.multiPrice, 아니면 price.
+ * starterPullsDone 을 안 넘기면 보통 가격이다. 표시용 — 서버는 잠그고 다시 정하고, 요청의 expectedCost 와 다르면 거절한다
+ */
+export function pullPrice(banner: BannerDef, pullType: PullType, starterPullsDone?: number | null): number {
+  const s = banner.starter;
+  if (s && isStarterPull(banner, pullType, starterPullsDone)) return s.multiPrice;
+  return banner.price[pullType];
+}
+
+/** 10연 할인율 (%) — 기준은 '1회 × 10' 하나 (정의서 §5: 보통 10%, 초보자 구간 28%) */
+export function multiDiscountPct(banner: BannerDef, starterPullsDone?: number | null): number {
+  return Math.round((1 - pullPrice(banner, 'multi', starterPullsDone) / (banner.price.single * PULL_COUNT.multi)) * 100);
 }
 
 const isGrade = (g: string): g is GachaGrade => g === 'UR' || g === 'SR' || g === 'R';
 
-/** 상시 풀 = 공개 − 기본 보유(chibi) − 이벤트 전용. 상시 · 초보자 배너가 뽑고, 픽업 배너 확률의 바탕이 된다 */
-export function standardPool<T extends GachaRosterEntry>(roster: readonly T[]): T[] {
+/**
+ * 등급 합의 바탕 = 공개 − 기본 보유(chibi) − 이벤트 전용. **픽업 전용(pickupOnly)은 들어간다** (정의서 v2 §1-2 A안).
+ * 등급 합은 이 집합의 종당 가중치로 정하고, 그 합을 그 배너에서 나올 수 있는 종이 나눈다 — 그래서 구미 · 무기를
+ * 상시에서 빼도 UR 등급 합과 픽업 숫자는 그대로고, 상시 UR(레거시 · 센티넬) 종당만 오른다
+ */
+export function gradeBase<T extends GachaRosterEntry>(roster: readonly T[]): T[] {
   return roster.filter(c => !c.unreleased && !c.eventOnly && c.id !== DEFAULT_CHARACTER_ID);
+}
+
+/** 상시 풀 = 등급 합의 바탕 − 픽업 전용. 상시 배너가 뽑고, 픽업 · 이벤트 배너의 '그 외' 종이 된다 */
+export function standardPool<T extends GachaRosterEntry>(roster: readonly T[]): T[] {
+  return gradeBase(roster).filter(c => !c.pickupOnly);
 }
 
 /** 상시 배경화면 = 뽑기 배경화면 − 이벤트 전용 */
@@ -231,26 +264,30 @@ export interface BannerRates {
 
 /**
  * 배너의 확률표 (정의서 §2). 규칙:
- * - 한 칸 = 배경화면 WALLPAPER_SHARE · 캐릭터 나머지. 캐릭터 등급 합은 상시 풀의 가중치 비율 그대로
+ * - 한 칸 = 배경화면 WALLPAPER_SHARE · 캐릭터 나머지. 캐릭터 등급 합은 등급 합의 바탕(gradeBase — 픽업 전용 포함)의
+ *   가중치 비율 그대로고, 그 합을 이 배너에서 나올 수 있는 종(상시 풀 + 이 배너 픽업)이 나눈다 (§1-2 A안)
+ * - 픽업이 없는 등급은 상시 풀의 그 등급 종이 고르게 나눈다
  * - 픽업이 있는 등급은 그 등급 합의 절반을 픽업이 나누고, 나머지 절반을 상시 종 중 픽업이 아닌 것이 나눈다
  * - 배경화면도 같다: 픽업 전용 배경이 절반, 나머지 상시 배경이 절반
  * - 10연 확정 칸: SR 이상 캐릭터만, 한 칸 확률의 비율 그대로 (합 100%)
  * - 10연 실효 = (9p + q·g + (1 − q)·p) / 10 — q = 확정 발동 확률, g = 확정 칸 확률
  *
- * 초보자 배너는 상시와 같은 표다. 초보자 50번째 보장(UR)은 이 표에 넣지 않는다 — 문구로 공개한다 (§7).
- * 명단에 없는 픽업 id 나 모르는 등급이 있으면 던진다 — 조용히 틀린 확률로 뽑느니 바로 터지는 쪽이 낫다
+ * 초보자 구간도 상시와 같은 표다. 초보자 50번째 보장(UR)은 이 표에 넣지 않는다 — 문구로 공개한다 (§7).
+ * 명단에 없는 픽업 id, 모르는 등급, 등급 합을 받을 종이 없는 등급이 있으면 던진다 — 조용히 틀린 확률로 뽑느니
+ * 바로 터지는 쪽이 낫다
  */
 export function bannerRates(
   banner: BannerDef,
   roster: readonly GachaRosterEntry[],
   wallpapers: readonly GachaWallpaperEntry[],
 ): BannerRates {
+  const base = gradeBase(roster);
   const pool = standardPool(roster);
-  for (const c of pool) {
+  for (const c of base) {
     if (!isGrade(c.grade)) throw new Error(`bannerRates: '${c.id}' 의 등급 '${c.grade}' 에 가중치가 없다`);
   }
-  const poolWeight = pool.reduce((s, c) => s + GRADE_WEIGHT[c.grade as GachaGrade], 0);
-  if (!(poolWeight > 0)) throw new Error('bannerRates: 상시 풀이 비었다');
+  const baseWeight = base.reduce((s, c) => s + GRADE_WEIGHT[c.grade as GachaGrade], 0);
+  if (!(baseWeight > 0)) throw new Error('bannerRates: 등급 합의 바탕이 비었다');
 
   const pickIds = [...(banner.pickupUR ? [banner.pickupUR] : []), ...banner.pickupSR];
   const picks = pickIds.map(id => {
@@ -266,6 +303,9 @@ export function bannerRates(
   const draft: { kind: RateEntry['kind']; grade: GachaGrade | null; pickup: boolean; ids: string[]; each: number }[] = [];
   /** 합 total 을 픽업 · 그 외로 반씩 — 한쪽이 비면 다른 쪽이 전부 갖는다 */
   const split = (kind: RateEntry['kind'], grade: GachaGrade | null, total: number, pickIdsOf: string[], otherIds: string[]) => {
+    if (total > 0 && pickIdsOf.length === 0 && otherIds.length === 0) {
+      throw new Error(`bannerRates: ${banner.id} 의 ${grade ?? '배경화면'} 몫 ${total}% 를 받을 종이 없다`);
+    }
     const pickTotal = pickIdsOf.length === 0 ? 0 : otherIds.length === 0 ? total : total / 2;
     const otherTotal = total - pickTotal;
     if (pickIdsOf.length > 0) draft.push({ kind, grade, pickup: true, ids: pickIdsOf, each: pickTotal / pickIdsOf.length });
@@ -273,15 +313,13 @@ export function bannerRates(
   };
 
   for (const grade of ['UR', 'SR', 'R'] as const) {
-    const base = pool.filter(c => c.grade === grade);
-    const total = (charShare * base.length * GRADE_WEIGHT[grade]) / poolWeight;
+    const total = (charShare * base.filter(c => c.grade === grade).length * GRADE_WEIGHT[grade]) / baseWeight;
     const gradePicks = picks.filter(c => c.grade === grade).map(c => c.id);
-    const others = base.filter(c => !gradePicks.includes(c.id)).map(c => c.id);
+    const others = pool.filter(c => c.grade === grade && !gradePicks.includes(c.id)).map(c => c.id);
     split('character', grade, total, gradePicks, others);
   }
   {
-    const base = standardWallpapers(wallpapers);
-    const others = base.filter(w => !banner.pickupWP.includes(w.id)).map(w => w.id);
+    const others = standardWallpapers(wallpapers).filter(w => !banner.pickupWP.includes(w.id)).map(w => w.id);
     split('wallpaper', null, WALLPAPER_SHARE, [...banner.pickupWP], others);
   }
 
@@ -358,9 +396,9 @@ export function drawSlots(rates: BannerRates, count: number, rand: () => number)
 /**
  * 천장 교환 후보 (정의서 §4-2). 손으로 적지 않는다 — 상시 UR 구성이 바뀌면 후보도 따라 바뀐다.
  * - pickupUR: [그 배너의 픽업 UR]
- * - chooseUR: 상시 풀의 UR
+ * - chooseUR: 상시 풀의 UR (픽업 전용 UR 은 빠진다 — 지금 레거시 · 센티넬)
  * - chooseSR: 그 배너의 픽업 SR (이벤트 셋). 전용 배경은 주지 않는다
- * 천장이 없는 배너(초보자)는 빈 배열
+ * 천장이 없는 배너는 빈 배열
  */
 export function pityChoices(banner: BannerDef, roster: readonly GachaRosterEntry[]): string[] {
   if (!banner.pity) return [];

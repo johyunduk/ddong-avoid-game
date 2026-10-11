@@ -13,9 +13,9 @@ import { corsHeaders, json, pityOf, rand, readRequestId, reject, rpcError, start
 const RATES = new Map<string, BannerRates>(BANNERS.map(b => [b.id, bannerRates(b, GACHA_ROSTER, GACHA_WALLPAPERS)]));
 
 // ── 요청 처리 ───────────────────────────────────────────────────────────
-// 입력: { pullType: 'single' | 'multi', bannerId?, requestId?, starterPick? } — 픽업 배너 정의서 §6-2
+// 입력: { pullType: 'single' | 'multi', bannerId?, requestId?, starterPick?, expectedCost? } — 픽업 배너 정의서 v2 §6-2
 // 추첨은 여기서 정본 확률표로 하고, 차감 · 천장 · 초보자 · 지급 · 기록은 DB 함수 gacha_pull_commit 이 한 트랜잭션에서 한다
-// (20261011000009). 초보자 50번째 보장도 초보자 상태를 잠근 그 함수가 넣는다
+// (20261011000009). 초보자 구간인지 · 가격(720 / 900) · 50번째 보장도 초보자 행을 잠근 그 함수가 정한다
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -25,21 +25,25 @@ Deno.serve(async (req: Request) => {
     const body = await req.json().catch(() => null) as Record<string, unknown> | null;
     if (!body || typeof body !== 'object') return reject('bad_request', 'Invalid body');
 
-    const { pullType, starterPick } = body;
+    const { pullType, starterPick, expectedCost } = body;
     if (pullType !== 'single' && pullType !== 'multi') return reject('bad_request', 'Invalid pullType');
 
-    // bannerId 가 없으면 상시 — 배너 이전 클라이언트 호환
+    // bannerId 가 없으면 상시 — 배너 이전 클라이언트 호환. v1 화면의 'starter' 도 상시로 받는다 (getBanner 가
+    // BANNER_ALIASES 를 따라간다). 지운 pickup_sentinel · pickup_legacy 는 없는 배너라 banner_closed
+    const bannerAware = body.bannerId !== undefined && body.bannerId !== null;
     const bannerId = body.bannerId ?? DEFAULT_BANNER_ID;
     const banner = typeof bannerId === 'string' ? getBanner(bannerId) : undefined;
     if (!banner || !isBannerOpen(banner, Date.now())) return reject('banner_closed', 'Banner closed');
 
-    const cost = pullPrice(banner, pullType);
-    if (cost === null) return reject('starter_single', 'No single pull on this banner');
-
-    // 초보자 배너에서만, 그 배너의 보장 후보 중 하나. 저장된 값을 바꾼다
+    // 초보자 설정이 있는 배너(상시)에서만, 보장 후보 중 하나. 구간 10연이면 저장된 값을 바꾼다
     if (starterPick !== undefined && starterPick !== null
       && !(typeof starterPick === 'string' && banner.starter?.pickFrom.includes(starterPick))) {
       return reject('bad_request', 'Invalid starterPick');
+    }
+    // 화면이 보인 가격 — DB 함수가 정한 실제 차감액과 다르면 price_changed
+    if (expectedCost !== undefined && expectedCost !== null
+      && !(typeof expectedCost === 'number' && Number.isInteger(expectedCost) && expectedCost > 0)) {
+      return reject('bad_request', 'Invalid expectedCost');
     }
 
     const requestId = readRequestId(body.requestId);
@@ -70,15 +74,23 @@ Deno.serve(async (req: Request) => {
     // ── 추첨 — 칸마다 배경화면 또는 캐릭터, 10연이면 SR 이상 1장 확정 (정의서 §2-4) ──
     const slots = drawSlots(RATES.get(banner.id)!, PULL_COUNT[pullType], rand);
 
+    // 초보자 혜택 — 상시 10연이면 넘기고, 구간인지는 DB 함수가 초보자 행을 잠그고 정한다 (구간 밖이면 보통 상시).
+    // bannerId 없이 부르는 배너 이전 클라이언트에는 넣지 않는다: 그 화면은 보장 UR 을 고를 줄 몰라, 다섯 번째 10연이
+    // starter_pick_required 로 끝없이 거절된다. 그 계정은 새 화면이 나올 때까지 보통 상시(900)로 뽑고 구간은 그대로 남는다
+    const starter = banner.starter && pullType === 'multi' && bannerAware
+      ? { max: banner.starter.maxPulls, multiPrice: banner.starter.multiPrice, pick: starterPick ?? null }
+      : null;
+
     // ── 차감 · 천장 · 초보자 · 지급 · 기록 — 한 트랜잭션 ──
     const { data, error } = await supabaseAdmin.rpc('gacha_pull_commit', {
       p_user_id: user.id,
       p_request_id: requestId,
       p_banner_id: banner.id,
-      p_cost: cost,
+      p_cost: pullPrice(banner, pullType),
       p_slots: slots,
       p_pity_track: banner.pity?.track ?? null,
-      p_starter: banner.starter ? { max: banner.starter.maxPulls, pick: starterPick ?? null } : null,
+      p_starter: starter,
+      p_expected_cost: expectedCost ?? null,
       p_rates_version: RATES_VERSION,
     });
     if (error) return rpcError(error);
@@ -101,8 +113,9 @@ Deno.serve(async (req: Request) => {
       characters,
       wallpapers,
       remainingSkor: Math.floor(Number(r.balance ?? 0)),
+      cost: r.cost,
       pity: pityOf(banner, r.pityPoints),
-      starter: starterOf(r.starter),
+      starter: starterOf(banner, r.starter),
       ratesVersion: r.ratesVersion,
     });
   } catch (error) {

@@ -51,7 +51,7 @@ const readLF = (path) => readFileSync(path, 'utf8').split(CR + LF).join(LF);
 /** `true` 표식 — 주석 · 문자열 속 글자는 세지 않는다 (마스크에서 본다) */
 const flagOf = (block, key) => new RegExp(`(^|[{,\\s])${key}\\s*:\\s*true\\b`).test(maskCode(block));
 
-/** `character.ts` 의 CHARACTERS 배열에서 (id, name, grade, unreleased, eventOnly) 를 뽑는다 */
+/** `character.ts` 의 CHARACTERS 배열에서 (id, name, grade, unreleased, eventOnly, pickupOnly) 를 뽑는다 */
 export function readRoster() {
   const text = readLF(SRC);
   const start = text.indexOf('export const CHARACTERS');
@@ -87,7 +87,10 @@ export function readRoster() {
       broken.push(`  ${i + 1}번째 항목: ${[!id && 'id', !name && 'name', !grade && 'grade'].filter(Boolean).join('·')} 를 읽지 못했다`);
       return;
     }
-    out.push({ id, name, grade, unreleased: flagOf(block, 'unreleased'), eventOnly: flagOf(block, 'eventOnly') });
+    out.push({
+      id, name, grade,
+      unreleased: flagOf(block, 'unreleased'), eventOnly: flagOf(block, 'eventOnly'), pickupOnly: flagOf(block, 'pickupOnly'),
+    });
   });
 
   if (broken.length) {
@@ -213,9 +216,10 @@ function topLevelObjects(arr) {
 export function render(roster, wallpapers) {
   const ids = roster.map(c => `  '${c.id}',`).join('\n');
   const grades = roster.map(c => `  ${(c.id + ':').padEnd(11)} '${c.grade}',`).join('\n');
-  const flagged = roster.filter(c => c.unreleased || c.eventOnly);
+  const flagged = roster.filter(c => c.unreleased || c.eventOnly || c.pickupOnly);
   const flags = flagged.map(c => {
-    const f = [c.unreleased && 'unreleased: true', c.eventOnly && 'eventOnly: true'].filter(Boolean).join(', ');
+    const f = [c.unreleased && 'unreleased: true', c.eventOnly && 'eventOnly: true', c.pickupOnly && 'pickupOnly: true']
+      .filter(Boolean).join(', ');
     return `  ${(c.id + ':').padEnd(11)} { ${f} },`;
   }).join('\n');
   const wps = wallpapers.map(w => `  { id: '${w.id}'${w.eventOnly ? ', eventOnly: true' : ''} },`).join('\n');
@@ -243,12 +247,12 @@ export function isKnownCharacter(id: unknown): id is string {
   return typeof id === 'string' && CHARACTER_IDS.includes(id);
 }
 
-/** id → 뽑기 표식 — 미공개(unreleased) · 이벤트 전용(eventOnly). 표식이 있는 캐릭터만 적힌다 */
-export const CHARACTER_FLAGS: Readonly<Record<string, { unreleased?: boolean; eventOnly?: boolean }>> = {
+/** id → 뽑기 표식 — 미공개(unreleased) · 이벤트 전용(eventOnly) · 픽업 전용(pickupOnly). 표식이 있는 캐릭터만 적힌다 */
+export const CHARACTER_FLAGS: Readonly<Record<string, { unreleased?: boolean; eventOnly?: boolean; pickupOnly?: boolean }>> = {
 ${flags}${flagged.length ? '\n' : ''}};
 
 /** 뽑기 계산용 명단 — \`_shared/banners.ts\` 의 bannerRates · pityChoices 에 넘긴다 */
-export const GACHA_ROSTER: readonly { id: string; grade: string; unreleased?: boolean; eventOnly?: boolean }[] =
+export const GACHA_ROSTER: readonly { id: string; grade: string; unreleased?: boolean; eventOnly?: boolean; pickupOnly?: boolean }[] =
   CHARACTER_IDS.map(id => ({ id, grade: CHARACTER_GRADES[id], ...CHARACTER_FLAGS[id] }));
 
 /** 뽑기 배경화면 (기본 제공 배경 제외, ${wallpapers.length}종) — bannerRates 에 넘긴다 */

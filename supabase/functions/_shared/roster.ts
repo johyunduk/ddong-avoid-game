@@ -72,15 +72,17 @@ export function isKnownCharacter(id: unknown): id is string {
   return typeof id === 'string' && CHARACTER_IDS.includes(id);
 }
 
-/** id → 뽑기 표식 — 미공개(unreleased) · 이벤트 전용(eventOnly). 표식이 있는 캐릭터만 적힌다 */
-export const CHARACTER_FLAGS: Readonly<Record<string, { unreleased?: boolean; eventOnly?: boolean }>> = {
+/** id → 뽑기 표식 — 미공개(unreleased) · 이벤트 전용(eventOnly) · 픽업 전용(pickupOnly). 표식이 있는 캐릭터만 적힌다 */
+export const CHARACTER_FLAGS: Readonly<Record<string, { unreleased?: boolean; eventOnly?: boolean; pickupOnly?: boolean }>> = {
+  mugi:       { pickupOnly: true },
+  gumi:       { pickupOnly: true },
   ted:        { eventOnly: true },
   heidi:      { eventOnly: true },
   red:        { eventOnly: true },
 };
 
 /** 뽑기 계산용 명단 — `_shared/banners.ts` 의 bannerRates · pityChoices 에 넘긴다 */
-export const GACHA_ROSTER: readonly { id: string; grade: string; unreleased?: boolean; eventOnly?: boolean }[] =
+export const GACHA_ROSTER: readonly { id: string; grade: string; unreleased?: boolean; eventOnly?: boolean; pickupOnly?: boolean }[] =
   CHARACTER_IDS.map(id => ({ id, grade: CHARACTER_GRADES[id], ...CHARACTER_FLAGS[id] }));
 
 /** 뽑기 배경화면 (기본 제공 배경 제외, 12종) — bannerRates 에 넘긴다 */

@@ -74,6 +74,12 @@ export interface CharacterDef {
    * (픽업 배너 정의서 §1, 2026-10-11)
    */
   eventOnly?: boolean;
+  /**
+   * 자기 픽업 배너에서만 나온다 — 상시 뽑기 풀 · 상시 천장 후보 · 다른 픽업 배너의 '그 외 UR' 에서 빠진다.
+   * 등급 합 계산에는 남는다 (그래서 빼도 상시 UR 등급 합 · 픽업 확률이 그대로다). 이미 가진 사람은 그대로 쓴다.
+   * 한정이 끝나 상시로 넣을 때 이 표식만 지운다 (픽업 배너 정의서 v2 §1, 2026-10-11)
+   */
+  pickupOnly?: boolean;
 }
 
 const UNRELEASED_KEY = 'showUnreleased';
@@ -175,6 +181,7 @@ export const CHARACTERS: CharacterDef[] = [
     id: 'mugi',
     name: '무기',
     grade: 'UR',
+    pickupOnly: true,
     gradeColor: '#ffaa00',
     imageKey: 'mugi_front',
     imagePath: 'assets/players/mugi_front.webp',
@@ -191,6 +198,7 @@ export const CHARACTERS: CharacterDef[] = [
     id: 'gumi',
     name: '구미',
     grade: 'UR',
+    pickupOnly: true,
     gradeColor: '#ffaa00',
     imageKey: 'gumi_front',
     imagePath: 'assets/players/gumi_front.webp',
