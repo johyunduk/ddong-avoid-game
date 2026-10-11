@@ -6,6 +6,8 @@ export interface BackgroundDef {
   bgKey: string;      // 인게임 배경용 Phaser 텍스처 키
   bgPath: string;     // public/ 기준 경로
   description: string;
+  /** 이벤트 픽업에서만 나온다 — 상시 뽑기 · 픽업 배너의 '그 외 배경'에서 빠진다 (src/config/banners.ts) */
+  eventOnly?: boolean;
 }
 
 /** 배경화면 공통 accent color — 등급 없이 단일 색상 사용 */
@@ -16,7 +18,8 @@ export const WP_ACCENT_INT = 0xcc88ff;
 export const DEFAULT_WP_IDS = ['wp_bg_easy', 'wp_bg_normal', 'wp_bg_hard'] as const;
 
 // 배경화면 목록 — 실제 에셋은 public/assets/wallpapers/ 폴더에 추가 필요
-// 등급 없음: 뽑기 가능한 종은 모두 같은 확률 — 슬롯당 GACHA_WP_DROP_CHANCE(3.5%) ÷ 종 수 (12종이면 종당 약 0.29%)
+// 등급 없음. 뽑기 확률은 src/config/banners.ts 의 bannerRates 가 배너마다 계산한다 —
+// 한 칸의 배경 몫(3.5%)을 상시 배경(eventOnly 뺀 것)이 나누고, 픽업 배너는 그 절반을 전용 배경이 갖는다
 export const WALLPAPERS: BackgroundDef[] = [
   // ── 기본 제공 배경 (처음부터 보유, 가챠 불필요) ───────────────────────────
   {
@@ -95,6 +98,7 @@ export const WALLPAPERS: BackgroundDef[] = [
   {
     id: 'wp_ted',
     name: '체스 광장',
+    eventOnly: true,
     thumbKey: 'wp_ted_thumb',
     thumbPath: 'assets/wallpapers/ted_thumb.webp',
     bgKey: 'wp_ted_bg',
@@ -104,6 +108,7 @@ export const WALLPAPERS: BackgroundDef[] = [
   {
     id: 'wp_heidi',
     name: '마을 큰길',
+    eventOnly: true,
     thumbKey: 'wp_heidi_thumb',
     thumbPath: 'assets/wallpapers/heidi_thumb.webp',
     bgKey: 'wp_heidi_bg',
@@ -113,6 +118,7 @@ export const WALLPAPERS: BackgroundDef[] = [
   {
     id: 'wp_red',
     name: '고철 차고',
+    eventOnly: true,
     thumbKey: 'wp_red_thumb',
     thumbPath: 'assets/wallpapers/red_thumb.webp',
     bgKey: 'wp_red_bg',

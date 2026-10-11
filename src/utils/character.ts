@@ -68,6 +68,12 @@ export interface CharacterDef {
    * 테스트로 보려면 {@link showUnreleased} 참고.
    */
   unreleased?: boolean;
+  /**
+   * 이벤트 픽업에서만 나온다 — 상시 뽑기 풀 · 상시 천장 후보 · 픽업 배너 확률의 바탕에서 빠진다.
+   * 이미 가진 사람은 그대로 쓴다. 확률은 src/config/banners.ts 의 bannerRates 가 이 표식으로 계산한다
+   * (픽업 배너 정의서 §1, 2026-10-11)
+   */
+  eventOnly?: boolean;
 }
 
 const UNRELEASED_KEY = 'showUnreleased';
@@ -233,6 +239,7 @@ export const CHARACTERS: CharacterDef[] = [
     id: 'ted',
     name: '테드',
     grade: 'SR',
+    eventOnly: true,
     gradeColor: '#4488ff',
     imageKey: 'ted_front',
     imagePath: 'assets/players/ted_front.webp',
@@ -282,6 +289,7 @@ export const CHARACTERS: CharacterDef[] = [
     id: 'heidi',
     name: '하이디',
     grade: 'SR',
+    eventOnly: true,
     gradeColor: '#4488ff',
     imageKey: 'heidi_front',
     imagePath: 'assets/players/heidi_front.webp',
@@ -305,6 +313,7 @@ export const CHARACTERS: CharacterDef[] = [
     id: 'red',
     name: '레드',
     grade: 'SR',
+    eventOnly: true,
     gradeColor: '#4488ff',
     imageKey: 'red_front',
     imagePath: 'assets/players/red_front.webp',

@@ -19,8 +19,8 @@
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { maskCode, readRoster } from './gen-roster.mjs';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { isCurrent, maskCode, outputs, readGachaWallpapers, readRoster } from './gen-roster.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const LF = String.fromCharCode(10);
@@ -82,24 +82,13 @@ function subset(label, list, { allow = [] } = {}) {
 }
 
 // ── 1. 생성물이 최신인가 ───────────────────────────────────────────────
-{
-  const label = 'supabase/functions/_shared/roster.ts 가 character.ts 와 일치';
-  const cur = (() => {
-    try { return read('supabase', 'functions', '_shared', 'roster.ts'); } catch { return ''; }
-  })();
-  const got = [...cur.matchAll(/^ {2}'([^']+)',$/gm)].map(m => m[1]);
-  const want = roster.map(c => c.id);
-  if (got.join(',') !== want.join(',')) {
-    fail(label, `node scripts/gen-roster.mjs 로 다시 생성해라 (생성물 ${got.length}종 / 정본 ${want.length}종)`);
-  } else {
-    // 등급까지 본다 — id 만 맞고 등급이 낡으면 뽑기 가중치가 옛 등급으로 남는다
-    const badGrade = roster.filter(c => !new RegExp(`\\n {2}${c.id}:\\s+'${c.grade}',`).test(cur));
-    if (badGrade.length) {
-      fail(label, `등급이 어긋난다: ${badGrade.map(c => `${c.id}=${c.grade}`).join(', ')}`);
-    } else {
-      pass(label, `${want.length}종 · 등급 포함`);
-    }
-  }
+// 글자 단위로 비교한다 — id · 등급만 보던 때는 eventOnly 같은 표식이 낡아도 통과했다.
+// 등급이 낡으면 뽑기 가중치가 옛 등급으로, 표식이 낡으면 이벤트 셋이 상시 풀에 남는다
+for (const [path, next, what] of outputs()) {
+  const rel = path.slice(ROOT.length + 1).split('\\').join('/');
+  const label = `${rel} 가 정본과 일치`;
+  if (isCurrent(path, next)) pass(label, what);
+  else fail(label, 'node scripts/gen-roster.mjs 로 다시 생성해라');
 }
 
 // ── 2. 서버가 명단을 베끼지 않는가 ─────────────────────────────────────
@@ -237,6 +226,93 @@ function subset(label, list, { allow = [] } = {}) {
     { allow: ['astronaut', 'gold_mugi', 'ktei', 'ktei_ss'] });
 }
 
+// ── 4-1. 뽑기 배너 (src/config/banners.ts) ───────────────────────────
+// 정의서 §6-1 의 검사. 정본 파일을 그대로 불러 같은 함수(bannerRates · pityChoices)로 잰다 —
+// 화면과 서버가 쓰는 계산 그 자체를 검사해야 검사가 헛돌지 않는다
+{
+  const B = await import(pathToFileURL(join(ROOT, 'src', 'config', 'banners.ts')).href);
+  const { SYNERGY_MAP } = await import(pathToFileURL(join(ROOT, 'src', 'config', 'synergyMap.ts')).href);
+  const wps = readGachaWallpapers();
+  const wpIds = wps.map(w => w.id);
+  const byId = new Map(roster.map(c => [c.id, c]));
+  const stdUR = B.standardPool(roster).filter(c => c.grade === 'UR').map(c => c.id);
+
+  const ids = B.BANNERS.map(b => b.id);
+  const dupIds = ids.filter((id, i) => ids.indexOf(id) !== i);
+  if (dupIds.length) fail('배너 id 가 겹치지 않는다', dupIds.join(', '));
+  else pass('배너 id 가 겹치지 않는다', `${ids.length}개`);
+  if (!B.getBanner(B.DEFAULT_BANNER_ID)) fail('기본 배너가 있다', `'${B.DEFAULT_BANNER_ID}' 가 BANNERS 에 없다`);
+
+  // 정의서 §6-1 의 kind 별 천장 모양 (threshold 값은 정본이 정한다)
+  const PITY_SHAPE = {
+    standard: { track: () => 'standard', exchange: 'chooseUR' },
+    pickup: { track: b => b.id, exchange: 'pickupUR' },
+    event: { track: b => b.id, exchange: 'chooseSR' },
+  };
+
+  for (const b of B.BANNERS) {
+    const errs = [];
+    const picks = [...(b.pickupUR ? [b.pickupUR] : []), ...b.pickupSR];
+    // 2. 픽업 id ⊆ 명단, 등급이 맞다
+    if (b.pickupUR && byId.get(b.pickupUR)?.grade !== 'UR') errs.push(`pickupUR '${b.pickupUR}' 가 명단의 UR 이 아니다`);
+    for (const id of b.pickupSR) if (byId.get(id)?.grade !== 'SR') errs.push(`pickupSR '${id}' 가 명단의 SR 이 아니다`);
+    // 3. 상시 · 픽업 · 초보자는 이벤트 전용이 없고, 이벤트 배너의 픽업은 전부 이벤트 전용이다
+    const evChars = picks.filter(id => byId.get(id)?.eventOnly);
+    const evWps = b.pickupWP.filter(id => wps.find(w => w.id === id)?.eventOnly);
+    if (b.kind === 'event') {
+      if (b.pickupUR) errs.push('이벤트 배너에 픽업 UR 이 있다');
+      if (evChars.length !== picks.length || picks.length === 0) errs.push('이벤트 배너의 픽업 캐릭터가 전부 eventOnly 가 아니다');
+      if (evWps.length !== b.pickupWP.length) errs.push('이벤트 배너의 픽업 배경이 전부 eventOnly 가 아니다');
+    } else if (evChars.length || evWps.length) {
+      errs.push(`${b.kind} 배너에 eventOnly 가 있다: ${[...evChars, ...evWps].join(', ')}`);
+    }
+    if ((b.kind === 'standard' || b.kind === 'starter') && (picks.length || b.pickupWP.length)) errs.push(`${b.kind} 배너에 픽업이 있다`);
+    if (b.kind === 'pickup' && (!b.pickupUR || b.pickupSR.length === 0)) errs.push('픽업 배너에 픽업 UR · SR 이 없다');
+    // 4. 배경 id ⊆ 뽑기 배경 (GACHA_WP_IDS), 전용 배경은 그 배너 픽업 SR 의 시너지 짝 (정의서 §2-2)
+    for (const id of b.pickupWP) if (!wpIds.includes(id)) errs.push(`pickupWP '${id}' 가 뽑기 배경화면이 아니다`);
+    const unpaired = b.pickupWP.filter(wp => !b.pickupSR.some(sr => SYNERGY_MAP[`${wp}:${sr}`]));
+    if (unpaired.length) errs.push(`pickupWP 가 픽업 SR 의 시너지 짝이 아니다: ${unpaired.join(', ')}`);
+    // 6. 천장이 kind 와 맞고, 교환 후보가 비지 않았다
+    if (b.kind === 'starter') {
+      if (b.pity !== null) errs.push('초보자 배너에 천장이 있다');
+      if (!b.starter) errs.push('초보자 배너에 starter 설정이 없다');
+      else {
+        if (!(b.starter.maxPulls > 0 && b.starter.maxPulls % 10 === 0)) errs.push(`starter.maxPulls ${b.starter.maxPulls} 가 10연의 배수가 아니다`);
+        const bad = b.starter.pickFrom.filter(id => !stdUR.includes(id));
+        if (bad.length || b.starter.pickFrom.length === 0) errs.push(`starter.pickFrom 이 상시 UR 이 아니다: ${bad.join(', ') || '(비었다)'}`);
+      }
+      if (b.price.single !== null) errs.push('초보자 배너에 1회 가격이 있다');
+    } else {
+      const shape = PITY_SHAPE[b.kind];
+      if (b.starter) errs.push(`${b.kind} 배너에 starter 설정이 있다`);
+      if (!b.pity) errs.push('천장이 없다');
+      else {
+        if (b.pity.track !== shape.track(b)) errs.push(`pity.track '${b.pity.track}' ≠ '${shape.track(b)}'`);
+        if (b.pity.exchange !== shape.exchange) errs.push(`pity.exchange '${b.pity.exchange}' ≠ '${shape.exchange}'`);
+        if (!(Number.isInteger(b.pity.threshold) && b.pity.threshold > 0)) errs.push(`pity.threshold ${b.pity.threshold}`);
+        if (B.pityChoices(b, roster).length === 0) errs.push('pityChoices 가 비었다');
+      }
+      if (!(b.price.single > 0)) errs.push('1회 가격이 없다');
+    }
+    if (!(b.price.multi > 0)) errs.push('10연 가격이 없다');
+    // 5. 확률 합 = 100% — 한 칸 · 10연 확정 칸 · 10연 실효
+    let sums = '';
+    try {
+      const r = B.bannerRates(b, roster, wps);
+      const sum = k => r.entries.reduce((s, e) => s + e.rate[k], 0);
+      for (const k of ['slot', 'guarantee', 'multi']) {
+        if (!(Math.abs(sum(k) - 100) <= 1e-9)) errs.push(`${k} 합 ${sum(k)} ≠ 100`);
+      }
+      sums = `종 ${r.entries.length} · UR ${r.byGrade.UR.slot.toFixed(4)}%`;
+    } catch (e) {
+      errs.push(`bannerRates 가 던졌다: ${e.message}`);
+    }
+    const label = `배너 ${b.id} (${b.kind})`;
+    if (errs.length) fail(label, errs.join(LF + '         '));
+    else pass(label, sums);
+  }
+}
+
 // ── 5. 이름에 기대지 않는 복제 탐지 ───────────────────────────────────
 // 위 검사들은 **알고 있는 변수 이름**만 본다. 이름을 바꿔 새 수동 목록을 만들면
 // 그대로 통과한다 (리뷰 지적). 그래서 소스 전체에서 **캐릭터 id 문자열이 여러 개
@@ -260,6 +336,8 @@ function subset(label, list, { allow = [] } = {}) {
     'src/abilities/index.ts#R_IDS',                             // RGradeAbility 사용 집합
     'src/utils/charAnim.ts#CHARS_WITH_ANIM_SHEETS',             // 시트 보유 집합 (비캐릭터 포함)
     'src/data/releaseNotes.ts#RELEASE_NOTES',                   // 버전별 발표 기록 (값을 박아 둔다)
+    'src/config/banners.ts#BANNERS',                            // 뽑기 배너 정본 (픽업 id 나열이 정당하다)
+    'supabase/functions/_shared/banners.ts#BANNERS',            // 그 생성물
   ]);
 
   /**

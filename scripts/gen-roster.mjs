@@ -1,5 +1,8 @@
 /**
- * `src/utils/character.ts` → `supabase/functions/_shared/roster.ts` 생성.
+ * 서버 사본 생성 — Edge Function 이 src/ 를 못 읽어서 필요한 것 둘.
+ *
+ *   - `src/utils/character.ts` + `src/utils/wallpaper.ts` → `supabase/functions/_shared/roster.ts`
+ *   - `src/config/banners.ts` (그대로)                  → `supabase/functions/_shared/banners.ts`
  *
  * ## 왜 생성하는가
  *
@@ -20,6 +23,13 @@
  *
  *     node scripts/gen-roster.mjs           # 생성
  *     node scripts/gen-roster.mjs --check   # 생성물과 파일이 같은지만 확인
+ *
+ * ## 배너는 왜 그대로 옮기는가
+ *
+ * 화면의 확률 표와 서버의 추첨이 **같은 함수**(bannerRates · pityChoices)를 써야 해서다.
+ * 그래서 정본 `banners.ts` 는 아무것도 import 하지 않게 써 두고 (명단은 인자로 받는다),
+ * 여기서는 머리말만 붙여 글자 그대로 옮긴다. import 가 생기면 생성을 거부한다 —
+ * Deno 에서 `src/` 경로가 풀리지 않아 배포 뒤에야 터진다.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -27,15 +37,23 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const SRC = join(ROOT, 'src', 'utils', 'character.ts');
+const WP_SRC = join(ROOT, 'src', 'utils', 'wallpaper.ts');
+const BANNER_SRC = join(ROOT, 'src', 'config', 'banners.ts');
 const OUT = join(ROOT, 'supabase', 'functions', '_shared', 'roster.ts');
+const BANNER_OUT = join(ROOT, 'supabase', 'functions', '_shared', 'banners.ts');
 
 const CR = String.fromCharCode(13);
 const LF = String.fromCharCode(10);
 
-/** `character.ts` 의 CHARACTERS 배열에서 (id, name, grade, unreleased) 를 뽑는다 */
+/** CRLF 로 저장돼 있어도 같은 정규식이 맞도록 줄바꿈을 통일해 읽는다 */
+const readLF = (path) => readFileSync(path, 'utf8').split(CR + LF).join(LF);
+
+/** `true` 표식 — 주석 · 문자열 속 글자는 세지 않는다 (마스크에서 본다) */
+const flagOf = (block, key) => new RegExp(`(^|[{,\\s])${key}\\s*:\\s*true\\b`).test(maskCode(block));
+
+/** `character.ts` 의 CHARACTERS 배열에서 (id, name, grade, unreleased, eventOnly) 를 뽑는다 */
 export function readRoster() {
-  // CRLF 로 저장돼 있어도 같은 정규식이 맞도록 줄바꿈을 먼저 통일한다
-  const text = readFileSync(SRC, 'utf8').split(CR + LF).join(LF);
+  const text = readLF(SRC);
   const start = text.indexOf('export const CHARACTERS');
   if (start < 0) throw new Error('character.ts 에서 CHARACTERS 배열을 못 찾았다');
   const body = text.slice(start);
@@ -69,7 +87,7 @@ export function readRoster() {
       broken.push(`  ${i + 1}번째 항목: ${[!id && 'id', !name && 'name', !grade && 'grade'].filter(Boolean).join('·')} 를 읽지 못했다`);
       return;
     }
-    out.push({ id, name, grade, unreleased: /(^|[{,\s])unreleased\s*:\s*true/.test(block) });
+    out.push({ id, name, grade, unreleased: flagOf(block, 'unreleased'), eventOnly: flagOf(block, 'eventOnly') });
   });
 
   if (broken.length) {
@@ -78,6 +96,27 @@ export function readRoster() {
       '  항목이 조용히 빠지면 그 캐릭터가 서버 명단에서 누락되고, 랭킹에 chibi 로 저장된다.',
     );
   }
+  return out;
+}
+
+/**
+ * `wallpaper.ts` 의 뽑기 배경화면 — WALLPAPERS 중 기본 제공(DEFAULT_WP_IDS)을 뺀 것 (= GACHA_WP_IDS).
+ * (id, eventOnly) 를 정본 순서대로 돌려준다
+ */
+export function readGachaWallpapers() {
+  const text = readLF(WP_SRC);
+  const defaults = (/DEFAULT_WP_IDS\s*=\s*\[([^\]]*)\]/.exec(text)?.[1] ?? '').match(/wp_\w+/g) ?? [];
+  if (defaults.length === 0) throw new Error('wallpaper.ts 에서 DEFAULT_WP_IDS 를 못 찾았다');
+  const start = text.indexOf('export const WALLPAPERS');
+  if (start < 0) throw new Error('wallpaper.ts 에서 WALLPAPERS 배열을 못 찾았다');
+  const blocks = topLevelObjects(sliceArray(text.slice(start)));
+  const out = [];
+  blocks.forEach((block, i) => {
+    const m = /(^|[{,\s])id\s*:\s*['"]([^'"]*)['"]/.exec(block);
+    if (!m) throw new Error(`WALLPAPERS ${i + 1}번째 항목의 id 를 읽지 못했다 — 조용히 빠지면 서버 뽑기 풀에서 누락된다`);
+    if (!defaults.includes(m[2])) out.push({ id: m[2], eventOnly: flagOf(block, 'eventOnly') });
+  });
+  if (out.length === 0) throw new Error('뽑기 배경화면을 하나도 읽지 못했다');
   return out;
 }
 
@@ -128,15 +167,15 @@ export function maskCode(src, { keepStrings = false } = {}) {
 }
 
 /**
- * `export const CHARACTERS ... = [ ... ];` 의 대괄호 안쪽만 잘라낸다.
+ * `export const NAME ... = [ ... ];` 의 대괄호 안쪽만 잘라낸다 (CHARACTERS · WALLPAPERS).
  * **`=` 뒤에서 찾는다** — 앞에서 찾으면 타입 표기(`CharacterDef[]`)의 대괄호를 잡는다.
  */
 function sliceArray(body) {
   const mask = maskCode(body);
   const eq = mask.indexOf('=');
-  if (eq < 0) throw new Error('CHARACTERS 선언에서 = 를 찾지 못했다');
+  if (eq < 0) throw new Error('배열 선언에서 = 를 찾지 못했다');
   const open = mask.indexOf('[', eq);
-  if (open < 0) throw new Error('CHARACTERS 배열의 여는 대괄호를 찾지 못했다');
+  if (open < 0) throw new Error('배열의 여는 대괄호를 찾지 못했다');
   let depth = 0;
   for (let i = open; i < mask.length; i++) {
     const ch = mask[i];
@@ -146,7 +185,7 @@ function sliceArray(body) {
       if (depth === 0) return body.slice(open + 1, i);
     }
   }
-  throw new Error('CHARACTERS 배열이 닫히지 않았다');
+  throw new Error('배열이 닫히지 않았다');
 }
 
 /** 배열 안의 **최상위** `{ ... }` 덩어리들 (중첩 객체는 그 안에 포함된 채로) */
@@ -171,12 +210,18 @@ function topLevelObjects(arr) {
   return out;
 }
 
-export function render(roster) {
+export function render(roster, wallpapers) {
   const ids = roster.map(c => `  '${c.id}',`).join('\n');
   const grades = roster.map(c => `  ${(c.id + ':').padEnd(11)} '${c.grade}',`).join('\n');
+  const flagged = roster.filter(c => c.unreleased || c.eventOnly);
+  const flags = flagged.map(c => {
+    const f = [c.unreleased && 'unreleased: true', c.eventOnly && 'eventOnly: true'].filter(Boolean).join(', ');
+    return `  ${(c.id + ':').padEnd(11)} { ${f} },`;
+  }).join('\n');
+  const wps = wallpapers.map(w => `  { id: '${w.id}'${w.eventOnly ? ', eventOnly: true' : ''} },`).join('\n');
   return `// 이 파일은 생성된 것이다. 손으로 고치지 마라.
 //   생성: node scripts/gen-roster.mjs
-//   정본: src/utils/character.ts 의 CHARACTERS
+//   정본: src/utils/character.ts 의 CHARACTERS · src/utils/wallpaper.ts 의 WALLPAPERS
 //   검사: scripts/check-roster.mjs (verify.ps1 에 물려 있다)
 //
 // Edge Function 은 Deno 라 src/ 를 번들에 넣지 못한다. 그래서 서버가 캐릭터 명단을
@@ -197,7 +242,38 @@ ${grades}
 export function isKnownCharacter(id: unknown): id is string {
   return typeof id === 'string' && CHARACTER_IDS.includes(id);
 }
+
+/** id → 뽑기 표식 — 미공개(unreleased) · 이벤트 전용(eventOnly). 표식이 있는 캐릭터만 적힌다 */
+export const CHARACTER_FLAGS: Readonly<Record<string, { unreleased?: boolean; eventOnly?: boolean }>> = {
+${flags}${flagged.length ? '\n' : ''}};
+
+/** 뽑기 계산용 명단 — \`_shared/banners.ts\` 의 bannerRates · pityChoices 에 넘긴다 */
+export const GACHA_ROSTER: readonly { id: string; grade: string; unreleased?: boolean; eventOnly?: boolean }[] =
+  CHARACTER_IDS.map(id => ({ id, grade: CHARACTER_GRADES[id], ...CHARACTER_FLAGS[id] }));
+
+/** 뽑기 배경화면 (기본 제공 배경 제외, ${wallpapers.length}종) — bannerRates 에 넘긴다 */
+export const GACHA_WALLPAPERS: readonly { id: string; eventOnly?: boolean }[] = [
+${wps}
+];
 `;
+}
+
+/** 배너 정의 서버 사본 — 머리말 + 정본 글자 그대로 */
+export function renderBanners() {
+  const src = readLF(BANNER_SRC);
+  const code = maskCode(src);
+  if (/(^|[;\s])import[\s{*'"(]/m.test(code) || /\brequire\s*\(/.test(code)) {
+    throw new Error('src/config/banners.ts 에 import 가 있다 — 서버(Deno)로 그대로 옮길 수 없다. 명단은 인자로 받게 써라');
+  }
+  return `// 이 파일은 생성된 것이다. 손으로 고치지 마라.
+//   생성: node scripts/gen-roster.mjs
+//   정본: src/config/banners.ts (머리말 아래는 정본과 글자까지 같다)
+//   검사: scripts/check-roster.mjs (verify.ps1 에 물려 있다)
+//
+// 화면의 확률 표와 서버의 추첨이 같은 bannerRates() 를 쓰도록 정본을 그대로 옮겨 둔다.
+// 명단은 ./roster.ts 의 GACHA_ROSTER · GACHA_WALLPAPERS 를 넘긴다.
+
+${src}`;
 }
 
 // `check-roster.mjs` 가 readRoster() 만 쓰려고 이 모듈을 import 한다.
@@ -205,25 +281,41 @@ export function isKnownCharacter(id: unknown): id is string {
 const isMain = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
 if (isMain) main();
 
-function main() {
+/** 생성물 [경로, 기대 내용, 설명] — check-roster.mjs 도 이걸로 비교한다 */
+export function outputs() {
   const roster = readRoster();
-  const next = render(roster);
+  const wallpapers = readGachaWallpapers();
+  return [
+    [OUT, render(roster, wallpapers), `roster.ts (캐릭터 ${roster.length}종 · 뽑기 배경 ${wallpapers.length}종)`],
+    [BANNER_OUT, renderBanners(), 'banners.ts (src/config/banners.ts 사본)'],
+  ];
+}
 
-  if (process.argv.includes('--check')) {
-    let cur = '';
-    try {
-      cur = readFileSync(OUT, 'utf8');
-    } catch {
-      cur = '';
-    }
-    if (cur.split(CR + LF).join(LF) !== next) {
-      console.error('FAIL  supabase/functions/_shared/roster.ts 가 character.ts 와 어긋난다.');
-      console.error('      node scripts/gen-roster.mjs 로 다시 생성해라.');
-      process.exit(1);
-    }
-    console.log(`OK    roster.ts 최신 (${roster.length}종)`);
-  } else {
-    writeFileSync(OUT, next, 'utf8');
-    console.log(`생성  supabase/functions/_shared/roster.ts — ${roster.length}종`);
+/** 파일이 기대 내용과 같은가 (줄바꿈 무시) */
+export function isCurrent(path, next) {
+  try {
+    return readLF(path) === next;
+  } catch {
+    return false;
   }
+}
+
+function main() {
+  const check = process.argv.includes('--check');
+  let bad = 0;
+  for (const [path, next, label] of outputs()) {
+    const rel = path.slice(ROOT.length + 1).split('\\').join('/');
+    if (check) {
+      if (isCurrent(path, next)) {
+        console.log(`OK    ${label} 최신`);
+      } else {
+        console.error(`FAIL  ${rel} 가 정본과 어긋난다 — node scripts/gen-roster.mjs 로 다시 생성해라.`);
+        bad++;
+      }
+    } else {
+      writeFileSync(path, next, 'utf8');
+      console.log(`생성  ${rel} — ${label}`);
+    }
+  }
+  if (bad) process.exit(1);
 }

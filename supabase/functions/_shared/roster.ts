@@ -1,6 +1,6 @@
 // 이 파일은 생성된 것이다. 손으로 고치지 마라.
 //   생성: node scripts/gen-roster.mjs
-//   정본: src/utils/character.ts 의 CHARACTERS
+//   정본: src/utils/character.ts 의 CHARACTERS · src/utils/wallpaper.ts 의 WALLPAPERS
 //   검사: scripts/check-roster.mjs (verify.ps1 에 물려 있다)
 //
 // Edge Function 은 Deno 라 src/ 를 번들에 넣지 못한다. 그래서 서버가 캐릭터 명단을
@@ -71,3 +71,30 @@ export const CHARACTER_GRADES: Readonly<Record<string, string>> = {
 export function isKnownCharacter(id: unknown): id is string {
   return typeof id === 'string' && CHARACTER_IDS.includes(id);
 }
+
+/** id → 뽑기 표식 — 미공개(unreleased) · 이벤트 전용(eventOnly). 표식이 있는 캐릭터만 적힌다 */
+export const CHARACTER_FLAGS: Readonly<Record<string, { unreleased?: boolean; eventOnly?: boolean }>> = {
+  ted:        { eventOnly: true },
+  heidi:      { eventOnly: true },
+  red:        { eventOnly: true },
+};
+
+/** 뽑기 계산용 명단 — `_shared/banners.ts` 의 bannerRates · pityChoices 에 넘긴다 */
+export const GACHA_ROSTER: readonly { id: string; grade: string; unreleased?: boolean; eventOnly?: boolean }[] =
+  CHARACTER_IDS.map(id => ({ id, grade: CHARACTER_GRADES[id], ...CHARACTER_FLAGS[id] }));
+
+/** 뽑기 배경화면 (기본 제공 배경 제외, 12종) — bannerRates 에 넘긴다 */
+export const GACHA_WALLPAPERS: readonly { id: string; eventOnly?: boolean }[] = [
+  { id: 'wp_hanok' },
+  { id: 'wp_lake' },
+  { id: 'wp_maehwa' },
+  { id: 'wp_gold_mine' },
+  { id: 'wp_fantasy' },
+  { id: 'wp_ted', eventOnly: true },
+  { id: 'wp_heidi', eventOnly: true },
+  { id: 'wp_red', eventOnly: true },
+  { id: 'wp_k' },
+  { id: 'wp_hacker' },
+  { id: 'wp_glitch' },
+  { id: 'wp_noise' },
+];
