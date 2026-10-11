@@ -163,8 +163,16 @@ export default class GachaScene extends BaseScene {
   private gstate: GachaState | null = null;
   private lobbyRates: BannerRates | null = null;
   private inLobby = false;
-  /** 로비를 그릴 때마다 오른다 — 늦게 온 서버 응답이 다른 로비를 고치지 않게 */
-  private lobbyGen = 0;
+  /** 지금 떠 있는 로비의 잔액 글자 · 그때 그린 상태(JSON) — 서버 값이 오면 이것과 비교해 고친다 */
+  private skorText: Phaser.GameObjects.Text | null = null;
+  private drawnState = '';
+  /**
+   * 뽑기 · 교환 응답이 잔액 · 상태를 넣을 때마다 오른다. 그보다 먼저 읽기 시작한 서버 조회는 낡은 값이라 버린다.
+   * (로비를 다시 그렸다고 버리지는 않는다 — 그림의 세대와 데이터의 신선도는 따로 본다)
+   */
+  private dataEpoch = 0;
+  /** 진행 중인 잔액 · 상태 조회 수 — 잔액을 모를 때 뽑기를 누르면 조회가 없을 때만 새로 건다 */
+  private refreshing = 0;
   /** 이 시각(ms, Date.now) 전에는 로비를 다시 그리지 않는다 — clearUI 가 BaseScene 의 입력 막기 타이머까지 지운다 */
   private redrawAfter = 0;
   /** 떠 있는 창 (확률 보기 · 고르기 · 확인) — 한 번에 하나 */
@@ -204,6 +212,10 @@ export default class GachaScene extends BaseScene {
     this.tabScrollX = 0;
     this.modal = null;
     this.inLobby = false;
+    this.skorText = null;
+    this.drawnState = '';
+    this.dataEpoch = 0;
+    this.refreshing = 0;
   }
 
   preload() {
@@ -271,7 +283,7 @@ export default class GachaScene extends BaseScene {
   private buildLobby(refresh = true) {
     this.clearUI();
     this.inLobby = true;
-    const gen = ++this.lobbyGen;
+    this.drawnState = JSON.stringify(this.gstate);
 
     const visible = visibleBanners(this.gstate);
     const banner = this.pickTab(visible);
@@ -296,7 +308,7 @@ export default class GachaScene extends BaseScene {
     // ── 위: 뒤로 · SKOR · 배너 탭 ──
     this.createBackButton(32, 32);
     const known = this.skorBalance >= 0 ? this.skorBalance : getCachedSkorBalance();
-    const skorText = this.createSkorPill(W - 80, 32, known !== null ? Math.floor(known).toLocaleString() : '--');
+    this.skorText = this.createSkorPill(W - 80, 32, known !== null ? Math.floor(known).toLocaleString() : '--');
     this.buildTabs(visible, banner);
 
     // ── 본문 앞 — 상시 · 초보자 = 얼굴 레일, 픽업 = 픽업 SR · 전용 배경 열, 이벤트 = 셋 나란히 ──
@@ -320,7 +332,7 @@ export default class GachaScene extends BaseScene {
       this.restartSlideTimer();
     }
 
-    if (refresh) void this.refreshLobby(gen, skorText);
+    if (refresh) void this.refreshLobby();
   }
 
   /** 그릴 탭 — 사람이 고른 탭이 보이면 그것, 아니면 초보자가 남았으면 초보자, 아니면 상시 (§5) */
@@ -341,26 +353,36 @@ export default class GachaScene extends BaseScene {
   }
 
   /**
-   * 서버에서 잔액 · 천장 · 초보자 상태를 읽는다. 상태가 그린 것과 다르면 로비를 다시 그린다
-   * (초보자 탭이 생기거나 사라짐 · 천장 숫자). 창이 떠 있으면 다시 그리지 않고 다음에 그릴 때 반영된다
+   * 서버에서 잔액 · 천장 · 초보자 상태를 읽는다.
+   * **받은 값은 그린 로비와 상관없이 받아들인다** — 읽는 동안 탭을 바꿔 로비를 다시 그려도 잔액은 그대로 사람의 것이다.
+   * (그림 세대가 바뀌었다고 버렸더니 skorBalance 가 -1 로 남아 모든 뽑기가 '잔액 확인 중'에 막혔다 — 리뷰 7673febc P1)
+   * 버리는 것은 읽기 시작한 뒤 뽑기 · 교환 응답이 더 새 값을 넣은 경우뿐이다 (dataEpoch).
+   * 그다음 지금 떠 있는 로비를 고친다 — 잔액 글자, 상태가 그린 것과 다르면 다시 그리기 (창이 떠 있으면 다음에 그릴 때)
    */
-  private async refreshLobby(gen: number, skorText: Phaser.GameObjects.Text) {
-    const drawn = JSON.stringify(this.gstate);
-    const [balance, state] = await Promise.all([
-      getSkorBalance().catch((e: unknown) => { console.error('[GachaScene] 잔액 조회 실패:', e); return null; }),
-      fetchGachaState().catch(() => null),
-    ]);
-    if (!this.scene.isActive() || gen !== this.lobbyGen || !this.inLobby) return;
+  private async refreshLobby() {
+    const epoch = this.dataEpoch;
+    this.refreshing++;
+    let balance: number | null, state: GachaState | null;
+    try {
+      [balance, state] = await Promise.all([
+        getSkorBalance().catch((e: unknown) => { console.error('[GachaScene] 잔액 조회 실패:', e); return null; }),
+        fetchGachaState().catch(() => null),
+      ]);
+    } finally {
+      this.refreshing--;
+    }
+    if (!this.scene.isActive() || epoch !== this.dataEpoch) return;
     if (balance !== null) {
       this.skorBalance = balance;
       cacheSkorBalance(balance);
-      if (skorText.active) skorText.setText(Math.floor(balance).toLocaleString());
+      if (this.skorText?.active) this.skorText.setText(Math.floor(balance).toLocaleString());
     }
-    if (!state || JSON.stringify(state) === drawn) return;
+    if (!state) return;
     this.gstate = state;
+    if (!this.inLobby || JSON.stringify(state) === this.drawnState) return;
     const wait = this.redrawAfter - Date.now();
     if (wait > 0) await new Promise(r => setTimeout(r, wait));
-    if (this.scene.isActive() && gen === this.lobbyGen && this.inLobby && !this.modal) this.buildLobby(false);
+    if (this.scene.isActive() && this.inLobby && !this.modal && JSON.stringify(this.gstate) !== this.drawnState) this.buildLobby(false);
   }
 
   /** 상시 · 초보자 본문 — 진열 일러스트 2레이어 (crossfade용). 늘이지 않고 덮어 채운다 */
@@ -1284,6 +1306,7 @@ export default class GachaScene extends BaseScene {
       const r = await gachaExchange(b.id, targetId, { requestId });
       if (!this.scene.isActive()) return;
       this.gstate = getCachedGachaState() ?? this.gstate;
+      this.dataEpoch++;   // 이 응답보다 먼저 시작한 상태 조회는 낡았다 (교환 전 천장)
       this.pullBanner = b;
       this.pullResults = [r.character];
       this.wpResults = [];
@@ -1394,7 +1417,11 @@ export default class GachaScene extends BaseScene {
   private async startPull(banner: BannerDef, type: PullType, requestId?: string) {
     const cost = pullPrice(banner, type);
     if (cost === null || this.modal) return;
-    if (this.skorBalance < 0) {
+    // '다시 시도'(같은 requestId)는 새 구매가 아니라 이미 보낸 뽑기의 결과 복구다 — 아래 사전 검사(잔액 · 초보자 보장)를
+    // 건너뛰고 서버에 그대로 보낸다. 서버가 이미 차감했으면 지금 잔액은 그만큼 줄어 있어 '부족'으로 막히고 만다.
+    // 판단은 서버가 한다 (배너 서버는 같은 requestId 의 첫 결과를 돌려준다 — 리뷰 7673febc P2)
+    const recovery = requestId !== undefined;
+    if (!recovery && this.skorBalance < 0) {
       const errMsg = this.add.text(this.scale.width / 2, this.scale.height - 196, '잔액 확인 중... 잠시 후 다시 시도하세요', {
         fontSize: '13px', color: '#ffaa44',
         stroke: '#000000', strokeThickness: 3,
@@ -1402,9 +1429,11 @@ export default class GachaScene extends BaseScene {
         padding: { x: 10, y: 5 },
       }).setOrigin(0.5);
       this.time.delayedCall(2000, () => { if (errMsg.active) errMsg.destroy(); });
+      // 조회가 실패해 잔액을 끝내 모르는 경우 — 진행 중인 조회가 없으면 다시 읽는다
+      if (this.refreshing === 0) void this.refreshLobby();
       return;
     }
-    if (this.skorBalance < cost) {
+    if (!recovery && this.skorBalance < cost) {
       this.showSkorToast(Math.floor(this.skorBalance), cost);
       return;
     }
@@ -1414,7 +1443,7 @@ export default class GachaScene extends BaseScene {
       const st = this.gstate?.starter;
       const pick = this.starterPickOf(banner);
       // 마지막 10연인데 보장 UR 을 안 골랐다 — 고르기 창을 먼저 (서버는 고른 값이 없으면 거절한다, §3)
-      if (st && !st.urHit && !pick && st.pullsDone + PULL_COUNT[type] >= st.max) {
+      if (!recovery && st && !st.urHit && !pick && st.pullsDone + PULL_COUNT[type] >= st.max) {
         this.openStarterPicker(banner, () => void this.startPull(banner, type, requestId));
         return;
       }
@@ -1465,6 +1494,7 @@ export default class GachaScene extends BaseScene {
       this.applyPulled();
       this.skorBalance = result.remainingSkor;
       cacheSkorBalance(result.remainingSkor);
+      this.dataEpoch++;   // 이 응답보다 먼저 시작한 잔액 · 상태 조회는 낡았다
 
       // ② 영상 스킵 시 결과 화면으로 직행
       if (this.skipToSummary) {
@@ -1506,16 +1536,17 @@ export default class GachaScene extends BaseScene {
   private onPullError(e: unknown, banner: BannerDef, type: PullType, cost: number) {
     const err = e instanceof GachaError ? e : null;
     if (!err) console.error('[GachaScene] 뽑기 실패:', e);
+    // 서버가 본 잔액을 먼저 넣는다 — 로비가 그 값으로 그려지고, 로비가 새로 거는 조회는 그 뒤의 것이라 버려지지 않는다
+    if (err?.code === 'insufficient_skor' && err.balance !== null) {
+      this.skorBalance = err.balance;
+      cacheSkorBalance(err.balance);
+      this.dataEpoch++;
+    }
     this.buildLobby();
     switch (err?.code) {
-      case 'insufficient_skor': {
-        if (err.balance !== null) {
-          this.skorBalance = err.balance;
-          cacheSkorBalance(err.balance);
-        }
+      case 'insufficient_skor':
         this.showSkorToast(Math.floor(err.balance ?? Math.max(0, this.skorBalance)), cost);
         return;
-      }
       case 'starter_pick_required':
         this.openStarterPicker(banner, () => void this.startPull(banner, type));
         return;
