@@ -62,11 +62,14 @@ const EVENT_ZOOM = 1.3;
  * 얼굴이 기본 자리에서 벗어난 일러스트만 따로 적는다 (레드: 공룡 아래 앉아 있어 얼굴이 낮다 · K: 가운데 위).
  * 캐릭터 정의에 일러스트 초점 값이 생기면 그쪽으로 옮긴다
  */
-const EVENT_FACE_DEFAULT = { x: 0.56, y: 0.27 };
-const EVENT_FACE: Partial<Record<string, { x: number; y: number }>> = {
+/** 얼굴 자리 (일러스트 가로 · 세로 비율) — zoom 을 적으면 그 캐릭터만 EVENT_ZOOM 대신 그 배율 */
+interface FaceSpot { x: number; y: number; zoom?: number }
+const EVENT_FACE_DEFAULT: FaceSpot = { x: 0.56, y: 0.27 };
+const EVENT_FACE: Partial<Record<string, FaceSpot>> = {
   red: { x: 0.56, y: 0.43 },
-  // K: 아이를 안고 있어 얼굴이 가운데 위에 있다 — 기본값이면 넷째 줄기(폭 약 90)에서 아이 얼굴이 잡히고 K 얼굴은 경계에 잘린다
-  k: { x: 0.49, y: 0.21 },
+  // K: 아이를 안고 있어 얼굴이 가운데 위에 있다 — 기본값이면 넷째 줄기(폭 약 90)에서 아이 얼굴이 잡히고 K 얼굴은 경계에 잘린다.
+  // 맨 오른쪽 줄기라 덜 확대한다 — 1.3 이면 얼굴이 화면 오른쪽 끝에 잘리고 › 화살표에 걸린다 (대표 2026-10-11)
+  k: { x: 0.49, y: 0.21, zoom: 1.0 },
 };
 /**
  * 자리 그림(수집 카드 216x288) — 얼굴 자리와 크기 (화면 높이 비율). 카드는 가까이 찍은 상반신이라 큰 그림만큼 키우면
@@ -236,6 +239,10 @@ export default class GachaScene extends BaseScene {
   private redrawAfter = 0;
   /** 떠 있는 창 (확률 보기 · 고르기 · 확인) — 한 번에 하나 */
   private modal: { close: () => void } | null = null;
+  /** 지금 픽업 배너의 UR 영상 (한 번에 하나) — 넘기기 · 결과 · 나가기에서 dropLobbyVideo 가 멈추고 내린다 */
+  private lobbyVideo: Phaser.GameObjects.Video | null = null;
+  /** 이 실행에서 영상을 못 튼 캐릭터 (자동재생 막힘 · 못 받음) — 다시 받지 않고 일러스트로 둔다 */
+  private lobbyVideoFailed = new Set<string>();
 
   // ── 로비 슬라이드쇼 상태 ──
   private featured: CharacterDef[] = [];
@@ -261,6 +268,8 @@ export default class GachaScene extends BaseScene {
     this.gstate = getCachedGachaState();
     this.modal = null;
     this.inLobby = false;
+    this.lobbyVideo = null;
+    this.lobbyVideoFailed = new Set();
     this.skorText = null;
     this.drawnState = '';
     // 새 실행 — 이전 실행이 걸어 둔 조회 · 뽑기 응답은 runId 가 달라 이 실행의 값 · 카운터를 건드리지 않는다
@@ -329,7 +338,10 @@ export default class GachaScene extends BaseScene {
     this.revealItemIndex = 0;
     this.toast = null;
     this.redrawAfter = Date.now() + this.inputGuardMs + 100;
-    this.events.once('shutdown', () => this.releaseTextures());
+    this.events.once('shutdown', () => {
+      this.dropLobbyVideo();   // 영상 텍스처(UUID 키)까지 — releaseTextures 의 gacha_ 접두사에 안 걸린다
+      this.releaseTextures();
+    });
     this.buildLobby();
   }
 
@@ -355,7 +367,7 @@ export default class GachaScene extends BaseScene {
 
     // ── 본문 뒤 — 상시 = 진열 일러스트, 픽업 = 픽업 UR 일러스트, 이벤트 = 이벤트 픽업 SR 일러스트를 그 수만큼 세로 줄기로 ──
     if (showcase) this.buildShowcase();
-    else if (banner.kind === 'pickup') this.coverIllust(this.add.image(cx, 0, getCharacterDef(banner.pickupUR ?? '').illustKey));
+    else if (banner.kind === 'pickup') this.buildPickupBody(banner);
     else this.buildEventBody(banner);
 
     // ── 위·아래 어둠 — 글자와 버튼이 일러스트 위에서 읽히게 (세로 그라데이션 한 장을 늘려 쓴다) ──
@@ -482,6 +494,67 @@ export default class GachaScene extends BaseScene {
   }
 
   /**
+   * 픽업 본문 뒤 — 픽업 UR 일러스트를 깔고, 그 캐릭터 영상(캐릭터 정의의 videoPath)이 있으면 그 위에서 무한 반복 (대표 2026-10-11).
+   * 영상은 지금 보는 배너 것만 받아 돈다 — 넘기면(로비를 다시 그림) · 결과로 가면 clearUI, 나가면 뒤로 버튼 · shutdown 이 멈추고 내린다.
+   * 첫 프레임이 오기 전, 자동재생이 막히거나(저전력 모드 등) 못 받으면 일러스트가 그대로 보인다 (빈 화면이 없다)
+   */
+  private buildPickupBody(b: BannerDef) {
+    const def = getCharacterDef(b.pickupUR ?? '');
+    const illust = this.add.image(this.scale.width / 2, 0, def.illustKey);
+    this.coverIllust(illust);
+    if (def.videoPath && !this.lobbyVideoFailed.has(def.id)) this.playLobbyVideo(def, def.videoPath, illust);
+  }
+
+  /**
+   * 로비 영상 — 음소거 · 화면 안 재생(playsinline, Phaser 가 붙인다) · 반복. 로더 캐시를 쓰지 않고 이 객체가 직접 받는다
+   * (넘기면 받던 것까지 끊는다). 첫 프레임에 화면 덮기(cover)로 맞춰 페이드 인하고, 다 덮으면 아래 일러스트를 숨긴다.
+   * 앱이 백그라운드로 가면 Phaser 가 게임과 같이 멈췄다 돌린다. 창이 떠 있으면 openPanel 이 멈춘다
+   */
+  private playLobbyVideo(def: CharacterDef, path: string, illust: Phaser.GameObjects.Image) {
+    const W = this.scale.width, H = this.scale.height;
+    const vid = this.add.video(W / 2, 0).setOrigin(0.5, 0).setAlpha(0);
+    this.lobbyVideo = vid;
+    const fail = () => {
+      if (this.lobbyVideo !== vid) return;
+      this.lobbyVideoFailed.add(def.id);   // 이 실행 동안은 다시 받지 않는다 — 막힌 채로 4~5MB 를 또 받지 않게
+      this.dropLobbyVideo();
+      if (illust.active) illust.setVisible(true);
+    };
+    vid.once('created', (_v: Phaser.GameObjects.Video, w: number, h: number) => {
+      if (this.lobbyVideo !== vid || !w || !h) return;
+      // 화면 덮기 — 일러스트와 같은 맞춤 (비율 유지, 위쪽 15% 기준)
+      const sc = Math.max(W / w, H / h);
+      vid.setScale(sc).setY(-(h * sc - H) * 0.15);
+      this.tweens.add({
+        targets: vid, alpha: 1, duration: 250, ease: 'Quad.easeOut',
+        onComplete: () => { if (this.lobbyVideo === vid && illust.active) illust.setVisible(false); },
+      });
+    });
+    vid.once('locked', fail);
+    vid.once('error', fail);
+    vid.once('unsupported', fail);
+    vid.loadURL(path, true);
+    vid.play(true);
+  }
+
+  /**
+   * 로비 영상을 멈추고 내린다. 받던 것도 끊는다 — Phaser 는 요소를 뗄 때 src 속성만 지워서 브라우저가 계속 받을 수 있다.
+   * 그래서 src 를 지우고 load() 로 비운 뒤 destroyVideo (영상 텍스처까지)
+   */
+  private dropLobbyVideo() {
+    const vid = this.lobbyVideo;
+    this.lobbyVideo = null;
+    if (!vid) return;
+    const el = vid.video;
+    if (el) {
+      el.pause();
+      el.removeAttribute('src');
+      el.load();
+    }
+    destroyVideo(vid);
+  }
+
+  /**
    * 이벤트 본문 뒤 — 화면을 이벤트 픽업 SR 수만큼 세로 줄기로 나눠 일러스트를 하나씩 (대표 2026-10-11 — 셋, K 가 들어와 넷).
    * 줄기 수는 배너의 pickupSR 에서 받는다 — 적어 두지 않는다.
    * 카드 테두리 · 바탕 없이, 줄기 사이는 기운 얇은 경계선. 얼굴 · 상반신이 보이게 자른다.
@@ -584,7 +657,8 @@ export default class GachaScene extends BaseScene {
       if (!this.scene.isActive()) return;
       // 받는 동안 화면 크기가 바뀌었을 수 있다 — 지금 크기로 굽는다
       this.eventStrips(b).forEach((s, i) => {
-        if (!this.textures.exists(s.key)) this.bakeEventStrip(s, s.key, srcs[i], EVENT_FACE[s.id] ?? EVENT_FACE_DEFAULT, EVENT_ZOOM);
+        const face = EVENT_FACE[s.id] ?? EVENT_FACE_DEFAULT;
+        if (!this.textures.exists(s.key)) this.bakeEventStrip(s, s.key, srcs[i], face, face.zoom ?? EVENT_ZOOM);
       });
       this.swapEventStrips();
     }).catch((e: unknown) => {
@@ -662,6 +736,7 @@ export default class GachaScene extends BaseScene {
     box.add(this.add.text(0, -1, '←', { fontSize: '24px', color: '#2a3340', fontStyle: 'bold' }).setOrigin(0.5));
     wireButton(this, box, size, size, () => {
       this.sound.stopAll();
+      this.dropLobbyVideo();
       this.scene.start('ModeSelectScene');
     });
   }
@@ -1153,9 +1228,12 @@ export default class GachaScene extends BaseScene {
         cleanups.splice(0).forEach(f => f());
         overlay.destroy();
         panel.destroy();
+        if (this.lobbyVideo?.active && this.inLobby) this.lobbyVideo.setPaused(false);
       },
     };
     this.modal = handle;
+    // 로비 영상은 창이 떠 있는 동안 멈춘다
+    if (this.lobbyVideo?.active) this.lobbyVideo.setPaused(true);
     overlay.on('pointerdown', (p: Phaser.Input.Pointer) => { if (!rect.contains(p.x, p.y)) handle.close(); });
 
     // 판 · 제목 — '보상 도착' 판과 같은 화법
@@ -2434,6 +2512,7 @@ export default class GachaScene extends BaseScene {
     // 창이 떠 있으면 먼저 닫는다 — 창이 건 씬 입력 · 마스크를 정리한다
     this.modal?.close();
     this.modal = null;
+    this.dropLobbyVideo();
     this.inLobby = false;
     this.slideshowActive = false;
     this.slideshowBgA = null;
