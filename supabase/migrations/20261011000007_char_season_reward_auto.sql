@@ -3,7 +3,8 @@
 -- 앞에 적용돼 있어야 하는 것: 20261011000003 (극한 캐릭터 점수 클라이언트 쓰기 차단 — 지난달 순위가 굳어 있어야 한다)
 --                            20261011000005 (season_reward_history_char 표 정의)
 --                            20261011000006 (잔액 원자적 가감 skor_credit — 지급이 이걸로 더한다)
--- 스케줄(pg_cron)은 여기서 켜지 않는다 — Edge Function 배포 뒤 20261011000008 에서
+-- 스케줄(pg_cron)과 지급 스위치(enabled)는 여기서 켜지 않는다 — Edge Function 4개 배포 뒤 20261011000008 에서.
+-- 꺼져 있는 동안은 cron 도 '캐릭터 보상' 버튼도 지급하지 않는다 (배포 중 구 Edge Function 의 절대값 쓰기와 겹치지 않게)
 --
 -- 그전에는 다음 달에 랭킹 → EXTREME → 바로 그 캐릭터를 골라야만 '캐릭터 보상' 버튼이 보였고, 직전 달만 받을 수 있었다.
 -- 2026-05~09 대상 73칸이 한 번도 수령되지 않았다 (pg_stat_statements 로 서버 수령 분기가 0회였음을 확인, 2026-10-11).
@@ -12,10 +13,14 @@
 -- 수령 버튼 경로(claim-season-reward { characterType })와 랭킹 표시(leaderboard-top)도 아래 함수를 쓴다
 -- — 자격 기준 · 금액이 이 파일의 설정 한 곳에서 나오고, cron 이 늦으면 버튼이 같은 지급을 대신한다.
 
--- 1. 설정 (한 행) — 자격 기준과 금액. 기본은 지금과 같다: 인원 · 점수 기준 없음, 1 · 2 · 3위 5000 · 3000 · 1500
---    기준을 바꿀 때는 이 행만 UPDATE 한다 (planner 제안 → 대표 승인)
+-- 1. 설정 (한 행) — 지급 스위치 · 시작 달 · 자격 기준 · 금액. 기준 · 금액 기본은 지금과 같다:
+--    인원 · 점수 기준 없음, 1 · 2 · 3위 5000 · 3000 · 1500. 바꿀 때는 이 행만 UPDATE 한다 (planner 제안 → 대표 승인)
 CREATE TABLE IF NOT EXISTS public.char_season_reward_settings (
-  id           BOOLEAN     PRIMARY KEY DEFAULT true CHECK (id),
+  id               BOOLEAN     PRIMARY KEY DEFAULT true CHECK (id),
+  -- 지급 스위치 — 000008 이 켠다. 꺼져 있으면 지급 함수는 아무것도 안 하고, 랭킹에 '받을 몫'도 안 보인다
+  enabled          BOOLEAN     NOT NULL DEFAULT false,
+  -- 이 달부터 지급한다. 2026-05~09 는 대상이 전부 테스트 계정이라 지급하지 않기로 했다 (대표 결정 2026-10-11)
+  first_year_month TEXT        NOT NULL DEFAULT '2026-10',
   min_players  INTEGER     NOT NULL DEFAULT 1,  -- 그 달 그 캐릭터 기록 수가 이 이상일 때만 지급
   min_score    INTEGER     NOT NULL DEFAULT 0,  -- 이 점수 이상인 기록만 지급
   reward_rank1 INTEGER     NOT NULL DEFAULT 5000,
@@ -30,7 +35,8 @@ ALTER TABLE public.char_season_reward_settings ENABLE ROW LEVEL SECURITY;
 -- 2. 지급됐지만 아직 '보상 도착'을 안 보여 준 기록
 ALTER TABLE public.season_reward_history_char ADD COLUMN IF NOT EXISTS notified_at TIMESTAMPTZ;
 
--- 3. 그 달의 지급 대상 — 순위는 claim-season-reward 와 같다 (나보다 높은 점수 수 + 1, 동점은 같은 순위)
+-- 3. 그 달의 지급 대상 — 순위는 claim-season-reward 와 같다 (나보다 높은 점수 수 + 1, 동점은 같은 순위).
+--    스위치가 꺼져 있거나 시작 달 전이면 비어 있다 — 지급 · 상태 함수가 이걸 거치므로 한 곳에서 막힌다
 CREATE OR REPLACE FUNCTION public.char_season_winners(p_year_month TEXT)
 RETURNS TABLE (user_id UUID, character_type TEXT, rank INTEGER, skor_awarded NUMERIC)
 LANGUAGE sql
@@ -39,7 +45,8 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
   WITH s AS (
-    SELECT * FROM public.char_season_reward_settings WHERE id
+    SELECT * FROM public.char_season_reward_settings
+    WHERE id AND enabled AND p_year_month >= first_year_month
   ), ranked AS (
     SELECT e.user_id, e.character_type, e.score,
            (rank() OVER (PARTITION BY e.character_type ORDER BY e.score DESC))::INTEGER AS r,
