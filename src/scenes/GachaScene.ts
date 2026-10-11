@@ -66,6 +66,13 @@ const LOBBY = {
   tabY: 78, tabH: 32, bodyTop: 110, bodyBottom: 300,
 } as const;
 
+/**
+ * 씬 실행 번호 — init 마다 하나씩 오른다 (모듈 단위라 씬을 나갔다 들어와도 되돌아가지 않는다).
+ * Phaser 는 같은 씬 인스턴스를 다시 쓰고, 서버 호출 Promise 는 씬을 나가도 취소되지 않는다. 그래서 늦게 온 응답은
+ * scene.isActive() 만으로는 '이전 실행'인지 모른다 — 재진입한 뒤에는 다시 active 다 (리뷰 19dace7a 새 회귀)
+ */
+let runSeq = 0;
+
 function readStore(key: string): string | null {
   try { return localStorage.getItem(key); } catch { return null; }
 }
@@ -171,8 +178,10 @@ export default class GachaScene extends BaseScene {
    * (로비를 다시 그렸다고 버리지는 않는다 — 그림의 세대와 데이터의 신선도는 따로 본다)
    */
   private dataEpoch = 0;
-  /** 진행 중인 잔액 · 상태 조회 수 — 잔액을 모를 때 뽑기를 누르면 조회가 없을 때만 새로 건다 */
+  /** 진행 중인 잔액 · 상태 조회 수 (이 실행의 것만) — 잔액을 모를 때 뽑기를 누르면 조회가 없을 때만 새로 건다 */
   private refreshing = 0;
+  /** 이 실행의 번호 (runSeq). 서버 응답을 기다린 뒤에는 isCurrent(run) 로 같은 실행인지 본다 */
+  private runId = 0;
   /** 이 시각(ms, Date.now) 전에는 로비를 다시 그리지 않는다 — clearUI 가 BaseScene 의 입력 막기 타이머까지 지운다 */
   private redrawAfter = 0;
   /** 떠 있는 창 (확률 보기 · 고르기 · 확인) — 한 번에 하나 */
@@ -214,8 +223,15 @@ export default class GachaScene extends BaseScene {
     this.inLobby = false;
     this.skorText = null;
     this.drawnState = '';
+    // 새 실행 — 이전 실행이 걸어 둔 조회 · 뽑기 응답은 runId 가 달라 이 실행의 값 · 카운터를 건드리지 않는다
+    this.runId = ++runSeq;
     this.dataEpoch = 0;
     this.refreshing = 0;
+  }
+
+  /** 서버 응답을 기다린 뒤 — 이 씬이 아직 그 호출을 건 실행 그대로인가 (나갔다 다시 들어왔으면 false) */
+  private isCurrent(run: number): boolean {
+    return run === this.runId && this.scene.isActive();
   }
 
   preload() {
@@ -356,10 +372,12 @@ export default class GachaScene extends BaseScene {
    * 서버에서 잔액 · 천장 · 초보자 상태를 읽는다.
    * **받은 값은 그린 로비와 상관없이 받아들인다** — 읽는 동안 탭을 바꿔 로비를 다시 그려도 잔액은 그대로 사람의 것이다.
    * (그림 세대가 바뀌었다고 버렸더니 skorBalance 가 -1 로 남아 모든 뽑기가 '잔액 확인 중'에 막혔다 — 리뷰 7673febc P1)
-   * 버리는 것은 읽기 시작한 뒤 뽑기 · 교환 응답이 더 새 값을 넣은 경우뿐이다 (dataEpoch).
+   * 버리는 것은 읽기 시작한 뒤 뽑기 · 교환 응답이 더 새 값을 넣은 경우(dataEpoch)와,
+   * 씬을 나갔다 다시 들어와 다른 실행이 된 경우(runId)뿐이다.
    * 그다음 지금 떠 있는 로비를 고친다 — 잔액 글자, 상태가 그린 것과 다르면 다시 그리기 (창이 떠 있으면 다음에 그릴 때)
    */
   private async refreshLobby() {
+    const run = this.runId;
     const epoch = this.dataEpoch;
     this.refreshing++;
     let balance: number | null, state: GachaState | null;
@@ -369,9 +387,9 @@ export default class GachaScene extends BaseScene {
         fetchGachaState().catch(() => null),
       ]);
     } finally {
-      this.refreshing--;
+      if (run === this.runId) this.refreshing--;   // 이전 실행의 조회는 새 실행의 카운터를 건드리지 않는다
     }
-    if (!this.scene.isActive() || epoch !== this.dataEpoch) return;
+    if (!this.isCurrent(run) || epoch !== this.dataEpoch) return;
     if (balance !== null) {
       this.skorBalance = balance;
       cacheSkorBalance(balance);
@@ -382,7 +400,7 @@ export default class GachaScene extends BaseScene {
     if (!this.inLobby || JSON.stringify(state) === this.drawnState) return;
     const wait = this.redrawAfter - Date.now();
     if (wait > 0) await new Promise(r => setTimeout(r, wait));
-    if (this.scene.isActive() && this.inLobby && !this.modal && JSON.stringify(this.gstate) !== this.drawnState) this.buildLobby(false);
+    if (this.isCurrent(run) && this.inLobby && !this.modal && JSON.stringify(this.gstate) !== this.drawnState) this.buildLobby(false);
   }
 
   /** 상시 · 초보자 본문 — 진열 일러스트 2레이어 (crossfade용). 늘이지 않고 덮어 채운다 */
@@ -1298,13 +1316,14 @@ export default class GachaScene extends BaseScene {
 
   /** 교환 호출 → 결과 카드 한 장 ('교환'). 영상 · 터미널은 없다. requestId 는 '다시 시도' 때만 (같은 교환으로 처리된다) */
   private async doExchange(b: BannerDef, targetId: string | undefined, requestId?: string) {
+    const run = this.runId;
     this.clearUI();
     const W = this.scale.width, H = this.scale.height;
     this.resultBackdrop(0.7);
     this.add.text(W / 2, H / 2, '교환 중...', { fontSize: '16px', color: '#ffe9a8', fontStyle: 'bold' }).setOrigin(0.5);
     try {
       const r = await gachaExchange(b.id, targetId, { requestId });
-      if (!this.scene.isActive()) return;
+      if (!this.isCurrent(run)) return;
       this.gstate = getCachedGachaState() ?? this.gstate;
       this.dataEpoch++;   // 이 응답보다 먼저 시작한 상태 조회는 낡았다 (교환 전 천장)
       this.pullBanner = b;
@@ -1315,10 +1334,10 @@ export default class GachaScene extends BaseScene {
       this.remainingSkor = Math.max(0, this.skorBalance);
       this.applyPulled();
       await this.loadResultThumbs();
-      if (!this.scene.isActive()) return;
+      if (!this.isCurrent(run)) return;
       this.showSummary();
     } catch (e) {
-      if (!this.scene.isActive()) return;
+      if (!this.isCurrent(run)) return;
       const err = e instanceof GachaError ? e : null;
       this.buildLobby();
       if (err?.code === 'network') {
@@ -1454,6 +1473,7 @@ export default class GachaScene extends BaseScene {
     this.clearUI();
 
     const count = PULL_COUNT[type];
+    const run = this.runId;
 
     try {
       // ① 영상(6초) + API 호출 병렬 실행 — 영상 보는 동안 응답 대기
@@ -1461,8 +1481,8 @@ export default class GachaScene extends BaseScene {
       this.videoSkipResolver = null;
       this.skipToSummary = false;
       const apiPromise = gachaPull(type, { bannerId: banner.id, starterPick, requestId }).then(r => {
-        // 영상이 아직 재생 중이면 스킵 버튼 표시
-        if (this.videoSkipResolver) {
+        // 영상이 아직 재생 중이면 스킵 버튼 표시 (씬을 나갔다 들어왔으면 새 실행의 화면이다 — 건드리지 않는다)
+        if (run === this.runId && this.videoSkipResolver) {
           const resolver = this.videoSkipResolver;
           this.addSkipButton(() => {
             if (resolver === this.videoSkipResolver) {
@@ -1476,7 +1496,7 @@ export default class GachaScene extends BaseScene {
       });
       const [result] = await Promise.all([apiPromise, this.playCommonVideo()]);
 
-      if (!this.scene.isActive()) return;
+      if (!this.isCurrent(run)) return;
 
       this.pullResults = result.characters;
       this.wpResults = result.wallpapers ?? [];
@@ -1500,6 +1520,7 @@ export default class GachaScene extends BaseScene {
       if (this.skipToSummary) {
         this.skipToSummary = false;
         await Promise.all([this.loadWallpaperBgs(this.wpResults.map(w => w.id)), this.loadResultThumbs()]);
+        if (!this.isCurrent(run)) return;
         this.showSummary();
         return;
       }
@@ -1512,6 +1533,7 @@ export default class GachaScene extends BaseScene {
       this.drawTerminalChrome(false); // 항상 초록으로 시작
       this.addSkipButton(() => { this.skipTerminal = true; });
       await this.runTerminalAnimation(count, isUR);
+      if (!this.isCurrent(run)) return;
       this.skipTerminal = false;
 
       // ③ 캐릭터별 개인 영상 + 배경화면 이미지 동적 로드 → 리빌
@@ -1520,10 +1542,11 @@ export default class GachaScene extends BaseScene {
         this.loadWallpaperBgs(this.wpResults.map(w => w.id)),
         this.loadResultThumbs(),
       ]);
+      if (!this.isCurrent(run)) return;
 
       this.showNextReveal();
     } catch (e) {
-      if (!this.scene.isActive()) return;
+      if (!this.isCurrent(run)) return;
       this.videoSkipResolver = null;
       this.onPullError(e, banner, type, cost);
     }
