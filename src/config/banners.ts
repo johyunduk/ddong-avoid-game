@@ -20,11 +20,8 @@
  * 모든 확률은 **% (0~100)** 다.
  */
 
-/**
- * 'starter' 는 v2 에서 없어졌다 — 초보자는 상시 배너의 `starter` 설정이다 (정의서 v2 §3).
- * 어느 배너도 쓰지 않는다 (check-roster 가 막는다). 화면(GachaScene)이 'starter' 비교를 지우면 타입에서도 뺀다
- */
-export type BannerKind = 'standard' | 'pickup' | 'event' | 'starter';
+/** 초보자는 kind 가 아니라 상시 배너의 `starter` 설정이다 (정의서 v2 §3). v1 의 'starter' kind 는 check-roster 가 막는다 */
+export type BannerKind = 'standard' | 'pickup' | 'event';
 export type PityExchange = 'pickupUR' | 'chooseUR' | 'chooseSR';
 export type GachaGrade = 'UR' | 'SR' | 'R';
 export type PullType = 'single' | 'multi';

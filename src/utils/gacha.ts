@@ -87,8 +87,6 @@ export type GachaErrorCode =
   | 'banner_closed'          // 닫힌 배너 · 모르는 배너 (지운 pickup_sentinel · pickup_legacy 포함)
   | 'starter_pick_required'  // 초보자 다섯 번째 10연인데 보장 UR 을 안 골랐다 → 고르기 창 뒤 starterPick 을 넣어 다시
   | 'price_changed'          // expectedCost 와 실제 차감액이 다르다 (다른 기기에서 초보자 구간을 다 썼다 등). error.cost = 실제 가격
-  | 'starter_done'           // @deprecated v2 서버는 보내지 않는다 — 구간이 끝나면 보통 상시가 된다. 화면이 case 를 지우면 뺀다
-  | 'starter_single'         // @deprecated v2 서버는 보내지 않는다 — 1회는 늘 보통 상시. 화면이 case 를 지우면 뺀다
   | 'pity_short'             // 교환: 포인트가 기준에 못 미친다
   | 'pity_target'            // 교환: 고를 수 있는 후보가 아니다 (chooseUR · chooseSR 은 targetId 가 꼭 있어야 한다)
   | 'network'                // 응답을 못 받았다 — 자동으로 다시 보내지 않는다 (invokeGacha 주석)
@@ -97,7 +95,7 @@ export type GachaErrorCode =
   | 'server';                // 그 밖 (5xx · 모르는 응답)
 
 const ERROR_CODES: readonly GachaErrorCode[] = [
-  'insufficient_skor', 'banner_closed', 'starter_pick_required', 'price_changed', 'starter_done', 'starter_single',
+  'insufficient_skor', 'banner_closed', 'starter_pick_required', 'price_changed',
   'pity_short', 'pity_target', 'network', 'bad_request', 'unauthorized', 'server',
 ];
 

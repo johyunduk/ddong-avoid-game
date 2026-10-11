@@ -151,7 +151,7 @@ for (const [path, next, what] of outputs()) {
   {
     // 진열 목록(신규 출시 + UR)은 캐릭터 정의에서 유도한다 — 손으로 적은 목록은 등급이 바뀌어도 안 따라온다
     const label = 'GachaScene 진열 캐릭터는 캐릭터 정의에서 유도한다';
-    if (/const\s+SLIDESHOW_IDS/.test(gacha)) fail(label, '손으로 적은 SLIDESHOW_IDS 가 되살아났다 — gachaPool() 에서 유도해라');
+    if (/const\s+SLIDESHOW_IDS/.test(gacha)) fail(label, '손으로 적은 SLIDESHOW_IDS 가 되살아났다 — standardGachaPool() 에서 유도해라');
     else pass(label);
   }
   const label = 'GachaScene CHARS_WITH_VIDS 는 캐릭터 정의에서 유도한다';
