@@ -128,35 +128,22 @@ export function cacheSkorBalance(balance: number): void {
 
 /**
  * 현재 SKOR 잔액 조회 (DB) 후 캐시 갱신
- * 신규 유저(행 없음)는 5000 SKOR 웰컴 보너스로 초기화
+ * 행이 없는 유저(신규)는 서버가 웰컴 보너스로 행을 만든 뒤 그 잔액을 돌려준다 — get_skor_balance RPC
+ * (보너스 값은 supabase/migrations/20261011000001_skor_welcome_server.sql 한 곳. 클라이언트는 user_skor 에 쓰지 않는다)
  */
 export async function getSkorBalance(): Promise<number> {
   // 세션 확보 (없으면 익명 로그인) — submitSkor와 동일한 패턴
-  let { data: { session } } = await supabase.auth.getSession();
+  const { data: { session } } = await supabase.auth.getSession();
   if (!session) {
-    const { data: authData } = await supabase.auth.signInAnonymously();
-    session = authData.session;
-  }
-  const userId = session?.user?.id;
-
-  const { data } = await supabase
-    .from('user_skor')
-    .select('balance')
-    .maybeSingle(); // 행이 없으면 null 반환 (신규 유저 처리)
-
-  if (!data) {
-    // 신규 유저: 5000 SKOR 웰컴 보너스로 초기화
-    const WELCOME_BONUS = 10000;
-    await supabase.from('user_skor').insert({
-      user_id: userId,
-      balance: WELCOME_BONUS,
-      weekly_earned: 0,
-    });
-    cacheSkorBalance(WELCOME_BONUS);
-    return WELCOME_BONUS;
+    await supabase.auth.signInAnonymously();
   }
 
-  const balance = data.balance as number;
+  const { data, error } = await supabase.rpc('get_skor_balance');
+  if (error) {
+    throw new Error(error.message || 'Failed to load skor balance');
+  }
+
+  const balance = Number(data);
   cacheSkorBalance(balance);
   return balance;
 }
