@@ -73,8 +73,8 @@ export interface GachaExchangeResult {
 
 /**
  * 서버가 거절한 이유. 화면은 code 로 토스트를 나눈다.
- * 'network' 는 응답을 못 받은 것이라 **뽑혔는지 모른다** — error.requestId 를 그대로 넘겨 다시 부르면
- * 서버가 첫 결과를 돌려준다 (두 번 차감되지 않는다)
+ * 'network' 는 응답을 못 받은 것이라 **뽑혔는지 모른다** — 화면이 '다시 시도'에서 error.requestId 를 그대로
+ * 넘겨 다시 부르면 서버가 첫 결과를 돌려준다 (두 번 차감되지 않는다)
  */
 export type GachaErrorCode =
   | 'insufficient_skor'      // SKOR 부족 (error.balance = 서버가 본 잔액)
@@ -84,7 +84,7 @@ export type GachaErrorCode =
   | 'starter_single'         // 초보자는 1회 뽑기가 없다
   | 'pity_short'             // 교환: 포인트가 기준에 못 미친다
   | 'pity_target'            // 교환: 고를 수 있는 후보가 아니다 (chooseUR · chooseSR 은 targetId 가 꼭 있어야 한다)
-  | 'network'                // 응답을 못 받았다 (자동 재시도 1번 뒤)
+  | 'network'                // 응답을 못 받았다 — 자동으로 다시 보내지 않는다 (invokeGacha 주석)
   | 'bad_request'            // 요청 모양이 틀렸다 (화면 버그) · 같은 requestId 를 다른 일에 다시 썼다
   | 'unauthorized'
   | 'server';                // 그 밖 (5xx · 모르는 응답)
@@ -150,8 +150,13 @@ async function toGachaError(error: unknown, requestId: string): Promise<GachaErr
 }
 
 /**
- * Edge Function 호출. 응답을 못 받으면(네트워크 · 릴레이) **같은 requestId 로** 한 번 더 보낸다 —
- * 첫 요청이 서버에 닿았어도 서버가 같은 requestId 의 첫 결과를 돌려주므로 두 번 뽑히지 않는다.
+ * Edge Function 호출 — 한 번만 보낸다. 응답을 못 받으면 GachaError('network') 에 이 requestId 를 실어 던진다.
+ *
+ * **자동으로 다시 보내지 않는다.** 같은 requestId 를 첫 결과로 돌려주는 것은 배너 서버(20261011000009 이후의
+ * gacha-pull)뿐이고, 배너 이전 gacha-pull 은 requestId 를 모른 채 요청마다 차감한다. 이 화면이 그 서버에 붙은
+ * 채(클라이언트 선행 배포 · 서버만 롤백) 첫 응답이 끊기면 자동 재시도가 SKOR 를 한 번 더 뺀다 (리뷰 e8997268 P1 재현).
+ * 다시 보낼지는 사람이 '다시 시도'로 정하고, 그때 화면이 error.requestId 를 넘긴다 — 배너 서버면 첫 결과가 오고,
+ * 옛 서버여도 사람이 한 번 더 누른 것과 같다.
  * 함수 이름은 부르는 쪽에 글자로 둔다 — `functions.invoke('<이름>')` 로 찾는 규칙 (CLAUDE.md)
  */
 async function invokeGacha(
@@ -160,17 +165,10 @@ async function invokeGacha(
   requestId: string,
 ): Promise<Record<string, unknown>> {
   await ensureSession();
-  for (let attempt = 0; ; attempt++) {
-    // SDK가 현재 세션의 Authorization 헤더를 자동으로 포함
-    const { data, error } = await invoke({ ...body, requestId });
-    if (!error) return data as Record<string, unknown>;
-    const retryable = error instanceof FunctionsFetchError || error instanceof FunctionsRelayError;
-    if (retryable && attempt === 0) {
-      await new Promise(r => setTimeout(r, 800));
-      continue;
-    }
-    throw await toGachaError(error, requestId);
-  }
+  // SDK가 현재 세션의 Authorization 헤더를 자동으로 포함
+  const { data, error } = await invoke({ ...body, requestId });
+  if (error) throw await toGachaError(error, requestId);
+  return data as Record<string, unknown>;
 }
 
 export interface GachaPullOptions {
@@ -179,8 +177,8 @@ export interface GachaPullOptions {
   /** 초보자 배너만 — 50번째 보장 UR 을 이 값으로 저장하고 뽑는다 */
   starterPick?: string;
   /**
-   * 보통은 넘기지 않는다 — 부를 때마다 gacha.ts 가 새로 만들고, 자동 재시도는 같은 값을 쓴다.
-   * 'network' 오류 뒤 화면이 '다시 시도'를 띄울 때만 그 오류의 requestId 를 넘긴다
+   * 보통은 넘기지 않는다 — 부를 때마다 gacha.ts 가 새로 만든다 (누를 때 하나).
+   * 'network' 오류 뒤 화면의 '다시 시도'만 그 오류의 requestId 를 넘긴다 (재시도는 같은 값)
    */
   requestId?: string;
 }

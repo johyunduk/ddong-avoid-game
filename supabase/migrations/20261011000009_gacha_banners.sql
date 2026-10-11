@@ -1,6 +1,10 @@
 -- 픽업 배너 — 천장 · 초보자 · 뽑기 기록 표와, 뽑기 · 교환을 한 트랜잭션으로 묶는 함수
 -- 실행: Supabase Dashboard > SQL Editor에 붙여넣기
 --   20261011000006(skor_spend) 뒤, gacha-pull · gacha-exchange 배포 "전에".
+--   순서는 DB → 두 Edge Function → 클라이언트(배너 화면). 배너 화면을 배너 이전 gacha-pull 에 붙이면 안 된다 —
+--   옛 함수는 bannerId · requestId 를 몰라 어느 탭에서든 상시로 뽑고, 같은 요청이 다시 와도 또 차감한다.
+--   같은 이유로 클라이언트가 나간 뒤 gacha-pull 만
+--   배너 이전으로 되돌리는 롤백도 하지 않는다 (되돌릴 때는 클라이언트도 같이).
 --   초보자 뽑기(할인)가 열리므로 웰컴 보너스 서버 지급(20261011000001 · 000002)이 운영에 들어간 뒤에 연다 —
 --   잔액을 클라이언트가 쓸 수 있으면 할인 뽑기를 무한히 산다 (정의서 §3)
 -- 기준: ~/ddong-fx-work/gacha/banner_spec_v1.md §4-5 · §6-2. 배너 · 확률 정본은 src/config/banners.ts
@@ -155,7 +159,10 @@ BEGIN
     v_pick := coalesce(p_starter->>'pick', v_st.pick);
     v_ur_before := v_st.ur_hit;
     IF v_st.pulls_done + v_count >= v_max THEN
-      -- 이번이 마지막 — 아직 UR 이 없는데 고른 값도 없으면 거절 (화면이 고르기 창을 먼저 띄운다)
+      -- 이번이 마지막 — 아직 UR 이 없는데 고른 값도 없으면 거절 (화면이 고르기 창을 먼저 띄운다).
+      -- 초보자 UR 을 이미 뽑았으면(ur_hit) 보장이 쓰이지 않으므로 고르지 않아도 된다 — 화면은 토글을 흐리게 하고
+      -- 'UR 획득 — 보장 없이 진행' 으로 그대로 뽑는다 (dev2 화면 계획 §6, director 승인 2026-10-11).
+      -- 정의서 §3 · §6-2 의 'pick 없음 거절' 문장에는 이 예외가 아직 안 적혀 있다
       IF NOT v_ur_before AND v_pick IS NULL THEN
         RAISE EXCEPTION 'gacha:starter_pick_required';
       END IF;
