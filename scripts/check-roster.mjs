@@ -104,86 +104,44 @@ for (const [path, next, what] of outputs()) {
   }
 }
 
-// ── 3. 뽑기 풀 ────────────────────────────────────────────────────────
+// ── 3. 뽑기 — 서버와 화면이 같은 배너 정본을 쓴다 ─────────────────────
+// 예전에는 gacha-pull 에 풀(OBTAINABLE_IDS) · 가중치 · 배경 풀을 손으로 적고 화면 값과 맞는지 따로 검사했다.
+// 지금은 둘 다 src/config/banners.ts 의 bannerRates 를 쓴다 (서버는 그 생성물 _shared/banners.ts — 위 1 이 글자 단위로 본다).
+// 그래서 여기는 '손으로 적은 풀 · 가중치가 되살아나지 않았는가'와 '정본 함수를 부르는가'를 본다
 {
-  const src = read('supabase', 'functions', 'gacha-pull', 'index.ts');
-  subset('gacha-pull OBTAINABLE_IDS ⊆ 명단', literalList(src, 'OBTAINABLE_IDS'));
-  const label = 'gacha-pull 이 등급을 _shared/roster.ts 에서 읽는다';
-  if (!/from '\.\.\/_shared\/roster\.ts'/.test(src)) {
-    fail(label, "import 가 없다 — 등급을 POOL 에 다시 적어 두면 character.ts 와 어긋난다");
-  } else if (/grade:\s*'(R|SR|UR)'/.test(src)) {
-    fail(label, '등급 리터럴이 POOL 에 되살아났다');
-  } else {
-    pass(label);
+  for (const fn of ['gacha-pull', 'gacha-exchange']) {
+    const src = read('supabase', 'functions', fn, 'index.ts');
+    const label = `${fn} 이 배너 · 명단을 _shared 생성물에서 읽는다`;
+    const errs = [];
+    if (!/from '\.\.\/_shared\/banners\.ts'/.test(src)) errs.push('_shared/banners.ts import 가 없다');
+    if (!/from '\.\.\/_shared\/roster\.ts'/.test(src)) errs.push('_shared/roster.ts import 가 없다');
+    if (/const\s+(OBTAINABLE_IDS|WP_POOL|POOL|WEIGHT_BY_GRADE|WP_DROP_CHANCE|SR_W|UR_W)\b/.test(src)) errs.push('손으로 적은 풀 · 가중치가 되살아났다');
+    if (/grade:\s*'(R|SR|UR)'/.test(src)) errs.push('등급 리터럴이 되살아났다');
+    if (errs.length) fail(label, errs.join(' · '));
+    else pass(label);
   }
-}
-
-{
-  // 뽑기 화면의 확률 표시는 src/utils/gacha.ts 가 계산한다 — 서버와 같은 가중치 · 같은 풀이어야 한다
-  const server = read('supabase', 'functions', 'gacha-pull', 'index.ts');
-  const client = read('src', 'utils', 'gacha.ts');
-  // 숫자 · 사칙연산만 있는 식만 계산한다 (그 밖이면 NaN → 실패)
-  const num = (expr) => (/^[\d.\s/*+-]+$/.test(expr.trim()) ? Function(`return (${expr})`)() : NaN);
-  const constOf = (src, name) => {
-    const m = new RegExp(`const\\s+${name}\\s*(?::[^=]*)?=\\s*([^;]+);`).exec(src);
-    return m ? m[1] : null;
-  };
-  const objOf = (src, name) => {
-    const m = new RegExp(`const\\s+${name}\\b[^=]*=\\s*\\{([^}]*)\\}`).exec(src);
-    if (!m) return null;
-    return Object.fromEntries(m[1].split(',').map(kv => kv.split(':').map(t => t.trim())).filter(kv => kv.length === 2));
-  };
-
-  const label = '뽑기 확률 표시(src/utils/gacha.ts)가 gacha-pull 과 같다';
-  const sw = objOf(server, 'WEIGHT_BY_GRADE');
-  const cw = objOf(client, 'GACHA_GRADE_WEIGHT');
-  if (!sw || !cw) {
-    fail(label, '가중치 선언을 찾지 못했다 — 이름이 바뀌었는지 확인해라 (검사가 헛돌면 안 된다)');
-  } else {
-    // 서버 값은 SR_W 같은 상수 이름일 수 있다 — 한 번 풀어서 계산
-    const sv = (v) => (/^[A-Z_]+$/.test(v) ? num(constOf(server, v) ?? '') : num(v));
-    const grades = [...new Set([...Object.keys(sw), ...Object.keys(cw)])];
-    const bad = grades.filter(g => !(Math.abs(sv(sw[g] ?? '') - num(cw[g] ?? '')) < 1e-12));
-    const swp = num(constOf(server, 'WP_DROP_CHANCE') ?? ''), cwp = num(constOf(client, 'GACHA_WP_DROP_CHANCE') ?? '');
-    if (bad.length) fail(label, `등급 가중치가 다르다: ${bad.join(', ')}`);
-    else if (!(swp === cwp)) fail(label, `배경화면 확률이 다르다: 서버 ${swp} / 화면 ${cwp}`);
-    else pass(label, `등급 ${grades.join('·')} · 배경화면 ${swp}`);
-  }
-
   {
-    // 배경화면 풀 — 서버가 주는 id 는 클라이언트가 그릴 수 있어야 하고, 클라이언트가 뽑기에서 얻는다고 보여 주는 id 는 서버 풀에 있어야 한다
-    const label3 = 'gacha-pull WP_POOL = 클라이언트 GACHA_WP_IDS (wallpaper.ts 의 기본 제공 3종을 뺀 목록)';
-    const m = /const\s+WP_POOL\s*=\s*\[([\s\S]*?)\];/.exec(server);
-    const wpSrc = read('src', 'utils', 'wallpaper.ts');
-    const all = [...wpSrc.matchAll(/^\s*id:\s*'(wp_[\w]+)'/gm)].map(x => x[1]);
-    const defaults = (/DEFAULT_WP_IDS\s*=\s*\[([^\]]*)\]/.exec(wpSrc)?.[1] ?? '').match(/wp_\w+/g) ?? [];
-    if (!m || !all.length || !defaults.length) {
-      fail(label3, 'WP_POOL · WALLPAPERS · DEFAULT_WP_IDS 중 하나를 찾지 못했다 — 이름이 바뀌었는지 확인해라');
-    } else {
-      const pool = [...m[1].matchAll(/id:\s*'(wp_\w+)'/g)].map(x => x[1]);
-      const client = all.filter(id => !defaults.includes(id));
-      const onlyServer = pool.filter(id => !client.includes(id)), onlyClient = client.filter(id => !pool.includes(id));
-      if (onlyServer.length || onlyClient.length) {
-        fail(label3, `서버에만: ${onlyServer.join(', ') || '-'} / 화면에만: ${onlyClient.join(', ') || '-'}`);
-      } else {
-        pass(label3, `${pool.length}종 · 종당 ${(num(constOf(server, 'WP_DROP_CHANCE') ?? '') * 100 / pool.length).toFixed(3)}%`);
-      }
-    }
+    const src = read('supabase', 'functions', 'gacha-pull', 'index.ts');
+    const label = 'gacha-pull 이 정본 bannerRates · drawSlots 로 뽑는다 (명단 = GACHA_ROSTER · GACHA_WALLPAPERS)';
+    if (!/bannerRates\(\s*\w+\s*,\s*GACHA_ROSTER\s*,\s*GACHA_WALLPAPERS\s*\)/.test(src) || !/drawSlots\(/.test(src)) fail(label, '정본 함수 호출을 찾지 못했다');
+    else pass(label);
   }
-
-  const label2 = 'gacha-pull OBTAINABLE_IDS = 공개 명단 − chibi (화면 확률 계산과 같은 풀)';
-  const obt = literalList(server, 'OBTAINABLE_IDS');
-  if (obt === null) {
-    fail(label2, 'OBTAINABLE_IDS 를 찾지 못했다');
-  } else {
-    const want = roster.filter(c => !c.unreleased && c.id !== 'chibi').map(c => c.id);
-    const missing = want.filter(id => !obt.includes(id));
-    const extra = obt.filter(id => !want.includes(id));
-    if (missing.length || extra.length) {
-      fail(label2, `서버에만: ${extra.join(', ') || '-'} / 화면에만: ${missing.join(', ') || '-'} — 다르게 둘 거면 gachaPool() 을 같이 고쳐라`);
-    } else {
-      pass(label2, `${obt.length}종`);
-    }
+  {
+    const src = read('supabase', 'functions', 'gacha-exchange', 'index.ts');
+    const label = 'gacha-exchange 가 교환 후보를 정본 pityChoices 로 검증한다';
+    if (!/pityChoices\(\s*banner\s*,\s*GACHA_ROSTER\s*\)/.test(src)) fail(label, 'pityChoices(banner, GACHA_ROSTER) 를 찾지 못했다');
+    else pass(label);
+  }
+  {
+    // 화면의 확률 표시도 같은 함수 · 같은 명단 — 숫자를 따로 적지 않는다
+    const src = read('src', 'utils', 'gacha.ts');
+    const label = '화면 확률(src/utils/gacha.ts)이 정본 bannerRates · pityChoices 를 쓴다';
+    const errs = [];
+    if (!/from '\.\.\/config\/banners'/.test(src)) errs.push('../config/banners import 가 없다');
+    if (!/bannerRates\(\s*banner\s*,\s*CHARACTERS\s*,/.test(src)) errs.push('bannerRates(banner, CHARACTERS, …) 가 없다');
+    if (/19\.3\s*\/\s*8|0\.7\s*\/\s*3|\bR:\s*8\b/.test(maskCode(src))) errs.push('등급 가중치 숫자가 되살아났다');
+    if (errs.length) fail(label, errs.join(' · '));
+    else pass(label);
   }
 }
 
@@ -332,7 +290,6 @@ for (const [path, next, what] of outputs()) {
   const ALLOWED = new Set([
     'src/utils/character.ts#CHARACTERS',                        // 정본
     'supabase/functions/_shared/roster.ts#CHARACTER_IDS',       // 생성물
-    'supabase/functions/gacha-pull/index.ts#OBTAINABLE_IDS',    // 뽑기 가능 집합
     'src/abilities/index.ts#R_IDS',                             // RGradeAbility 사용 집합
     'src/utils/charAnim.ts#CHARS_WITH_ANIM_SHEETS',             // 시트 보유 집합 (비캐릭터 포함)
     'src/data/releaseNotes.ts#RELEASE_NOTES',                   // 버전별 발표 기록 (값을 박아 둔다)

@@ -3,8 +3,8 @@ import { supabase } from './supabase';
 import { CHARACTERS, setOwnedCharacters, getOwnedCharacters, setDuplicateCount, type CharacterDef } from './character';
 import { WALLPAPERS, GACHA_WP_IDS, setOwnedWallpapers, getOwnedWallpapers } from './wallpaper';
 import {
-  BANNERS, DEFAULT_BANNER_ID, bannerRates, isBannerOpen, pityChoices, standardPool,
-  type BannerDef, type BannerRates, type GachaWallpaperEntry, type PityExchange, type PullType,
+  BANNERS, DEFAULT_BANNER_ID, WALLPAPER_SHARE, bannerRates, getBanner, isBannerOpen, pityChoices, standardPool,
+  type BannerDef, type BannerRates, type GachaGrade, type GachaWallpaperEntry, type PityExchange, type PullType,
 } from '../config/banners';
 
 // 배너 정의 · 확률 규칙의 정본은 src/config/banners.ts 다. 여기는 화면이 쓰는 호출 · 상태 · 표시 함수만 둔다.
@@ -85,12 +85,13 @@ export type GachaErrorCode =
   | 'pity_short'             // 교환: 포인트가 기준에 못 미친다
   | 'pity_target'            // 교환: 고를 수 있는 후보가 아니다 (chooseUR · chooseSR 은 targetId 가 꼭 있어야 한다)
   | 'network'                // 응답을 못 받았다 (자동 재시도 1번 뒤)
+  | 'bad_request'            // 요청 모양이 틀렸다 (화면 버그) · 같은 requestId 를 다른 일에 다시 썼다
   | 'unauthorized'
   | 'server';                // 그 밖 (5xx · 모르는 응답)
 
 const ERROR_CODES: readonly GachaErrorCode[] = [
   'insufficient_skor', 'banner_closed', 'starter_done', 'starter_pick_required', 'starter_single',
-  'pity_short', 'pity_target', 'network', 'unauthorized', 'server',
+  'pity_short', 'pity_target', 'network', 'bad_request', 'unauthorized', 'server',
 ];
 
 export class GachaError extends Error {
@@ -150,13 +151,18 @@ async function toGachaError(error: unknown, requestId: string): Promise<GachaErr
 
 /**
  * Edge Function 호출. 응답을 못 받으면(네트워크 · 릴레이) **같은 requestId 로** 한 번 더 보낸다 —
- * 첫 요청이 서버에 닿았어도 서버가 같은 requestId 의 첫 결과를 돌려주므로 두 번 뽑히지 않는다
+ * 첫 요청이 서버에 닿았어도 서버가 같은 requestId 의 첫 결과를 돌려주므로 두 번 뽑히지 않는다.
+ * 함수 이름은 부르는 쪽에 글자로 둔다 — `functions.invoke('<이름>')` 로 찾는 규칙 (CLAUDE.md)
  */
-async function invokeGacha(fn: 'gacha-pull' | 'gacha-exchange', body: Record<string, unknown>, requestId: string): Promise<Record<string, unknown>> {
+async function invokeGacha(
+  invoke: (body: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }>,
+  body: Record<string, unknown>,
+  requestId: string,
+): Promise<Record<string, unknown>> {
   await ensureSession();
   for (let attempt = 0; ; attempt++) {
     // SDK가 현재 세션의 Authorization 헤더를 자동으로 포함
-    const { data, error } = await supabase.functions.invoke(fn, { body: { ...body, requestId } });
+    const { data, error } = await invoke({ ...body, requestId });
     if (!error) return data as Record<string, unknown>;
     const retryable = error instanceof FunctionsFetchError || error instanceof FunctionsRelayError;
     if (retryable && attempt === 0) {
@@ -186,7 +192,11 @@ export interface GachaPullOptions {
 export async function gachaPull(pullType: PullType, opts: GachaPullOptions = {}): Promise<GachaPullResult> {
   const bannerId = opts.bannerId ?? DEFAULT_BANNER_ID;
   const requestId = opts.requestId ?? newRequestId();
-  const data = await invokeGacha('gacha-pull', { pullType, bannerId, starterPick: opts.starterPick }, requestId);
+  const data = await invokeGacha(
+    b => supabase.functions.invoke('gacha-pull', { body: b }),
+    { pullType, bannerId, starterPick: opts.starterPick },
+    requestId,
+  );
   const result: GachaPullResult = {
     success: data.success !== false,
     bannerId: (data.bannerId as string | undefined) ?? bannerId,
@@ -208,7 +218,7 @@ export async function gachaPull(pullType: PullType, opts: GachaPullOptions = {})
  */
 export async function gachaExchange(bannerId: string, targetId?: string, opts: { requestId?: string } = {}): Promise<GachaExchangeResult> {
   const requestId = opts.requestId ?? newRequestId();
-  const data = await invokeGacha('gacha-exchange', { bannerId, targetId }, requestId);
+  const data = await invokeGacha(b => supabase.functions.invoke('gacha-exchange', { body: b }), { bannerId, targetId }, requestId);
   const character = data.character as PulledCharacter;
   const result: GachaExchangeResult = {
     success: data.success !== false,
@@ -410,33 +420,23 @@ export function formatRate(percent: number): string {
   return String(parseFloat(percent < 10 ? percent.toFixed(2) : percent.toFixed(1)));
 }
 
-// ── 배너 이전의 확률 표시 (지금 운영 중인 gacha-pull 과 같은 계산) ────────
-// 화면이 ratesOf · standardGachaPool 로 옮기고 서버가 배너로 바뀌면 지운다.
-// 아래 값이 서버와 어긋나면 scripts/check-roster.mjs 가 실패시킨다 (verify.ps1)
+// ── 배너 탭 이전 화면의 확률 표시 ────────────────────────────────────────
+// 서버는 배너로 바뀌었고, 탭 없는 지금 화면은 bannerId 없이 부르므로 상시 배너를 뽑는다. 그래서 아래도 상시 배너 값이다
+// (한 칸 기준, 정의서 §2-1). 화면이 ratesOf · standardGachaPool 로 옮기면 지운다
 
-/** @deprecated 배너 이전 — banners.ts 의 GRADE_WEIGHT. 등급별 **종당** 가중치 (gacha-pull 의 WEIGHT_BY_GRADE 와 같은 값) */
-export const GACHA_GRADE_WEIGHT = { R: 8, SR: 19.3 / 8, UR: 0.7 / 3 } as const;
-/** @deprecated 배너 이전 — 확률 보기는 ratesOf(banner).byGrade.WP. 슬롯마다 배경화면이 나올 확률 (gacha-pull 의 WP_DROP_CHANCE) */
-export const GACHA_WP_DROP_CHANCE = 0.035;
+/** @deprecated ratesOf(banner).byGrade.WP — 한 칸이 배경화면일 확률 (0~1) */
+export const GACHA_WP_DROP_CHANCE = WALLPAPER_SHARE / 100;
 
-type PullGrade = keyof typeof GACHA_GRADE_WEIGHT;
-const weightOf = (grade: string): number => GACHA_GRADE_WEIGHT[grade as PullGrade] ?? 0;
-
-/**
- * @deprecated 배너 이전 풀 (이벤트 셋 포함) — 상시 풀은 standardGachaPool().
- * 뽑기 풀 = 공개 캐릭터 중 기본 보유(chibi)를 뺀 것 — gacha-pull OBTAINABLE_IDS 와 같은 집합 (check-roster)
- */
+/** @deprecated standardGachaPool() — 상시 풀 (이벤트 셋 제외) */
 export function gachaPool(): CharacterDef[] {
-  return CHARACTERS.filter(c => !c.unreleased && c.id !== 'chibi');
+  return standardGachaPool();
 }
 
-/** @deprecated 배너 이전 — ratesOf(banner). 등급 전체 확률(%)과 종당 확률(%) (캐릭터 칸 안 값) */
-export function gachaRates(): { byGrade: Record<PullGrade, number>; perChar: (grade: string) => number } {
-  const pool = gachaPool();
-  const total = pool.reduce((sum, c) => sum + weightOf(c.grade), 0) || 1;
-  const byGrade: Record<PullGrade, number> = { UR: 0, SR: 0, R: 0 };
-  for (const c of pool) {
-    if (c.grade in byGrade) byGrade[c.grade as PullGrade] += (weightOf(c.grade) / total) * 100;
-  }
-  return { byGrade, perChar: (grade: string) => (weightOf(grade) / total) * 100 };
+/** @deprecated ratesOf(banner) — 상시 배너의 등급 합(%)과 종당(%), 한 칸 기준 */
+export function gachaRates(): { byGrade: Record<GachaGrade, number>; perChar: (grade: string) => number } {
+  const r = ratesOf(getBanner(DEFAULT_BANNER_ID)!);
+  return {
+    byGrade: { UR: r.byGrade.UR.slot, SR: r.byGrade.SR.slot, R: r.byGrade.R.slot },
+    perChar: (grade: string) => r.rows.find(row => row.kind === 'character' && row.grade === grade)?.each.slot ?? 0,
+  };
 }

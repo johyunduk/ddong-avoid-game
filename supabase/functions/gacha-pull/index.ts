@@ -1,110 +1,54 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { CHARACTER_GRADES } from '../_shared/roster.ts';
+import { GACHA_ROSTER, GACHA_WALLPAPERS } from '../_shared/roster.ts';
+import {
+  BANNERS, DEFAULT_BANNER_ID, PULL_COUNT, RATES_VERSION, bannerRates, drawSlots, getBanner, isBannerOpen, pullPrice,
+  type BannerRates,
+} from '../_shared/banners.ts';
+import { corsHeaders, json, pityOf, rand, readRequestId, reject, rpcError, starterOf, type CommitResult } from '../_shared/gacha.ts';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
-
-// ── 배경화면 풀 정의 ─────────────────────────────────────────────────────
-// 등급 없음. 아래 WP_POOL 의 종이 모두 같은 확률.
-// 슬롯마다 WP_DROP_CHANCE(3.5%) 로 배경화면이 나오고, 그 안에서 종을 균등하게 고른다
-// → 종당 실효 확률 = 3.5% ÷ 12종 ≈ 0.29% (2026-10-09 대표 결정 A안: 종이 늘어도 3.5% 는 그대로 두고 나눈다)
-// 화면 표시는 src/utils/gacha.ts 의 GACHA_WP_DROP_CHANCE, 종 목록은 src/utils/wallpaper.ts 의 GACHA_WP_IDS 와 같아야 한다
-// (scripts/check-roster.mjs 가 둘 다 검사한다)
-const WP_DROP_CHANCE = 0.035; // 슬롯당 3.5%
-const WP_POOL = [
-  { id: 'wp_hanok'     },
-  { id: 'wp_lake'      },
-  { id: 'wp_maehwa'    },
-  { id: 'wp_gold_mine' },
-  { id: 'wp_fantasy'   },
-  // SR 캐릭터 배경화면 일곱 장 (2026-10-09)
-  { id: 'wp_ted'       },
-  { id: 'wp_heidi'     },
-  { id: 'wp_red'       },
-  { id: 'wp_k'         },
-  { id: 'wp_hacker'    },
-  { id: 'wp_glitch'    },
-  { id: 'wp_noise'     },
-];
-
-function pullWallpaper(): { id: string } {
-  return WP_POOL[Math.floor(Math.random() * WP_POOL.length)];
-}
-
-// ── 뽑기 풀 정의 ────────────────────────────────────────────────────────
-// R 종당 ≈7.44% (10종), SR 종당 ≈2.24% (11종 → 총 ≈24.7%), UR 종당 ≈0.217% (4종 → 총 ≈0.87%)
-// 종을 늘릴 때 **종당 가중치는 그대로 두고 대역 총합이 늘어나게** 한다 (UR_W 주석의 선례).
-// 가중치 합이 100 이 아니므로 아래 숫자는 가중치지 확률이 아니다 — 실제 확률은
-// weight / POOL_TOTAL 이다. UR 4번째를 넣기 전에는 합이 정확히 100.0 이었다.
-const SR_W  = 19.3 / 8;         // 가중치 ≈2.413 (기존 8종 산출값 유지 — 11종이어도 기존 SR 너프 없음)
-const UR_W  = 0.7  / 3;         // 종당 ≈0.233% (기존 3종 산출값 유지 — 4종이어도 종당 확률 동일, 기존 UR 너프 없음)
-/** 등급별 종당 가중치 */
-const WEIGHT_BY_GRADE: Record<string, number> = { R: 8, SR: SR_W, UR: UR_W };
-
-/**
- * **뽑을 수 있는 캐릭터 id 만** 적는다. 등급과 가중치는 적지 않는다 —
- * 등급은 `_shared/roster.ts`(= character.ts 에서 생성) 에서 오고, 가중치는 등급에서 온다.
- *
- * 여기 등급을 같이 적어 두면 character.ts 에서 등급을 올렸을 때 뽑기 확률만 옛 등급에
- * 남는다. 실제로 그 부류의 사고가 랭킹 쪽에서 났다 (명단을 베껴 둔 화이트리스트).
- *
- * chibi 는 기본 보유라 넣지 않는다. 미공개 캐릭터를 넣을지는 별도 판단이다.
- */
-const OBTAINABLE_IDS = [
-  'log', 'swap', 'sum', 'fork', 'seed', 'session', 'branch', 'hook', 'socket', 'index',
-  'hacker', 'miner', 'maehwa', 'archieve', 'glitch', 'noise', 'knight', 'k', 'red', 'heidi',
-  'mugi', 'gumi', 'sentinel', 'legacy', 'ted',
-];
-
-const POOL = OBTAINABLE_IDS.map((id) => {
-  const grade = CHARACTER_GRADES[id];
-  // 명단에 없는 id 가 들어오면 가중치가 NaN 이 되어 뽑기가 조용히 망가진다.
-  // 조용히 틀리느니 배포 즉시 터지는 쪽이 낫다
-  if (!grade) throw new Error(`gacha POOL: '${id}' 가 캐릭터 명단에 없다 (_shared/roster.ts)`);
-  const weight = WEIGHT_BY_GRADE[grade];
-  if (weight === undefined) throw new Error(`gacha POOL: 등급 '${grade}' 의 가중치가 없다 ('${id}')`);
-  return { id, grade, weight };
-});
-
-const POOL_TOTAL = POOL.reduce((s, c) => s + c.weight, 0);
-
-function pullOne(): { id: string; grade: string } {
-  let r = Math.random() * POOL_TOTAL;
-  for (const c of POOL) {
-    r -= c.weight;
-    if (r <= 0) return { id: c.id, grade: c.grade };
-  }
-  return { id: POOL[POOL.length - 1].id, grade: POOL[POOL.length - 1].grade };
-}
+// ── 확률표 ──────────────────────────────────────────────────────────────
+// 배너 · 확률 정본은 src/config/banners.ts (서버 사본 _shared/banners.ts 는 생성물). 여기에 풀 · 가중치를 적지 않는다 —
+// 화면의 확률 보기와 같은 bannerRates · 같은 명단(_shared/roster.ts 생성물)으로 부팅 때 배너마다 한 번 계산한다.
+// 명단과 배너가 어긋나면(픽업 id 가 명단에 없는 등) 여기서 던져 부팅이 실패한다 — 조용히 틀린 확률로 뽑느니 바로 터지는 쪽이 낫다
+const RATES = new Map<string, BannerRates>(BANNERS.map(b => [b.id, bannerRates(b, GACHA_ROSTER, GACHA_WALLPAPERS)]));
 
 // ── 요청 처리 ───────────────────────────────────────────────────────────
+// 입력: { pullType: 'single' | 'multi', bannerId?, requestId?, starterPick? } — 픽업 배너 정의서 §6-2
+// 추첨은 여기서 정본 확률표로 하고, 차감 · 천장 · 초보자 · 지급 · 기록은 DB 함수 gacha_pull_commit 이 한 트랜잭션에서 한다
+// (20261011000009). 초보자 50번째 보장도 초보자 상태를 잠근 그 함수가 넣는다
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
   try {
-    const { pullType } = await req.json(); // 'single' | 'multi'
+    const body = await req.json().catch(() => null) as Record<string, unknown> | null;
+    if (!body || typeof body !== 'object') return reject('bad_request', 'Invalid body');
 
-    if (pullType !== 'single' && pullType !== 'multi') {
-      return new Response(
-        JSON.stringify({ error: 'Invalid pullType' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    const { pullType, starterPick } = body;
+    if (pullType !== 'single' && pullType !== 'multi') return reject('bad_request', 'Invalid pullType');
+
+    // bannerId 가 없으면 상시 — 배너 이전 클라이언트 호환
+    const bannerId = body.bannerId ?? DEFAULT_BANNER_ID;
+    const banner = typeof bannerId === 'string' ? getBanner(bannerId) : undefined;
+    if (!banner || !isBannerOpen(banner, Date.now())) return reject('banner_closed', 'Banner closed');
+
+    const cost = pullPrice(banner, pullType);
+    if (cost === null) return reject('starter_single', 'No single pull on this banner');
+
+    // 초보자 배너에서만, 그 배너의 보장 후보 중 하나. 저장된 값을 바꾼다
+    if (starterPick !== undefined && starterPick !== null
+      && !(typeof starterPick === 'string' && banner.starter?.pickFrom.includes(starterPick))) {
+      return reject('bad_request', 'Invalid starterPick');
     }
 
-    const cost = pullType === 'multi' ? 900 : 100;
-    const count = pullType === 'multi' ? 10 : 1;
+    const requestId = readRequestId(body.requestId);
+    if (requestId === null) return reject('bad_request', 'Invalid requestId');
 
     // 인증
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: 'Missing authorization header' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return json(401, { error: 'Missing authorization header', code: 'unauthorized' });
     }
 
     const supabaseUser = createClient(
@@ -115,10 +59,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: { user }, error: authError } = await supabaseUser.auth.getUser();
     if (authError || !user) {
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return json(401, { error: 'Unauthorized', code: 'unauthorized' });
     }
 
     const supabaseAdmin = createClient(
@@ -126,136 +67,46 @@ Deno.serve(async (req: Request) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // ── 1. SKOR 잔액 + 보유 캐릭터 + 보유 배경화면 병렬 조회 ────────
-    const [{ data: skorData }, { data: owned }, { data: ownedWp }] = await Promise.all([
-      supabaseAdmin.from('user_skor').select('balance').eq('user_id', user.id).single(),
-      supabaseAdmin.from('user_characters').select('character_id').eq('user_id', user.id),
-      supabaseAdmin.from('user_wallpapers').select('wallpaper_id').eq('user_id', user.id),
-    ]);
+    // ── 추첨 — 칸마다 배경화면 또는 캐릭터, 10연이면 SR 이상 1장 확정 (정의서 §2-4) ──
+    const slots = drawSlots(RATES.get(banner.id)!, PULL_COUNT[pullType], rand);
 
-    const balance = skorData?.balance ?? 0;
-    if (balance < cost) {
-      return new Response(
-        JSON.stringify({ error: 'Insufficient SKOR', balance }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // ── 2. 슬롯별 결정: 각 슬롯은 배경화면 또는 캐릭터 중 하나
-    //       총합 = count, 추가 드롭 없음 ────────────────────────────────
-    const ownedSet = new Set((owned ?? []).map((r: { character_id: string }) => r.character_id));
-    const ownedWpSet = new Set((ownedWp ?? []).map((r: { wallpaper_id: string }) => r.wallpaper_id));
-
-    const characters: { id: string; grade: string; isNew: boolean }[] = [];
-    const wallpapers: { id: string; isNew: boolean }[] = [];
-
-    for (let i = 0; i < count; i++) {
-      if (Math.random() < WP_DROP_CHANCE) {
-        // 이 슬롯은 배경화면
-        const wp = pullWallpaper();
-        wallpapers.push({ id: wp.id, isNew: !ownedWpSet.has(wp.id) });
-        ownedWpSet.add(wp.id); // 같은 pull 내 중복 isNew 방지
-      } else {
-        // 이 슬롯은 캐릭터
-        const char = pullOne();
-        characters.push({ id: char.id, grade: char.grade, isNew: !ownedSet.has(char.id) });
-        ownedSet.add(char.id); // 같은 pull 내 중복 isNew 방지
-      }
-    }
-
-    // ── 3. 신규 배경화면 등록 ────────────────────────────────────────────
-    const newWps = wallpapers
-      .filter(w => w.isNew)
-      .map(w => ({ user_id: user.id, wallpaper_id: w.id }));
-
-    // ── 4. 신규 캐릭터 등록 + 중복 카운트 증가 + SKOR 차감 병렬 처리 ─────
-    // 같은 캐릭터가 10연차에서 중복 등장할 수 있으므로 횟수 집계 후 처리
-    const newChars = [...new Map(
-      characters
-        .filter(c => c.isNew)
-        .map(c => [c.id, { user_id: user.id, character_id: c.id }])
-    ).values()];
-
-    // 중복 캐릭터별 횟수 집계 (같은 캐릭터가 10연차에서 2번 나오면 +2)
-    const dupCountMap = new Map<string, number>();
-    characters.filter(c => !c.isNew).forEach(c => {
-      dupCountMap.set(c.id, (dupCountMap.get(c.id) ?? 0) + 1);
+    // ── 차감 · 천장 · 초보자 · 지급 · 기록 — 한 트랜잭션 ──
+    const { data, error } = await supabaseAdmin.rpc('gacha_pull_commit', {
+      p_user_id: user.id,
+      p_request_id: requestId,
+      p_banner_id: banner.id,
+      p_cost: cost,
+      p_slots: slots,
+      p_pity_track: banner.pity?.track ?? null,
+      p_starter: banner.starter ? { max: banner.starter.maxPulls, pick: starterPick ?? null } : null,
+      p_rates_version: RATES_VERSION,
     });
+    if (error) return rpcError(error);
 
-    // SKOR 차감 — 아이템을 쓰기 전에, 한 문장으로 (DB skor_spend, 20261011000006).
-    // 위 잔액 조회는 빠른 거절용이다. 그사이 다른 뽑기 · 정산 · 시즌 지급이 잔액을 바꿔도 여기서 덮지 않고,
-    // 두 탭에서 동시에 뽑아도 비용이 각각 빠진다 (그전에는 읽은 값에서 뺀 절대값을 써서 한 번만 빠질 수 있었다)
-    const { data: spentBalance, error: spendError } = await supabaseAdmin.rpc('skor_spend', {
-      p_user_id: user.id, p_cost: cost,
+    const r = data as CommitResult;
+    // 같은 requestId 가 다른 일(교환 · 다른 배너)에 이미 쓰였다 — 그 결과를 이 배너의 뽑기로 돌려주지 않는다
+    if (r.kind !== 'pull' || r.bannerId !== banner.id) return reject('bad_request', 'requestId already used');
+
+    const characters = r.results
+      .filter(s => s.kind === 'character')
+      .map(s => ({ id: s.id, grade: s.grade, isNew: s.isNew, guaranteed: s.guaranteed ?? null }));
+    const wallpapers = r.results
+      .filter(s => s.kind === 'wallpaper')
+      .map(s => ({ id: s.id, isNew: s.isNew }));
+
+    return json(200, {
+      success: true,
+      bannerId: banner.id,
+      video: characters.some(c => c.grade === 'UR') ? 'red' : 'green',
+      characters,
+      wallpapers,
+      remainingSkor: Math.floor(Number(r.balance ?? 0)),
+      pity: pityOf(banner, r.pityPoints),
+      starter: starterOf(r.starter),
+      ratesVersion: r.ratesVersion,
     });
-    if (spendError) {
-      console.error('skor_spend 실패:', spendError);
-      return new Response(
-        JSON.stringify({ error: 'Failed to spend SKOR' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-    if (spentBalance === null) {
-      return new Response(
-        JSON.stringify({ error: 'Insufficient SKOR', balance }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-    const newBalance = Number(spentBalance);
-
-    const [charResult, , wpResult] = await Promise.all([
-      newChars.length > 0
-        ? supabaseAdmin.from('user_characters').upsert(newChars, { onConflict: 'user_id,character_id' })
-        : Promise.resolve({ error: null }),
-      // 중복 카운트 증가: RPC로 atomic increment
-      dupCountMap.size > 0
-        ? Promise.all([...dupCountMap.entries()].map(([charId, inc]) =>
-            supabaseAdmin.rpc('increment_duplicate_count', {
-              p_user_id: user.id,
-              p_character_id: charId,
-              p_amount: inc,
-            })
-          ))
-        : Promise.resolve(null),
-      // 신규 배경화면 등록
-      newWps.length > 0
-        ? supabaseAdmin.from('user_wallpapers').upsert(newWps, { onConflict: 'user_id,wallpaper_id' })
-        : Promise.resolve({ error: null }),
-    ]);
-
-    if (charResult && 'error' in charResult && charResult.error) {
-      console.error('user_characters upsert 실패:', charResult.error);
-      return new Response(
-        JSON.stringify({ error: 'Failed to save characters', detail: charResult.error }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-    if (wpResult && 'error' in wpResult && wpResult.error) {
-      console.error('user_wallpapers upsert 실패:', wpResult.error);
-      return new Response(
-        JSON.stringify({ error: 'Failed to save wallpapers', detail: wpResult.error }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // ── 6. 응답 ───────────────────────────────────────────────────────
-    const hasUR = characters.some(c => c.grade === 'UR');
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        video: hasUR ? 'red' : 'green',
-        characters,
-        wallpapers,
-        remainingSkor: Math.floor(newBalance),
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
   } catch (error) {
     console.error('Unexpected error:', error);
-    return new Response(
-      JSON.stringify({ error: 'Internal server error' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    return json(500, { error: 'Internal server error', code: 'server' });
   }
 });

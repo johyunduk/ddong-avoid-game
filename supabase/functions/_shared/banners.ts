@@ -320,6 +320,49 @@ export function bannerRates(
   return { bannerId: banner.id, ratesVersion: RATES_VERSION, rows, entries, byGrade, srPlusSlot, guaranteeTrigger: q * 100 };
 }
 
+/** 뽑힌 칸 하나 */
+export interface DrawnSlot {
+  kind: 'character' | 'wallpaper';
+  id: string;
+  grade: GachaGrade | null;
+  /**
+   * 확정 칸으로 나온 것 — 10연 SR 이상 확정이면 'srPlus'.
+   * 초보자 50번째 보장('starterUR')은 여기서 정하지 않는다 — 초보자 상태를 잠그고 보는 DB 함수(gacha_pull_commit)가 바꿔 넣는다
+   */
+  guaranteed: 'srPlus' | 'starterUR' | null;
+}
+
+/** 가중치 key 로 하나 고른다. r 은 [0, 1) — 가중치 0 인 종은 안 나온다 */
+function pickEntry(entries: readonly RateEntry[], key: 'slot' | 'guarantee', r: number): RateEntry {
+  const total = entries.reduce((s, e) => s + e.rate[key], 0);
+  let x = r * total;
+  let last: RateEntry | undefined;
+  for (const e of entries) {
+    const w = e.rate[key];
+    if (!(w > 0)) continue;
+    last = e;
+    if (x < w) return e;
+    x -= w;
+  }
+  if (!last) throw new Error(`drawSlots: '${key}' 가중치가 모두 0 이다`);
+  return last;   // 부동소수 끝자리로 합을 넘긴 경우
+}
+
+/**
+ * 한 번의 뽑기 — 칸 count 개 (정의서 §2 · §2-4). rand 는 [0, 1) 난수를 내는 함수 (서버는 crypto 기반).
+ * 10연이면 앞 9칸에 SR 이상 캐릭터가 하나도 없을 때 10번째 칸을 확정 칸 표(guarantee)로 뽑는다. 1회 뽑기에는 확정이 없다
+ */
+export function drawSlots(rates: BannerRates, count: number, rand: () => number): DrawnSlot[] {
+  const out: DrawnSlot[] = [];
+  const srPlus = (s: DrawnSlot) => s.kind === 'character' && (s.grade === 'UR' || s.grade === 'SR');
+  for (let i = 0; i < count; i++) {
+    const guaranteed = count === PULL_COUNT.multi && i === count - 1 && !out.some(srPlus);
+    const e = pickEntry(rates.entries, guaranteed ? 'guarantee' : 'slot', rand());
+    out.push({ kind: e.kind, id: e.id, grade: e.grade, guaranteed: guaranteed ? 'srPlus' : null });
+  }
+  return out;
+}
+
 /**
  * 천장 교환 후보 (정의서 §4-2). 손으로 적지 않는다 — 상시 UR 구성이 바뀌면 후보도 따라 바뀐다.
  * - pickupUR: [그 배너의 픽업 UR]
