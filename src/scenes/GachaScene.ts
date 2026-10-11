@@ -606,8 +606,9 @@ export default class GachaScene extends BaseScene {
       }
     });
     vid.on('complete', () => { if (this.lobbyVideo === vid) this.endReelClip(); });
-    // 영상 트랙을 못 푼다 — 예: HEVC(hvc1)를 못 푸는 브라우저 · 웹뷰는 오류 없이 시간 · 소리만 흐르고 그림(videoWidth)이 0 이다.
-    // 못 받음과 같이 일러스트로 둔다 (legacy.mp4 · sentinel.mp4 가 HEVC 다 — 2026-10-11 확인)
+    // 영상 트랙을 못 푼다 — 예: 그 기기가 못 푸는 코덱이면 오류 없이 시간 · 소리만 흐르고 그림(videoWidth)이 0 이다.
+    // 못 받음과 같이 일러스트로 둔다. (legacy · sentinel 이 HEVC 여서 실제로 그랬다 — 7355c449 에서 전부 H.264 로 다시
+    // 인코딩했지만, 다른 이유로 그림이 안 나올 때를 위해 남긴다)
     vid.once('metadata', () => { if (this.lobbyVideo === vid && vid.video && !vid.video.videoWidth) fail(false)(); });
     vid.once('locked', fail(true));
     vid.once('error', fail(false));
