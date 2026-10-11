@@ -54,16 +54,20 @@ const OLD_TAB_KEY = 'ddong_gacha_tab';
 const STARTER_PICK_KEY = 'ddong_gacha_starter_pick';
 /** 좌우 밀기 — 가로로 이만큼(px) 밀고 세로보다 가로로 더 움직였으면 이웃 배너로 */
 const SWIPE_MIN = 48;
-/** 이벤트 세 줄기 — 경계선이 위아래로 기우는 폭(px) · 일러스트를 화면 높이보다 키우는 비율 (얼굴 · 상반신이 줄기를 채우게) */
+/** 이벤트 줄기 (이벤트 픽업 SR 수만큼) — 경계선이 위아래로 기우는 폭(px) · 일러스트를 화면 높이보다 키우는 비율 (얼굴 · 상반신이 줄기를 채우게) */
 const EVENT_SLANT = 44;
 const EVENT_ZOOM = 1.3;
 /**
  * 이벤트 줄기 — 일러스트에서 얼굴이 있는 자리 (가로 · 세로 비율). 대부분 위쪽 ¼ 쯤이라 기본값으로 두고,
- * 얼굴이 낮게 그려진 일러스트만 따로 적는다 (레드: 공룡 아래 앉아 있어 얼굴이 절반 가까이 내려와 있다).
+ * 얼굴이 기본 자리에서 벗어난 일러스트만 따로 적는다 (레드: 공룡 아래 앉아 있어 얼굴이 낮다 · K: 가운데 위).
  * 캐릭터 정의에 일러스트 초점 값이 생기면 그쪽으로 옮긴다
  */
 const EVENT_FACE_DEFAULT = { x: 0.56, y: 0.27 };
-const EVENT_FACE: Partial<Record<string, { x: number; y: number }>> = { red: { x: 0.56, y: 0.43 } };
+const EVENT_FACE: Partial<Record<string, { x: number; y: number }>> = {
+  red: { x: 0.56, y: 0.43 },
+  // K: 아이를 안고 있어 얼굴이 가운데 위에 있다 — 기본값이면 넷째 줄기(폭 약 90)에서 아이 얼굴이 잡히고 K 얼굴은 경계에 잘린다
+  k: { x: 0.49, y: 0.21 },
+};
 /**
  * 자리 그림(수집 카드 216x288) — 얼굴 자리와 크기 (화면 높이 비율). 카드는 가까이 찍은 상반신이라 큰 그림만큼 키우면
  * 얼굴이 크고 흐려진다 — 작게 그려 큰 그림으로 바뀔 때 덜 튀게 한다
@@ -349,7 +353,7 @@ export default class GachaScene extends BaseScene {
     const cx = W / 2;
     const showcase = banner.kind === 'standard';
 
-    // ── 본문 뒤 — 상시 · 초보자 = 진열 일러스트, 픽업 = 픽업 UR 일러스트, 이벤트 = 셋 일러스트 세 줄기 ──
+    // ── 본문 뒤 — 상시 = 진열 일러스트, 픽업 = 픽업 UR 일러스트, 이벤트 = 이벤트 픽업 SR 일러스트를 그 수만큼 세로 줄기로 ──
     if (showcase) this.buildShowcase();
     else if (banner.kind === 'pickup') this.coverIllust(this.add.image(cx, 0, getCharacterDef(banner.pickupUR ?? '').illustKey));
     else this.buildEventBody(banner);
@@ -376,7 +380,7 @@ export default class GachaScene extends BaseScene {
 
     // ── 배너 고르기 — 가장자리 ‹ › · 좌우 밀기 ──
     this.buildSwitcher(visible, banner);
-    // 옆 배너(무한 롤링 — 끝과 처음도 이웃)가 이벤트면 큰 줄기 그림을 미리 굽는다 — 넘기자마자 3분할이 큰 그림으로 (GPU 에는 줄기 약 1MB 만)
+    // 옆 배너(무한 롤링 — 끝과 처음도 이웃)가 이벤트면 큰 줄기 그림을 미리 굽는다 — 넘기자마자 줄기가 큰 그림으로 (GPU 에는 줄기만 — 장당 약 0.3MB)
     for (const dir of [-1, 1] as const) {
       const nb = this.neighborOf(visible, banner, dir);
       if (nb?.kind === 'event') this.prepareEventStrips(nb);
@@ -478,9 +482,10 @@ export default class GachaScene extends BaseScene {
   }
 
   /**
-   * 이벤트 본문 뒤 — 화면을 세로 세 줄기로 나눠 이벤트 픽업 셋의 일러스트를 하나씩 (대표 2026-10-11).
+   * 이벤트 본문 뒤 — 화면을 이벤트 픽업 SR 수만큼 세로 줄기로 나눠 일러스트를 하나씩 (대표 2026-10-11 — 셋, K 가 들어와 넷).
+   * 줄기 수는 배너의 pickupSR 에서 받는다 — 적어 두지 않는다.
    * 카드 테두리 · 바탕 없이, 줄기 사이는 기운 얇은 경계선. 얼굴 · 상반신이 보이게 자른다.
-   * **처음부터 세 줄기다** — 큰 일러스트 줄기가 아직 없으면 같은 틀에 수집 썸네일 줄기를 깔고,
+   * **처음부터 줄기다** — 큰 일러스트 줄기가 아직 없으면 같은 틀에 수집 썸네일 줄기를 깔고,
    * 큰 그림이 오면 그 자리에서 바꾼다 (swapEventStrips · 로비를 다시 그리지 않는다)
    */
   private buildEventBody(b: BannerDef) {
@@ -564,7 +569,7 @@ export default class GachaScene extends BaseScene {
   /**
    * 큰 줄기 그림 준비 — 이벤트 배너를 볼 때와 그 옆 배너를 볼 때 미리 (buildLobby).
    * 일러스트(장당 약 4MB 로 풀린다)는 Phaser 텍스처로 올리지 않고 브라우저 Image 로만 풀어 줄기로 굽는다 —
-   * GPU 에는 줄기 셋(합 약 1MB)만 올라가고, 풀린 원본은 굽고 나면 버려진다. 다 되면 떠 있는 자리 그림을 바꾼다
+   * GPU 에는 줄기만(장당 약 0.3MB) 올라가고, 풀린 원본은 굽고 나면 버려진다. 다 되면 떠 있는 자리 그림을 바꾼다
    */
   private prepareEventStrips(b: BannerDef) {
     if (this.eventStripLoading || this.eventStripFailed) return;
@@ -572,17 +577,21 @@ export default class GachaScene extends BaseScene {
     const run = this.runId;
     this.eventStripLoading = true;
     Promise.all(b.pickupSR.map(id => this.illustSource(getCharacterDef(id)))).then(srcs => {
+      // 이전 실행(씬을 나갔다 다시 들어오기 전)의 콜백은 이 실행의 로딩 플래그를 건드리지 않는다 — 새 실행이 받는 중인데
+      // 꺼 버리면 같은 일러스트를 또 받는다 (리뷰 0569db0c P3). 플래그는 init 이 실행마다 다시 세운다
+      if (run !== this.runId) return;
       this.eventStripLoading = false;
-      if (run !== this.runId || !this.scene.isActive()) return;
+      if (!this.scene.isActive()) return;
       // 받는 동안 화면 크기가 바뀌었을 수 있다 — 지금 크기로 굽는다
       this.eventStrips(b).forEach((s, i) => {
         if (!this.textures.exists(s.key)) this.bakeEventStrip(s, s.key, srcs[i], EVENT_FACE[s.id] ?? EVENT_FACE_DEFAULT, EVENT_ZOOM);
       });
       this.swapEventStrips();
     }).catch((e: unknown) => {
+      if (run !== this.runId) return;
       console.error('[GachaScene] 이벤트 일러스트를 받지 못함 — 자리 그림으로 둔다:', e);
       this.eventStripLoading = false;
-      if (run === this.runId) this.eventStripFailed = true;
+      this.eventStripFailed = true;
     });
   }
 
