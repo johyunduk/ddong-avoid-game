@@ -6,8 +6,10 @@
 -- 새 익명 계정이 아무 잔액(numeric(10,1) 한도까지)으로 자기 행을 만들 수 있었다.
 -- 이제 보너스 값은 아래 grant_welcome_skor 한 곳에서만 정한다.
 --
--- 클라이언트 insert 경로를 닫는 정책 삭제는 20261011000002 — 새 클라이언트가 나간 "뒤에" 적용한다.
--- 이 파일만 적용된 상태에서도 구 클라이언트는 그대로 돈다: 새 계정은 가입 순간 행이 생겨 자기 insert 를 안 탄다.
+-- 클라이언트 insert 경로를 닫는 정책 삭제는 20261011000002 — 이 파일 바로 뒤에 적용한다.
+-- 이 파일이 끝나면 모든 계정에 행이 있다 (새 계정은 가입 트리거, 기존 무행 계정은 4번 일괄 지급).
+-- 그래서 구 클라이언트(토스 빌드 · 새로고침 안 한 탭)는 SELECT 에서 행을 보고 자기 insert 를 타지 않는다
+-- — 정책을 지워도 구 클라이언트가 깨지지 않는다.
 
 -- 1. 행이 없을 때만 웰컴 보너스로 만든다. 이미 있는 행은 건드리지 않는다.
 --    남의 user_id 로 부르지 못하게 클라이언트 실행 권한을 닫는다
@@ -72,3 +74,14 @@ $$;
 
 REVOKE EXECUTE ON FUNCTION public.get_skor_balance() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.get_skor_balance() TO authenticated;
+
+-- 4. 이미 가입했는데 행이 없는 계정을 지금 채운다 (2026-10-11 운영 77개).
+--    구 클라이언트는 get_skor_balance 를 부르지 않아 3번 경로로는 못 채우고, 트리거는 소급하지 않는다.
+--    트리거(2번) 뒤에 두어 그 사이 가입은 트리거가 맡는다. 이미 행이 있는 계정은 건드리지 않는다
+DO $$
+BEGIN
+  PERFORM public.grant_welcome_skor(u.id)
+  FROM auth.users u
+  WHERE NOT EXISTS (SELECT 1 FROM public.user_skor s WHERE s.user_id = u.id);
+END;
+$$;
