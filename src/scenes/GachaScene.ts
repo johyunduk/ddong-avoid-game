@@ -35,8 +35,19 @@ interface PullMeta {
 const WP_CARD_TEAL_HEX = '#40c8ff';
 const WP_CARD_TEAL = 0x40c8ff;
 
-/** 진열이 넘어가는 간격 (ms) */
+/** 진열이 넘어가는 간격 (ms) — 상시 영상을 못 틀 때의 일러스트 번갈아 보이기 */
 const SLIDE_MS = 3000;
+/** 로비 영상 — 첫 프레임이 나올 때 페이드 인 · 끝에서 다음 일러스트로 걷어 내는 크로스페이드 (ms) */
+const VIDEO_FADE_IN_MS = 250;
+const VIDEO_SEAM_FADE_MS = 500;
+
+/** 로비 영상 줄 (startReel) — ids 를 차례로, anchor 바로 위에 영상, setBase = 영상 밑 바탕 바꾸기 (상시만) */
+interface LobbyReel {
+  ids: string[];
+  i: number;
+  anchor: Phaser.GameObjects.Image;
+  setBase: ((def: CharacterDef, i: number) => void) | null;
+}
 
 // ── 픽업 배너 (정의서 ~/ddong-fx-work/gacha/banner_spec_v1.md §5) ──────────────
 // 배너 정의 · 확률 · 교환 후보는 src/config/banners.ts 와 utils/gacha.ts 가 계산한다. 이 화면은 그리기만 한다 —
@@ -241,8 +252,13 @@ export default class GachaScene extends BaseScene {
   private modal: { close: () => void } | null = null;
   /** 지금 픽업 배너의 UR 영상 (한 번에 하나) — 넘기기 · 결과 · 나가기에서 dropLobbyVideo 가 멈추고 내린다 */
   private lobbyVideo: Phaser.GameObjects.Video | null = null;
-  /** 이 실행에서 영상을 못 튼 캐릭터 (자동재생 막힘 · 못 받음) — 다시 받지 않고 일러스트로 둔다 */
+  /** 이 실행에서 영상을 못 받은 캐릭터 — 다시 받지 않고 일러스트로 둔다 */
   private lobbyVideoFailed = new Set<string>();
+  /** 이 실행에서 자동재생이 막혔다 (저전력 모드 등) — 다른 캐릭터 영상도 틀지 않는다 */
+  private videoLocked = false;
+  /** 로비 영상 줄 · 창이 떠 있어 다음 영상을 미뤄 둠 */
+  private reel: LobbyReel | null = null;
+  private reelPending = false;
 
   // ── 로비 슬라이드쇼 상태 ──
   private featured: CharacterDef[] = [];
@@ -270,6 +286,9 @@ export default class GachaScene extends BaseScene {
     this.inLobby = false;
     this.lobbyVideo = null;
     this.lobbyVideoFailed = new Set();
+    this.videoLocked = false;
+    this.reel = null;
+    this.reelPending = false;
     this.skorText = null;
     this.drawnState = '';
     // 새 실행 — 이전 실행이 걸어 둔 조회 · 뽑기 응답은 runId 가 달라 이 실행의 값 · 카운터를 건드리지 않는다
@@ -479,7 +498,7 @@ export default class GachaScene extends BaseScene {
     else go();
   }
 
-  /** 상시 · 초보자 본문 — 진열 일러스트 2레이어 (crossfade용). 늘이지 않고 덮어 채운다 */
+  /** 상시 본문 — 진열 일러스트 2레이어 (crossfade용, 늘이지 않고 덮어 채운다) + 그 위 진열 영상 번갈아 */
   private buildShowcase() {
     const cx = this.scale.width / 2;
     this.slideshowIndex = 0;
@@ -491,50 +510,148 @@ export default class GachaScene extends BaseScene {
     this.slideshowBgB = this.add.image(cx, 0, first.illustKey).setAlpha(0);
     this.coverIllust(this.slideshowBgA);
     this.coverIllust(this.slideshowBgB);
+    // 진열 영상 번갈아 (대표 2026-10-11) — 못 트는 동안은 위 두 레이어의 일러스트 번갈아 보이기 그대로
+    this.startReel(this.featured.map(d => d.id), 0, this.slideshowBgB, (def, i) => this.setShowcaseBase(def, i));
   }
 
   /**
-   * 픽업 본문 뒤 — 픽업 UR 일러스트를 깔고, 그 캐릭터 영상(캐릭터 정의의 videoPath)이 있으면 그 위에서 무한 반복 (대표 2026-10-11).
-   * 영상은 지금 보는 배너 것만 받아 돈다 — 넘기면(로비를 다시 그림) · 결과로 가면 clearUI, 나가면 뒤로 버튼 · shutdown 이 멈추고 내린다.
-   * 첫 프레임이 오기 전, 자동재생이 막히거나(저전력 모드 등) 못 받으면 일러스트가 그대로 보인다 (빈 화면이 없다)
+   * 픽업 본문 뒤 — 픽업 UR 일러스트를 깔고, 그 위에서 그 캐릭터 영상을 되풀이한다 (로비 영상 줄 — startReel).
+   * 첫 프레임 전 · 자동재생 막힘(저전력 모드 등) · 못 받으면 일러스트가 그대로 보인다 (빈 화면이 없다)
    */
   private buildPickupBody(b: BannerDef) {
     const def = getCharacterDef(b.pickupUR ?? '');
     const illust = this.add.image(this.scale.width / 2, 0, def.illustKey);
     this.coverIllust(illust);
-    if (def.videoPath && !this.lobbyVideoFailed.has(def.id)) this.playLobbyVideo(def, def.videoPath, illust);
+    this.startReel([def.id], 0, illust, null);
   }
 
   /**
-   * 로비 영상 — 음소거 · 화면 안 재생(playsinline, Phaser 가 붙인다) · 반복. 로더 캐시를 쓰지 않고 이 객체가 직접 받는다
-   * (넘기면 받던 것까지 끊는다). 첫 프레임에 화면 덮기(cover)로 맞춰 페이드 인하고, 다 덮으면 아래 일러스트를 숨긴다.
-   * 앱이 백그라운드로 가면 Phaser 가 게임과 같이 멈췄다 돌린다. 창이 떠 있으면 openPanel 이 멈춘다
+   * 로비 영상 줄 (대표 2026-10-11) — **한 번에 영상 하나.** ids 를 차례로 한 번씩 재생하고, 끝나면 다음 캐릭터 일러스트로
+   * 짧게 크로스페이드(VIDEO_SEAM_FADE_MS)한 뒤 그 캐릭터 영상을 처음부터 (일러스트 ≈ 영상 첫 프레임이라 이어져 보인다 —
+   * 끝 프레임에서 첫 프레임으로 툭 끊기지 않는다).
+   * - 픽업 = 자기 하나를 되풀이 — 같은 요소를 처음으로 돌려 다시 튼다 (다시 받지 않는다)
+   * - 상시 = 진열(상시 UR) 번갈아 — 영상이 도는 동안 슬라이드 타이머는 멈추고, 못 트는 동안은 일러스트 번갈아 보이기 그대로
+   * anchor = 영상을 그 바로 위에 놓을 바탕 (나중에 만드는 영상도 위 · 아래 어둠 · 글자 · 버튼 밑에 들어간다).
+   * setBase = 영상 밑 바탕을 그 캐릭터 일러스트로 바꾸기 (상시만 — 픽업은 바탕이 늘 그 캐릭터)
    */
-  private playLobbyVideo(def: CharacterDef, path: string, illust: Phaser.GameObjects.Image) {
+  private startReel(ids: string[], i: number, anchor: Phaser.GameObjects.Image, setBase: ((def: CharacterDef, i: number) => void) | null) {
+    this.reel = { ids, i, anchor, setBase };
+    this.reelPending = false;
+    this.playReelClip();
+  }
+
+  /** 지금 차례(reel.i)의 영상을 튼다 — 같은 영상이면 처음으로 돌려 다시, 아니면 새로 받는다. 창이 떠 있으면 닫힐 때까지 미룬다 */
+  private playReelClip() {
+    const reel = this.reel;
+    if (!reel || !this.inLobby) return;
+    if (this.modal) {
+      this.reelPending = true;
+      return;
+    }
+    const def = getCharacterDef(reel.ids[reel.i]);
+    if (!def.videoPath || this.videoLocked || this.lobbyVideoFailed.has(def.id)) {
+      this.reelFallback();
+      return;
+    }
+    const vid = this.lobbyVideo;
+    if (vid?.active && vid.video && vid.getData('path') === def.videoPath) {
+      // 같은 영상 — 처음으로 돌려 다시 튼다. 일러스트(≈ 첫 프레임) 위로 첫 프레임이 나오면 짧게 페이드 인
+      const el = vid.video;
+      el.requestVideoFrameCallback(() => {
+        if (this.lobbyVideo === vid) this.tweens.add({ targets: vid, alpha: 1, duration: VIDEO_FADE_IN_MS, ease: 'Quad.easeOut' });
+      });
+      vid.setCurrentTime(0);
+      vid.play(false);
+      return;
+    }
+    this.dropLobbyVideo();
+    this.createReelVideo(def, reel);
+  }
+
+  private createReelVideo(def: CharacterDef, reel: LobbyReel) {
     const W = this.scale.width, H = this.scale.height;
-    const vid = this.add.video(W / 2, 0).setOrigin(0.5, 0).setAlpha(0);
+    const path = def.videoPath ?? '';
+    const vid = this.add.video(W / 2, 0).setOrigin(0.5, 0).setAlpha(0).setData('path', path);
+    // 바탕 바로 위로 — add.video 는 맨 위에 붙어서 그대로 두면 글자 · 버튼을 덮는다.
+    // moveAbove 는 쓰지 않는다 — '이미 위에 있으면 그대로' 라서 맨 위에 붙은 새 영상은 안 내려온다 (두 번째 영상부터 화면을 덮었다)
+    if (reel.anchor.active) {
+      const list = this.children.list;
+      list.splice(list.indexOf(vid), 1);
+      list.splice(list.indexOf(reel.anchor) + 1, 0, vid);
+    }
     this.lobbyVideo = vid;
-    const fail = () => {
+    const fail = (locked: boolean) => () => {
       if (this.lobbyVideo !== vid) return;
-      this.lobbyVideoFailed.add(def.id);   // 이 실행 동안은 다시 받지 않는다 — 막힌 채로 4~5MB 를 또 받지 않게
+      // 이 실행 동안은 다시 받지 않는다 — 막힌 채로 영상을 또 받지 않게. 자동재생이 막히면 다른 캐릭터도 못 트니 전부 멈춘다
+      if (locked) this.videoLocked = true;
+      else this.lobbyVideoFailed.add(def.id);
       this.dropLobbyVideo();
-      if (illust.active) illust.setVisible(true);
+      this.reelFallback();
     };
     vid.once('created', (_v: Phaser.GameObjects.Video, w: number, h: number) => {
       if (this.lobbyVideo !== vid || !w || !h) return;
       // 화면 덮기 — 일러스트와 같은 맞춤 (비율 유지, 위쪽 15% 기준)
       const sc = Math.max(W / w, H / h);
       vid.setScale(sc).setY(-(h * sc - H) * 0.15);
+      // 영상이 돌기 시작했다 — 상시의 일러스트 번갈아 보이기를 멈추고 영상이 넘긴다
+      this.slideTimer?.remove();
+      this.slideTimer = null;
       this.tweens.add({
-        targets: vid, alpha: 1, duration: 250, ease: 'Quad.easeOut',
-        onComplete: () => { if (this.lobbyVideo === vid && illust.active) illust.setVisible(false); },
+        targets: vid, alpha: 1, duration: VIDEO_FADE_IN_MS, ease: 'Quad.easeOut',
+        onComplete: () => { if (this.lobbyVideo === vid && this.reel === reel) reel.setBase?.(def, reel.i); },
       });
+      if (reel.setBase) {
+        this.slideshowIndex = reel.i;
+        this.refreshFaces();
+      }
     });
-    vid.once('locked', fail);
-    vid.once('error', fail);
-    vid.once('unsupported', fail);
+    vid.on('complete', () => { if (this.lobbyVideo === vid) this.endReelClip(); });
+    // 영상 트랙을 못 푼다 — 예: HEVC(hvc1)를 못 푸는 브라우저 · 웹뷰는 오류 없이 시간 · 소리만 흐르고 그림(videoWidth)이 0 이다.
+    // 못 받음과 같이 일러스트로 둔다 (legacy.mp4 · sentinel.mp4 가 HEVC 다 — 2026-10-11 확인)
+    vid.once('metadata', () => { if (this.lobbyVideo === vid && vid.video && !vid.video.videoWidth) fail(false)(); });
+    vid.once('locked', fail(true));
+    vid.once('error', fail(false));
+    vid.once('unsupported', fail(false));
     vid.loadURL(path, true);
-    vid.play(true);
+    // 소리 없음 — loadURL 의 noAudio 는 요소만 음소거하고 Phaser 의 코드 음소거(_codeMuted)를 세우지 않는다.
+    // 그러면 게임 소리를 켤 때(GLOBAL_MUTE false) globalMute 가 요소의 음소거를 풀어 버린다. 그래서 코드로 음소거 + 볼륨 0
+    vid.setMute(true).setVolume(0);
+    vid.play(false);
+  }
+
+  /** 영상 끝 — 밑에 다음 캐릭터 일러스트를 깔고(영상이 덮고 있어 안 보인다) 영상을 짧게 걷어 내 크로스페이드, 그다음 다음 영상 */
+  private endReelClip() {
+    const reel = this.reel, vid = this.lobbyVideo;
+    if (!reel || !vid) return;
+    const j = (reel.i + 1) % reel.ids.length;
+    const next = getCharacterDef(reel.ids[j]);
+    reel.setBase?.(next, j);
+    this.tweens.add({
+      targets: vid, alpha: 0, duration: VIDEO_SEAM_FADE_MS, ease: 'Sine.easeInOut',
+      onComplete: () => {
+        if (this.reel !== reel || this.lobbyVideo !== vid) return;
+        reel.i = j;
+        this.playReelClip();
+      },
+    });
+  }
+
+  /** 영상을 못 튼다 — 일러스트가 그대로 보인다. 상시는 일러스트 번갈아 보이기(슬라이드 타이머)로 */
+  private reelFallback() {
+    if (this.reel?.setBase && this.slideshowActive && !this.slideTimer) this.restartSlideTimer();
+  }
+
+  /** 상시 영상 밑 바탕 — 지금 보이는 진열 레이어를 그 캐릭터 일러스트로 바로 바꾸고 다른 레이어는 숨긴다 */
+  private setShowcaseBase(def: CharacterDef, i: number) {
+    const current = this.slideshowIsA ? this.slideshowBgA : this.slideshowBgB;
+    const other = this.slideshowIsA ? this.slideshowBgB : this.slideshowBgA;
+    if (!current?.active || !other?.active) return;
+    this.tweens.killTweensOf([current, other]);
+    current.setTexture(def.illustKey).setAlpha(1);
+    this.coverIllust(current);
+    other.setAlpha(0);
+    this.slideshowIndex = i;
+    this.refreshFaces();
   }
 
   /**
@@ -545,6 +662,7 @@ export default class GachaScene extends BaseScene {
     const vid = this.lobbyVideo;
     this.lobbyVideo = null;
     if (!vid) return;
+    this.tweens.killTweensOf(vid);
     const el = vid.video;
     if (el) {
       el.pause();
@@ -917,6 +1035,12 @@ export default class GachaScene extends BaseScene {
     this.slideshowIndex = index;
     this.refreshFaces();
     if (byUser) this.restartSlideTimer();
+    // 사람이 진열 얼굴을 눌렀다 — 그 캐릭터 영상으로 (돌던 영상은 내린다. 첫 프레임이 나오면 타이머는 영상이 멈춘다)
+    if (byUser && this.reel) {
+      this.reel.i = index;
+      this.dropLobbyVideo();
+      this.playReelClip();
+    }
 
     // crossfade: 현재 fade-out, 다음 fade-in
     this.tweens.add({ targets: current,  alpha: 0, duration: 600, ease: 'Sine.easeInOut' });
@@ -1228,7 +1352,10 @@ export default class GachaScene extends BaseScene {
         cleanups.splice(0).forEach(f => f());
         overlay.destroy();
         panel.destroy();
-        if (this.lobbyVideo?.active && this.inLobby) this.lobbyVideo.setPaused(false);
+        if (this.inLobby && this.reelPending) {
+          this.reelPending = false;
+          this.playReelClip();
+        } else if (this.lobbyVideo?.active && this.inLobby) this.lobbyVideo.setPaused(false);
       },
     };
     this.modal = handle;
@@ -2513,6 +2640,8 @@ export default class GachaScene extends BaseScene {
     this.modal?.close();
     this.modal = null;
     this.dropLobbyVideo();
+    this.reel = null;
+    this.reelPending = false;
     this.inLobby = false;
     this.slideshowActive = false;
     this.slideshowBgA = null;
