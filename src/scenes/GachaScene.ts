@@ -42,8 +42,11 @@ const SLIDE_MS = 3000;
 // 배너 정의 · 확률 · 교환 후보는 src/config/banners.ts 와 utils/gacha.ts 가 계산한다. 이 화면은 그리기만 한다 —
 // 이름과 숫자(확률 · 천장 기준 · 가격 · 후보)를 손으로 적지 않는다
 
-/** 마지막에 보던 배너 — 기기에 기억한다 */
-const TAB_KEY = 'ddong_gacha_tab';
+/**
+ * 예전에 마지막으로 보던 배너를 적던 기기 키 — 이제 기억하지 않는다 (대표 2026-10-11: 들어올 때마다 첫 배너).
+ * 남은 값은 읽지 않고, 씬을 열 때 지운다
+ */
+const OLD_TAB_KEY = 'ddong_gacha_tab';
 /**
  * 초보자 50번째 보장으로 골라 둔 UR (상시 초보자 줄의 얼굴 토글). 서버에는 다음 상시 10연의 starterPick 으로 저장된다 (v2 §3 · §6-2).
  * 뽑기 전에 화면을 나가도 고른 값이 남게 기기에 적어 둔다
@@ -200,8 +203,8 @@ export default class GachaScene extends BaseScene {
   // ── 배너 ──
   /** 지금 그린 탭 */
   private banner: BannerDef = BANNERS[0];
-  /** 사람이 고른 탭 (누른 탭 · 기억한 탭). 그 탭이 안 보이면 기본(초보자가 남았으면 초보자, 아니면 상시)을 그린다 */
-  private chosenTab: string | null = null;
+  /** 이번에 넘겨 온 배너 (이 씬 실행 안에서만 — 결과를 닫으면 그 배너로 돌아온다). 씬을 새로 열면 첫 배너 */
+  private chosenBanner: string | null = null;
   /** 결과 화면의 1회 더 · 10회 더 가 뽑는 배너 */
   private pullBanner: BannerDef = BANNERS[0];
   /** 천장 · 초보자 상태 — 캐시로 먼저 그리고, 서버 값이 그린 것과 다르면 다시 그린다. 못 읽었으면 null */
@@ -249,7 +252,8 @@ export default class GachaScene extends BaseScene {
   init() {
     this.ownKeys = new Set();   // preload 가 채운다
     this.skorBalance = -1;
-    this.chosenTab = readStore(TAB_KEY);
+    this.chosenBanner = null;
+    try { localStorage.removeItem(OLD_TAB_KEY); } catch { /* 못 지워도 읽지 않는다 */ }
     this.gstate = getCachedGachaState();
     this.modal = null;
     this.inLobby = false;
@@ -372,9 +376,11 @@ export default class GachaScene extends BaseScene {
 
     // ── 배너 고르기 — 가장자리 ‹ › · 좌우 밀기 ──
     this.buildSwitcher(visible, banner);
-    // 옆 배너가 이벤트면 큰 줄기 그림을 미리 굽는다 — 넘기자마자 3분할이 큰 그림으로 보이게 (GPU 에는 줄기 약 1MB 만)
-    const i = visible.indexOf(banner);
-    for (const nb of [visible[i - 1], visible[i + 1]]) if (nb?.kind === 'event') this.prepareEventStrips(nb);
+    // 옆 배너(무한 롤링 — 끝과 처음도 이웃)가 이벤트면 큰 줄기 그림을 미리 굽는다 — 넘기자마자 3분할이 큰 그림으로 (GPU 에는 줄기 약 1MB 만)
+    for (const dir of [-1, 1] as const) {
+      const nb = this.neighborOf(visible, banner, dir);
+      if (nb?.kind === 'event') this.prepareEventStrips(nb);
+    }
 
     if (showcase) {
       // ── 슬라이드쇼 타이머 (자동 전환) ──
@@ -386,16 +392,11 @@ export default class GachaScene extends BaseScene {
   }
 
   /**
-   * 그릴 배너 — 사람이 고른(넘긴) 배너가 보이면 그것 (없어진 id 는 getBanner 가 BANNER_ALIASES 로 옮긴다 — 예전 초보자 배너 → 상시).
-   * 기억이 없으면 초보자 구간이 남았을 때 상시, 아니면 첫 픽업 (정의서 v2 §5). 상태를 아직 모르면(처음 오는 사람) 상시
+   * 그릴 배너 — 이번 실행에서 넘겨 온 배너가 보이면 그것, 아니면 **visibleBanners 의 첫 배너** (대표 2026-10-11).
+   * 순서는 banners.ts 가 정한다 — 화면은 따로 고르지 않는다 (마지막 본 배너 기억 · 초보자 기준 기본 배너는 없앴다)
    */
   private pickBanner(visible: BannerDef[]): BannerDef {
-    const want = this.chosenTab ? getBanner(this.chosenTab)?.id : undefined;
-    const standard = visible.find(b => b.id === DEFAULT_BANNER_ID);
-    const starterLeft = !this.gstate || (!!standard && starterWindowOf(standard, this.gstate) !== null);
-    return visible.find(b => b.id === want)
-      ?? (starterLeft ? standard : visible.find(b => b.kind === 'pickup'))
-      ?? standard
+    return visible.find(b => b.id === this.chosenBanner)
       ?? visible[0]
       ?? getBanner(DEFAULT_BANNER_ID)
       ?? BANNERS[0];
@@ -403,9 +404,16 @@ export default class GachaScene extends BaseScene {
 
   private selectBanner(id: string) {
     if (id === this.banner.id) return;
-    this.chosenTab = id;
-    writeStore(TAB_KEY, id);
+    this.chosenBanner = id;
     this.buildLobby(false);
+  }
+
+  /** dir 쪽 이웃 배너 — 무한 롤링: 끝 다음은 처음, 처음 앞은 끝 (대표 2026-10-11). 배너가 하나뿐이면 없음 */
+  private neighborOf(visible: BannerDef[], cur: BannerDef, dir: -1 | 1): BannerDef | null {
+    const n = visible.length;
+    if (n < 2) return null;
+    const i = Math.max(0, visible.indexOf(cur));
+    return visible[(i + dir + n) % n];
   }
 
   /**
@@ -664,14 +672,14 @@ export default class GachaScene extends BaseScene {
   /**
    * 배너 고르기 — 니케식 (대표 결정 2026-10-11, 시안 ~/ddong-fx-work/dev2/mockups2/E.png). 탭 줄은 없다.
    * 화면 가장자리 가운데 ‹ › (화살표만 — 이웃 배너 이름은 두지 않는다, 대표) · 본문을 좌우로 밀기 · 뽑기 버튼 아래 페이지 점(buildDots).
-   * 순서 = visibleBanners (BANNERS 배열 순서) — 배너가 7개든 4개든 그대로 돈다. 양 끝에서는 그쪽 화살표가 없다 (돌지 않는다)
+   * 순서 = visibleBanners (BANNERS 배열 순서). **무한 롤링** — 끝에서 넘기면 처음, 처음에서 거꾸로 넘기면 끝 (대표 2026-10-11).
+   * 그래서 양 끝에도 화살표가 있다. 배너가 하나뿐이면 화살표 · 밀기가 없다
    */
   private buildSwitcher(visible: BannerDef[], cur: BannerDef) {
     const W = this.scale.width, H = this.scale.height;
-    const i = visible.indexOf(cur);
     const y = Math.round(H * LOBBY.arrowY);
     for (const dir of [-1, 1] as const) {
-      const nb = visible[i + dir];
+      const nb = this.neighborOf(visible, cur, dir);
       if (!nb) continue;
       const box = this.add.container(dir < 0 ? 17 : W - 17, y);
       box.add(this.add.graphics().fillStyle(0x0a0618, 0.5).fillRoundedRect(-14, -32, 28, 64, 10));
@@ -705,11 +713,10 @@ export default class GachaScene extends BaseScene {
     });
   }
 
-  /** 이웃 배너로 (‹ › · 밀기). 끝이면 그대로 */
+  /** 이웃 배너로 (‹ › · 밀기) — 끝과 처음이 이어진다 */
   private stepBanner(dir: -1 | 1) {
     if (this.modal || !this.inLobby) return;
-    const visible = visibleBanners(this.gstate);
-    const next = visible[visible.indexOf(this.banner) + dir];
+    const next = this.neighborOf(visibleBanners(this.gstate), this.banner, dir);
     if (next) this.selectBanner(next.id);
   }
 
