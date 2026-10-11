@@ -188,6 +188,31 @@ export async function getLeaderboard(
   return data as LeaderboardResponse;
 }
 
+// ── 시즌 보상 도착 알림 ────────────────────────────────────────────────
+// 캐릭터별 시즌 보상은 월초에 서버가 자동 지급한다 (supabase/migrations/20261011000006).
+// 지급됐지만 아직 안 보여 준 것을 다음 접속 때 받아 띄우고, 띄운 것만 본 것으로 돌려준다
+
+export interface SeasonRewardNotice {
+  id: string;
+  year_month: string;
+  character_type: string;
+  rank: number;
+  skor_awarded: number;
+}
+
+/** 아직 안 보여 준 시즌 보상 — 실패하면 빈 목록 (다음 접속 때 다시 받는다) */
+export async function getSeasonRewardNotices(): Promise<SeasonRewardNotice[]> {
+  const { data, error } = await supabase.rpc('get_season_reward_notices');
+  if (error || !Array.isArray(data)) return [];
+  return data as SeasonRewardNotice[];
+}
+
+/** 띄운 알림을 본 것으로 — 그 id 들만 (그사이 새로 들어온 지급은 다음에 띄운다) */
+export async function ackSeasonRewardNotices(ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  await supabase.rpc('ack_season_reward_notices', { p_ids: ids });
+}
+
 // ── 시즌 보상 수령 캐시 (localStorage) ──────────────────────────────────
 // 수령 완료된 시즌/난이도는 localStorage에 캐시해 불필요한 서버 조회 방지
 // 보안: djb2 서명으로 변조 방지 (실제 이중 수령은 서버 UNIQUE 제약이 방어)

@@ -3,16 +3,18 @@ import { GameMode, GAME_MODES, type GameModeConfig } from '../types/GameMode';
 import { getSkorBalance, getCachedSkorBalance, cacheSkorBalance } from '../utils/skor';
 import { setBgmMuted, isFxBloomEnabled } from '../utils/settings';
 import { setBloomEnabled } from '../utils/vfx';
-import { getUserInitials, setUserInitials } from '../utils/leaderboard';
+import { getUserInitials, setUserInitials, getSeasonRewardNotices, ackSeasonRewardNotices } from '../utils/leaderboard';
 import { RELEASE_NOTES } from '../data/releaseNotes';
 import BaseScene from './BaseScene';
 import { addBackground } from '../utils/background';
-import { getCharacterDef, getSafeSelectedCharacter } from '../utils/character';
+import { CHARACTERS, getCharacterDef, getSafeSelectedCharacter } from '../utils/character';
 import { bakeButton, bakeRadialGlow, bakeShine, gradientText, wireButton, type ButtonSkin } from '../utils/buttonSkin';
 
 export default class ModeSelectScene extends BaseScene {
   private skorText!: Phaser.GameObjects.Text;
   private settingsPanel: Phaser.GameObjects.Container | null = null;
+  /** '보상 도착' 팝업 — 떠 있는 동안 메뉴 버튼 입력을 꺼 둔다 */
+  private rewardNotice: Phaser.GameObjects.Container | null = null;
   /** 메뉴 버튼들 — 설정 팝업이 떠 있는 동안 입력을 꺼 둔다 */
   private menuButtons: Phaser.GameObjects.Container[] = [];
 
@@ -49,6 +51,7 @@ export default class ModeSelectScene extends BaseScene {
   create() {
     super.create();
     this.settingsPanel = null;   // 클래스 프로퍼티는 씬 재시작 후에도 남는다
+    this.rewardNotice = null;
     this.menuButtons = [];
 
     const W = this.scale.width;
@@ -103,6 +106,107 @@ export default class ModeSelectScene extends BaseScene {
     } catch {
       // 잔액 로드 실패 시 캐시 값 유지
     }
+    // 잔액 조회가 세션을 확보한 뒤에 — 월초 자동 지급된 시즌 보상 알림
+    await this.showSeasonRewardNotices();
+  }
+
+  /**
+   * '보상 도착' — 월초에 서버가 자동 지급한 시즌 보상 중 아직 안 보여 준 것.
+   * 잔액에는 이미 들어가 있다. 닫으면 띄운 것만 본 것으로 돌려주고, 닫기 전에 씬을 떠나면 다음 접속 때 다시 띄운다
+   */
+  private async showSeasonRewardNotices() {
+    const notices = await getSeasonRewardNotices();
+    if (notices.length === 0 || !this.scene.isActive() || this.settingsPanel || this.rewardNotice) return;
+
+    const SW = this.scale.width, SH = this.scale.height;
+    const cx = SW / 2;
+    const MAX_ROWS = 5;
+    const shown = notices.slice(0, MAX_ROWS);
+    const more = notices.length - shown.length;
+    const total = notices.reduce((s, n) => s + Number(n.skor_awarded), 0);
+    const pw = Math.min(340, SW - 32);
+    const rowH = 32, rowGap = 6;
+    const listH = shown.length * (rowH + rowGap) + (more > 0 ? 24 : 0);
+    const ph = 76 + listH + 40 + 66;
+    const top = Math.round((SH - ph) / 2 + 10);
+    const panelRect = new Phaser.Geom.Rectangle(cx - pw / 2, top - 26, pw, ph + 26);
+
+    const overlay = this.add.rectangle(cx, SH / 2, SW, SH, 0x000000, 0.55).setDepth(60).setInteractive();
+    const panel = this.add.container(0, 0).setDepth(61);
+    this.rewardNotice = panel;
+    this.menuButtons.forEach(b => b.disableInteractive());
+
+    const teardown = () => {
+      overlay.destroy();
+      panel.destroy();
+      this.rewardNotice = null;
+      this.events.off('shutdown', teardown);
+    };
+    this.events.once('shutdown', teardown);
+    const close = () => {
+      if (this.rewardNotice !== panel) return;
+      teardown();
+      this.menuButtons.forEach(b => { if (b.active) b.setInteractive().setScale(1); });
+      void ackSeasonRewardNotices(notices.map(n => n.id));
+    };
+    overlay.on('pointerdown', (p: Phaser.Input.Pointer) => {
+      if (!panelRect.contains(p.x, p.y)) close();
+    });
+
+    // 판 · 제목판 — 설정 팝업과 같은 화법
+    const panelKey = `reward_panel_${pw}x${ph}`;
+    const { originY } = bakeButton(this, panelKey, {
+      w: pw, h: ph, radius: 22, top: '#2a1460', bottom: '#120626', border: '#d38bff', borderW: 3,
+      lip: '#3a1478', lipH: 6, gloss: 0, glow: 'rgba(190,110,255,0.67)',
+    });
+    panel.add(this.add.image(cx, top + ph / 2, panelKey).setOrigin(0.5, originY));
+    const plank = bakeButton(this, 'reward_title_plank', {
+      w: 200, h: 52, radius: 16, top: '#c98a4a', bottom: '#8a5226', border: '#3a1f0a', borderW: 3,
+      lip: '#5b3416', lipH: 5, gloss: 0,
+    });
+    panel.add(this.add.image(cx, top, 'reward_title_plank').setOrigin(0.5, plank.originY));
+    const title = this.add.text(cx, top - 1, '보상 도착', {
+      fontSize: '24px', fontStyle: 'bold', stroke: '#3a1f0a', strokeThickness: 4,
+    }).setOrigin(0.5);
+    gradientText(title, [[0, '#fff7c2'], [0.5, '#ffd34d'], [1, '#ff9f1a']]);
+    panel.add(title);
+    panel.add(this.add.text(cx, top + 44, 'EXTREME 캐릭터 시즌 보상이 들어왔어요', {
+      fontSize: '13px', color: '#e6d7ff',
+    }).setOrigin(0.5));
+
+    // 줄마다: '9월 · 테드 1위' · '+5,000'
+    const x0 = cx - pw / 2 + 16, rw = pw - 32;
+    shown.forEach((n, i) => {
+      const y = top + 76 + i * (rowH + rowGap) + rowH / 2;
+      const month = Number(n.year_month.split('-')[1]);
+      const name = CHARACTERS.find(c => c.id === n.character_type)?.name ?? n.character_type;
+      panel.add(this.add.graphics().fillStyle(0xffffff, 0.08).fillRoundedRect(x0, y - rowH / 2, rw, rowH, 10));
+      panel.add(this.add.text(x0 + 12, y, `${month}월 · ${name} ${n.rank}위`, {
+        fontSize: '15px', color: '#ffffff', fontStyle: 'bold',
+      }).setOrigin(0, 0.5));
+      panel.add(this.add.text(x0 + rw - 12, y, `+${Number(n.skor_awarded).toLocaleString()}`, {
+        fontSize: '16px', color: '#ffd34d', fontStyle: 'bold',
+      }).setOrigin(1, 0.5));
+    });
+    if (more > 0) {
+      panel.add(this.add.text(cx, top + 76 + shown.length * (rowH + rowGap) + 8, `외 ${more}개`, {
+        fontSize: '13px', color: '#b9a3d6',
+      }).setOrigin(0.5));
+    }
+    panel.add(this.add.text(cx, top + 76 + listH + 18, `합계 +${total.toLocaleString()} SKOR`, {
+      fontSize: '18px', color: '#ffd34d', fontStyle: 'bold', stroke: '#000', strokeThickness: 3,
+    }).setOrigin(0.5));
+
+    const okW = 140, okH = 46;
+    const ok = this.add.container(cx, top + ph - 40);
+    const okSkin = bakeButton(this, 'reward_ok_btn', {
+      w: okW, h: okH, radius: 14, top: '#fff3a8', bottom: '#ffb81a', border: '#7a4a00', borderW: 2,
+      lip: '#a8650a', lipH: 4, gloss: 0,
+    });
+    ok.add(this.add.image(0, 0, 'reward_ok_btn').setOrigin(0.5, okSkin.originY));
+    ok.add(this.add.text(0, 0, '확인', { fontSize: '17px', color: '#5b2e0e', fontStyle: 'bold' }).setOrigin(0.5));
+    wireButton(this, ok, okW, okH, close);
+    panel.add(ok);
   }
 
   // ── 메뉴 버튼 (B안 — 일러스트를 버튼 면에) ──────────────────────────────
