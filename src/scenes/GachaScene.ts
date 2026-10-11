@@ -51,7 +51,7 @@ const STARTER_PICK_KEY = 'ddong_gacha_starter_pick';
 /** 좌우 밀기 — 가로로 이만큼(px) 밀고 세로보다 가로로 더 움직였으면 이웃 배너로 */
 const SWIPE_MIN = 48;
 /** 이벤트 세 줄기 — 경계선이 위아래로 기우는 폭(px) · 일러스트를 화면 높이보다 키우는 비율 (얼굴 · 상반신이 줄기를 채우게) */
-const EVENT_SLANT = 26;
+const EVENT_SLANT = 44;
 const EVENT_ZOOM = 1.3;
 /**
  * 이벤트 줄기 — 일러스트에서 얼굴이 있는 자리 (가로 · 세로 비율). 대부분 위쪽 ¼ 쯤이라 기본값으로 두고,
@@ -60,6 +60,23 @@ const EVENT_ZOOM = 1.3;
  */
 const EVENT_FACE_DEFAULT = { x: 0.56, y: 0.27 };
 const EVENT_FACE: Partial<Record<string, { x: number; y: number }>> = { red: { x: 0.56, y: 0.43 } };
+/**
+ * 자리 그림(수집 카드 216x288) — 얼굴 자리와 크기 (화면 높이 비율). 카드는 가까이 찍은 상반신이라 큰 그림만큼 키우면
+ * 얼굴이 크고 흐려진다 — 작게 그려 큰 그림으로 바뀔 때 덜 튀게 한다
+ */
+const EVENT_CARD_FACE = { x: 0.5, y: 0.42 };
+const EVENT_CARD_ZOOM = 0.6;
+
+/** 이벤트 줄기 하나 — 큰 그림 키 · 자리 그림 키 · 모양(다각형, 화면 좌표) · 그림 왼쪽 x · 폭 · 높이 y 의 가운데 x */
+interface EventStrip {
+  id: string;
+  key: string;
+  phKey: string;
+  x0: number;
+  w: number;
+  poly: [number, number][];
+  midAt: (y: number) => number;
+}
 
 /** 결과 카드의 작은 글자 — 연출(빛 · 테두리)은 fx 몫이라 글자만 단다 */
 const GUARANTEE_TAG: Record<PullGuarantee, string> = { srPlus: 'SR 확정', starterUR: '보장' };
@@ -203,9 +220,11 @@ export default class GachaScene extends BaseScene {
   private refreshing = 0;
   /** 이 실행의 번호 (runSeq). 서버 응답을 기다린 뒤에는 isCurrent(run) 로 같은 실행인지 본다 */
   private runId = 0;
-  /** 이벤트 줄기 일러스트를 받는 중 · 받지 못함 (이 실행 동안은 카드로 보인다) */
+  /** 이벤트 큰 줄기 그림을 받는 중 · 받지 못함 (이 실행 동안은 자리 그림으로 둔다) */
   private eventStripLoading = false;
   private eventStripFailed = false;
+  /** 지금 로비에 떠 있는 이벤트 줄기 — 큰 그림이 오면 이 이미지의 텍스처만 바꾼다 */
+  private eventStripImgs: { img: Phaser.GameObjects.Image; key: string }[] = [];
   /** 이 시각(ms, Date.now) 전에는 로비를 다시 그리지 않는다 — clearUI 가 BaseScene 의 입력 막기 타이머까지 지운다 */
   private redrawAfter = 0;
   /** 떠 있는 창 (확률 보기 · 고르기 · 확인) — 한 번에 하나 */
@@ -328,10 +347,9 @@ export default class GachaScene extends BaseScene {
     const showcase = banner.kind === 'standard' || banner.kind === 'starter';
 
     // ── 본문 뒤 — 상시 · 초보자 = 진열 일러스트, 픽업 = 픽업 UR 일러스트, 이벤트 = 셋 일러스트 세 줄기 ──
-    let eventStrips = false;
     if (showcase) this.buildShowcase();
     else if (banner.kind === 'pickup') this.coverIllust(this.add.image(cx, 0, getCharacterDef(banner.pickupUR ?? '').illustKey));
-    else eventStrips = this.buildEventBody(banner);
+    else this.buildEventBody(banner);
 
     // ── 위·아래 어둠 — 글자와 버튼이 일러스트 위에서 읽히게 (세로 그라데이션 한 장을 늘려 쓴다) ──
     const fade = this.bakeVFade();
@@ -343,11 +361,8 @@ export default class GachaScene extends BaseScene {
     const known = this.skorBalance >= 0 ? this.skorBalance : getCachedSkorBalance();
     this.skorText = this.createSkorPill(W - 80, 32, known !== null ? Math.floor(known).toLocaleString() : '--');
 
-    // ── 본문 앞 — 이벤트 = 줄기 아래 이름 (줄기 그림을 받는 동안은 카드) · 상시 · 픽업의 얼굴은 정보 블록의 얼굴 줄 ──
-    if (banner.kind === 'event') {
-      if (eventStrips) this.buildEventNames(banner);
-      else this.buildEventCards(banner);
-    }
+    // ── 본문 앞 — 이벤트 = 줄기 아래 이름 · 상시 · 픽업의 얼굴은 정보 블록의 얼굴 줄 ──
+    if (banner.kind === 'event') this.buildEventNames(banner);
 
     // ── 정보 · 천장 · 뽑기 버튼 · 페이지 점 · 확률 줄 ──
     if (banner.kind === 'starter') this.buildStarterInfo(banner);
@@ -361,6 +376,9 @@ export default class GachaScene extends BaseScene {
 
     // ── 배너 고르기 — 가장자리 ‹ › · 좌우 밀기 ──
     this.buildSwitcher(visible, banner);
+    // 옆 배너가 이벤트면 큰 줄기 그림을 미리 굽는다 — 넘기자마자 3분할이 큰 그림으로 보이게 (GPU 에는 줄기 약 1MB 만)
+    const i = visible.indexOf(banner);
+    for (const nb of [visible[i - 1], visible[i + 1]]) if (nb?.kind === 'event') this.prepareEventStrips(nb);
 
     if (showcase) {
       this.updateSlideshowText(this.featured[0]);
@@ -423,9 +441,9 @@ export default class GachaScene extends BaseScene {
   }
 
   /**
-   * 사람이 누르지 않았는데 로비를 다시 그릴 때 (서버 상태가 바뀜 · 이벤트 줄기 그림이 다 됨) — 같은 실행 · 로비 · 창 없음 ·
+   * 사람이 누르지 않았는데 로비를 다시 그릴 때 (서버 상태가 바뀜) — 같은 실행 · 로비 · 창 없음 ·
    * cond 일 때만. 씬을 연 직후(redrawAfter 전)에는 기다린다: clearUI 의 time.removeAllEvents 가 BaseScene 의 입력 막기
-   * 타이머까지 지워 입력이 영영 안 켜진다 (이벤트 줄기 그림이 빨리 받아지자 실제로 그랬다). 씬 시계가 아니라 setTimeout 으로 기다린다
+   * 타이머까지 지워 입력이 영영 안 켜진다 (이벤트 줄기 그림으로 다시 그리던 때 실제로 그랬다). 씬 시계가 아니라 setTimeout 으로 기다린다
    */
   private redrawLobbyWhen(run: number, cond: () => boolean) {
     const go = () => {
@@ -452,24 +470,35 @@ export default class GachaScene extends BaseScene {
 
   /**
    * 이벤트 본문 뒤 — 화면을 세로 세 줄기로 나눠 이벤트 픽업 셋의 일러스트를 하나씩 (대표 2026-10-11).
-   * 카드 테두리 · 바탕 없이, 줄기 사이는 살짝 기운 얇은 경계선. 얼굴 · 상반신이 보이게 위쪽을 기준으로 자른다.
-   * 줄기 그림이 아직 없으면 뽑기 배경만 깔고 false — 앞에서는 그동안 카드(buildEventCards)를 보인다
+   * 카드 테두리 · 바탕 없이, 줄기 사이는 기운 얇은 경계선. 얼굴 · 상반신이 보이게 자른다.
+   * **처음부터 세 줄기다** — 큰 일러스트 줄기가 아직 없으면 같은 틀에 수집 썸네일 줄기를 깔고,
+   * 큰 그림이 오면 그 자리에서 바꾼다 (swapEventStrips · 로비를 다시 그리지 않는다)
    */
-  private buildEventBody(b: BannerDef): boolean {
+  private buildEventBody(b: BannerDef) {
     const W = this.scale.width, H = this.scale.height;
     if (this.textures.exists('gacha_background')) addBackground(this, 'gacha_background', W, H);
     else this.add.rectangle(W / 2, H / 2, W, H, 0x150a2a);
     this.add.rectangle(W / 2, H / 2, W, H, 0x0a0618, 0.35);
-    const strips = this.eventStrips(b);
-    if (!strips.every(s => this.textures.exists(s.key)) && !this.prepareEventStrips(b)) return false;
-    for (const s of strips) this.add.image(s.x0, 0, s.key).setOrigin(0);
+    this.eventStripImgs = [];
+    for (const s of this.eventStrips(b)) {
+      let key = s.key;
+      if (!this.textures.exists(key)) {
+        // 자리 그림 — 이미 받아 둔 수집 카드(216x288)를 같은 모양으로 굽는다. 카드도 없으면 어두운 칸
+        key = s.phKey;
+        if (!this.textures.exists(key)) {
+          const card = `gacha_card_${s.id}`;
+          this.bakeEventStrip(s, key, this.textures.exists(card) ? this.textures.get(card).getSourceImage() as HTMLImageElement : null, EVENT_CARD_FACE, EVENT_CARD_ZOOM);
+        }
+      }
+      this.eventStripImgs.push({ img: this.add.image(s.x0, 0, key).setOrigin(0), key: s.key });
+    }
     // 경계선 — 밝은 선 + 그 아래 그림자 (아래쪽은 정보 블록 어둠에 묻힌다)
     const g = this.add.graphics();
     for (const [top, bot] of this.eventDividers(b.pickupSR.length)) {
       g.lineStyle(5, 0x000000, 0.35).lineBetween(top, 0, bot, H);
       g.lineStyle(2, 0xffffff, 0.85).lineBetween(top, 0, bot, H);
     }
-    return true;
+    this.prepareEventStrips(b);
   }
 
   /** 줄기 사이 경계선 — [위 x, 아래 x]. 위가 오른쪽으로 기운다 ('/') */
@@ -481,8 +510,8 @@ export default class GachaScene extends BaseScene {
     });
   }
 
-  /** 줄기 하나씩 — 구운 그림 키 · 모양(다각형, 화면 좌표) · 그림의 왼쪽 x */
-  private eventStrips(b: BannerDef) {
+  /** 줄기 하나씩 — 큰 그림 키 · 자리 그림 키 · 모양(다각형, 화면 좌표) · 그림의 왼쪽 x */
+  private eventStrips(b: BannerDef): EventStrip[] {
     const W = this.scale.width, H = this.scale.height;
     const n = b.pickupSR.length, d = this.eventDividers(n);
     return b.pickupSR.map((id, i) => {
@@ -492,71 +521,77 @@ export default class GachaScene extends BaseScene {
       const poly: [number, number][] = [[lt, 0], [rt, 0], [rb, H], [lb, H]];
       /** 높이 y 에서 줄기 가운데 x */
       const midAt = (y: number) => ((lt + (lb - lt) * y / H) + (rt + (rb - rt) * y / H)) / 2;
-      return { id, key: `gacha_evstrip_${id}_${i}of${n}_${W}x${H}`, x0, w: x1 - x0, poly, midAt };
+      const tag = `${id}_${i}of${n}_${W}x${H}_${EVENT_SLANT}`;
+      return { id, key: `gacha_evstrip_${tag}`, phKey: `gacha_evph_${tag}`, x0, w: x1 - x0, poly, midAt };
     });
   }
 
   /**
-   * 줄기 그림 준비 — 원본 일러스트가 이미 있으면 바로 굽고 true. 없으면 받기 시작하고 false.
-   * 이벤트 셋 일러스트(장당 약 4MB)는 이벤트 배너를 처음 볼 때만 받는다. 받으면 줄기 그림으로 한 번 굽고
-   * 원본은 바로 내린다 (줄기 셋 합 약 1MB). 받은 뒤에는 그 배너를 보고 있을 때 로비를 다시 그린다
+   * 줄기 그림 하나를 굽는다 — 모양으로 자르고 어둡게 깐 뒤, 그림을 화면 높이 × zoom 으로 그려 얼굴이 정보 블록 위
+   * 보이는 자리(위에서 42%)에 오게 놓는다 (줄기를 덮을 수 있으면 비지 않게 가둔다). src 가 없으면 어두운 칸만
    */
-  private prepareEventStrips(b: BannerDef): boolean {
-    if (this.eventStripFailed) return false;
+  private bakeEventStrip(s: EventStrip, key: string, src: HTMLImageElement | null, face: { x: number; y: number }, zoom: number) {
+    const H = this.scale.height;
+    const tex = this.textures.createCanvas(key, s.w, H);
+    if (!tex) return;
+    const ctx = tex.getContext();
+    ctx.beginPath();
+    s.poly.forEach(([x, y], k) => (k ? ctx.lineTo(x - s.x0, y) : ctx.moveTo(x - s.x0, y)));
+    ctx.closePath();
+    ctx.clip();
+    ctx.fillStyle = '#140a2a';
+    ctx.fillRect(0, 0, s.w, H);
+    if (src) {
+      const dh = H * zoom, dw = src.width * dh / src.height;
+      const ty = (H - LOBBY.bodyBottom) * 0.42;
+      const ox = Phaser.Math.Clamp(s.midAt(ty) - s.x0 - face.x * dw, Math.min(0, s.w - dw), 0);
+      const oy = Phaser.Math.Clamp(ty - face.y * dh, Math.min(0, H - dh), 0);
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(src, ox, oy, dw, dh);
+    }
+    tex.refresh();
+  }
+
+  /**
+   * 큰 줄기 그림 준비 — 이벤트 배너를 볼 때와 그 옆 배너를 볼 때 미리 (buildLobby).
+   * 일러스트(장당 약 4MB 로 풀린다)는 Phaser 텍스처로 올리지 않고 브라우저 Image 로만 풀어 줄기로 굽는다 —
+   * GPU 에는 줄기 셋(합 약 1MB)만 올라가고, 풀린 원본은 굽고 나면 버려진다. 다 되면 떠 있는 자리 그림을 바꾼다
+   */
+  private prepareEventStrips(b: BannerDef) {
+    if (this.eventStripLoading || this.eventStripFailed) return;
+    if (this.eventStrips(b).every(s => this.textures.exists(s.key))) return;
     const run = this.runId;
-    const defs = b.pickupSR.map(id => getCharacterDef(id));
-    const bake = () => {
-      const H = this.scale.height;
-      for (const s of this.eventStrips(b)) {
-        if (this.textures.exists(s.key)) continue;
-        const def = getCharacterDef(s.id);
-        if (!this.textures.exists(def.illustKey)) return false;
-        const tex = this.textures.createCanvas(s.key, s.w, H);
-        if (!tex) return false;
-        const ctx = tex.getContext();
-        ctx.beginPath();
-        s.poly.forEach(([x, y], k) => (k ? ctx.lineTo(x - s.x0, y) : ctx.moveTo(x - s.x0, y)));
-        ctx.closePath();
-        ctx.clip();
-        // 화면 높이보다 조금 키워, 얼굴이 정보 블록 위 보이는 자리(위에서 42%)에 오게 놓는다 — 줄기 밖으로 비지 않게 가둔다
-        const src = this.textures.get(def.illustKey).getSourceImage() as HTMLImageElement;
-        const dh = H * EVENT_ZOOM, dw = src.width * dh / src.height;
-        const face = EVENT_FACE[s.id] ?? EVENT_FACE_DEFAULT;
-        const ty = (H - LOBBY.bodyBottom) * 0.42;
-        const ox = Phaser.Math.Clamp(s.midAt(ty) - s.x0 - face.x * dw, s.w - dw, 0);
-        const oy = Phaser.Math.Clamp(ty - face.y * dh, H - dh, 0);
-        ctx.imageSmoothingQuality = 'high';
-        ctx.drawImage(src, ox, oy, dw, dh);
-        tex.refresh();
-      }
-      return true;
-    };
-    /** 굽고 원본을 내린다 — 원본은 이 씬이 받은 것만 (다른 씬이 올려 둔 것은 그대로) */
-    const bakeAndRelease = () => {
-      if (!bake()) { this.eventStripFailed = true; return false; }
-      for (const def of defs) {
-        if (this.ownKeys.delete(def.illustKey)) this.textures.remove(def.illustKey);
-      }
-      return true;
-    };
-    const missing = defs.filter(d => !this.textures.exists(d.illustKey));
-    if (missing.length === 0) return bakeAndRelease();   // 지금 그리는 로비가 바로 쓴다 — 다시 그리지 않는다
-    if (this.eventStripLoading) return false;
-    const finish = () => {
+    this.eventStripLoading = true;
+    Promise.all(b.pickupSR.map(id => this.illustSource(getCharacterDef(id)))).then(srcs => {
       this.eventStripLoading = false;
       if (run !== this.runId || !this.scene.isActive()) return;
-      if (bakeAndRelease()) this.redrawLobbyWhen(run, () => this.banner.id === b.id);
-    };
-    this.eventStripLoading = true;
-    for (const d of missing) {
-      this.ownKeys.add(d.illustKey);
-      this.load.image(d.illustKey, d.illustPath);
+      // 받는 동안 화면 크기가 바뀌었을 수 있다 — 지금 크기로 굽는다
+      this.eventStrips(b).forEach((s, i) => {
+        if (!this.textures.exists(s.key)) this.bakeEventStrip(s, s.key, srcs[i], EVENT_FACE[s.id] ?? EVENT_FACE_DEFAULT, EVENT_ZOOM);
+      });
+      this.swapEventStrips();
+    }).catch((e: unknown) => {
+      console.error('[GachaScene] 이벤트 일러스트를 받지 못함 — 자리 그림으로 둔다:', e);
+      this.eventStripLoading = false;
+      if (run === this.runId) this.eventStripFailed = true;
+    });
+  }
+
+  /** 일러스트 원본 — 다른 씬이 이미 올려 둔 텍스처가 있으면 그것, 없으면 브라우저 Image 로 받아 푼다 */
+  private illustSource(def: CharacterDef): Promise<HTMLImageElement> {
+    if (this.textures.exists(def.illustKey)) return Promise.resolve(this.textures.get(def.illustKey).getSourceImage() as HTMLImageElement);
+    const img = new Image();
+    img.src = def.illustPath;
+    return img.decode().then(() => img);
+  }
+
+  /** 떠 있는 줄기의 자리 그림을 큰 그림으로 바꾼다 — 같은 자리 · 같은 모양이라 로비를 다시 그리지 않는다 */
+  private swapEventStrips() {
+    for (const { img, key } of this.eventStripImgs) {
+      if (!img.active || img.texture.key === key || !this.textures.exists(key)) continue;
+      img.setTexture(key).setAlpha(0.55);
+      this.tweens.add({ targets: img, alpha: 1, duration: 220, ease: 'Quad.easeOut' });
     }
-    const onError = () => { this.eventStripFailed = true; };
-    this.load.once(Phaser.Loader.Events.FILE_LOAD_ERROR, onError);
-    this.load.once(Phaser.Loader.Events.COMPLETE, () => { this.load.off(Phaser.Loader.Events.FILE_LOAD_ERROR, onError); finish(); });
-    this.load.start();
-    return false;
   }
 
   /** 이벤트 줄기 아래쪽 이름 — 정보 블록 위, 줄기 가운데에 작게 */
@@ -861,22 +896,6 @@ export default class GachaScene extends BaseScene {
     return out;
   }
 
-  /**
-   * 이벤트 본문 (줄기 그림을 받는 동안 · 받지 못했을 때) — 이벤트 픽업 셋 카드를 나란히. 가장자리 ‹ › 에 걸리지 않게 화살표 줄 위에 둔다.
-   * 전용 배경화면은 확률 보기 창에서 보인다
-   */
-  private buildEventCards(b: BannerDef) {
-    const W = this.scale.width, H = this.scale.height;
-    const n = Math.max(1, b.pickupSR.length), gap = 10;
-    const top = LOBBY.bodyTop, bottom = Math.min(H - LOBBY.bodyBottom, Math.round(H * LOBBY.arrowY) - 40);
-    const byW = Math.floor((W - 80 - gap * (n - 1)) / n);
-    const byH = Math.floor((bottom - top) * 3 / 4);
-    const cw = Math.max(48, Math.min(108, byW, byH));
-    const ch = Math.round(cw * 4 / 3);
-    const y = top + Math.max(0, (bottom - top - ch) / 2) + ch / 2;
-    const x0 = W / 2 - (n * cw + (n - 1) * gap) / 2 + cw / 2;
-    b.pickupSR.forEach((id, i) => this.miniCard(x0 + i * (cw + gap), y, cw, ch, id, true));
-  }
 
   /**
    * 상시 · 픽업 · 이벤트 정보 (니케식) — 얼굴 줄, 한 칸 확률 한 줄 + [확률 보기], 뽑기 버튼 바로 위 큰 배너 이름.
@@ -2424,6 +2443,7 @@ export default class GachaScene extends BaseScene {
     this.slideshowRateText = null;
     this.slideTimer = null;
     this.faceChips = [];
+    this.eventStripImgs = [];
     this.toast = null;         // 아래에서 같이 부서진다
     this.tweens.killAll();
     this.time.removeAllEvents();
