@@ -142,7 +142,11 @@ export default class CharacterSelectScene extends BaseScene {
   private hasDragged = false;
   private hasPointerDownInScene = false; // 이 씬에서 pointerdown이 발생했는지 추적 (bleed-through 방지)
   private maskGfx!: Phaser.GameObjects.Graphics;
-  private loadingKeys = new Set<string>();
+  /**
+   * 받는 중인 그림 → 기다리는 쪽(이름표 → 콜백). 같은 그림을 쇼케이스와 상세가 같이 기다릴 수 있다 —
+   * 예전에는 받는 중이면 새 콜백을 버려서, 쇼케이스가 받는 사이 '능력 보기'를 누르면 상세가 끝내 안 열렸다 (리뷰 ccdc7f0a P1)
+   */
+  private loadingKeys = new Map<string, Map<string, { ready: () => void; fail?: () => void }>>();
   /** 이 씬이 직접 올린 큰 그림 (일러스트 · 배경화면 큰 그림) — 나갈 때 내린다. 원래 있던 키는 남긴다 */
   private ownKeys = new Set<string>();
   /** 이번 방문에서 서버 동기화 뒤 이미 한 번 재시작했다 — 다시 동기화하지 않는다 (재시작 루프 안전망) */
@@ -159,7 +163,8 @@ export default class CharacterSelectScene extends BaseScene {
   /** 위 영상 (utils/videoReel — 뽑기 로비와 같이 쓴다) · 이 실행에서 못 받은 영상 · 자동재생 막힘 기록 */
   private detailReel: VideoReel | null = null;
   private videoMemo: ReelMemo = newReelMemo();
-  private illustLoadingId: string | null = null;
+  /** 그림을 기다리는 상세 — 마지막으로 누른 캐릭터만 연다 (그사이 다른 캐릭터를 누르면 그쪽) */
+  private pendingDetailId: string | null = null;
 
   constructor() {
     super('CharacterSelectScene');
@@ -234,7 +239,7 @@ export default class CharacterSelectScene extends BaseScene {
     this.detailThumb = null;
     this.detailScrollOff = null;
     this.detailReel = null;
-    this.illustLoadingId = null;
+    this.pendingDetailId = null;
 
     // 동기화 전 각성 수치 스냅샷 (동기화 후 변화 감지용)
     this._preSyncDupCounts = new Map(
@@ -423,17 +428,33 @@ export default class CharacterSelectScene extends BaseScene {
     return key;
   }
 
-  /** 텍스처를 그때그때 올린다 — 다 올라오면 onReady (이미 있으면 바로) */
-  private ensureTexture(key: string, path: string, onReady: () => void): void {
+  /**
+   * 텍스처를 그때그때 올린다 — 다 올라오면 onReady (이미 있으면 바로), 못 받으면 onFail.
+   * 이미 받는 중이면 기다림만 더한다. tag 가 같은 기다림은 나중 것으로 바꾼다 (같은 칩을 여러 번 눌러도 한 번 다시 그린다)
+   */
+  private ensureTexture(key: string, path: string, onReady: () => void, onFail?: () => void, tag = 'default'): void {
     if (this.textures.exists(key)) { onReady(); return; }
-    if (this.loadingKeys.has(key)) return;
-    this.loadingKeys.add(key);
+    const waiting = this.loadingKeys.get(key);
+    if (waiting) {
+      waiting.set(tag, { ready: onReady, fail: onFail });
+      return;
+    }
+    const waiters = new Map([[tag, { ready: onReady, fail: onFail }]]);
+    this.loadingKeys.set(key, waiters);
     this.ownKeys.add(key);
-    this.load.image(key, path);
-    this.load.once(`${Phaser.Loader.Events.FILE_KEY_COMPLETE}image-${key}`, () => {
+    const done = (ok: boolean) => {
+      this.load.off(`${Phaser.Loader.Events.FILE_KEY_COMPLETE}image-${key}`, onDone);
+      this.load.off(Phaser.Loader.Events.FILE_LOAD_ERROR, onError);
+      if (this.loadingKeys.get(key) !== waiters) return;   // 씬을 다시 연 뒤의 늦은 소식
       this.loadingKeys.delete(key);
-      if (this.scene.isActive()) onReady();
-    });
+      if (!this.scene.isActive()) return;
+      for (const w of waiters.values()) (ok ? w.ready : w.fail)?.();
+    };
+    const onDone = () => done(true);
+    const onError = (file: Phaser.Loader.File) => { if (file.key === key) done(false); };
+    this.load.image(key, path);
+    this.load.once(`${Phaser.Loader.Events.FILE_KEY_COMPLETE}image-${key}`, onDone);
+    this.load.on(Phaser.Loader.Events.FILE_LOAD_ERROR, onError);
     this.load.start();
   }
 
@@ -688,7 +709,7 @@ export default class CharacterSelectScene extends BaseScene {
       }
       this.ensureTexture(def.illustKey, def.illustPath, () => {
         if (this.activeTab === 'character' && this.focusedId === def.id) this.renderShowcase();
-      });
+      }, undefined, 'showcase');
     }
     this.showcase.add(this.add.image(W / 2, sh, this.bakeFade('cs_fade_char', W, 190, 0, 1)).setOrigin(0.5, 1));
 
@@ -763,7 +784,7 @@ export default class CharacterSelectScene extends BaseScene {
     } else {
       this.ensureTexture(wp.bgKey, wp.bgPath, () => {
         if (this.activeTab === 'wallpaper' && this.focusedWpId === wp.id) this.renderShowcase();
-      });
+      }, undefined, 'showcase');
     }
     this.showcase.add(this.add.image(W / 2, picBottom + 2, this.bakeFade('cs_fade_wp', W, 90, 0, 1)).setOrigin(0.5, 1));
     this.showcase.add(this.add.rectangle(W / 2, picBottom + 2, W, 66, BG_DARK).setOrigin(0.5, 0));
@@ -848,7 +869,7 @@ export default class CharacterSelectScene extends BaseScene {
     } else {
       this.ensureTexture(`cs_banner_${def.id}`, `assets/ui/collection/banner/${def.id}.webp`, () => {
         if (this.activeTab === 'character' && this.focusedId === def.id) this.renderShowcase();
-      });
+      }, undefined, 'showcase');
     }
 
     const gradeKey = getGradeImgKey(def.grade);
@@ -921,7 +942,7 @@ export default class CharacterSelectScene extends BaseScene {
     } else {
       this.ensureTexture(wp.bgKey, wp.bgPath, () => {
         if (this.activeTab === 'wallpaper' && this.focusedWpId === wp.id) this.renderShowcase();
-      });
+      }, undefined, 'showcase');
     }
     this.showcase.add(this.add.text(x0 + 12, y0 + 18, `${used ? '사용 중' : '미리보기'} · ${wp.name}`, {
       fontSize: '12px', color: '#ffe9a8', fontStyle: 'bold', backgroundColor: '#00000099', padding: { x: 8, y: 4 },
@@ -1088,19 +1109,24 @@ export default class CharacterSelectScene extends BaseScene {
   // 아래 = 시트: 이름 · 탭 [능력 · 각성 · 시너지] · 내용(넘치면 시트 안 스크롤) · 버튼 [장착] / [뽑기로]
   // 각성 수치는 config/awakening, 시너지는 config/synergyMap, 얻는 곳은 config/banners — 화면에 숫자를 베끼지 않는다
 
-  /** '능력 보기' — 일러스트를 그때 올리고(한 번 누르면 열린다) 능력 탭으로 연다 */
+  /**
+   * '능력 보기' — 일러스트를 그때 올리고(한 번 누르면 열린다) 능력 탭으로 연다. 쇼케이스가 같은 그림을 받는 중이어도
+   * 그 받기에 기다림을 붙인다. 기다리는 사이 다른 캐릭터를 누르면 그쪽을 연다. 그림을 못 받아도 상세는 연다 (게임 스프라이트로)
+   */
   private showCharacterDetail(id: string): void {
     const def = CHARACTERS.find(c => c.id === id) ?? CHARACTERS[0];
-    if (!this.textures.exists(def.illustKey)) {
-      if (this.illustLoadingId) return; // 이미 올리는 중이면 중복 요청 무시
-      this.illustLoadingId = id;
-      this.ensureTexture(def.illustKey, def.illustPath, () => {
-        this.illustLoadingId = null;
-        this.buildCharacterDetail(id, 'ability');
-      });
+    if (this.textures.exists(def.illustKey)) {
+      this.pendingDetailId = null;
+      this.buildCharacterDetail(id, 'ability');
       return;
     }
-    this.buildCharacterDetail(id, 'ability');
+    this.pendingDetailId = id;
+    const open = () => {
+      if (this.pendingDetailId !== id) return;
+      this.pendingDetailId = null;
+      this.buildCharacterDetail(id, 'ability');
+    };
+    this.ensureTexture(def.illustKey, def.illustPath, open, open, `detail_${id}`);
   }
 
   /** 상세 화면을 그린다 (탭을 바꾸면 탭 줄 · 내용만 다시 그린다 — showDetailTab) */
@@ -1123,9 +1149,16 @@ export default class CharacterSelectScene extends BaseScene {
     // ── 위 — 일러스트를 깔고 그 위에서 영상 반복 (비율 유지 화면 덮기 · 늘이지 않는다) ──
     const mediaH = Math.round(H * DETAIL.mediaRatio);
     const area = { x: 0, y: 0, w: W, h: mediaH + DETAIL.sheetOverlap, focusY: 0.15 };
-    const illust = this.add.image(cx, 0, def.illustKey).setOrigin(0.5, 0);
-    const sc = Math.max(area.w / illust.width, area.h / illust.height);
-    illust.setScale(sc).setY(area.y - (illust.height * sc - area.h) * area.focusY);
+    let illust: Phaser.GameObjects.Image;
+    if (this.textures.exists(def.illustKey)) {
+      illust = this.add.image(cx, 0, def.illustKey).setOrigin(0.5, 0);
+      const sc = Math.max(area.w / illust.width, area.h / illust.height);
+      illust.setScale(sc).setY(area.y - (illust.height * sc - area.h) * area.focusY);
+    } else {
+      // 일러스트를 못 받았다 — 게임 스프라이트를 칸 안에 비율대로 (늘이지 않는다). 영상이 오면 그 위를 덮는다
+      illust = this.add.image(cx, area.h * 0.55, def.imageKey).setOrigin(0.5, 0.5);
+      illust.setScale(Math.min(area.w * 0.5 / illust.width, area.h * 0.6 / illust.height));
+    }
     panel.add(illust);
     this.detailReel = new VideoReel(this, {
       ids: [def.id], anchor: illust, area, memo: this.videoMemo,

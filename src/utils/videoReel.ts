@@ -62,6 +62,12 @@ export class VideoReel {
   /** 창이 떠 있어 다음 영상을 미뤄 둠 */
   pending = false;
   private dead = false;
+  /**
+   * 지금 영상의 요소 · 영상 텍스처 키(UUID) — 만들 때 잡아 둔다. 씬이 닫힐 때는 화면 목록(컨테이너)이 영상을 먼저 부수고,
+   * 그때 Phaser 가 요소를 떼어(video = null) scene 도 비워서 나중에는 받던 것도 텍스처도 못 지웠다 (리뷰 ccdc7f0a P2).
+   * 그래서 영상의 DESTROY 에서 잡아 둔 것으로 정리한다 — 누가 먼저 부숴도 같다
+   */
+  private media: { vid: Phaser.GameObjects.Video; el: HTMLVideoElement | null; texKey: string | undefined } | null = null;
   private readonly scene: Phaser.Scene;
   private readonly opts: VideoReelOptions;
 
@@ -172,6 +178,9 @@ export class VideoReel {
     vid.once('unsupported', fail(false));
     vid.loadURL(path, true);
     vid.setMute(true).setVolume(0);
+    const media = { vid, el: vid.video, texKey: (vid as unknown as { _key?: string })._key };
+    this.media = media;
+    vid.once(Phaser.GameObjects.Events.DESTROY, () => this.releaseMedia(media));
     vid.play(false);
   }
 
@@ -212,12 +221,23 @@ export class VideoReel {
     this.video = null;
     if (!vid) return;
     this.scene.tweens.killTweensOf(vid);
-    const el = vid.video;
+    // 아직 살아 있으면 부순다 — DESTROY 가 releaseMedia 를 부른다. 이미 부서졌으면(컨테이너가 먼저) 거기서 정리됐다
+    if (vid.active) destroyVideo(vid);
+    if (this.media?.vid === vid) this.releaseMedia(this.media);
+  }
+
+  /** 받던 것까지 끊고 영상 텍스처(UUID 키)를 지운다 — 두 번 불려도 된다 */
+  private releaseMedia(media: { vid: Phaser.GameObjects.Video; el: HTMLVideoElement | null; texKey: string | undefined }): void {
+    if (this.media === media) this.media = null;
+    if (this.video === media.vid) this.video = null;
+    const el = media.el;
     if (el) {
+      media.el = null;
       el.pause();
       el.removeAttribute('src');
       el.load();
     }
-    destroyVideo(vid);
+    const textures = this.scene.sys.textures;
+    if (media.texKey && textures.exists(media.texKey)) textures.remove(media.texKey);
   }
 }
