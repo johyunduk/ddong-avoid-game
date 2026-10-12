@@ -4,6 +4,7 @@ import {
   SENTINEL_DESC, SENTINEL_DEFERRED_SHEETS, LEGACY_DESC, KNIGHT_DESC,
   GUMI_DESC, MUGI_DESC, K_DESC, TED_DESC, RED_DESC, RED_SHEETS, HEIDI_DESC, HEIDI_PRELOAD_SHEETS, HEIDI_DEFERRED_SHEETS,
 } from '../config/abilityParams';
+import { awakeningLevelOf } from '../config/awakening';
 import { type FxKey } from './vfx';
 
 export interface CharacterDef {
@@ -588,28 +589,9 @@ export const CHARACTERS: CharacterDef[] = [
   },
 ];
 
-/** duplicate_count → 각성 단계 계산 (모든 등급 최대 ★5) */
+/** duplicate_count → 각성 단계 계산 (모든 등급 최대 ★5). 기준 장 수는 src/config/awakening.ts 의 AWAKENING_THRESHOLDS */
 export function getAwakeningLevel(grade: string, duplicateCount: number): number {
-  if (grade === 'R') {
-    if (duplicateCount >= 100) return 5;
-    if (duplicateCount >= 75)  return 4;
-    if (duplicateCount >= 50)  return 3;
-    if (duplicateCount >= 25)  return 2;
-    if (duplicateCount >= 10)  return 1;
-  } else if (grade === 'SR') {
-    if (duplicateCount >= 40) return 5;
-    if (duplicateCount >= 25) return 4;
-    if (duplicateCount >= 15) return 3;
-    if (duplicateCount >= 7)  return 2;
-    if (duplicateCount >= 3)  return 1;
-  } else if (grade === 'UR') {
-    if (duplicateCount >= 10) return 5;
-    if (duplicateCount >= 6)  return 4;
-    if (duplicateCount >= 4)  return 3;
-    if (duplicateCount >= 2)  return 2;
-    if (duplicateCount >= 1)  return 1;
-  }
-  return 0;
+  return awakeningLevelOf(grade, duplicateCount);
 }
 
 const DUPES_KEY     = 'duplicateCounts';

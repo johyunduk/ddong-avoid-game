@@ -22,6 +22,7 @@ import {
 import { getExtremeCharBest, updateExtremeCharBest } from '../utils/extremeCharBest';
 import { submitSkor, type SkorSubmitResponse, getQuestProgressCache, setQuestProgressCache, estimateQuestRewards } from '../utils/skor';
 import { CHARACTERS, getSafeSelectedCharacter, getCharacterDef, getDuplicateCount, getAwakeningLevel, getGradeImgKey } from '../utils/character';
+import { getAwakeningSpeedBonus } from '../config/awakening';
 import { getSafeSelectedWallpaper, getWallpaperDef } from '../utils/wallpaper';
 import { getSynergy, type WallpaperSynergy } from '../config/synergyMap';
 import { isChristmasSeason } from '../utils/seasonChecker';
@@ -383,18 +384,8 @@ export default class GameScene extends BaseScene {
     if (CHARS_WITH_SPRITES.includes(this.selectedCharId)) {
       playerTexturePrefix = `${this.selectedCharId}_`;
     }
-    // 등급 각성 패시브: ★1 R+5/SR+10/UR+15, ★2 R+10/SR+15/UR+20
-    // 매화 예외: ★1 +5, ★2+ 속도 패시브 없음 (대신 특수똥 수집 +5pt)
-    const _gs = (r: number, sr: number, ur: number) =>
-      this.selectedCharGrade === 'UR' ? ur
-      : this.selectedCharGrade === 'SR' ? sr
-      : this.selectedCharGrade === 'R'  ? r
-      : 0;
-    const gradeAwakeSpeed = this.selectedCharId === 'maehwa'
-      ? (this.charAwakeLevel >= 1 ? 5 : 0)
-      : this.charAwakeLevel >= 2 ? _gs(10, 15, 20)
-      : this.charAwakeLevel >= 1 ? _gs(5, 10, 15)
-      : 0;
+    // 등급 각성 패시브 (이동 속도) — 수치 · 매화 예외는 src/config/awakening.ts
+    const gradeAwakeSpeed = getAwakeningSpeedBonus(this.selectedCharId, this.selectedCharGrade, this.charAwakeLevel);
     const [playerW, playerH] = getCharacterDef(this.selectedCharId).playerDisplaySize ?? [50, 80];
     // 시트가 다 준비된 경우에만 애니메이션 모드 — 아니면 기존 정적 텍스처로 동작한다
     const animSheetId = this.getAnimSheetId();
