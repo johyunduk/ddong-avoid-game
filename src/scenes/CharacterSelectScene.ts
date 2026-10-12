@@ -83,6 +83,12 @@ function shortLine(s: string, max = 44): string {
   return t.length > max ? `${t.slice(0, max - 1)}…` : t;
 }
 
+/** 목적격 조사 — 끝 글자에 받침이 있으면 '을', 없으면 '를' (한글이 아니면 '를') */
+function objectJosa(word: string): string {
+  const c = word.charCodeAt(word.length - 1);
+  return c >= 0xac00 && c <= 0xd7a3 && (c - 0xac00) % 28 !== 0 ? '을' : '를';
+}
+
 /** 배너 아래 필터 줄(수집 진행 · 등급 칩)의 세로 가운데 — 배너 아래끝(sh)에서 */
 const FILTER_ROW_DY = MIN_TOUCH / 2;
 
@@ -1362,7 +1368,8 @@ export default class CharacterSelectScene extends BaseScene {
       });
       content.add(label);
       let ly = y + textContentHeight(label) + 2;
-      const how = wp ? `배경화면 '${wp.name}' 을 쓰면 ${effect}` : `어떤 배경화면이든 쓰면 ${effect}`;
+      // 조사는 붙여 쓰고, 받침에 따라 을/를
+      const how = wp ? `배경화면 '${wp.name}'${objectJosa(wp.name)} 쓰면 ${effect}` : `어떤 배경화면이든 쓰면 ${effect}`;
       const ht = this.add.text(tx, ly, how, {
         fontSize: '12px', color: '#cfc4e8', lineSpacing: 2, wordWrap: { width: w - (tx - x), useAdvancedWrap: true },
       });
@@ -1424,7 +1431,7 @@ export default class CharacterSelectScene extends BaseScene {
     }).setOrigin(0.5);
     if (where.length) gradientText(label, [[0, '#fff7c2'], [0.5, '#ffd34d'], [1, '#ff9f1a']]);
     box.add(label);
-    box.add(this.add.text(0, 13, where.length ? `${where.join(' · ')} 에서 나와요` : '지금 열린 뽑기에는 없어요', {
+    box.add(this.add.text(0, 13, where.length ? `${where.join(' · ')}에서 나와요` : '지금 열린 뽑기에는 없어요', {
       fontSize: '11px', color: '#e8dcff', fontStyle: 'bold',
     }).setOrigin(0.5));
     panel.add(box);
