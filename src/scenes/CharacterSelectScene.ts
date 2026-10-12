@@ -20,11 +20,17 @@ import {
   setSelectedWallpaper,
   type BackgroundDef,
 } from '../utils/wallpaper';
-import { syncOwnedCharacters, syncOwnedWallpapers } from '../utils/gacha';
-import { destroyVideo } from '../utils/video';
+import { syncOwnedCharacters, syncOwnedWallpapers, visibleBanners } from '../utils/gacha';
+import { VideoReel, newReelMemo, type ReelMemo } from '../utils/videoReel';
+import { standardPool } from '../config/banners';
+import { getSynergy, type WallpaperSynergy } from '../config/synergyMap';
+import {
+  AWAKENING_THRESHOLDS, MAX_AWAKENING_LEVEL, MAX_DEFINED_AWAKENING_LEVEL,
+  awakeningLevelOf, getAwakeningEffectText, getNextAwakening, type AwakeningGrade,
+} from '../config/awakening';
 import BaseScene from './BaseScene';
 import { textContentHeight, textContentWidth } from '../utils/textSafety';
-import { bakeButton, clipToViewport, hitRect, MIN_TOUCH, setTouchInteractive, wireButton, type ButtonSkin } from '../utils/buttonSkin';
+import { bakeButton, clipToViewport, gradientText, hitRect, MIN_TOUCH, setTouchInteractive, wireButton, type ButtonSkin } from '../utils/buttonSkin';
 
 /**
  * 수집 화면 — 배치 두 가지를 COLLECTION_LAYOUT 하나로 고른다 (docs/ui-collection.md).
@@ -80,6 +86,15 @@ function shortLine(s: string, max = 44): string {
 /** 배너 아래 필터 줄(수집 진행 · 등급 칩)의 세로 가운데 — 배너 아래끝(sh)에서 */
 const FILTER_ROW_DY = MIN_TOUCH / 2;
 
+/** 캐릭터 상세 (B 탭 시트형) 탭 */
+type DetailTab = 'ability' | 'awaken' | 'synergy';
+const DETAIL_TAB_LABEL: Record<DetailTab, string> = { ability: '능력', awaken: '각성', synergy: '시너지' };
+/**
+ * 캐릭터 상세 배치 — mediaRatio = 위 영상 · 일러스트 칸 (화면 높이 비율, 시트가 그 아래), sheetOverlap = 그림을 시트 밑으로 더 깔아
+ * 둥근 모서리 틈이 비지 않게, nameDy = 시트 위 이름 줄, tabH = 탭 줄 높이, buttonArea = 아래 버튼 칸 (내용 창은 그 위까지)
+ */
+const DETAIL = { mediaRatio: 0.55, sheetOverlap: 20, nameDy: 26, tabH: 44, buttonArea: 76, sheetColor: 0x140a2a } as const;
+
 export default class CharacterSelectScene extends BaseScene {
   private returnScene: string = 'ModeSelectScene';
   private selectedId: string = 'chibi';
@@ -127,11 +142,17 @@ export default class CharacterSelectScene extends BaseScene {
   /** 이번 방문에서 서버 동기화 뒤 이미 한 번 재시작했다 — 다시 동기화하지 않는다 (재시작 루프 안전망) */
   private syncedThisVisit = false;
 
-  // 상세 정보 패널
+  // 캐릭터 상세 (B 탭 시트형)
   private detailPanel: Phaser.GameObjects.Container | null = null;
-  private infoPanel: Phaser.GameObjects.Container | null = null;
-  private detailVideo: Phaser.GameObjects.Video | null = null;
-  private fitVideoTimers: Phaser.Time.TimerEvent[] = [];
+  private detailTab: DetailTab = 'ability';
+  /** 시트 내용 창 (스크롤) · 그 마스크 · 스크롤 막대 · 스크롤 입력 풀기 */
+  private detailContent: Phaser.GameObjects.Container | null = null;
+  private detailMask: Phaser.GameObjects.Graphics | null = null;
+  private detailThumb: Phaser.GameObjects.Rectangle | null = null;
+  private detailScrollOff: (() => void) | null = null;
+  /** 위 영상 (utils/videoReel — 뽑기 로비와 같이 쓴다) · 이 실행에서 못 받은 영상 · 자동재생 막힘 기록 */
+  private detailReel: VideoReel | null = null;
+  private videoMemo: ReelMemo = newReelMemo();
   private illustLoadingId: string | null = null;
 
   constructor() {
@@ -142,15 +163,13 @@ export default class CharacterSelectScene extends BaseScene {
     this.returnScene = data.returnScene ?? 'ModeSelectScene';
     this.syncedThisVisit = data.synced === true;
     this.ownKeys = new Set();   // preload 가 채운다 — create 에서 비우면 안 된다
+    this.videoMemo = newReelMemo();
   }
 
   preload() {
     for (const char of CHARACTERS) {
       if (!this.textures.exists(char.imageKey)) {
         this.load.image(char.imageKey, char.imagePath);
-      }
-      if (char.videoKey && char.videoPath && !this.cache.video.exists(char.videoKey)) {
-        this.load.video(char.videoKey, char.videoPath);
       }
       // 격자 그림 — C안 얼굴 칩(128px) / A안 카드(216x288). 없는 캐릭터는 로드 실패로 넘어가고 스프라이트로 대신한다
       const [gk, gf] = COLLECTION_LAYOUT === 'A' ? [`cs_card_${char.id}`, 'card'] : [`cs_face_${char.id}`, 'face'];
@@ -204,9 +223,11 @@ export default class CharacterSelectScene extends BaseScene {
     this.loadingKeys.clear();
     // 씬 인스턴스 재사용 대비 stale 참조 리셋 (상세 패널 연 채로 씬 이탈 시 스크롤 가드가 막히는 것 방지)
     this.detailPanel = null;
-    this.infoPanel = null;
-    this.detailVideo = null;
-    this.fitVideoTimers = [];
+    this.detailContent = null;
+    this.detailMask = null;
+    this.detailThumb = null;
+    this.detailScrollOff = null;
+    this.detailReel = null;
     this.illustLoadingId = null;
 
     // 동기화 전 각성 수치 스냅샷 (동기화 후 변화 감지용)
@@ -334,6 +355,7 @@ export default class CharacterSelectScene extends BaseScene {
 
     // maskGfx는 display list 외부에 있으므로 씬 종료 시 직접 정리
     this.events.once('shutdown', () => {
+      this.hideCharacterDetail();   // 영상 텍스처(UUID 키) · 시트 마스크까지
       this.maskGfx.destroy();
       this.bannerMaskG?.destroy();
       this.bannerMaskG = null;
@@ -1055,341 +1077,386 @@ export default class CharacterSelectScene extends BaseScene {
     }
   }
 
+  // ══ 캐릭터 상세 — B 탭 시트형 (대표 결정 2026-10-12, 시안 ~/ddong-fx-work/dev2/mockups3/B_*.png) ══════════
+  // 위 = 캐릭터 영상 무음 반복 (utils/videoReel — 뽑기 로비와 같은 규칙), 못 틀면 일러스트. 둘 다 비율 유지 화면 덮기
+  // 아래 = 시트: 이름 · 탭 [능력 · 각성 · 시너지] · 내용(넘치면 시트 안 스크롤) · 버튼 [장착] / [뽑기로]
+  // 각성 수치는 config/awakening, 시너지는 config/synergyMap, 얻는 곳은 config/banners — 화면에 숫자를 베끼지 않는다
+
+  /** '능력 보기' — 일러스트를 그때 올리고(한 번 누르면 열린다) 능력 탭으로 연다 */
   private showCharacterDetail(id: string): void {
     const def = CHARACTERS.find(c => c.id === id) ?? CHARACTERS[0];
-    // 일러스트 온디맨드 로드 (preload에서는 선택된 캐릭터만 로드됨)
     if (!this.textures.exists(def.illustKey)) {
-      if (this.illustLoadingId) return; // 이미 로딩 중이면 중복 요청 무시
+      if (this.illustLoadingId) return; // 이미 올리는 중이면 중복 요청 무시
       this.illustLoadingId = id;
-      this.ownKeys.add(def.illustKey);
-      this.load.image(def.illustKey, def.illustPath);
-      this.load.once(Phaser.Loader.Events.COMPLETE, () => {
+      this.ensureTexture(def.illustKey, def.illustPath, () => {
         this.illustLoadingId = null;
-        if (this.scene.isActive()) this.buildCharacterDetail(id);
+        this.buildCharacterDetail(id, 'ability');
       });
-      this.load.start();
       return;
     }
-    this.buildCharacterDetail(id);
+    this.buildCharacterDetail(id, 'ability');
   }
 
-  private buildCharacterDetail(id: string): void {
+  /** 상세 화면을 그린다 (탭을 바꾸면 탭 줄 · 내용만 다시 그린다 — showDetailTab) */
+  private buildCharacterDetail(id: string, tab: DetailTab): void {
     this.hideCharacterDetail();
 
     const W = this.scale.width;
     const H = this.scale.height;
     const cx = W / 2;
     const def = CHARACTERS.find(c => c.id === id) ?? CHARACTERS[0];
-    const isOwned = this.ownedIds.includes(id);
-    const gradeColorInt = parseInt(def.gradeColor.replace('#', ''), 16);
+    const owned = this.ownedIds.includes(id);
+    const equipped = owned && this.selectedId === id;
 
     const panel = this.add.container(0, 0).setDepth(300);
     this.detailPanel = panel;
 
-    // ── 클릭 투과 차단 레이어 (카드 목록으로 이벤트 전달 방지)
-    const blocker = this.add.rectangle(cx, H / 2, W, H, 0x000000, 0).setInteractive();
-    panel.add(blocker);
+    // 바탕 · 아래 목록으로 입력이 새지 않게 막는다
+    panel.add(this.add.rectangle(cx, H / 2, W, H, BG_DARK).setInteractive());
 
-    // ── 일러스트 전체 화면 ───────────────────────────────────────────
-    const illust = this.add.image(cx, H / 2, def.illustKey).setDisplaySize(W, H);
+    // ── 위 — 일러스트를 깔고 그 위에서 영상 반복 (비율 유지 화면 덮기 · 늘이지 않는다) ──
+    const mediaH = Math.round(H * DETAIL.mediaRatio);
+    const area = { x: 0, y: 0, w: W, h: mediaH + DETAIL.sheetOverlap, focusY: 0.15 };
+    const illust = this.add.image(cx, 0, def.illustKey).setOrigin(0.5, 0);
+    const sc = Math.max(area.w / illust.width, area.h / illust.height);
+    illust.setScale(sc).setY(area.y - (illust.height * sc - area.h) * area.focusY);
     panel.add(illust);
+    this.detailReel = new VideoReel(this, {
+      ids: [def.id], anchor: illust, area, memo: this.videoMemo,
+      canPlay: () => this.detailPanel === panel,
+    }).start();
 
-    // ── 비디오 (일러스트와 같은 위치, 처음엔 숨김) ─────────────────
-    const hasVideo = !!(def.videoKey && this.cache.video.exists(def.videoKey));
-    const videoObj = hasVideo
-      ? this.add.video(cx, H / 2, def.videoKey!).setDisplaySize(W, H).setVisible(false)
-      : null;
-    if (videoObj) {
-      panel.add(videoObj);
-      this.detailVideo = videoObj;
-    }
+    // 위 · 아래 어둠 — ← 와 이름이 그림 위에서 읽히게
+    panel.add(this.add.image(cx, 0, this.bakeFade('cs_dfade_top', W, 90, 0.6, 0)).setOrigin(0.5, 0));
+    panel.add(this.add.image(cx, mediaH + 2, this.bakeFade('cs_dfade_bot', W, 130, 0, 0.92)).setOrigin(0.5, 1));
 
-    // ── 하단 그라디언트 (위 투명 → 아래 짙은 어둠) ─────────────────
-    // 비디오/일러스트 위, 버튼 아래에 위치하도록 여기서 추가
-    const yOff = (H - 600) / 2;
-    const grad = this.add.graphics();
-    grad.fillGradientStyle(0x000000, 0x000000, 0x000000, 0x000000, 0, 0, 0.78, 0.78);
-    grad.fillRect(0, H - 220, W, 220);
-    panel.add(grad);
-
-    // ── ✕ 닫기 버튼 (우상단 플로팅) ────────────────────────────────
-    const closeBg = this.add.circle(W - 28, 38 + yOff, 22, 0x000000, 0.55)
-      .setInteractive({ useHandCursor: true });
-    const closeBtn = this.add.text(W - 28, 38 + yOff, '✕', {
-      fontSize: '18px', color: '#cccccc',
-    }).setOrigin(0.5);
-    closeBg.on('pointerover', () => { closeBg.setFillStyle(0x333333, 0.8); closeBtn.setColor('#ffffff'); });
-    closeBg.on('pointerout',  () => { closeBg.setFillStyle(0x000000, 0.55); closeBtn.setColor('#cccccc'); });
-    closeBg.on('pointerup',   () => this.hideCharacterDetail());
-    panel.add(closeBg);
-    panel.add(closeBtn);
-
-    // ── 하단 정보 영역 ───────────────────────────────────────────────
-    // 픽셀 스프라이트
-    const sprite = this.add.image(38, H - 85, def.imageKey).setDisplaySize(46, 64);
-    if (!isOwned) { sprite.setTint(0x222222).setAlpha(0.55); }
-    panel.add(sprite);
-
-    // 등급 배지
-    const gradeImgKey2 = getGradeImgKey(def.grade);
-    if (gradeImgKey2) {
-      const gradeBadge = this.add.image(74, H - 108, gradeImgKey2).setDisplaySize(28, 28).setOrigin(0.5);
-      panel.add(gradeBadge);
-    }
-
-    // 캐릭터 이름 (크게)
-    const nameText = this.add.text(74, H - 90, def.name, {
-      fontSize: '26px', color: '#ffffff', fontStyle: 'bold',
-      stroke: '#000000', strokeThickness: 5,
+    // ← 닫기 (왼쪽 위) — 뽑기 화면 · 난이도 화면과 같은 판
+    const back = this.add.container(32, 32);
+    const backSkin = bakeButton(this, 'diff_back', {
+      w: 44, h: 44, radius: 22, top: '#ffffff', bottom: '#dfe6ee', border: '#2a3340', borderW: 3, lip: '#9aa6b5', lipH: 4, gloss: 0,
     });
+    back.add(this.add.image(0, 0, 'diff_back').setOrigin(0.5, backSkin.originY));
+    back.add(this.add.text(0, -1, '←', { fontSize: '24px', color: '#2a3340', fontStyle: 'bold' }).setOrigin(0.5));
+    panel.add(back);
+    wireButton(this, back, 44, 44, () => this.hideCharacterDetail());
+
+    // ── 이름 줄 — 등급 배지 · 이름 · 상태 꼬리표 (장착 중 / 미보유) ──
+    const ny = mediaH - DETAIL.nameDy;
+    let nx = 18;
+    const gradeKey = getGradeImgKey(def.grade);
+    if (gradeKey && this.textures.exists(gradeKey)) {
+      panel.add(this.add.image(nx + 18, ny, gradeKey).setDisplaySize(36, 36));
+      nx += 42;
+    }
+    const nameText = this.add.text(nx, ny, def.name, {
+      fontSize: '26px', color: '#ffffff', fontStyle: 'bold', stroke: '#000000', strokeThickness: 6,
+    }).setOrigin(0, 0.5);
     panel.add(nameText);
-
-    // ── 하단 버튼 2개 (나란히) ──────────────────────────────────────
-    const BTN_Y = H - 32;
-    const BTN_W = 168;
-    const BTN_H = 44;   // 손가락 크기 (MIN_TOUCH)
-
-    // 📋 정보 보기 (좌)
-    const infoBg = this.add.rectangle(cx - 92, BTN_Y, BTN_W, BTN_H, 0x1a1a1a)
-      .setStrokeStyle(1.5, 0x555555)
-      .setInteractive({ useHandCursor: true });
-    infoBg.on('pointerover', () => infoBg.setFillStyle(0x2e2e2e));
-    infoBg.on('pointerout',  () => infoBg.setFillStyle(0x1a1a1a));
-    infoBg.on('pointerup',   () => this.showInfoPanel(def));
-    const infoLabel = this.add.text(cx - 92, BTN_Y, '📋  정보 보기', {
-      fontSize: '14px', color: '#cccccc', fontStyle: 'bold',
-    }).setOrigin(0.5);
-    panel.add(infoBg);
-    panel.add(infoLabel);
-
-    // ✔ 선택하기 / 🔒 미보유 (우)
-    if (isOwned) {
-      const selBg = this.add.rectangle(cx + 92, BTN_Y, BTN_W, BTN_H, 0x1144bb)
-        .setStrokeStyle(2, gradeColorInt)
-        .setInteractive({ useHandCursor: true });
-      selBg.on('pointerover', () => selBg.setFillStyle(0x2860dd));
-      selBg.on('pointerout',  () => selBg.setFillStyle(0x1144bb));
-      selBg.on('pointerup',   () => this.confirmSelect(id));
-      const selLabel = this.add.text(cx + 92, BTN_Y, '✔  선택하기', {
-        fontSize: '15px', color: '#ffffff', fontStyle: 'bold',
-        stroke: '#000000', strokeThickness: 2,
-      }).setOrigin(0.5);
-      panel.add(selBg);
-      panel.add(selLabel);
-    } else {
-      const lockBg = this.add.rectangle(cx + 92, BTN_Y, BTN_W, BTN_H, 0x1a1a1a)
-        .setStrokeStyle(1.5, 0x444444);
-      const lockLabel = this.add.text(cx + 92, BTN_Y, '🔒  미보유', {
-        fontSize: '14px', color: '#555555',
-      }).setOrigin(0.5);
-      panel.add(lockBg);
-      panel.add(lockLabel);
+    if (equipped || !owned) {
+      const tag = this.add.text(nx + textContentWidth(nameText) + 8, ny + 1, equipped ? '장착 중' : '미보유', {
+        fontSize: '12px', color: equipped ? '#3a1d00' : '#e8dcff', fontStyle: 'bold',
+        backgroundColor: equipped ? '#ffd34d' : '#2a1d4acc', padding: { x: 8, y: 3 },
+      }).setOrigin(0, 0.5);
+      panel.add(tag);
     }
 
-    // ── 비디오 인터랙션 (비디오가 있는 캐릭터만) ────────────────────
-    if (hasVideo && videoObj) {
-      // 일러스트 탭 → 비디오 재생 (가챠와 동일한 fitVideo 방식)
-      // active 체크: ✕ 탭 시 패널 파괴 직후 이 핸들러가 동시에 발화하는 경우 방지
-      const startVideo = () => {
-        if (!illust.active || !videoObj?.active) return;
-        videoObj!.setVisible(true);
-        videoObj!.play(false);
-        this.fitVideoToPanel(videoObj!);
-        // 비디오 'play' 이벤트 = 실제 재생 시작 시점 → 그때 일러스트 숨김
-        // (즉시 숨기면 첫 프레임 렌더 전 갭에 카드 목록이 비침)
-        videoObj!.once('play', () => {
-          if (illust.active) illust.setVisible(false);
-        });
-      };
-      illust.setInteractive({ useHandCursor: true });
-      illust.on('pointerup', startVideo);
+    // ── 시트 ──
+    const sheetTop = mediaH;
+    const g = this.add.graphics();
+    g.fillStyle(DETAIL.sheetColor, 1).fillRoundedRect(0, sheetTop - 6, W, H - sheetTop + 6, { tl: 18, tr: 18, bl: 0, br: 0 });
+    g.lineStyle(1.5, 0x8a7ab8, 0.7).strokeRoundedRect(0, sheetTop - 6, W, H - sheetTop + 6, { tl: 18, tr: 18, bl: 0, br: 0 });
+    panel.add(g);
 
-      // 비디오 탭 또는 재생 완료 → 일러스트로 복귀
-      const stopVideo = () => {
-        videoObj!.stop();
-        videoObj!.setVisible(false);
-        illust.setVisible(true);
-      };
-      videoObj.setInteractive({ useHandCursor: true });
-      videoObj.on('pointerup', stopVideo);
-      videoObj.on('complete', stopVideo);
-    }
+    panel.add(this.add.rectangle(W / 2, sheetTop + DETAIL.tabH, W - 32, 1, 0x8a7ab8, 0.35));
+    const showTab = this.detailTabsOf(def).includes(tab) ? tab : 'ability';
+
+    // ── 버튼 — 보유 = [장착] (장착 중이면 그 상태), 미보유 = [뽑기로] + 어느 뽑기에서 나오는지 ──
+    this.buildDetailButton(panel, def, owned, equipped);
+
+    this.showDetailTab(def, showTab);
   }
 
-  /** GachaScene.fitVideoToCanvas와 동일 — aspect ratio 유지하며 캔버스에 cover */
-  private fitVideoToPanel(vid: Phaser.GameObjects.Video): void {
-    const W = this.scale.width, H = this.scale.height;
-    vid.setDisplaySize(W, H);
+  /** 이 캐릭터에 보일 탭 — 각성이 없는 등급(등급외)이면 각성 탭을, 시너지 짝이 없으면 시너지 탭을 숨긴다 */
+  private detailTabsOf(def: CharacterDef): DetailTab[] {
+    const tabs: DetailTab[] = ['ability'];
+    if (getNextAwakening(def.grade, 0)) tabs.push('awaken');
+    if (this.synergyOf(def).length) tabs.push('synergy');
+    return tabs;
+  }
 
-    const applyContain = () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const el: HTMLVideoElement | null = (vid as any).video ?? null;
-      const nw = el?.videoWidth  || 0;
-      const nh = el?.videoHeight || 0;
-      if (nw > 0 && nh > 0) {
-        const scale = Math.max(W / nw, H / nh);
-        vid.setDisplaySize(Math.round(nw * scale), Math.round(nh * scale));
+  /** 탭을 보인다 — 탭 줄(글자 · 밑줄 · 눌리는 칸)과 내용 창만 다시 그린다. 영상 · 이름 · 버튼은 그대로 */
+  private showDetailTab(def: CharacterDef, tab: DetailTab): void {
+    const panel = this.detailPanel;
+    if (!panel) return;
+    for (const o of [...panel.list]) if (o.getData('detailTabRow')) o.destroy();
+    const W = this.scale.width, H = this.scale.height;
+    const sheetTop = Math.round(H * DETAIL.mediaRatio);
+    const tabs = this.detailTabsOf(def);
+    const tw = (W - 32) / tabs.length;
+    const tabY = sheetTop + DETAIL.tabH / 2 - 2;
+    tabs.forEach((t, i) => {
+      const on = t === tab, tx = 16 + i * tw + tw / 2;
+      const row: Phaser.GameObjects.GameObject[] = [
+        this.add.text(tx, tabY, DETAIL_TAB_LABEL[t], { fontSize: '15px', color: on ? '#ffd34d' : '#b9a3d6', fontStyle: 'bold' }).setOrigin(0.5),
+      ];
+      if (on) row.push(this.add.graphics().fillStyle(0xffd34d).fillRoundedRect(tx - 24, tabY + 14, 48, 3, 1.5));
+      else {
+        const zone = setTouchInteractive(this.add.zone(tx, tabY, tw, DETAIL.tabH));
+        zone.on('pointerup', () => this.showDetailTab(def, t));
+        row.push(zone);
       }
+      for (const o of row) panel.add(o.setData('detailTabRow', true));
+    });
+    this.renderDetailContent(def, tab);
+  }
+
+  /** 시트 내용 창 — 넘치면 시트 안에서 끌어 · 휠로 스크롤 */
+  private renderDetailContent(def: CharacterDef, tab: DetailTab): void {
+    this.detailTab = tab;
+    this.dropDetailContent();
+    const W = this.scale.width, H = this.scale.height;
+    const sheetTop = Math.round(H * DETAIL.mediaRatio);
+    const top = sheetTop + DETAIL.tabH + 8, bottom = H - DETAIL.buttonArea;
+    const vp = new Phaser.Geom.Rectangle(0, top, W, Math.max(40, bottom - top));
+    const content = this.add.container(0, vp.y).setDepth(301);
+    this.detailContent = content;
+
+    const x = 18, w = W - 36 - 8;   // 오른쪽 8 = 스크롤 막대 자리
+    let y = 0;
+    const heading = (s: string, color: string) => {
+      const t = this.add.text(x, y, s, { fontSize: '12px', color, fontStyle: 'bold' });
+      content.add(t);
+      y += textContentHeight(t) + 4;
+    };
+    const body = (s: string, color = '#eeeeee', indent = 0) => {
+      const t = this.add.text(x + indent, y, s, { fontSize: '13px', color, lineSpacing: 3, wordWrap: { width: w - indent, useAdvancedWrap: true } });
+      content.add(t);
+      y += textContentHeight(t);
+      return t;
     };
 
-    vid.once('play', applyContain);
-    this.fitVideoTimers.push(this.time.delayedCall(100, applyContain));
-    this.fitVideoTimers.push(this.time.delayedCall(500, applyContain));
+    if (tab === 'ability') {
+      // 능력 문구의 ** (굵게 표시) 는 뺀다 — 한 줄 설명(shortLine)과 같다
+      const plain = (t: string) => t.replace(/\*\*/g, '');
+      heading('기본 효과', '#88bbff');
+      body(plain(def.basicEffect));
+      y += 14;
+      heading('특수 능력', '#ffdd88');
+      body(plain(def.specialAbility), def.specialAbility === '없음' ? '#8a7ab8' : '#eeeeee');
+    } else if (tab === 'awaken') {
+      this.renderAwakening(content, def, x, w, () => y, v => { y = v; });
+    } else {
+      this.renderSynergy(content, def, x, w, () => y, v => { y = v; });
+    }
+    y += 8;
+
+    // ── 시트 안 스크롤 — 마스크로 자르고 손가락 · 휠로 끈다 (내용에 눌리는 칸이 없어 clipToViewport 는 필요 없다) ──
+    const mask = this.make.graphics({ x: 0, y: 0 });
+    mask.fillRect(vp.x, vp.y, vp.width, vp.height);
+    content.setMask(mask.createGeometryMask());
+    this.detailMask = mask;
+    const maxScroll = Math.max(0, y - vp.height);
+    let scroll = 0;
+    const thumbH = maxScroll > 0 ? Math.max(24, vp.height * vp.height / y) : 0;
+    const thumb = maxScroll > 0 ? this.add.rectangle(W - 6, vp.y, 3, thumbH, 0xd9c6f0, 0.6).setOrigin(0.5, 0).setDepth(302) : null;
+    this.detailThumb = thumb;
+    const apply = () => {
+      content.y = vp.y - scroll;
+      if (thumb) thumb.y = vp.y + (vp.height - thumbH) * (scroll / maxScroll);
+    };
+    let drag: { y: number; s: number } | null = null;
+    const down = (p: Phaser.Input.Pointer) => { drag = maxScroll > 0 && vp.contains(p.x, p.y) ? { y: p.y, s: scroll } : null; };
+    const move = (p: Phaser.Input.Pointer) => {
+      if (!drag || !p.isDown) return;
+      scroll = Phaser.Math.Clamp(drag.s + (drag.y - p.y), 0, maxScroll);
+      apply();
+    };
+    const up = () => { drag = null; };
+    const wheel = (p: Phaser.Input.Pointer, _over: unknown, _dx: number, dy: number) => {
+      if (maxScroll <= 0 || !vp.contains(p.x, p.y)) return;
+      scroll = Phaser.Math.Clamp(scroll + dy * 0.5, 0, maxScroll);
+      apply();
+    };
+    this.input.on('pointerdown', down);
+    this.input.on('pointermove', move);
+    this.input.on('pointerup', up);
+    this.input.on('wheel', wheel);
+    this.detailScrollOff = () => {
+      this.input.off('pointerdown', down);
+      this.input.off('pointermove', move);
+      this.input.off('pointerup', up);
+      this.input.off('wheel', wheel);
+    };
+    apply();
   }
 
+  /** 각성 탭 — 지금 ★ · 다음 각성까지 남은 장 수 · 효과가 정해진 단계만 (config/awakening) */
+  private renderAwakening(content: Phaser.GameObjects.Container, def: CharacterDef, x: number, w: number,
+    getY: () => number, setY: (v: number) => void): void {
+    const owned = this.ownedIds.includes(def.id);
+    const dup = owned ? getDuplicateCount(def.id) : 0;
+    const level = owned ? awakeningLevelOf(def.grade, dup) : 0;
+    const next = getNextAwakening(def.grade, dup);
+    const thresholds = AWAKENING_THRESHOLDS[def.grade as AwakeningGrade] ?? [];
+    let y = getY();
+
+    // ★ 줄
+    const stars = this.add.text(x, y, '★'.repeat(level) + '☆'.repeat(MAX_AWAKENING_LEVEL - level), {
+      fontSize: '18px', color: '#ffd34d', fontStyle: 'bold',
+    });
+    content.add(stars);
+    const tail = !owned
+      ? `얻으면 ★0 · ★1 은 중복 ${thresholds[0] ?? 0}장`
+      : next ? `다음 ★${next.level} 까지 ${next.remaining}장` : '최대 각성';
+    content.add(this.add.text(x + textContentWidth(stars) + 10, y + 3, tail, { fontSize: '13px', color: '#e8dcff', fontStyle: 'bold' }));
+    y += textContentHeight(stars) + 6;
+    content.add(this.add.text(x, y, owned ? `중복 ${dup}장 보유` : '아직 없는 캐릭터예요 — 뽑으면 ★0 부터', {
+      fontSize: '11px', color: '#b9a3d6',
+    }));
+    y += 24;
+
+    // 효과가 정해진 단계만 — 효과가 없는 단계(★3~★5)는 줄을 만들지 않는다
+    for (let n = 1; n <= MAX_DEFINED_AWAKENING_LEVEL; n++) {
+      const text = getAwakeningEffectText(def.id, def.grade, n);
+      if (!text) continue;
+      const got = level >= n;
+      const star = this.add.text(x, y, `★${n}`, { fontSize: '14px', color: got ? '#ffd34d' : '#8a7ab8', fontStyle: 'bold' });
+      const need = this.add.text(x + 34, y + 2, `중복 ${thresholds[n - 1] ?? 0}장`, { fontSize: '11px', color: '#b9a3d6', fontStyle: 'bold' });
+      const t = this.add.text(x + 100, y, text, {
+        fontSize: '13px', color: got ? '#ffffff' : '#cfc4e8', wordWrap: { width: w - 100, useAdvancedWrap: true },
+      });
+      content.add([star, need, t]);
+      y += Math.max(textContentHeight(star), textContentHeight(t)) + 10;
+    }
+    setY(y);
+  }
+
+  /** 이 캐릭터의 시너지 — 배경화면마다 getSynergy (config/synergyMap). 모든 배경화면에 붙으면(치비) 한 줄로 */
+  private synergyOf(def: CharacterDef): { wp: BackgroundDef | null; syn: WallpaperSynergy }[] {
+    const wps = WALLPAPERS.filter(w => AVAILABLE_WP_SET.has(w.id));
+    const hits = wps.map(w => ({ wp: w, syn: getSynergy(w.id, def.id) })).filter((h): h is { wp: BackgroundDef; syn: WallpaperSynergy } => !!h.syn);
+    if (hits.length && hits.length === wps.length) return [{ wp: null, syn: hits[0].syn }];
+    return hits;
+  }
+
+  /** 시너지 탭 — 배경화면 썸네일 · 짝 이름 · 효과 · 보유 여부 */
+  private renderSynergy(content: Phaser.GameObjects.Container, def: CharacterDef, x: number, w: number,
+    getY: () => number, setY: (v: number) => void): void {
+    let y = getY();
+    const tw = 96, th = Math.round(tw * 220 / 340);
+    for (const { wp, syn } of this.synergyOf(def)) {
+      const effect = [
+        `이동속도 +${syn.speedBonus}`,
+        `특수 똥 +${syn.collectBonus}점`,
+        ...(syn.rainbowFever ? ['피버가 가끔 레인보우 피버로'] : []),
+        ...(syn.clearPoops ? ['일정 점수마다 화면의 똥 전부 제거'] : []),
+      ].join(' · ');
+      let tx = x;
+      if (wp) {
+        const key = this.bakeRounded(`cs_wp_${wp.id}`, `cs_dsyn_${wp.id}`, tw, th, 8);
+        if (key) content.add(this.add.image(x, y, key).setOrigin(0, 0));
+        tx = x + tw + 10;
+      }
+      const label = this.add.text(tx, y, syn.label, {
+        fontSize: '14px', color: '#ffffff', fontStyle: 'bold', wordWrap: { width: w - (tx - x), useAdvancedWrap: true },
+      });
+      content.add(label);
+      let ly = y + textContentHeight(label) + 2;
+      const how = wp ? `배경화면 '${wp.name}' 을 쓰면 ${effect}` : `어떤 배경화면이든 쓰면 ${effect}`;
+      const ht = this.add.text(tx, ly, how, {
+        fontSize: '12px', color: '#cfc4e8', lineSpacing: 2, wordWrap: { width: w - (tx - x), useAdvancedWrap: true },
+      });
+      content.add(ht);
+      ly += textContentHeight(ht) + 2;
+      if (wp) {
+        const have = this.ownedWpIds.includes(wp.id);
+        content.add(this.add.text(tx, ly, have ? '배경화면 보유' : '배경화면 미보유', {
+          fontSize: '11px', color: have ? '#9fe8a8' : '#b9a3d6', fontStyle: 'bold',
+        }));
+        ly += 16;
+      }
+      y = Math.max(y + (wp ? th : 0), ly) + 12;
+    }
+    setY(y);
+  }
+
+  /** 어느 뽑기에서 나오는지 — 지금 열린 배너(visibleBanners) 순서대로. 상시 풀이면 '상시' */
+  private whereToPull(def: CharacterDef): string[] {
+    const inStandard = standardPool(CHARACTERS).some(c => c.id === def.id);
+    return visibleBanners().flatMap(b => {
+      if (b.kind === 'standard') return inStandard ? ['상시'] : [];
+      if (b.pickupUR !== def.id && !b.pickupSR.includes(def.id)) return [];
+      if (b.kind === 'event') return ['이벤트 픽업'];
+      const ur = b.pickupUR ? CHARACTERS.find(c => c.id === b.pickupUR) : null;
+      return [ur ? `${ur.name} 픽업` : '픽업'];
+    });
+  }
+
+  /** 아래 버튼 — [장착] (장착 중이면 그 상태) / [뽑기로] + 얻는 곳 한 줄 → 뽑기 화면 */
+  private buildDetailButton(panel: Phaser.GameObjects.Container, def: CharacterDef, owned: boolean, equipped: boolean): void {
+    const W = this.scale.width, H = this.scale.height;
+    const w = W - 32, h = 52, y = H - DETAIL.buttonArea / 2;
+    const box = this.add.container(W / 2, y);
+    if (owned) {
+      const skin = bakeButton(this, `cs_dbtn_${equipped ? 'on' : 'equip'}_${w}`, equipped
+        ? { w, h, radius: 16, top: '#5a4a2a', bottom: '#3a2e14', border: '#ffd34d', borderW: 2, lip: '#2a2010', lipH: 4, gloss: 0 }
+        : { w, h, radius: 16, top: '#fff3a8', bottom: '#ffb81a', border: '#7a4a00', borderW: 3, lip: '#a8650a', lipH: 5, gloss: 0 });
+      box.add(this.add.image(0, 0, skin.key).setOrigin(0.5, skin.originY));
+      box.add(this.add.text(0, -1, equipped ? '장착 중' : '장착', {
+        fontSize: '19px', fontStyle: 'bold', color: equipped ? '#ffd34d' : '#5b2e0e', stroke: equipped ? '#000000' : '#ffffff', strokeThickness: equipped ? 3 : 4,
+      }).setOrigin(0.5));
+      panel.add(box);
+      if (!equipped) {
+        wireButton(this, box, w, h, () => {
+          this.selectCharacter(def.id);
+          this.buildCharacterDetail(def.id, this.detailTab);   // '장착 중' 으로 다시 그린다
+        });
+      }
+      return;
+    }
+    const where = this.whereToPull(def);
+    const skin = bakeButton(this, `cs_dbtn_pull_${where.length ? 'on' : 'off'}_${w}`, where.length
+      ? { w, h, radius: 16, top: '#5a24a8', bottom: '#1e0a40', border: '#ffd34d', borderW: 3, lip: '#5a1e9c', lipH: 5, gloss: 0, glow: 'rgba(255,200,90,0.6)' }
+      : { w, h, radius: 16, top: '#4a4458', bottom: '#2a2638', border: '#6a6488', borderW: 2, lip: '#1e1a2a', lipH: 4, gloss: 0 });
+    box.add(this.add.image(0, 0, skin.key).setOrigin(0.5, skin.originY));
+    const label = this.add.text(0, -9, '뽑기로', {
+      fontSize: '19px', fontStyle: 'bold', color: '#ffffff', stroke: '#2a0a4a', strokeThickness: 4,
+    }).setOrigin(0.5);
+    if (where.length) gradientText(label, [[0, '#fff7c2'], [0.5, '#ffd34d'], [1, '#ff9f1a']]);
+    box.add(label);
+    box.add(this.add.text(0, 13, where.length ? `${where.join(' · ')} 에서 나와요` : '지금 열린 뽑기에는 없어요', {
+      fontSize: '11px', color: '#e8dcff', fontStyle: 'bold',
+    }).setOrigin(0.5));
+    panel.add(box);
+    if (where.length) {
+      wireButton(this, box, w, h, () => {
+        this.hideCharacterDetail();   // 영상 · 받던 것까지 내리고 나간다 (shutdown 에서는 요소가 먼저 떨어져 받던 것을 못 끊는다)
+        this.scene.start('GachaScene');
+      });
+    }
+  }
+
+  /** 시트 내용 창을 내린다 (스크롤 입력 · 마스크까지) */
+  private dropDetailContent(): void {
+    this.detailScrollOff?.();
+    this.detailScrollOff = null;
+    this.detailContent?.destroy();
+    this.detailContent = null;
+    this.detailMask?.destroy();   // 마스크 그래픽은 화면 목록 밖이라 따로 지운다
+    this.detailMask = null;
+    this.detailThumb?.destroy();
+    this.detailThumb = null;
+  }
+
+  /** 상세를 닫는다 — 영상은 받던 것까지 끊고 내린다 (utils/videoReel). 일러스트는 나갈 때 releaseTextures 가 내린다 */
   private hideCharacterDetail(): void {
-    // fitVideoToPanel의 pending 타이머 취소
-    for (const t of this.fitVideoTimers) t.remove();
-    this.fitVideoTimers = [];
-
-    // 비디오 파괴 + 재생 시 생성된 UUID 텍스처 제거 (Phaser preDestroy가 안 지움)
-    destroyVideo(this.detailVideo);
-    this.detailVideo = null;
-
-    this.hideInfoPanel();
+    this.detailReel?.destroy();
+    this.detailReel = null;
+    this.dropDetailContent();
     this.detailPanel?.destroy();
     this.detailPanel = null;
   }
 
-  private confirmSelect(id: string): void {
-    this.selectCharacter(id);
-    this.hideCharacterDetail();
-  }
-
-  private showInfoPanel(def: CharacterDef): void {
-    this.hideInfoPanel();
-
-    const gradeColorInt = parseInt(def.gradeColor.replace('#', ''), 16);
-    const panel = this.add.container(0, 0).setDepth(400);
-    this.infoPanel = panel;
-
-    // ── 각성 보너스 계산 ──────────────────────────────────────────────
-    const dupCount   = getDuplicateCount(def.id);
-    const awakeLevel = getAwakeningLevel(def.grade, dupCount);
-    const awakeBonusLines: string[] = [];
-    if (def.grade !== '등급외') {
-      if (awakeLevel >= 1) {
-        const spd = def.id === 'maehwa' ? 5 : def.grade === 'UR' ? 15 : def.grade === 'SR' ? 10 : 5;
-        awakeBonusLines.push(`★1 각성: 이동속도 +${spd} px/s`);
-      }
-      if (awakeLevel >= 2) {
-        if (def.id === 'maehwa') {
-          awakeBonusLines.push('★2 각성: 특수 똥 수집 시 +5점');
-        } else {
-          const spd = def.grade === 'UR' ? 20 : def.grade === 'SR' ? 15 : 10;
-          awakeBonusLines.push(`★2 각성: 이동속도 +${spd} px/s (누적)`);
-        }
-      }
-    }
-    const awakeBonusText = awakeBonusLines.join('\n');
-
-    // 반투명 배경 (클릭 시 닫기)
-    const overlay = this.add.rectangle(this.scale.width / 2, this.scale.height / 2, this.scale.width, this.scale.height, 0x000000, 0.80)
-      .setInteractive();
-    overlay.on('pointerup', () => this.hideInfoPanel());
-    panel.add(overlay);
-
-    // ── 카드 크기 계산 (텍스트 높이 선측정) ─────────────────────────
-    const CARD_W = 370;
-    const WRAP_W = CARD_W - 40; // 좌(15px)·우(25px) 여백 제외한 실제 텍스트 폭
-    const HEADER_H = 60;  // 스프라이트+이름+구분선 영역
-    const PAD_BOT  = 20;
-
-    const btMeasure = this.add.text(0, -999, def.basicEffect,    { fontSize: '13px', wordWrap: { width: WRAP_W } });
-    const stMeasure = this.add.text(0, -999, def.specialAbility, { fontSize: '13px', wordWrap: { width: WRAP_W } });
-    const abMeasure = awakeBonusText
-      ? this.add.text(0, -999, awakeBonusText, { fontSize: '12px', wordWrap: { width: WRAP_W } })
-      : null;
-    const abHeight  = abMeasure ? textContentHeight(abMeasure) + 8 : 0;
-    const cardH = HEADER_H + 18 + textContentHeight(btMeasure) + abHeight + 14 + 18 + textContentHeight(stMeasure) + PAD_BOT;
-    btMeasure.destroy();
-    stMeasure.destroy();
-    abMeasure?.destroy();
-
-    // 화면 중앙 배치 (상하 여백 각 70px 보장)
-    const _cx = this.scale.width / 2;
-    const _H = this.scale.height;
-    const _yOff = (_H - 600) / 2;
-    const cardTop = Math.max(70 + _yOff, Math.round((_H - cardH) / 2));
-    const card = this.add.rectangle(_cx, cardTop + cardH / 2, CARD_W, cardH, 0x111111)
-      .setStrokeStyle(2, gradeColorInt);
-    panel.add(card);
-
-    // ── 헤더: 픽셀 스프라이트 + 등급 + 이름 ─────────────────────────
-    const sprite = this.add.image(_cx - CARD_W / 2 + 37, cardTop + 24, def.imageKey).setDisplaySize(38, 52);
-    panel.add(sprite);
-
-    const gradeImgKey3 = getGradeImgKey(def.grade);
-    if (gradeImgKey3) {
-      const badge = this.add.image(_cx - CARD_W / 2 + 67, cardTop + 8, gradeImgKey3).setDisplaySize(24, 24).setOrigin(0.5, 0);
-      panel.add(badge);
-    }
-
-    const name = this.add.text(_cx - CARD_W / 2 + 67, cardTop + 24, def.name, {
-      fontSize: '17px', color: '#ffffff', fontStyle: 'bold',
-      stroke: '#000', strokeThickness: 3,
-    });
-    panel.add(name);
-
-    // ✕ 닫기 (헤더 우측)
-    const closeX = _cx + CARD_W / 2 - 14;
-    const closeY = cardTop + 16;
-    const infoBtnBg = this.add.circle(closeX, closeY, 22, 0x000000, 0)   // 투명 — 반지름 22 = 지름 44 (MIN_TOUCH)
-      .setInteractive({ useHandCursor: true });
-    const closeTxt = this.add.text(closeX, closeY, '✕', {
-      fontSize: '16px', color: '#999999',
-    }).setOrigin(0.5);
-    infoBtnBg.on('pointerover', () => closeTxt.setColor('#ffffff'));
-    infoBtnBg.on('pointerout',  () => closeTxt.setColor('#999999'));
-    infoBtnBg.on('pointerup',   () => this.hideInfoPanel());
-    panel.add(infoBtnBg);
-    panel.add(closeTxt);
-
-    // 구분선
-    panel.add(this.add.rectangle(_cx, cardTop + HEADER_H - 4, CARD_W - 20, 1, 0x444444));
-
-    // ── 기본 효과 ─────────────────────────────────────────────────────
-    const textLeft = _cx - CARD_W / 2 + 15;
-    let curY = cardTop + HEADER_H + 4;
-
-    panel.add(this.add.text(textLeft, curY, '🔷 기본 효과', {
-      fontSize: '12px', color: '#88bbff', fontStyle: 'bold',
-    }));
-    curY += 18;
-
-    const basicText = this.add.text(textLeft, curY, def.basicEffect, {
-      fontSize: '13px', color: '#eeeeee', wordWrap: { width: WRAP_W },
-    });
-    panel.add(basicText);
-    curY += textContentHeight(basicText);
-
-    if (awakeBonusText) {
-      curY += 8;
-      panel.add(this.add.text(textLeft, curY, awakeBonusText, {
-        fontSize: '12px', color: '#ffd700', wordWrap: { width: WRAP_W },
-      }));
-      curY += (abHeight - 8);
-    }
-
-    curY += 14;
-
-    // ── 특수 능력 ─────────────────────────────────────────────────────
-    panel.add(this.add.text(textLeft, curY, '⚡ 특수 능력', {
-      fontSize: '12px', color: '#ffdd88', fontStyle: 'bold',
-    }));
-    curY += 18;
-
-    panel.add(this.add.text(textLeft, curY, def.specialAbility, {
-      fontSize: '13px',
-      color: def.specialAbility === '없음' ? '#666666' : '#eeeeee',
-      wordWrap: { width: WRAP_W },
-    }));
-  }
-
-  private hideInfoPanel(): void {
-    this.infoPanel?.destroy();
-    this.infoPanel = null;
-  }
 
   /** 돌아가기 — 메인 화면 버튼과 같은 판 */
   private createBackButton() {
