@@ -62,8 +62,10 @@ export function getAwakeningEffectText(charId: string, grade: string, level: num
   const g = asGrade(grade);
   if (!g || level < 1 || level > MAX_DEFINED_AWAKENING_LEVEL) return null;
   if (level === 1) return `이동속도 +${getAwakeningSpeedBonus(charId, grade, 1)} px/s`;
+  // 매화 ★2 는 속도를 바꾸지 않고 점수를 더한다 — ★1 의 이동속도는 그대로 남는다
   if (charId === MAEHWA_ID) return `특수 똥 수집 시 +${MAEHWA_PARAMS.awake2SpecialBonus}점`;
-  return `이동속도 +${AWAKENING_SPEED[2][g]} px/s (누적)`;
+  // ★2 속도는 ★1 에 더하지 않고 바꾼다 (합계 = ★2 값) — '누적'으로 쓰면 더하기로 읽힌다
+  return `이동속도 +${AWAKENING_SPEED[2][g]} px/s (★1 의 +${AWAKENING_SPEED[1][g]} 대신)`;
 }
 
 /** 지금 단계까지 받은 효과를 '★n 각성: …' 줄로 — 정의된 단계만 (캐릭터 정보 카드의 각성 보너스 칸) */
