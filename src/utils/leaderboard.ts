@@ -220,7 +220,8 @@ export async function getLeaderboard(
   characterType?: string,
   yearMonth?: string
 ): Promise<LeaderboardResponse> {
-  const cacheKey = `${difficulty}:${limit}:${characterType ?? ''}:${yearMonth ?? ''}`;
+  // 달은 대상 달로 — 기본 호출도 부른 시점의 UTC 달. 빈 키로 두면 달이 바뀐 뒤 30초 동안 지난달 랭킹이 나온다
+  const cacheKey = `${difficulty}:${limit}:${characterType ?? ''}:${yearMonth ?? getCurrentYearMonth()}`;
   const cached = _lbCache.get(cacheKey);
   if (cached && Date.now() - cached.ts < _LB_TTL) {
     return cached.data;
