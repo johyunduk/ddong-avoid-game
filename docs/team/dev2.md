@@ -2,9 +2,9 @@
 
 화면 개편이 몰릴 때 여는 **dev 의 보조 자리**다. 맡은 화면이 끝나면 닫는다.
 
-- 맡는 것: director 가 보낸 화면 개편 — 지금은 설정 팝업 · 릴리스 노트 · 뽑기 화면 · 캐릭터 상세(능력 보기)
+- 맡는 것: director 가 보낸 화면 개편 — 지금은 설정 팝업 · 릴리스 노트 · 뽑기 화면 · 캐릭터 상세(능력 보기) · 랭킹 캐릭터 선택
 - **고치는 파일은 받은 일의 것만.** 지금 경계:
-  - 네 파일: `ModeSelectScene.ts`(설정 팝업) · `ReleaseNotesScene.ts` · `src/data/releaseNotes.ts` · `GachaScene.ts` · `CharacterSelectScene.ts`(상세 화면 B안, 2026-10-12)
+  - 네 파일: `ModeSelectScene.ts`(설정 팝업) · `ReleaseNotesScene.ts` · `src/data/releaseNotes.ts` · `GachaScene.ts` · `CharacterSelectScene.ts`(상세 화면 B안, 2026-10-12) · `LeaderboardScene.ts`(캐릭터 선택 A안, 2026-10-13)
   - dev 의 파일: `GameScene.ts` · `activeButton.ts` · `buttonSkin.ts` — **고치지 않는다.** 쓰기만 한다
   - 공용 헬퍼(`buttonSkin.ts`)에 고칠 게 생기면 director 에게 말한다
 - 하지 않는 것: 서버(`supabase/`), 배포, push, 이미지 생성, 캐릭터 등록
