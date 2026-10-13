@@ -192,7 +192,8 @@ export function invalidateLeaderboardCache(): void {
  * yearMonth 를 안 주면 이번 달. 로그인 상태면 내 순위 · 점수 · 보상권이 채워진다
  */
 export async function getExtremeCharSummary(yearMonth?: string): Promise<ExtremeCharSummaryResponse> {
-  const cacheKey = yearMonth ?? '';
+  // 캐시는 대상 달로 가른다 — 기본 호출도 부른 시점의 UTC 달. 빈 키로 두면 달이 바뀐 뒤 30초 동안 지난달 요약이 나온다
+  const cacheKey = yearMonth ?? getCurrentYearMonth();
   const cached = _summaryCache.get(cacheKey);
   if (cached && Date.now() - cached.ts < _LB_TTL) {
     return cached.data;
