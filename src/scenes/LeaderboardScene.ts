@@ -129,6 +129,12 @@ export default class LeaderboardScene extends BaseScene {
 
     this.events.once('shutdown', () => {
       this.overlayCleanup?.();
+      this.overlayCleanup = undefined;
+      // 열려 있던 시트 — 화면 목록의 것은 DisplayList 가 이미 부쉈지만, 목록 밖에서 만든 마스크 그래픽은 여기서 부숴야 한다
+      // (destroy 는 이미 부서진 것에는 아무것도 안 한다)
+      this.charOverlayObjects.forEach(o => o.destroy());
+      this.charOverlayObjects = [];
+      this.cancelCharSelectOpen();
       // 카드 썸네일(시상대 · 캐릭터 고르기)은 이 씬에서만 쓴다 — 나갈 때 내린다.
       // DisplayList 의 SHUTDOWN 리스너가 부팅 때 걸려 먼저 돌아서, 여기 올 때는 이 그림을 쓰던 이미지가 이미 다 부서져 있다
       for (const key of this.textures.getTextureKeys()) {
@@ -295,6 +301,8 @@ export default class LeaderboardScene extends BaseScene {
   }
 
   private async loadLeaderboard() {
+    // 난이도 · 시즌 · 캐릭터 필터가 바뀌었다 — 받는 중인 시트 열기는 이전 화면의 것이라 버린다
+    this.cancelCharSelectOpen();
     // 요청 ID 증가 (새로운 요청 시작)
     this.currentRequestId++;
     const requestId = this.currentRequestId;
@@ -641,18 +649,26 @@ export default class LeaderboardScene extends BaseScene {
       const want: [string, string][] = getVisibleCharacters().map(c => [`rank_cardsrc_${c.id}`, `assets/ui/collection/card/${c.id}.webp`]);
       for (const g of ['ur', 'sr', 'r']) want.push([`grade_${g}`, `assets/character_ranks/${g}.png`]);
       const missing = want.filter(([key]) => !this.textures.exists(key) && !this.triedTextures.has(key));
-      if (missing.length === 0) { resolve(); return; }
       missing.forEach(([key, path]) => { this.triedTextures.add(key); this.load.image(key, path); });
+      // 버려진 열기가 걸어 둔 받기가 아직 돌고 있으면 그것도 기다린다 (안 기다리면 그 카드만 게임 스프라이트로 열린다)
+      const stillLoading = this.load.isLoading() && want.some(([key]) => !this.textures.exists(key));
+      if (missing.length === 0 && !stillLoading) { resolve(); return; }
       this.load.once(Phaser.Loader.Events.COMPLETE, () => resolve());
-      this.load.start();
+      if (missing.length > 0) this.load.start();
     });
 
     void Promise.all([summary, textures]).then(([s]) => {
-      if (seq !== this.overlayOpenSeq || !this.scene.isActive()) return;
+      // 기다리는 사이 난이도 · 시즌 · 필터가 바뀌었거나 씬이 닫혔으면 이 열기는 버려졌다 (cancelCharSelectOpen)
+      if (seq !== this.overlayOpenSeq || !this.scene.isActive() || this.selectedDifficulty !== DifficultyEnum.EXTREME) return;
       this.charOverlayLoading = false;
-      // 기다리는 사이 다른 시즌으로 넘겼으면 그 요약은 버린다 (다른 달의 순위를 띄우지 않게)
-      this.buildCharSelectOverlay(this.viewingYearMonth === ym ? s : null);
+      this.buildCharSelectOverlay(s);
     });
+  }
+
+  /** 받는 중인 시트 열기를 버린다 — 늦게 온 썸네일 · 요약이 다른 화면 위에 이전 시트를 띄우지 않게 */
+  private cancelCharSelectOpen() {
+    this.overlayOpenSeq++;
+    this.charOverlayLoading = false;
   }
 
   /**
