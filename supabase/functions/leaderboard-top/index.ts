@@ -55,7 +55,7 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { difficulty, limit: limitParam, characterType, yearMonth: requestedYM } = await req.json().catch(() => ({}));
+    const { difficulty, limit: limitParam, characterType, yearMonth: requestedYM, summary } = await req.json().catch(() => ({}));
     const limit = parseInt(limitParam ?? '100', 10);
 
     // 입력 검증
@@ -63,6 +63,14 @@ Deno.serve(async (req: Request) => {
     if (!difficulty || !validDifficulties.includes(difficulty)) {
       return new Response(
         JSON.stringify({ error: 'Invalid difficulty' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // 요약 모드는 EXTREME 캐릭터별만 있다
+    if (summary === true && difficulty !== 'extreme') {
+      return new Response(
+        JSON.stringify({ error: 'Summary is extreme only' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -100,6 +108,47 @@ Deno.serve(async (req: Request) => {
     );
 
     const prevYearMonth = getPrevYearMonth(yearMonth);
+
+    // EXTREME 캐릭터별 요약 — 캐릭터 고르기 화면이 캐릭터마다 부르지 않고 한 번에 받는다 (20261013000010).
+    // 남의 user_id 는 없다 — 캐릭터별 인원 · 1위 점수와 내 순위 · 점수 · 보상권만. 그 달 기록이 없는 캐릭터는 빠진다
+    if (summary === true) {
+      const { data: sumRows, error: sumError } = await supabaseAdmin.rpc('get_extreme_char_summary', {
+        p_year_month: yearMonth, p_user_id: currentUserId,
+      });
+
+      if (sumError) {
+        console.error('Extreme char summary error:', sumError);
+        return new Response(
+          JSON.stringify({ error: 'Failed to fetch character summary' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const characters = (sumRows ?? []).map((r: {
+        character_type: string; players: number; top_score: number;
+        my_rank: number | null; my_score: number | null; reward_skor: number | string | null;
+      }) => ({
+        characterType: r.character_type,
+        players: r.players,
+        topScore: r.top_score,
+        myRank: r.my_rank ?? null,
+        myScore: r.my_score ?? null,
+        // 보상권 = 지금 달이 끝나면 받을 자리 — 1~3위 · 최소 인원 · 최소 점수 · 지급 스위치 · 시작 달 (char_season_winners)
+        rewardEligible: r.reward_skor !== null,
+        rewardSkor: r.reward_skor === null ? null : Number(r.reward_skor),
+      }));
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          difficulty,
+          yearMonth,
+          season: calcSeason(yearMonth),
+          characters,
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     // EXTREME 캐릭터 필터: RPC로 리더보드 + 내 순위 단일 쿼리
     if (characterType && difficulty === 'extreme') {

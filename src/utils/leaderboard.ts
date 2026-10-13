@@ -42,6 +42,33 @@ export interface LeaderboardResponse {
   prevSeasonReward: PrevSeasonReward | null;
 }
 
+/**
+ * EXTREME 캐릭터 하나의 이번 달 요약 (leaderboard-top 요약 모드 · get_extreme_char_summary).
+ * 그 달 기록이 없는 캐릭터는 목록에 없다 — 화면은 인원 0 · 기록 없음으로 그린다
+ */
+export interface ExtremeCharSummary {
+  characterType: string;
+  /** 그 달 그 캐릭터 기록 수 (1 이상) */
+  players: number;
+  /** 1위 점수 */
+  topScore: number;
+  /** 내 순위 — 동점은 같은 순위 (캐릭터별 랭킹과 같은 셈). 기록 없음 · 비로그인은 null */
+  myRank: number | null;
+  myScore: number | null;
+  /** 지금 달이 끝나면 보상 받을 자리인가 — 1~3위 · 최소 인원 · 최소 점수 · 지급 스위치 · 시작 달을 서버가 판정 */
+  rewardEligible: boolean;
+  /** rewardEligible 이면 그 금액 (SKOR), 아니면 null */
+  rewardSkor: number | null;
+}
+
+export interface ExtremeCharSummaryResponse {
+  success: boolean;
+  difficulty: 'extreme';
+  yearMonth: string;       // 'YYYY-MM'
+  season: number;
+  characters: ExtremeCharSummary[];
+}
+
 export interface ClaimRewardResponse {
   success: boolean;
   alreadyClaimed: boolean;
@@ -152,9 +179,35 @@ export async function submitScore(
 const _lbCache = new Map<string, { data: LeaderboardResponse; ts: number }>();
 const _LB_TTL = 30_000;
 
+const _summaryCache = new Map<string, { data: ExtremeCharSummaryResponse; ts: number }>();
+
 /** 랭킹 조회 캐시 비우기 — 점수를 등록한 직후 바뀐 순위를 다시 받을 때 (30초 캐시가 옛 순위를 돌려준다) */
 export function invalidateLeaderboardCache(): void {
   _lbCache.clear();
+  _summaryCache.clear();
+}
+
+/**
+ * EXTREME 캐릭터별 요약 — 캐릭터마다 부르지 않고 한 번에 (leaderboard-top 요약 모드).
+ * yearMonth 를 안 주면 이번 달. 로그인 상태면 내 순위 · 점수 · 보상권이 채워진다
+ */
+export async function getExtremeCharSummary(yearMonth?: string): Promise<ExtremeCharSummaryResponse> {
+  const cacheKey = yearMonth ?? '';
+  const cached = _summaryCache.get(cacheKey);
+  if (cached && Date.now() - cached.ts < _LB_TTL) {
+    return cached.data;
+  }
+
+  const body: Record<string, unknown> = { difficulty: 'extreme', summary: true };
+  if (yearMonth) body.yearMonth = yearMonth;
+
+  const { data, error } = await supabase.functions.invoke('leaderboard-top', { body });
+  if (error) {
+    throw new Error(error.message || 'Failed to fetch character summary');
+  }
+
+  _summaryCache.set(cacheKey, { data: data as ExtremeCharSummaryResponse, ts: Date.now() });
+  return data as ExtremeCharSummaryResponse;
 }
 
 /**
