@@ -7,10 +7,12 @@ import {
   getCachedClaimAmount,
   getCachedCharClaimAmount,
   getUserInitials,
+  getExtremeCharSummary,
+  type ExtremeCharSummaryResponse,
   type LeaderboardEntry,
   type PrevSeasonReward,
 } from '../utils/leaderboard';
-import { CHARACTERS, getVisibleCharacters, getGradeColorInt, type CharacterDef } from '../utils/character';
+import { CHARACTERS, getVisibleCharacters, getOwnedCharacters, getGradeImgKey, type CharacterDef } from '../utils/character';
 import BaseScene from './BaseScene';
 import { addBackground } from '../utils/background';
 import { bakeButton, bakeRoundedImage, clipToViewport, gradientText, setTouchInteractive, wireButton } from '../utils/buttonSkin';
@@ -36,6 +38,12 @@ const ROW_H = 42;
 /** 시상대 전체 높이 (왕관 ~ 1등 단 아래, 축소 1배 기준) — 화면이 낮으면 줄인다 */
 const PODIUM_H = 270;
 /** 메달 판 색 — 금 · 은 · 동 */
+/** 캐릭터 선택 시트 (A안) 색 */
+const SHEET = { bg: 0x120a24, line: 0x3a2f6a, dim: '#a99fd0', gold: '#ffd34d', goldInt: 0xffd34d };
+/** 캐릭터 선택 시트를 열 때 캐릭터별 요약(내 순위 · 보상권)을 기다리는 최대 시간 — 넘으면 그 줄 없이 연다 */
+const SUMMARY_WAIT_MS = 1500;
+/** 캐릭터 선택 시트의 칸 순서 — 높은 등급부터 */
+const GRADE_ORDER: CharacterDef['grade'][] = ['UR', 'SR', 'R', '등급외'];
 const MEDAL: Record<number, Tier> = {
   1: ['#fff3a8', '#ffc21a', '#7a4a00'],
   2: ['#f4f7fb', '#b8c2cf', '#3a4450'],
@@ -57,6 +65,8 @@ export default class LeaderboardScene extends BaseScene {
   private charFilterObjects: Phaser.GameObjects.GameObject[] = [];
   private charOverlayObjects: Phaser.GameObjects.GameObject[] = [];
   private charOverlayLoading = false;
+  /** 시트 열기 차례 — 씬을 다시 열면 올린다. 늦게 온 썸네일 · 요약이 다음 실행에 시트를 띄우지 않게 */
+  private overlayOpenSeq = 0;
   private overlayCleanup?: () => void;
 
   // 시즌 UI 요소
@@ -92,6 +102,7 @@ export default class LeaderboardScene extends BaseScene {
     // 씬 인스턴스 재사용 대비 stale 상태 리셋 (로딩 중 이탈 시 오버레이가 영영 안 열리는 것 방지)
     this.charOverlayObjects = [];
     this.charOverlayLoading = false;
+    this.overlayOpenSeq++;
     this.leaderboardTexts = [];
     this.charFilterObjects = [];
     this.difficultyTabs.clear();
@@ -105,7 +116,7 @@ export default class LeaderboardScene extends BaseScene {
     }
     // 캐릭터 스프라이트 — 카드·얼굴 그림이 없는 캐릭터의 대신 그림
     // 시상대 카드(ui/collection/card)와 목록 얼굴(ui/collection/face)은 랭킹이 오면 보이는 캐릭터 것만 받는다.
-    // EXTREME 캐릭터 필터 오버레이는 시상대와 같은 카드 썸네일(rank_cardsrc_*)을 showCharSelectOverlay()에서 온디맨드 로드
+    // EXTREME 캐릭터 고르기 시트는 시상대와 같은 카드 썸네일(rank_cardsrc_*)과 등급 배지를 showCharSelectOverlay()에서 온디맨드 로드
     CHARACTERS.forEach(char => {
       if (!this.textures.exists(char.imageKey)) {
         this.load.image(char.imageKey, char.imagePath);
@@ -611,189 +622,245 @@ export default class LeaderboardScene extends BaseScene {
   }
 
   /**
-   * 캐릭터 선택 오버레이 표시 — 카드 썸네일(ui/collection/card, 216x288)은 이 시점에 온디맨드 로드.
-   * 예전에는 일러스트 원본(768x1344) 26장을 올려 GPU 79MB 가 씬을 나가도 남았다 (2026-10-07 측정)
+   * 캐릭터 선택 시트 열기 — 카드 썸네일(ui/collection/card, 216x288)과 등급 배지는 이 시점에 온디맨드 로드.
+   * 예전에는 일러스트 원본(768x1344) 26장을 올려 GPU 79MB 가 씬을 나가도 남았다 (2026-10-07 측정).
+   * 캐릭터별 내 순위 · 보상권은 요약 한 번(getExtremeCharSummary)으로 같이 받는다 — 실패하거나 SUMMARY_WAIT_MS 를 넘기면 그 줄 없이 연다
    */
   private showCharSelectOverlay() {
     if (this.charOverlayObjects.length > 0 || this.charOverlayLoading) return;
+    this.charOverlayLoading = true;
+    const seq = ++this.overlayOpenSeq;
+    const ym = this.viewingYearMonth;
 
-    const missing = getVisibleCharacters().filter(c => !this.textures.exists(`rank_cardsrc_${c.id}`) && !this.triedTextures.has(`rank_cardsrc_${c.id}`));
-    if (missing.length > 0) {
-      this.charOverlayLoading = true;
-      missing.forEach(c => { this.triedTextures.add(`rank_cardsrc_${c.id}`); this.load.image(`rank_cardsrc_${c.id}`, `assets/ui/collection/card/${c.id}.webp`); });
-      this.load.once(Phaser.Loader.Events.COMPLETE, () => {
-        this.charOverlayLoading = false;
-        if (this.scene.isActive()) this.buildCharSelectOverlay();
-      });
+    const summary = Promise.race([
+      getExtremeCharSummary(ym ?? undefined).catch(() => null),
+      new Promise<null>(resolve => setTimeout(() => resolve(null), SUMMARY_WAIT_MS)),
+    ]);
+
+    const textures = new Promise<void>(resolve => {
+      const want: [string, string][] = getVisibleCharacters().map(c => [`rank_cardsrc_${c.id}`, `assets/ui/collection/card/${c.id}.webp`]);
+      for (const g of ['ur', 'sr', 'r']) want.push([`grade_${g}`, `assets/character_ranks/${g}.png`]);
+      const missing = want.filter(([key]) => !this.textures.exists(key) && !this.triedTextures.has(key));
+      if (missing.length === 0) { resolve(); return; }
+      missing.forEach(([key, path]) => { this.triedTextures.add(key); this.load.image(key, path); });
+      this.load.once(Phaser.Loader.Events.COMPLETE, () => resolve());
       this.load.start();
-      return;
-    }
-    this.buildCharSelectOverlay();
+    });
+
+    void Promise.all([summary, textures]).then(([s]) => {
+      if (seq !== this.overlayOpenSeq || !this.scene.isActive()) return;
+      this.charOverlayLoading = false;
+      // 기다리는 사이 다른 시즌으로 넘겼으면 그 요약은 버린다 (다른 달의 순위를 띄우지 않게)
+      this.buildCharSelectOverlay(this.viewingYearMonth === ym ? s : null);
+    });
   }
 
-  /** 캐릭터 선택 오버레이 구성 (일러스트 포트레이트 카드, 스크롤 가능) */
-  private buildCharSelectOverlay() {
+  /**
+   * 캐릭터 선택 시트 (A안) — 화면을 덮고 UR · SR · R 칸으로 나눈다. 같은 등급 안에서는 보유 먼저, 미보유는 흐리게.
+   * 자리는 실제 화면 높이 기준이다 (예전 오버레이는 600 높이 기준 yOff 로 띄웠고, 360 폭에서 카드가 화면 끝에 붙었다).
+   * summary 가 있으면 카드 아래에 내 순위 줄 — 기록이 있으면 'N위', 이번 달 보상 자리면 'N위 · 보상권', 보유했는데 기록이 없으면 '기록 없음'.
+   * summary 가 없으면(요청 실패 · 늦음) 그 줄을 통째로 뺀다 — 가짜 값이나 빈 칸을 띄우지 않는다
+   */
+  private buildCharSelectOverlay(summary: ExtremeCharSummaryResponse | null) {
     if (this.charOverlayObjects.length > 0) return;
 
-    const W = this.scale.width;
-    const H = this.scale.height;
-    const cx = W / 2;
-    const yOff = (H - 600) / 2;
+    const { W, H, cx } = this.getScaleInfo();
     const DEPTH = 500;
+    const keep = <T extends Phaser.GameObjects.GameObject>(o: T): T => { this.charOverlayObjects.push(o); return o; };
 
-    // 반투명 배경 (이벤트 흡수)
-    const bg = this.add.rectangle(cx, H / 2, W, H, 0x000000, 0.92)
-      .setDepth(DEPTH).setInteractive();
-    this.charOverlayObjects.push(bg);
+    // 시트 — 뒤 랭킹을 덮고 입력을 흡수한다
+    keep(this.add.rectangle(cx, H / 2, W, H, SHEET.bg, 1).setDepth(DEPTH).setInteractive());
 
-    // 타이틀
-    this.charOverlayObjects.push(
-      this.add.text(cx, 38 + yOff, '캐릭터 선택', {
-        fontSize: '20px', color: '#ffffff', fontStyle: 'bold',
-        stroke: '#000', strokeThickness: 4,
-      }).setOrigin(0.5).setDepth(DEPTH + 1)
-    );
-
-    // 오버레이가 열린 시각을 기록해 200ms 이내 pointerup은 모두 무시한다.
-    // (드롭다운 pointerdown → 오버레이 생성 → 같은 손가락 pointerup이 카드·버튼에 전달되는 고스트 클릭 방지)
-    // Phaser 이벤트 순서에 의존하는 readyForInput 패턴을 대체한다.
+    // 오버레이가 열린 시각을 기록해 200ms 이내 입력은 모두 무시한다.
+    // (칩 pointerdown → 시트 생성 → 같은 손가락 pointerup 이 카드·버튼에 전달되는 고스트 클릭 방지)
     const openedAt = Date.now();
     const OPEN_DEBOUNCE = 200;
+    const fresh = () => Date.now() - openedAt < OPEN_DEBOUNCE;
 
     const scroll = { y: 0, startY: 0, startScrollY: 0, active: false, hasDragged: false };
 
-    // "전체 랭킹" 버튼
+    // 머리 — 제목 · 보는 시즌 · 닫기
+    keep(this.add.text(16, 26, '캐릭터별 랭킹', { fontSize: '19px', fontStyle: 'bold', color: '#ffffff' })
+      .setOrigin(0, 0.5).setDepth(DEPTH + 2));
+    const season = this.seasonText?.text;
+    keep(this.add.text(16, 48, season ? `EXTREME · ${season}` : 'EXTREME', { fontSize: '12px', color: SHEET.dim })
+      .setOrigin(0, 0.5).setDepth(DEPTH + 2));
+
+    const close = keep(this.add.container(W - 16 - 29, 30).setDepth(DEPTH + 2));
+    const closeSkin = bakeButton(this, 'rank_sheet_close', {
+      w: 58, h: 32, radius: 11, top: '#5a5478', bottom: '#38334f', border: '#17131f', borderW: 2, lip: '#17131f', lipH: 3, gloss: 0,
+    });
+    close.add(this.add.image(0, 0, closeSkin.key).setOrigin(0.5, closeSkin.originY));
+    close.add(this.add.text(0, -1, '닫기', { fontSize: '14px', fontStyle: 'bold', color: '#ffffff' }).setOrigin(0.5));
+    wireButton(this, close, 58, 32, () => { if (!fresh()) this.hideCharSelectOverlay(); }, true);
+
+    // "전체 랭킹" 줄 — 지금 보고 있으면 파란 판
     const allSel = this.selectedCharFilter === null;
-    const allBg = this.add.rectangle(cx, 68 + yOff, 160, 30,
-      allSel ? 0x334488 : 0x222233, 1).setDepth(DEPTH + 1);
-    allBg.setStrokeStyle(2, allSel ? 0xaaccff : 0x444466);
-    const allTxt = this.add.text(cx, 68 + yOff, '전체 랭킹', {
-      fontSize: '13px', color: allSel ? '#ffffff' : '#8899bb', fontStyle: 'bold',
-    }).setOrigin(0.5).setDepth(DEPTH + 2);
-    setTouchInteractive(allBg);
-    allBg.on('pointerup', () => {
-      if (Date.now() - openedAt < OPEN_DEBOUNCE || scroll.hasDragged) return;
+    const rw = W - 24, ry = 90;
+    const all = keep(this.add.container(cx, ry).setDepth(DEPTH + 2));
+    const allSkin = bakeButton(this, `rank_sheet_all_${allSel ? 'on' : 'off'}_${rw}`, allSel
+      ? { w: rw, h: 42, radius: 13, top: '#4f6ad6', bottom: '#2d3f9c', border: '#b3c8ff', borderW: 2, lip: '#1c2766', lipH: 4, gloss: 0 }
+      : { w: rw, h: 42, radius: 13, top: '#2c2650', bottom: '#211c3d', border: '#4a4280', borderW: 2, lip: '#141029', lipH: 4, gloss: 0 });
+    all.add(this.add.image(0, 0, allSkin.key).setOrigin(0.5, allSkin.originY));
+    all.add(this.add.text(-rw / 2 + 16, -1, '전체 랭킹', { fontSize: '15px', fontStyle: 'bold', color: allSel ? '#ffffff' : '#c8c0e8' })
+      .setOrigin(0, 0.5));
+    if (allSel) all.add(this.add.text(rw / 2 - 16, -1, '보는 중', { fontSize: '12px', fontStyle: 'bold', color: SHEET.gold }).setOrigin(1, 0.5));
+    wireButton(this, all, rw, 42, () => {
+      if (fresh()) return;
       this.hideCharSelectOverlay();
       if (this.selectedCharFilter !== null) {
         this.selectedCharFilter = null;
         this.loadLeaderboard();
       }
-    });
-    this.charOverlayObjects.push(allBg, allTxt);
+    }, true);
 
-    // 닫기 버튼 (하단 고정) — 스크롤 영역 밖이므로 hasDragged 체크 불필요
-    const closeY = H - 24;
-    const closeBg = this.add.rectangle(cx, closeY, 100, 30, 0x333333, 1)
-      .setDepth(DEPTH + 3).setStrokeStyle(2, 0x666666);
-    const closeTxt = this.add.text(cx, closeY, '✕ 닫기', {
-      fontSize: '13px', color: '#cccccc', fontStyle: 'bold',
-    }).setOrigin(0.5).setDepth(DEPTH + 4);
-    setTouchInteractive(closeBg);
-    closeBg.on('pointerup', () => {
-      if (Date.now() - openedAt < OPEN_DEBOUNCE) return;
-      this.hideCharSelectOverlay();
-    });
-    this.charOverlayObjects.push(closeBg, closeTxt);
+    // 스크롤 창 — 전체 랭킹 줄 아래부터 화면 끝까지
+    const SCROLL_TOP = ry + 32;
+    const viewH = H - SCROLL_TOP;
+    const scrollView = new Phaser.Geom.Rectangle(0, SCROLL_TOP, W, viewH);
+    const maskGfx = keep(this.make.graphics({}, false));
+    maskGfx.fillStyle(0xffffff).fillRect(0, SCROLL_TOP, W, viewH);
+    const box = keep(this.add.container(0, 0).setDepth(DEPTH + 1));
+    box.setMask(maskGfx.createGeometryMask());
 
-    // 스크롤 영역 정의
-    const SCROLL_TOP = 90 + yOff;
-    const SCROLL_BOTTOM = H - 46;
-    const scrollAreaH = SCROLL_BOTTOM - SCROLL_TOP;
+    // 4열 — 좌우 여백 SIDE 를 두고 화면 폭에 맞춰 카드 폭을 정한다
+    const COLS = 4, SIDE = 12, GAP = 8;
+    const cw = Math.floor((W - SIDE * 2 - GAP * (COLS - 1)) / COLS);
+    const ch = Math.round(cw * 1.18);
+    const showRank = summary !== null;
+    const rowH = ch + 30 + (showRank ? 20 : 0);   // 카드 + 이름 (+ 내 순위)
+    const mine = new Map((summary?.characters ?? []).map(c => [c.characterType, c]));
+    // 보상권은 이번 달만 — 지난 시즌의 rewardEligible 은 '그 달 지급 대상이었나'라 뜻이 다르다
+    const isCurrent = this.viewingYearMonth === null;
 
-    // 카드 크기 (4열 포트레이트)
-    const COLS = 4;
-    const CELL_W = 90;
-    const CELL_H = 112;
-    const CARD_W = 84;
-    const CARD_H = 106;
-    const gridLeft = (W - COLS * CELL_W) / 2; // = 20px
+    const owned = new Set(getOwnedCharacters());
+    const visible = getVisibleCharacters();
+    let y = SCROLL_TOP + 8;
+    for (const grade of GRADE_ORDER) {
+      // 같은 등급 안에서는 보유 먼저 (sort 는 안정 정렬 — 나머지는 등록 순 그대로)
+      const list = visible.filter(c => c.grade === grade).sort((a, b) => Number(owned.has(b.id)) - Number(owned.has(a.id)));
+      if (list.length === 0) continue;
 
-    // 도감도 사람에게 보이는 화면이다 — 미공개 캐릭터는 빼고 행수를 잡는다
-    const charList = getVisibleCharacters();
-    const ROWS = Math.ceil(charList.length / COLS);
-    const totalGridH = ROWS * CELL_H;
-    const maxScroll = Math.max(0, totalGridH - scrollAreaH);
-    const scrollView = new Phaser.Geom.Rectangle(0, SCROLL_TOP, W, scrollAreaH);
-
-    // GeometryMask — 스크롤 뷰포트 클리핑
-    const maskGfx = this.add.graphics();
-    maskGfx.fillStyle(0xffffff);
-    maskGfx.fillRect(0, SCROLL_TOP, W, scrollAreaH);
-    const mask = maskGfx.createGeometryMask();
-    this.charOverlayObjects.push(maskGfx);
-
-    // 카드 컨테이너 (container.y = -scroll.y 로 스크롤)
-    const cardContainer = this.add.container(0, 0).setDepth(DEPTH + 1);
-    cardContainer.setMask(mask);
-    this.charOverlayObjects.push(cardContainer);
-
-    charList.forEach((char, i) => {
-      const col = i % COLS;
-      const row = Math.floor(i / COLS);
-      const lx = gridLeft + col * CELL_W + CELL_W / 2;
-      const ly = SCROLL_TOP + row * CELL_H + CELL_H / 2;
-      const isSel = this.selectedCharFilter === char.id;
-
-      // 카드 배경
-      const cardBg = this.add.rectangle(lx, ly, CARD_W, CARD_H, 0x0a0a18, 1);
-      cardBg.setStrokeStyle(isSel ? 3 : 1, isSel ? 0xaaccff : 0x222240);
-
-      // 카드 썸네일 (216x288 = 3:4 → 카드 84x106 에 맞게 위아래를 조금 잘라 꽉 채운다). 없으면 게임 스프라이트
-      const src = `rank_cardsrc_${char.id}`;
-      let illust: Phaser.GameObjects.Image;
-      if (this.textures.exists(src)) {
-        const fr = this.textures.getFrame(src);
-        const k = CARD_W / fr.width;
-        const cropH = Math.min(fr.height, CARD_H / k);
-        illust = this.add.image(lx, ly, src).setScale(k).setOrigin(0.5)
-          .setCrop(0, (fr.height - cropH) / 2, fr.width, cropH);
-      } else {
-        illust = this.add.image(lx, ly - 8, char.imageKey).setOrigin(0.5);
-        illust.setScale(Math.min((CARD_W - 16) / illust.width, (CARD_H - 30) / illust.height));
+      // 칸 머리 — 등급 배지 · 등급 · 인원 · 보유 수
+      const hy = y + 12;
+      const badge = getGradeImgKey(grade);
+      let tx = SIDE;
+      if (badge && this.textures.exists(badge)) {
+        box.add(this.add.image(SIDE + 12, hy, badge).setDisplaySize(24, 24));
+        tx = SIDE + 30;
       }
-      if (!isSel) illust.setAlpha(0.75);
+      const label = this.add.text(tx, hy, grade, { fontSize: '15px', fontStyle: 'bold', color: list[0].gradeColor }).setOrigin(0, 0.5);
+      box.add([
+        label,
+        this.add.text(tx + label.width + 8, hy, `${list.length}명 · 보유 ${list.filter(c => owned.has(c.id)).length}`, {
+          fontSize: '12px', color: SHEET.dim,
+        }).setOrigin(0, 0.5),
+        this.add.rectangle(SIDE, hy + 16, W - SIDE * 2, 1, SHEET.line).setOrigin(0, 0.5),
+      ]);
+      y += 34;
 
-      // 하단 그라디언트 (이름 가독성)
-      const grad = this.add.graphics();
-      grad.fillGradientStyle(0x000000, 0x000000, 0x000000, 0x000000, 0, 0, 0.88, 0.88);
-      grad.fillRect(lx - CARD_W / 2, ly + CARD_H / 2 - 30, CARD_W, 30);
+      list.forEach((char, i) => {
+        const x = SIDE + (i % COLS) * (cw + GAP);
+        const top = y + Math.floor(i / COLS) * rowH;
+        const own = owned.has(char.id);
+        const isSel = this.selectedCharFilter === char.id;
 
-      // 이름 텍스트
-      const nameTxt = this.add.text(lx, ly + CARD_H / 2 - 5, char.name, {
-        fontSize: '9px', color: '#ffffff', fontStyle: 'bold',
-        stroke: '#000', strokeThickness: 2,
-      }).setOrigin(0.5, 1);
+        const base = this.add.graphics();
+        base.fillStyle(0x0a0a18, 1).fillRoundedRect(x, top, cw, ch, 10);
+        box.add(base);
 
-      // 등급 뱃지 (우상단 원)
-      const dot = this.add.circle(
-        lx + CARD_W / 2 - 8, ly - CARD_H / 2 + 8,
-        5, getGradeColorInt(char), 1
-      );
-
-      // 선택 시 하이라이트 오버레이
-      if (isSel) {
-        const sel = this.add.rectangle(lx, ly, CARD_W, CARD_H, 0x5588ff, 0.18);
-        cardContainer.add(sel);
-      }
-
-      cardContainer.add([cardBg, illust, grad, nameTxt, dot]);
-
-      // 스크롤 창 밖으로 밀려난 카드는 눌리지 않게 — 마스크는 입력을 자르지 않아 '전체 랭킹' 위를 덮었다
-      cardBg.setInteractive(clipToViewport(new Phaser.Geom.Rectangle(0, 0, CARD_W, CARD_H), scrollView));
-      cardBg.on('pointerup', (ptr: Phaser.Input.Pointer) => {
-        if (Date.now() - openedAt < OPEN_DEBOUNCE || scroll.hasDragged) return;
-        if (ptr.y < SCROLL_TOP || ptr.y > SCROLL_BOTTOM) return;
-        this.hideCharSelectOverlay();
-        if (this.selectedCharFilter !== char.id) {
-          this.selectedCharFilter = char.id;
-          this.loadLeaderboard();
+        // 카드 썸네일 (3:4 → 칸 비율에 맞게 위쪽을 살려 둥글게 굽는다). 없으면 게임 스프라이트
+        const src = `rank_cardsrc_${char.id}`;
+        let art: Phaser.GameObjects.Image;
+        if (this.textures.exists(src)) {
+          const key = bakeRoundedImage(this, `rank_card_${char.id}_${cw}x${ch}`, src, cw, ch, 10, 0.2);
+          art = this.add.image(x, top, key).setOrigin(0).setDisplaySize(cw, ch);
+        } else {
+          art = this.add.image(x + cw / 2, top + ch / 2, char.imageKey);
+          art.setScale(Math.min((cw - 16) / art.width, (ch - 16) / art.height));
         }
+        if (!own) art.setTint(0x6a6680).setAlpha(0.5);
+        box.add(art);
+
+        const edge = this.add.graphics();
+        edge.lineStyle(isSel ? 3 : 1.5, isSel ? SHEET.goldInt : SHEET.line).strokeRoundedRect(x, top, cw, ch, 10);
+        box.add(edge);
+
+        const gk = getGradeImgKey(char.grade);
+        if (gk && this.textures.exists(gk)) box.add(this.add.image(x + 13, top + 13, gk).setDisplaySize(22, 22));
+
+        if (!own) {
+          const t = this.add.text(x + cw / 2, top + ch - 14, '미보유', { fontSize: '11px', fontStyle: 'bold', color: '#e0dcef' }).setOrigin(0.5);
+          const pill = this.add.graphics();
+          pill.fillStyle(0x000000, 0.6).fillRoundedRect(x + cw / 2 - t.width / 2 - 7, top + ch - 23, t.width + 14, 18, 9);
+          box.add([pill, t]);
+        }
+
+        const name = this.add.text(x + cw / 2, top + ch + 13, char.name, {
+          fontSize: '13px', fontStyle: 'bold', color: isSel ? SHEET.gold : own ? '#ffffff' : '#8a84a0',
+        }).setOrigin(0.5);
+        if (name.width > cw) name.setScale(cw / name.width);
+        box.add(name);
+
+        if (showRank) {
+          const s = mine.get(char.id);
+          const ly = top + ch + 32;
+          if (s?.myRank != null) {
+            const reward = isCurrent && s.rewardEligible;
+            const t = this.add.text(x + cw / 2, ly, reward ? `${s.myRank}위 · 보상권` : `${s.myRank}위`, {
+              fontSize: '12px', fontStyle: 'bold', color: reward ? '#3a2400' : '#ffffff',
+            }).setOrigin(0.5);
+            if (t.width + 14 > cw) t.setScale((cw - 14) / t.width);
+            const pw = t.displayWidth + 14;
+            const pill = this.add.graphics();
+            pill.fillStyle(reward ? SHEET.goldInt : 0x2e2558, 1).fillRoundedRect(x + (cw - pw) / 2, ly - 9, pw, 18, 9);
+            box.add([pill, t]);
+          } else if (own) {
+            box.add(this.add.text(x + cw / 2, ly, '기록 없음', { fontSize: '12px', color: SHEET.dim }).setOrigin(0.5));
+          }
+        }
+
+        // 눌리는 자리 = 카드 + 이름 (+ 내 순위). 스크롤 창 밖으로 밀려난 카드는 눌리지 않게 (마스크는 입력을 자르지 않는다)
+        const hitH = rowH - 6;
+        const hit = this.add.zone(x, top, cw, hitH).setOrigin(0);
+        hit.setInteractive(clipToViewport(new Phaser.Geom.Rectangle(0, 0, cw, hitH), scrollView));
+        hit.on('pointerup', (ptr: Phaser.Input.Pointer) => {
+          if (fresh() || scroll.hasDragged) return;
+          if (ptr.y < SCROLL_TOP) return;
+          this.hideCharSelectOverlay();
+          if (this.selectedCharFilter !== char.id) {
+            this.selectedCharFilter = char.id;
+            this.loadLeaderboard();
+          }
+        });
+        box.add(hit);
       });
-    });
+      y += Math.ceil(list.length / COLS) * rowH + 4;
+    }
+
+    // 아래 여백 — 맨 끝 줄이 바닥 흐림에 덮이지 않게
+    const contentH = y + 32 - SCROLL_TOP;
+    const maxScroll = Math.max(0, contentH - viewH);
+
+    // 더 있다는 표시 — 바닥 흐림 · 오른쪽 스크롤 막대
+    let thumb: Phaser.GameObjects.Rectangle | null = null;
+    const trackH = viewH - 12;
+    if (maxScroll > 0) {
+      const fade = keep(this.add.graphics().setDepth(DEPTH + 2));
+      fade.fillGradientStyle(SHEET.bg, SHEET.bg, SHEET.bg, SHEET.bg, 0, 0, 1, 1).fillRect(0, H - 32, W, 32);
+      keep(this.add.rectangle(W - 5, SCROLL_TOP + 4, 3, trackH, 0xffffff, 0.12).setOrigin(0.5, 0).setDepth(DEPTH + 3));
+      thumb = keep(this.add.rectangle(W - 5, SCROLL_TOP + 4, 3, Math.max(30, trackH * viewH / contentH), 0xffffff, 0.55)
+        .setOrigin(0.5, 0).setDepth(DEPTH + 3));
+    }
+    const scrollTo = (v: number) => {
+      scroll.y = Phaser.Math.Clamp(v, 0, maxScroll);
+      box.y = -scroll.y;
+      if (thumb) thumb.y = SCROLL_TOP + 4 + (trackH - thumb.height) * (scroll.y / maxScroll);
+    };
 
     // 씬 레벨 드래그 핸들러 (스크롤)
     const onDown = (ptr: Phaser.Input.Pointer) => {
-      if (ptr.y < SCROLL_TOP || ptr.y > SCROLL_BOTTOM) return;
+      if (ptr.y < SCROLL_TOP) return;
       scroll.startY = ptr.y;
       scroll.startScrollY = scroll.y;
       scroll.active = true;
@@ -803,8 +870,7 @@ export default class LeaderboardScene extends BaseScene {
       if (!scroll.active || !ptr.isDown) return;
       const delta = scroll.startY - ptr.y;
       if (Math.abs(delta) > 6) scroll.hasDragged = true;
-      scroll.y = Math.max(0, Math.min(maxScroll, scroll.startScrollY + delta));
-      cardContainer.y = -scroll.y;
+      scrollTo(scroll.startScrollY + delta);
     };
     const onUp = () => {
       scroll.active = false;
@@ -822,7 +888,7 @@ export default class LeaderboardScene extends BaseScene {
     };
   }
 
-  /** 캐릭터 선택 오버레이 숨김 */
+  /** 캐릭터 선택 시트 닫기 */
   private hideCharSelectOverlay() {
     this.overlayCleanup?.();
     this.overlayCleanup = undefined;
