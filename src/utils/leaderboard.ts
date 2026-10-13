@@ -188,6 +188,16 @@ export function invalidateLeaderboardCache(): void {
 }
 
 /**
+ * 응답이 실제로 담은 달 — 캐시에 넣을 키. 조회는 대상 달(기본 호출은 부른 시점의 UTC 달)로 하지만, 넣는 것은 이 달로 한다:
+ * 달 경계에 걸친 기본 요청은 보낼 때 10월이어도 서버가 받을 때 11월이면 11월로 답한다. 보낸 때의 키에 넣으면
+ * 그 뒤 명시 10월 조회가 11월 응답을 받는다 (리뷰 f2089825). 달이 없는 응답은 넣지 않는다
+ */
+function responseMonth(data: unknown): string | null {
+  const ym = (data as { yearMonth?: unknown } | null)?.yearMonth;
+  return typeof ym === 'string' && /^\d{4}-\d{2}$/.test(ym) ? ym : null;
+}
+
+/**
  * EXTREME 캐릭터별 요약 — 캐릭터마다 부르지 않고 한 번에 (leaderboard-top 요약 모드).
  * yearMonth 를 안 주면 이번 달. 로그인 상태면 내 순위 · 점수 · 보상권이 채워진다
  */
@@ -207,7 +217,8 @@ export async function getExtremeCharSummary(yearMonth?: string): Promise<Extreme
     throw new Error(error.message || 'Failed to fetch character summary');
   }
 
-  _summaryCache.set(cacheKey, { data: data as ExtremeCharSummaryResponse, ts: Date.now() });
+  const got = responseMonth(data);
+  if (got) _summaryCache.set(got, { data: data as ExtremeCharSummaryResponse, ts: Date.now() });
   return data as ExtremeCharSummaryResponse;
 }
 
@@ -221,7 +232,8 @@ export async function getLeaderboard(
   yearMonth?: string
 ): Promise<LeaderboardResponse> {
   // 달은 대상 달로 — 기본 호출도 부른 시점의 UTC 달. 빈 키로 두면 달이 바뀐 뒤 30초 동안 지난달 랭킹이 나온다
-  const cacheKey = `${difficulty}:${limit}:${characterType ?? ''}:${yearMonth ?? getCurrentYearMonth()}`;
+  const keyOf = (ym: string) => `${difficulty}:${limit}:${characterType ?? ''}:${ym}`;
+  const cacheKey = keyOf(yearMonth ?? getCurrentYearMonth());
   const cached = _lbCache.get(cacheKey);
   if (cached && Date.now() - cached.ts < _LB_TTL) {
     return cached.data;
@@ -239,7 +251,8 @@ export async function getLeaderboard(
     throw new Error(error.message || 'Failed to fetch leaderboard');
   }
 
-  _lbCache.set(cacheKey, { data: data as LeaderboardResponse, ts: Date.now() });
+  const got = responseMonth(data);
+  if (got) _lbCache.set(keyOf(got), { data: data as LeaderboardResponse, ts: Date.now() });
   return data as LeaderboardResponse;
 }
 
