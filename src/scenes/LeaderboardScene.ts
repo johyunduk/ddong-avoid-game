@@ -139,9 +139,10 @@ export default class LeaderboardScene extends BaseScene {
       this.charOverlayObjects.forEach(o => o.destroy());
       this.charOverlayObjects = [];
       this.cancelCharSelectOpen();
-      // 카드 썸네일(시상대 · 캐릭터 고르기)과 목록 얼굴은 이 씬에서만 쓴다 — 나갈 때 내린다.
+      // 카드 썸네일(시상대 · 캐릭터 고르기) · 목록 얼굴 · 고르기 시트의 구운 판(rank_sheet_rr_*)은 이 씬에서만 쓴다 — 나갈 때 내린다.
+      // 시트 판은 키에 카드 크기(화면 폭)가 들어가 남겨 두면 폭이 바뀔 때마다 쌓인다 (리뷰 7d42e04a P2)
       // DisplayList 의 SHUTDOWN 리스너가 부팅 때 걸려 먼저 돌아서, 여기 올 때는 이 그림을 쓰던 이미지가 이미 다 부서져 있다
-      const own = ['rank_cardsrc_', 'rank_card_', 'rank_facesrc_', 'rank_face_'];
+      const own = ['rank_cardsrc_', 'rank_card_', 'rank_facesrc_', 'rank_face_', 'rank_sheet_rr_'];
       for (const key of this.textures.getTextureKeys()) {
         if (own.some(p => key.startsWith(p))) this.textures.remove(key);
       }
