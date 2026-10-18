@@ -17,6 +17,7 @@ import BaseScene from './BaseScene';
 import { addBackground } from '../utils/background';
 import { bakeButton, bakeRoundedImage, clipToViewport, gradientText, setTouchInteractive, wireButton } from '../utils/buttonSkin';
 import { DIFFICULTY_TIER, type Tier } from '../utils/difficultyTheme';
+import { addRoundRect } from '../utils/bakeShape';
 
 // ── 배치 (A안 — 시상대 + 목록 + 아래 고정 내 순위) ─────────────────────────
 // 위 고정 영역(뒤로 · 제목 · 시즌 · 탭 · 캐릭터 필터)은 화면 위에 붙는다. 그 아래가 시상대와 목록
@@ -68,6 +69,8 @@ export default class LeaderboardScene extends BaseScene {
   /** 시트 열기 차례 — 씬을 다시 열면 올린다. 늦게 온 썸네일 · 요약이 다음 실행에 시트를 띄우지 않게 */
   private overlayOpenSeq = 0;
   private overlayCleanup?: () => void;
+  /** 시트가 덮는 동안 카메라에서 뺀 뒤 랭킹 화면 — 시트를 닫으면 되돌린다 */
+  private behindSheet: Phaser.GameObjects.GameObject[] = [];
 
   // 시즌 UI 요소
   private seasonText?: Phaser.GameObjects.Text;
@@ -103,6 +106,7 @@ export default class LeaderboardScene extends BaseScene {
     this.charOverlayObjects = [];
     this.charOverlayLoading = false;
     this.overlayOpenSeq++;
+    this.behindSheet = [];
     this.leaderboardTexts = [];
     this.charFilterObjects = [];
     this.difficultyTabs.clear();
@@ -684,6 +688,11 @@ export default class LeaderboardScene extends BaseScene {
     const DEPTH = 500;
     const keep = <T extends Phaser.GameObjects.GameObject>(o: T): T => { this.charOverlayObjects.push(o); return o; };
 
+    // 시트가 화면을 다 덮는 동안 뒤 랭킹 화면은 그리지 않는다 (목록 줄 · 시즌 줄 Graphics 가 매 프레임 다시 그려진다).
+    // 보이기(visible)는 받는 중인 그림의 로딩 글자처럼 시트가 떠 있는 동안에도 다른 코드가 바꾸니, 카메라에서만 뺐다가 닫을 때 되돌린다
+    this.behindSheet = [...this.children.list];
+    this.cameras.main.ignore(this.behindSheet);
+
     // 시트 — 뒤 랭킹을 덮고 입력을 흡수한다
     keep(this.add.rectangle(cx, H / 2, W, H, SHEET.bg, 1).setDepth(DEPTH).setInteractive());
 
@@ -781,9 +790,8 @@ export default class LeaderboardScene extends BaseScene {
         const own = owned.has(char.id);
         const isSel = this.selectedCharFilter === char.id;
 
-        const base = this.add.graphics();
-        base.fillStyle(0x0a0a18, 1).fillRoundedRect(x, top, cw, ch, 10);
-        box.add(base);
+        // 바탕 · 테 · 알약은 구운 그림 (utils/bakeShape) — 카드 26장의 Graphics 를 매 프레임 다시 그리지 않게
+        box.add(addRoundRect(this, 'rank_sheet', x, top, cw, ch, 10, { fill: 0x0a0a18 }));
 
         // 카드 썸네일 (3:4 → 칸 비율에 맞게 위쪽을 살려 둥글게 굽는다). 없으면 게임 스프라이트
         const src = `rank_cardsrc_${char.id}`;
@@ -798,17 +806,14 @@ export default class LeaderboardScene extends BaseScene {
         if (!own) art.setTint(0x6a6680).setAlpha(0.5);
         box.add(art);
 
-        const edge = this.add.graphics();
-        edge.lineStyle(isSel ? 3 : 1.5, isSel ? SHEET.goldInt : SHEET.line).strokeRoundedRect(x, top, cw, ch, 10);
-        box.add(edge);
+        box.add(addRoundRect(this, 'rank_sheet', x, top, cw, ch, 10, { line: isSel ? SHEET.goldInt : SHEET.line, lineWidth: isSel ? 3 : 1.5 }));
 
         const gk = getGradeImgKey(char.grade);
         if (gk && this.textures.exists(gk)) box.add(this.add.image(x + 13, top + 13, gk).setDisplaySize(22, 22));
 
         if (!own) {
           const t = this.add.text(x + cw / 2, top + ch - 14, '미보유', { fontSize: '11px', fontStyle: 'bold', color: '#e0dcef' }).setOrigin(0.5);
-          const pill = this.add.graphics();
-          pill.fillStyle(0x000000, 0.6).fillRoundedRect(x + cw / 2 - t.width / 2 - 7, top + ch - 23, t.width + 14, 18, 9);
+          const pill = addRoundRect(this, 'rank_sheet', x + cw / 2 - t.width / 2 - 7, top + ch - 23, t.width + 14, 18, 9, { fill: 0x000000, fillAlpha: 0.6 });
           box.add([pill, t]);
         }
 
@@ -827,9 +832,8 @@ export default class LeaderboardScene extends BaseScene {
               fontSize: '12px', fontStyle: 'bold', color: reward ? '#3a2400' : '#ffffff',
             }).setOrigin(0.5);
             if (t.width + 14 > cw) t.setScale((cw - 14) / t.width);
-            const pw = t.displayWidth + 14;
-            const pill = this.add.graphics();
-            pill.fillStyle(reward ? SHEET.goldInt : 0x2e2558, 1).fillRoundedRect(x + (cw - pw) / 2, ly - 9, pw, 18, 9);
+            const pw = Math.round(t.displayWidth + 14);   // 구운 그림 키가 폭마다라 정수로
+            const pill = addRoundRect(this, 'rank_sheet', x + (cw - pw) / 2, ly - 9, pw, 18, 9, { fill: reward ? SHEET.goldInt : 0x2e2558 });
             box.add([pill, t]);
           } else if (own) {
             box.add(this.add.text(x + cw / 2, ly, '기록 없음', { fontSize: '12px', color: SHEET.dim }).setOrigin(0.5));
@@ -910,7 +914,15 @@ export default class LeaderboardScene extends BaseScene {
     this.overlayCleanup = undefined;
     this.charOverlayObjects.forEach(o => o.destroy());
     this.charOverlayObjects = [];
+    this.restoreBehindSheet();
     this.updateCharFilterRow();
+  }
+
+  /** 시트를 열 때 카메라에서 뺀 뒤 화면을 되돌린다 (그사이 부서진 것에는 아무 일도 없다) */
+  private restoreBehindSheet() {
+    const id = this.cameras.main.id;
+    for (const o of this.behindSheet) o.cameraFilter &= ~id;
+    this.behindSheet = [];
   }
 
   /** 클라이언트 기준 현재 'YYYY-MM' */
