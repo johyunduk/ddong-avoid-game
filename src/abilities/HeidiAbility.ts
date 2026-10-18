@@ -347,7 +347,7 @@ export class HeidiAbility extends BaseAbility {
    * 잡힌 똥은 즉시 조용히 회수하고(닿아도 안 죽는다) 그 자리에 멈춘 잔상(ghost)을 둔다
    */
   private binds: {
-    g: Phaser.GameObjects.Graphics; t0: number;
+    t0: number;
     q?: Phaser.Physics.Arcade.Sprite; ghost?: Phaser.GameObjects.Image;
     tx: number; ty: number; sx: number; sy: number;
     /** 잡은 순간의 잔상 표시 크기 — 조르기는 여기서 매번 다시 계산한다 (누적하면 줄어든다) */
@@ -357,6 +357,11 @@ export class HeidiAbility extends BaseAbility {
     /** 발밑 그림자 웅덩이의 가로 반지름 — 가닥은 웅덩이 **가장자리**에서 나온다 */
     pr: number;
   }[] = [];
+  /**
+   * 가닥 전부를 그리는 그래픽스 **하나** (렉 점검 2026-10-18). 예전엔 가닥마다 하나씩(똥 수만큼) 만들어 매 프레임 지우고
+   * 다시 그렸다 — 깊이가 같고 만든 순서대로 겹치므로 한 장에 같은 순서로 그리면 보이는 것은 같다
+   */
+  private bindG?: Phaser.GameObjects.Graphics;
   /** 발밑 그림자 웅덩이 */
   private bindPool?: Phaser.GameObjects.Graphics;
   /** 마지막 가닥이 닿는 시각 (인 시작 기준 ms). 가닥 수에 따라 달라서 뻗을 때 정한다 */
@@ -585,7 +590,8 @@ export class HeidiAbility extends BaseAbility {
     this.burns = [];
     this.fires = [];
     this.binds = [];
-    this.bindPool = undefined;   // 오브젝트는 tracked 가 이미 부쉈다
+    this.bindG = undefined;      // 오브젝트는 tracked 가 이미 부쉈다
+    this.bindPool = undefined;
     this.nui = undefined;
     this.ball = undefined;
     this.gates = [];
@@ -1901,7 +1907,7 @@ export class HeidiAbility extends BaseAbility {
 
   /**
    * **시카마루 — 그림자 흉내 (땅 판본).** 착지한 자리에서 쪼그려 쥐 인을 맺으면 발밑
-   * 그림자에서 가닥 12개가 땅을 타고 뻗어, 위로 꺾여 똥을 하나씩 잡는다. 잡힌 똥은
+   * 그림자에서 가닥이 (화면 안 일반 똥마다, 가장 아래부터 최대 bindMax 24) 땅을 타고 뻗어, 위로 꺾여 똥을 하나씩 잡는다. 잡힌 똥은
    * 그 자리에 **뚝 멈춘다.** 전부 묶이면 0.5초 정적 — 그리고 한꺼번에 조여 터진다.
    *
    * 다른 일곱이 "순간에 지우는" 동안 시카마루만 **멈춤 → 정적 → 동시 소멸**의 박자다
@@ -1927,7 +1933,7 @@ export class HeidiAbility extends BaseAbility {
   }
 
   /**
-   * 가닥 목표 — **화면 안의 일반 똥 전부** (bindMax 가 0 이 아니면 가장 아래부터 그 수만큼).
+   * 가닥 목표 — 화면 안의 일반 똥을 **가장 아래부터 bindMax 개** (0 이면 전부). 남은 똥은 이어지는 꿰매기 바늘이 맡는다.
    * 단 땅 가까이 **이미 떨어져 내려온 똥은 뺀다** (bindMinRiseH — 화면 높이 대비)
    */
   private spawnBinds(api: GameSceneAPI, p: Puyo, now: number): void {
@@ -1943,9 +1949,9 @@ export class HeidiAbility extends BaseAbility {
     const gap = pool.length > 1
       ? Math.min(P.bindStaggerMs, P.bindStaggerSpan / (pool.length - 1)) : 0;
     this.bindReachEnd = P.bindSealMs + P.bindCreepMs + P.bindDashMs + gap * Math.max(0, pool.length - 1);
+    if (pool.length > 0) this.bindG = this.track(scene.add.graphics().setDepth(DEPTH_PUYO - 1));
     pool.forEach((q, i) => {
       this.binds.push({
-        g: this.track(scene.add.graphics().setDepth(DEPTH_PUYO - 1)),
         t0: now + i * gap, q, tx: q.x, ty: q.y,
         sx: p.ob.x, sy: this.groundY, gw: 0, gh: 0, ph: Math.random() * Math.PI * 2,
         pr: p.size * 0.75 * 0.85,
@@ -1987,10 +1993,9 @@ export class HeidiAbility extends BaseAbility {
     this.drawBinds(api, now, e >= squeezeAt ? (e - squeezeAt) / P.bindSqueezeMs : -1);
 
     if (e < squeezeAt + P.bindSqueezeMs) return;
-    for (const b of this.binds) {
-      if (b.g.active) this.discard(b.g);
-      if (b.ghost?.active) this.discard(b.ghost);
-    }
+    if (this.bindG?.active) this.discard(this.bindG);
+    this.bindG = undefined;
+    for (const b of this.binds) if (b.ghost?.active) this.discard(b.ghost);
     this.binds = [];
     // 마무리 — 그림자 꿰매기 (사람 지시). 웅덩이는 그대로 두고 바닥 전체로 번진다
     this.nui = {
@@ -2173,8 +2178,10 @@ export class HeidiAbility extends BaseAbility {
   private drawBinds(api: GameSceneAPI, now: number, squeeze: number): void {
     const P = HEIDI_PARAMS;
     const { scene } = api;
+    const g = this.bindG;
+    if (g?.active) g.clear();
     for (const b of this.binds) {
-      if (!b.g.active) continue;
+      if (!g?.active) break;
       // 아직 안 잡았으면 목표는 떨어지는 똥을 따라간다
       if (!b.ghost && b.q?.active) { b.tx = b.q.x; b.ty = b.q.y; }
       const el = now - b.t0;
@@ -2218,7 +2225,6 @@ export class HeidiAbility extends BaseAbility {
         ? creep * (1 - (1 - k1) * (1 - k1))
         : creep + (total - creep) * k2;
       const alpha = squeeze < 0 ? 0.92 : 0.92 * Math.max(0, 1 - squeeze);
-      b.g.clear();
       if (len <= 0 || alpha <= 0) continue;
       // **처음만 꿈틀댄다.** 곡선 길을 6px 마디로 나눠, 길을 따라 흐르는 물결로
       // 길의 **법선 방향**으로 흔든다. 흔들림은 뿌리에서 0, 머리로 갈수록 커지고
@@ -2253,11 +2259,11 @@ export class HeidiAbility extends BaseAbility {
         for (let j = i * per, end = Math.min(n, (i + 1) * per + 1); j < end; j++) part.push(bindPts[j]);
         if (part.length < 2) break;
         const w = Math.max(2, P.bindWidth * (1 - 0.6 * ((i + 0.5) / bands)));
-        b.g.lineStyle(w, P.bindColor, alpha).strokePoints(part);
+        g.lineStyle(w, P.bindColor, alpha).strokePoints(part);
       }
       // 잡은 똥을 감은 고리
       if (b.ghost) {
-        b.g.lineStyle(3, P.bindColor, alpha).strokeCircle(b.tx, b.ty,
+        g.lineStyle(3, P.bindColor, alpha).strokeCircle(b.tx, b.ty,
           Math.max(6, b.ghost.displayWidth * 0.45 * (squeeze < 0 ? 1 : 1 - 0.6 * squeeze)));
       }
     }
