@@ -72,8 +72,7 @@ const POP = {
   last3:  { from: 2.1, ms: 260, flashMs: 90, shakePx: 2 },
 } as const;
 
-/** 획득 글자 묶음 풀 크기 — 한 자리에 겹쳐 뜨니 넷이면 충분하다 */
-const POP_POOL = 4;
+/** 획득 글자 묶음 — 풀에서 돌려 쓴다 (popSpecial) */
 interface HudPop {
   box: Phaser.GameObjects.Container;
   text: Phaser.GameObjects.Text;
@@ -388,8 +387,9 @@ export class HudView {
   /**
    * 특수똥 획득 — 피버 알약 바로 아래에 아이콘 + 점수, 떠오르며 사라진다.
    *
-   * 글자 묶음은 풀에서 돌려 쓴다 (POP_POOL 장). 전에는 주울 때마다 Text 를 새로 만들어 캔버스 · 텍스처를 새로 만들고
-   * 1.25초 뒤 부쉈다 — 피버 중에는 초에 여러 번. 한 자리에 겹쳐 뜨니 읽히는 건 맨 위 몇 장뿐이라, 다 쓰고 있으면 가장 오래된 것을 다시 쓴다
+   * 글자 묶음은 풀에서 돌려 쓴다. 전에는 주울 때마다 Text 를 새로 만들어 캔버스 · 텍스처를 새로 만들고
+   * 1.25초 뒤 부쉈다 — 피버 중에는 초에 여러 번. **떠 있는 연출은 끊지 않는다** — 쉬는 묶음이 없으면 새로 만든다
+   * (풀은 동시에 떠 있던 최대 수까지만 는다. 씬이 끝나면 씬과 함께 부서진다)
    */
   popSpecial(textureKey: string, label: string, color: string) {
     const { scene } = this;
@@ -404,27 +404,27 @@ export class HudView {
     if (scene.textures.exists(textureKey)) icon.setTexture(textureKey).setDisplaySize(24, 24).setVisible(true);
     else icon.setVisible(false);
     box.setPosition(cx - (text.width + 16) / 2 + 8, POP_Y).setAlpha(1).setVisible(true);
-    scene.children.bringToTop(box);   // 나중에 주운 것이 위 — 새로 만들던 때와 같은 순서
+    // 나중에 주운 것이 위 — 새로 만들던 때와 같은 순서. bringToTop 만으로는 깊이 정렬 표시가 안 서서(List.bringToTop)
+    // 다음 정렬까지 깊이가 더 높은 블룸 · 꽃잎 · 플래시 위에 그려진다 — setDepth 로 queueDepthSort 를 다시 건다 (c64333c6 과 같다)
+    scene.children.bringToTop(box);
+    box.setDepth(DEPTH + 2);
     scene.tweens.add({ targets: box, y: POP_Y - 14, alpha: { from: 1, to: 0 }, duration: 1000, delay: 250, ease: 'Quad.easeIn',
       onComplete: () => box.setVisible(false) });
   }
 
-  /** 쉬고 있는 글자 묶음 — 없으면 새로 (POP_POOL 까지), 그것도 다 찼으면 가장 오래 전에 쓴 것 */
+  /** 쉬고 있는(연출이 끝나 숨은) 글자 묶음 — 없으면 새로 만든다. 떠 있는 것은 건드리지 않는다 */
   private takePop(): HudPop {
+    const idle = this.pops.find(p => !p.box.visible);
+    if (idle) return idle;
     const { scene } = this;
-    let slot = this.pops.find(p => !p.box.visible);
-    if (!slot && this.pops.length < POP_POOL) {
-      const box = scene.add.container(0, POP_Y).setDepth(DEPTH + 2).setVisible(false);
-      const text = scene.add.text(12, 0, '', {
-        fontSize: '20px', color: '#ffffff', fontStyle: 'bold', stroke: '#000000', strokeThickness: 5,
-      }).setOrigin(0, 0.5);
-      const icon = scene.add.image(-4, 0, '__DEFAULT').setVisible(false);
-      box.add([text, icon]);
-      slot = { box, text, icon };
-    }
-    if (!slot) slot = this.pops[0];
-    // 쓴 순서대로 — 맨 앞이 가장 오래 전에 쓴 것
-    this.pops = [...this.pops.filter(p => p !== slot), slot];
+    const box = scene.add.container(0, POP_Y).setDepth(DEPTH + 2).setVisible(false);
+    const text = scene.add.text(12, 0, '', {
+      fontSize: '20px', color: '#ffffff', fontStyle: 'bold', stroke: '#000000', strokeThickness: 5,
+    }).setOrigin(0, 0.5);
+    const icon = scene.add.image(-4, 0, '__DEFAULT').setVisible(false);
+    box.add([text, icon]);
+    const slot = { box, text, icon };
+    this.pops.push(slot);
     return slot;
   }
 }
