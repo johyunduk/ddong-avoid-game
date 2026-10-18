@@ -40,6 +40,38 @@ import { GameOverView, prefetchGameOverArt, releaseGameOverArt, type RankValue }
 import { HudView, HUD_BOTTOM } from './hud/HudView';
 import { bakeButton, bakeRadialGlow, bakeRoundedImage } from '../utils/buttonSkin';
 
+/** 시간 식으로 움직이는 입자 — 쏠 때(emitCallback) 정한 시작 · 변위 · 각도와, TweenTimedPath 가 쌓는 경과(ms) */
+type TimedParticle = Phaser.GameObjects.Particles.Particle & {
+  age?: number; x0?: number; y0?: number; dx?: number; dy?: number; a0?: number; da?: number;
+};
+
+/**
+ * 입자를 **예전 트윈과 같은 시간 식**으로 움직인다 (매화×매화 버스트 — aaa47151 리뷰).
+ *
+ * 속도 · 가속도로 적분하면(v += a·dt, x += v·dt) 프레임 delta 에 따라 궤적이 짧아진다 (모바일 지연에서 더 벌어진다).
+ * 그래서 경과 시간으로 위치를 바로 구한다 — 트윈처럼 경과는 **이번 프레임 delta 까지** 넣고
+ * (Particle.update 는 수명을 프로세서 뒤에 깎는다), 트윈 배율(tweens.timeScale)을 따른다:
+ * 히트스톱(배율 0) 동안 예전 트윈처럼 멈추고, 그동안 수명도 깎지 않는다
+ */
+class TweenTimedPath extends Phaser.GameObjects.Particles.ParticleProcessor {
+  private readonly tweens: Phaser.Tweens.TweenManager;
+  private readonly apply: (p: TimedParticle, u: number) => void;
+
+  constructor(tweens: Phaser.Tweens.TweenManager, apply: (p: TimedParticle, u: number) => void) {
+    super(0, 0, true);
+    this.tweens = tweens;
+    this.apply = apply;
+  }
+
+  override update(particle: Phaser.GameObjects.Particles.Particle, delta: number): void {
+    const p = particle as TimedParticle;
+    const ts = this.tweens.timeScale;
+    p.age = (p.age ?? 0) + delta * ts;
+    p.lifeCurrent += delta * (1 - ts);   // 이 뒤에 delta 를 깎는다 — 순감소 = delta × 배율
+    this.apply(p, Math.min(1, p.age / p.life));
+  }
+}
+
 export default class GameScene extends BaseScene {
   protected inputGuardMs = 0; // 게임플레이 씬은 즉시 입력 허용
 
@@ -1719,10 +1751,13 @@ export default class GameScene extends BaseScene {
       ctx.stroke();
     });
     const res = GameScene.BAKE_RES;
+    // 둘 다 속도 · 가속도는 쓰지 않는다 — 위치 · 각도 · 알파는 TweenTimedPath 가 예전 트윈과 같은 시간 식으로 정한다
     const slashes = this.add.particles(0, 0, slashKey, {
-      emitting: false, lifespan: 300, speed: 0, scale: 1 / res, alpha: { start: 1, end: 0 },   // 트윈 기본(선형) 300ms
+      emitting: false, lifespan: 300, speed: 0, scale: 1 / res, alpha: 1,
+      emitCallback: (p: TimedParticle) => { p.age = 0; },
     }).setDepth(195);
-    type Petal = Phaser.GameObjects.Particles.Particle & { a0?: number; da?: number };
+    // 칼날 — 300ms 동안 알파 1 → 0 (트윈 기본 이징 = 선형)
+    slashes.addParticleProcessor(new TweenTimedPath(this.tweens, (p, u) => { p.alpha = 1 - u; }));
     const petals = this.add.particles(0, 0, petalKey, {
       emitting: false,
       lifespan: { min: 500, max: 900 },
@@ -1730,12 +1765,9 @@ export default class GameScene extends BaseScene {
       // scaleX · scaleY 를 따로 둔다 — scale 하나로 주면 scaleY 가 scaleX 를 따라간다 (입자마다 가로 · 세로가 다르다)
       scaleX: 1, scaleY: 1,
       tint: 0xff3377,
-      alpha: { start: 0.9, end: 0, ease: 'Quad.easeOut' },
-      rotate: {
-        onEmit: () => 0,
-        onUpdate: (p: Petal, _k: string, t: number) => (p.a0 ?? 0) + (p.da ?? 0) * t * (2 - t),   // Quad.easeOut
-      },
-      emitCallback: (p: Petal) => {
+      alpha: 0.9,
+      rotate: 0,
+      emitCallback: (p: TimedParticle) => {
         const w = Phaser.Math.Between(4, 8), h = Phaser.Math.Between(7, 12);
         p.scaleX = w / (8 * res);
         p.scaleY = h / (12 * res);
@@ -1743,17 +1775,24 @@ export default class GameScene extends BaseScene {
         p.da = Phaser.Math.Between(-180, 180);
         p.angle = p.a0;
         p.rotation = Phaser.Math.DegToRad(p.a0);
-        // 예전 트윈과 같은 길 — 사방 40~90 + 아래로 20~50 을 Quad.easeOut 으로.
-        // easeOut(quad) = 처음 속도 2D/T 에서 끝에 0 이 되도록 고르게 줄이는 것과 같다
+        // 예전 트윈의 목표 — 사방 40~90 + 아래로 20~50
         const ang = Phaser.Math.DegToRad(Phaser.Math.Between(0, 360));
         const dist = Phaser.Math.Between(40, 90), drop = Phaser.Math.Between(20, 50);
-        const T = p.life / 1000;
-        p.velocityX = (2 * Math.cos(ang) * dist) / T;
-        p.velocityY = (2 * (Math.sin(ang) * dist + drop)) / T;
-        p.accelerationX = -p.velocityX / T;
-        p.accelerationY = -p.velocityY / T;
+        p.x0 = p.x;
+        p.y0 = p.y;
+        p.dx = Math.cos(ang) * dist;
+        p.dy = Math.sin(ang) * dist + drop;
+        p.age = 0;
       },
     }).setDepth(190);
+    // 꽃잎 — 위치 · 각도 · 알파(0.9 → 0) 모두 Quad.easeOut: e = u(2 - u)
+    petals.addParticleProcessor(new TweenTimedPath(this.tweens, (p, u) => {
+      const e = u * (2 - u);
+      p.x = (p.x0 ?? p.x) + (p.dx ?? 0) * e;
+      p.y = (p.y0 ?? p.y) + (p.dy ?? 0) * e;
+      p.angle = (p.a0 ?? 0) + (p.da ?? 0) * e;
+      p.alpha = 0.9 * (1 - e);
+    }));
     this.maehwaFx = { slashes, petals, petalKey, stormFree: [] };
     return this.maehwaFx;
   }
@@ -1776,8 +1815,11 @@ export default class GameScene extends BaseScene {
     const DURATION = 2200;
     const fx = this.ensureMaehwaFx();
     const res = GameScene.BAKE_RES;
-    const imgs = Array.from({ length: COUNT }, () => fx.stormFree.pop()
-      ?? this.add.image(0, 0, fx.petalKey).setDepth(194).setVisible(false));
+    // 풀에서는 **앞에서부터** 꺼낸다 — 돌려놓을 때 p0 → p54 순서로 넣으므로, 꺼낸 묶음도 표시 목록에서 p0 이 먼저 그려진다.
+    // (뒤에서 꺼내면 두 번째 눈보라부터 겹침 순서가 뒤집혀 반투명 꽃잎이 겹친 색이 달라진다 — 예전 Graphics 는 늘 p0 → p54)
+    const reused = fx.stormFree.splice(0, COUNT);
+    const imgs = [...reused, ...Array.from({ length: COUNT - reused.length },
+      () => this.add.image(0, 0, fx.petalKey).setDepth(194).setVisible(false))];
 
     const petals = Array.from({ length: COUNT }, () => ({
       startX:     Phaser.Math.Between(-30, W + 30),
