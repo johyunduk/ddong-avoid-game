@@ -580,6 +580,11 @@ export default class GameScene extends BaseScene {
       if (this.restarting) return;
       releaseGameOverArt(this);
       releaseHeavyCharacterAssets(this);
+      // 크리스마스 곡은 EXTREME 판 몫 — 소리 객체를 먼저 부수고(버퍼를 잡고 있다) PCM(64MB)을 내린다
+      if (this.cache.audio.exists('xmasBgMusic')) {
+        if (this.bgMusic?.key === 'xmasBgMusic') this.bgMusic.destroy();
+        this.cache.audio.remove('xmasBgMusic');
+      }
     });
 
     // 탭 전환 시 기준점 리셋 — 숨김/복귀 양방향으로 처리

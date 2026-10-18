@@ -100,9 +100,9 @@ export default class DifficultySelectScene extends BaseScene {
         if (!this.textures.exists('xmas_poop_beard')) this.load.image('xmas_poop_beard', 'assets/poops/xmas_beard_poop.webp');
       }
 
-      // BGM
+      // BGM — 크리스마스 곡(xmas_poop.mp3)은 여기서 받지 않는다. EXTREME 판에서만 쓰는데 Web Audio 는 곡 전체를
+      // PCM 으로 들고 있어 175초 = 64MB 다 (2026-10-18 렉 실측). GameScene.preload 가 EXTREME 판일 때만 받는다
       if (!this.cache.audio.exists('bgMusic')) this.load.audio('bgMusic', 'assets/bgms/poop.mp3');
-      if (isChristmasSeason() && !this.cache.audio.exists('xmasBgMusic')) this.load.audio('xmasBgMusic', 'assets/bgms/xmas_poop.mp3');
 
     }
   }
