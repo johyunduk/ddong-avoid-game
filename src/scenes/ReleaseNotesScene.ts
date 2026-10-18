@@ -301,7 +301,9 @@ export default class ReleaseNotesScene extends BaseScene {
    * 한 줄에 들어가게 뒤를 자르고 '…' 를 붙인다 (force 면 이미 '…' 가 붙은 글이다). t 의 글자는 바꾸지 않는다 — 부르는 쪽이 한 번 setText.
    * 폭은 t 의 글꼴로 measureText 해 Phaser 와 같은 식(줄 바꿈 없이 · 올림 · 외곽선 · 여백)으로 잰다.
    * 예전에는 한 글자씩 지우며 매번 setText 했다 — Text 는 setText 마다 캔버스를 다시 그리고 GPU 로 올려서,
-   * 지난 버전 요약 줄만으로 화면을 열 때 약 600번이었다 (2026-10-18 렉 점검). 이제 이진 탐색으로 고른 길이가 예전과 같다
+   * 지난 버전 요약 줄만으로 화면을 열 때 약 600번이었다 (2026-10-18 렉 점검). 자르는 순서는 예전 루프 그대로 — 뒤에서 한 칸씩.
+   * 이진 탐색은 쓰지 않는다 — 조합 이모지(피부색 등)는 앞 조각보다 다 붙은 쪽이 좁아서 폭이 길이에 따라 늘기만 하지 않고,
+   * 예전보다 짧게 잘랐다 (A👍🏽BCD → A👍…, 리뷰 c11b9837 P2). 재기는 measureText 라 한 칸씩이어도 싸다
    */
   private fitOneLine(t: Phaser.GameObjects.Text, s: string, maxW: number, force = false): string {
     const ctx = t.context;
@@ -309,16 +311,13 @@ export default class ReleaseNotesScene extends BaseScene {
     const pad = (t.padding.left ?? 0) + (t.padding.right ?? 0);
     const fits = (str: string) => Math.ceil(t.style.strokeThickness + ctx.measureText(str).width) + pad <= maxW;
     if (!force && fits(s)) return s;
-    const body = force ? s.slice(0, -1) : s;
-    const cut = (n: number) => body.slice(0, n).trimEnd() + '…';
-    // 앞 n 글자 + '…' 가 들어가는 가장 큰 n (1 ~ 길이-1). 하나도 안 들어가면 1 — 예전 루프와 같다
-    let lo = 1, hi = body.length - 1;
-    if (hi < 1) return cut(Math.max(0, hi));
-    while (lo < hi) {
-      const mid = (lo + hi + 1) >> 1;
-      if (fits(cut(mid))) lo = mid; else hi = mid - 1;
-    }
-    return cut(lo);
+    let body = force ? s.slice(0, -1) : s;
+    let out: string;
+    do {
+      body = body.slice(0, -1);
+      out = body.trimEnd() + '…';
+    } while (!fits(out) && body.length > 1);
+    return out;
   }
 
   /**
