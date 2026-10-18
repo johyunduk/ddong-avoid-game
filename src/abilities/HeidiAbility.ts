@@ -166,7 +166,7 @@ type PuyoState =
   // ── 지라이야 고유: 화둔·가마유탄 (땅 판본) ──
   | 'toadSummon'  // 두루마리 소환 → 가마분타 머리 위에서 불길 (본체는 숨고 두꺼비 그림이 대신)
   // ── 기본 뿌요 고유: 그림자 분신술 + 강화 아랑아 ──
-  | 'cloneJutsu'; // 인 → 펑 → 드릴 여덟이 화면을 누빈다 (본체는 숨는다)
+  | 'cloneJutsu'; // 인 → 펑 → 드릴 cloneCount(12) 마리가 화면을 누빈다 (본체는 숨는다)
 
 /**
  * 뿌요 **한 마리분** 상태.
@@ -1111,7 +1111,7 @@ export class HeidiAbility extends BaseAbility {
   }
 
   /**
-   * **미나토 — 비뢰신 3연속.** 걷다가 아무 방향으로 표식 쿠나이를 던지고, 꽂힌 자리로
+   * **미나토 — 비뢰신 blinkCount(5)연속.** 걷다가 아무 방향으로 표식 쿠나이를 던지고, 꽂힌 자리로
    * 순간이동한다. 거기서 또 던지고 또 뛴다.
    *
    * 한 주기 (시간 하나에서 전부 뽑는다 — 트윈 없음):
@@ -1690,7 +1690,7 @@ export class HeidiAbility extends BaseAbility {
 
   /**
    * **이타치 — 아마테라스 (땅 판본).** 착지한 자리에서 만화경을 뜨고 망토를 펼치면
-   * 깃털이 흩어지며 까마귀 6마리가 난다. 까마귀는 각자 다른 똥을 쫓아가 부딪히고,
+   * 깃털이 흩어지며 까마귀 igniteCrows(12) 마리가 난다. 까마귀는 각자 다른 똥을 쫓아가 부딪히고,
    * 부딪힌 자리에 **검은 불기둥**이 4초 서서 닿는 똥을 태운다. 못 맞힌 까마귀도 1초 뒤
    * 그 자리에서 불기둥이 된다.
    *
@@ -1760,7 +1760,7 @@ export class HeidiAbility extends BaseAbility {
     for (let i = 0; i < n; i++) {
       // 부채꼴로 위로 퍼진다 (-160° ~ -20°)
       const a = Phaser.Math.DegToRad(-160 + (140 * (i + 0.5)) / n);
-      // 망토 폭만큼 좌우로 흩어서 나온다 — 한 점에서 나오면 여덟이 겹쳐 수가 안 읽힌다
+      // 망토 폭만큼 좌우로 흩어서 나온다 — 한 점에서 나오면 까마귀(igniteCrows)가 겹쳐 수가 안 읽힌다
       const sx = cx + P.crowSpreadX * ((i + 0.5) / n * 2 - 1);
       const ob = this.track(scene.add.sprite(sx, cy - Math.abs(Math.sin(a)) * 6, tex, 0)
         .setDepth(DEPTH_PUYO + 2));
@@ -2688,7 +2688,7 @@ export class HeidiAbility extends BaseAbility {
    */
   /**
    * **기본 뿌요 — 그림자 분신술 + 강화 아랑아.** 착지한 자리에서 인을 맺고(컷인),
-   * 펑 하고 여덟 마리 흰 회오리 드릴이 되어 위쪽 부채꼴로 엇갈려 튀어나간다.
+   * 펑 하고 cloneCount(12) 마리 흰 회오리 드릴이 되어 위쪽 부채꼴로 엇갈려 튀어나간다.
    * 드릴은 벽·천장·바닥을 cloneBounces 번 튕기고 그다음 벽에서 펑 하고 사라진다.
    * 다 사라지면 본체가 원래 자리에 다시 나타난다.
    */
@@ -2710,7 +2710,7 @@ export class HeidiAbility extends BaseAbility {
     if (this.cutin) this.stepCutin(scene, now);
     if (now < p.stateUntil) { p.ob.y = this.groundY; return; }
 
-    // ① 펑 — 본체가 숨고 드릴 여덟이 나온다
+    // ① 펑 — 본체가 숨고 드릴 cloneCount 마리가 나온다
     if (!p.finFired) {
       p.finFired = true;
       const key = fxPickSheetKey(HEIDI_PUYO_SHEETS.tsuga);
@@ -2721,7 +2721,7 @@ export class HeidiAbility extends BaseAbility {
       const n = P.cloneCount;
       impact(scene, { hitstop: 50, shake: { duration: 200, intensity: 0.006 } });
       // **분신이 화면 곳곳에 먼저 보인다** (사람 판정: "바닥 말고 곳곳에, 각자 자세를 잡고
-      // 나서 아랑아"). 여덟이 서로 다른 자세 한 컷으로 펑 하고 나타나 잠깐 버틴다.
+      // 나서 아랑아"). 드릴들이 서로 다른 자세 한 컷으로 펑 하고 나타나 잠깐 버틴다.
       // 자리는 서로 cloneMinGap 이상 떨어지게 뽑는다. 나타나는 박자와 튀어 나가는 순서는 섞는다
       const poseKey = fxPickSheetKey(HEIDI_FX_CLONEPOSE);
       const x0 = W0 * P.cloneEdgeW, x1 = W0 * (1 - P.cloneEdgeW);
@@ -2803,7 +2803,7 @@ export class HeidiAbility extends BaseAbility {
         this.cloneLeft -= got;
       }
       d.prev = { x, y };
-      // 잔상 (평소 아랑아와 같은 목록 — 드릴이 여덟이라 간격을 두 배로)
+      // 잔상 (평소 아랑아와 같은 목록 — 드릴이 여럿(cloneCount)이라 간격을 두 배로)
       if (now >= this.tsugaTrailAt) {
         this.tsugaTrailAt = now + P.tsugaTrailEvery * 2;
         const g = this.track(scene.add.image(x, y, d.ob.texture.key, d.ob.frame.name)
@@ -3222,7 +3222,7 @@ export class HeidiAbility extends BaseAbility {
   }
 
   /**
-   * 치도리 — **장전 → 벽으로 돌진**을 세 번 (사람 지시: "가운데서 장전, 왼쪽이나 오른쪽 벽으로
+   * 치도리 — **장전 → 벽으로 돌진**을 surgeDashes(5)번 (사람 지시: "가운데서 장전, 왼쪽이나 오른쪽 벽으로
    * 치도리, 장전 후 반대쪽 벽 살짝 위로, 또 장전 후 반대쪽 벽 좀 위로").
    *
    *   땅(가운데)에서 장전 surgeChargeMs → 좌·우 벽이나 천장의 먼 자리로 돌진

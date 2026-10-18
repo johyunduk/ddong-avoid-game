@@ -1458,7 +1458,8 @@ export const HEIDI_PARAMS = {
   igniteFireMs:    4000,  // 불기둥 지속
   igniteFireSize:    72,  // 불기둥 표시 크기(px)
   igniteFireR:       30,  // 불기둥 판정 반경(px) — 불 몸통 가운데 기준
-  igniteFireMax:     40,  // 한 번의 아마테라스로 태우는 최대 개수 (불기둥 전부 합쳐서)
+  igniteFireMax:     40,  // 한 번의 아마테라스로 불기둥이 태우는 최대 개수 (불기둥 전부 합쳐서). 까마귀가 직접 맞혀 태운 똥
+                         // (최대 igniteCrows 12)은 이 수에서 안 깎는다 — 한 번에 최대 52 (불기둥 40 + 직격 12)
   igniteBurnMs:     650,  // 불에 닿은 똥이 까맣게 타서 사라지는 시간
   kaitenLandDelayMs: 200, // 착지 후 백안까지
   byakuganMs:       450,  // 백안 — 정면으로 멈춰 눈에 힘. 이 틈이 "이제 돈다"를 예고한다
