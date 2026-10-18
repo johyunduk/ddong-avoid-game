@@ -2,14 +2,15 @@ import Phaser from 'phaser';
 import { getCharacterDef } from './character';
 import { getCharacterTextureKeys } from './characterTextures';
 import { preloadCharSheets } from './charAnim';
-import { loadFxPickSheet, preloadFxSheet } from './vfx';
+import { fxPickSheetKey, fxTextureKeysOf, loadFxPickSheet, preloadFxSheet } from './vfx';
 
 /**
  * 판 캐릭터 에셋 — **올리기와 내리기를 한 곳에서** (렉·메모리 조사 #1 · #7, ddong-fx-work/perf-leak/REPORT.md).
  *
  * 전에는 판에 쓴 캐릭터 텍스처가 판이 끝나도 남았다. 캐릭터를 바꿀 때마다 쌓여 17종이면 GPU 약 289MB
  * (테드 +97MB · 하이디 +62MB). 이제 **다른 캐릭터로 판을 준비할 때** 이전 캐릭터 몫을 내린다 — 상한은 공통 + 캐릭터 하나.
- * 같은 캐릭터로 다시 하기 · 메뉴 왕복은 그대로 둔다.
+ * 같은 캐릭터로 다시 하기는 그대로 둔다. **메뉴로 나가면 큰 몫만 내린다** (releaseHeavyCharacterAssets) —
+ * 테드 판 뒤 메뉴에 수묵 시트가 남아 GPU 126~134MB 였고, 그 위에 뽑기 · 수집이 얹혀 194MB 까지 갔다 (2026-10-18 렉 실측).
  *
  * 어느 키가 그 캐릭터 몫인지는 characterTextures.getCharacterTextureKeys (fx) 가 정한다 — 공통 키(똥 · HUD · 배경)와
  * 여러 캐릭터가 같이 쓰는 키(shared)는 거기 안 들어 있으니 여기서 지울 일이 없다.
@@ -38,8 +39,42 @@ export function releasePreviousCharacter(scene: Phaser.Scene, nextId: string): s
   if (prefixes.length) {
     for (const k of scene.textures.getTextureKeys()) if (prefixes.some(p => k.startsWith(p))) targets.add(k);
   }
+  return removeTexturesAndAnims(scene, targets);
+}
+
+/**
+ * 판의 **큰 몫**만 내린다 — 판을 떠나 메뉴로 갈 때 (GameScene shutdown, 다시 하기가 아닐 때). 그때는 그 텍스처를 그리던
+ * 오브젝트가 씬과 함께 이미 부서졌다.
+ *
+ * 큰 몫 = 판 안에서만 쓰는 시트 · 그림: extraImages · extraSpriteSheets · deferredSpriteSheets(테드 수묵) ·
+ * deferredFxSheets · deferredFxAnims(하이디 닌자 묶음 등) + 판 중에 코드가 구운 키(prefixes). 그 캐릭터만 쓰는 키(own)만.
+ * 플레이어 스프라이트 · 걷기 시트 · 얼굴 칩 · 판 시작에 올리는 fx 시트(extraFxSheets · extraFxAnims)는 둔다 — 작고, 다음 판 첫 프레임에 바로 쓴다.
+ * 같은 캐릭터로 다시 판을 준비하면 loadCharacterAssets(난이도 화면 뒤 받기 · GameScene.preload)와 능력의 나눠 올리기가
+ * 없는 키만 다시 받는다 — 다른 캐릭터로 갔다 돌아올 때와 같은 길이다
+ */
+export function releaseHeavyCharacterAssets(scene: Phaser.Scene): string[] {
+  const id = loadedCharId;
+  if (!id) return [];
+  const def = getCharacterDef(id);
+  const { own, prefixes } = getCharacterTextureKeys(id);
+  const ownSet = new Set(own);
+  const targets = new Set([
+    ...Object.keys(def.extraImages ?? {}),
+    ...Object.keys(def.extraSpriteSheets ?? {}),
+    ...Object.keys(def.deferredSpriteSheets ?? {}),
+    ...(def.deferredFxSheets ?? []).map(f => fxPickSheetKey(f)),
+    ...(def.deferredFxAnims ?? []).flatMap(k => fxTextureKeysOf(k)),
+  ].filter(k => ownSet.has(k)));
+  if (prefixes.length) {
+    for (const k of scene.textures.getTextureKeys()) if (prefixes.some(p => k.startsWith(p))) targets.add(k);
+  }
+  return removeTexturesAndAnims(scene, targets);
+}
+
+/** 있는 키만 지우고, 지운 텍스처를 프레임으로 쓰는 애니메이션도 지운다 */
+function removeTexturesAndAnims(scene: Phaser.Scene, keys: Iterable<string>): string[] {
   const removed: string[] = [];
-  for (const k of targets) {
+  for (const k of keys) {
     if (scene.textures.exists(k)) { scene.textures.remove(k); removed.push(k); }
   }
   if (removed.length === 0) return removed;

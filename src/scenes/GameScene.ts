@@ -32,7 +32,7 @@ import { BaseAbility } from '../abilities/BaseAbility';
 import { realNow } from '../utils/realTime';
 import { preloadFxAssets } from '../utils/vfx';
 import { ensureCharAnims } from '../utils/charAnim';
-import { loadCharacterAssets } from '../utils/characterAssets';
+import { loadCharacterAssets, releaseHeavyCharacterAssets } from '../utils/characterAssets';
 import BaseScene from './BaseScene';
 import { ACTIVE_BTN } from '../config/activeButton';
 import { addBackground } from '../utils/background';
@@ -574,10 +574,12 @@ export default class GameScene extends BaseScene {
     // 게임오버 화면과 한 프레임에 겹친다. 판 첫 몇 초(캐릭터 시트 업로드)와 겹치지 않게 조금 뒤에
     this.time.delayedCall(4000, () => { if (!this.gameOver) prefetchGameOverArt(this, this.selectedCharId); });
     // 판을 떠날 때 (다시 하기가 아니면) 판 몫을 내린다. shutdown 순서상 이 씬의 오브젝트는 이미 부서졌다
-    // (DisplayList 가 START 때 먼저 건 shutdown 이 먼저 돈다) — 텍스처를 지워도 그리던 오브젝트가 없다
+    // (DisplayList 가 START 때 먼저 건 shutdown 이 먼저 돈다) — 텍스처를 지워도 그리던 오브젝트가 없다.
+    // 캐릭터의 큰 시트(테드 수묵 · 하이디 닌자 묶음 등)도 메뉴 · 뽑기 · 수집까지 들고 가지 않는다 — 다시 하기에서만 둔다
     this.events.once('shutdown', () => {
       if (this.restarting) return;
       releaseGameOverArt(this);
+      releaseHeavyCharacterAssets(this);
     });
 
     // 탭 전환 시 기준점 리셋 — 숨김/복귀 양방향으로 처리
