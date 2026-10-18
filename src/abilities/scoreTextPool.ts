@@ -36,7 +36,10 @@ export class ScoreTextPool {
     while (txt && !txt.active) txt = this.free.pop();   // 씬과 함께 파기된 것은 버린다
     if (txt) {
       txt.setText(text).setPosition(x, y).setAlpha(1).setVisible(true);
+      // 맨 위로 옮기고 **깊이 정렬을 다시 건다** — bringToTop 만으로는 정렬 표시가 안 서서(List.bringToTop)
+      // 다음 정렬까지 깊이가 더 높은 오브젝트 위에 그려진다. setDepth 가 queueDepthSort 를 건다 (Depth 컴포넌트)
       scene.children.bringToTop(txt);
+      txt.setDepth(this.depth);
     } else {
       txt = scene.add.text(x, y, text, this.style).setOrigin(0.5).setDepth(this.depth);
       this.all.add(txt);
