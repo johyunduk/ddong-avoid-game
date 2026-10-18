@@ -556,6 +556,8 @@ function getState(scene: Phaser.Scene): SceneFxState {
   let st = SCENE_STATE.get(scene);
   if (st) return st;
 
+  // 새 씬(새 판)의 첫 이펙트 — 블룸 설정을 저장된 값으로 다시 읽는다
+  bloomEnabled = isFxBloomEnabled();
   st = {
     sprites: new Set(),
     active: new Map(),
@@ -702,7 +704,10 @@ const BLOOM_PARAMS = {
   steps: 4,
 } as const;
 
-/** 세션 내 상태 — 저사양 기기에서 런타임으로 끌 수 있다 */
+/**
+ * 세션 내 상태 — 저사양 기기에서 런타임으로 끌 수 있다. **씬마다(판 시작마다) 설정에서 다시 읽는다** (getState) —
+ * 모듈 로드 때 한 번만 읽으면 판 사이에 저장된 설정이 바뀌어도 안 먹었다
+ */
 let bloomEnabled: boolean = isFxBloomEnabled();
 
 /** 현재 블룸 사용 여부 */
@@ -725,9 +730,15 @@ export function setBloomEnabled(on: boolean): void {
   });
 }
 
+/**
+ * **레이어당 블룸 하나.** Phaser 3.90 의 `postFX.add` 는 post 효과를 `fx.list` 에 넣지 않고 `setPostPipeline` 으로
+ * BloomFX 파이프라인 인스턴스를 새로 만들어 `postPipelines` 에 쌓는다 (FX.js add · PostPipeline.setPostPipeline).
+ * 예전 막이(`fx.list.length > 0`)는 늘 거짓이라 가산 이펙트가 붙을 때마다 블룸이 하나씩 겹쳤다 — bloomRefs 가
+ * 0 이 될 때까지 살아 붙은 가산 오브젝트 수만큼 전체 화면 블룸 패스가 돌았다 (렉 점검 2026-10-18 · dev 확인)
+ */
 function applyBloomController(layer: Phaser.GameObjects.Layer): void {
   const fx = layer.postFX;
-  if (!fx || fx.list.length > 0) return;
+  if (!fx || layer.postPipelines.length > 0) return;
   fx.addBloom(
     BLOOM_PARAMS.color,
     BLOOM_PARAMS.offsetX,

@@ -262,10 +262,13 @@ class Layer extends GameObj {
     super(scene);
     created.layers++; live.layers++;
     this.list = [];
+    // 실제 Phaser 3.90 처럼 — post 효과는 postFX.list 가 아니라 postPipelines 에 파이프라인으로 쌓인다
+    // (FX.js add → setPostPipeline). 예전 스텁은 list 에 넣어서 vfx 의 '이미 블룸 있음' 막이가 스텁에서만 맞았다
+    this.postPipelines = [];
     this.postFX = {
       list: [],
-      addBloom: () => { this.postFX.list.push({ bloom: true }); },
-      clear: () => { this.postFX.list.length = 0; },
+      addBloom: () => { this.postPipelines.push({ bloom: true }); },
+      clear: () => { this.postPipelines.length = 0; },
     };
   }
   add(obj) {
