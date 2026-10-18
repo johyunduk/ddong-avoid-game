@@ -45,8 +45,62 @@ export type RankValue = number | null | undefined;
 const DEPTH = 200;
 /** 일러스트가 차지하는 화면 위쪽 비율 */
 const ART_RATIO = 0.65;
-/** 일러스트 크롭 텍스처 — 한 장만 쓰고 씬이 끝나면 지운다 */
-const ART_KEY = 'gameover_art';
+/**
+ * 일러스트 크롭 텍스처 — 캐릭터 · 화면 크기마다 한 장. **다시 하기에서는 재사용**하고 메뉴로 나갈 때 지운다
+ * (releaseGameOverArt — GameScene 이 판을 떠날 때 부른다). 한 번에 한 캐릭터 몫만 둔다
+ */
+const ART_PREFIX = 'gameover_art_';
+const artKeyOf = (charId: string, w: number, h: number) => `${ART_PREFIX}${charId}_${w}x${h}`;
+
+/**
+ * 판 중에 미리 받아 **메인 스레드 밖에서** 디코드해 둔 원본 (캐릭터 하나).
+ *
+ * 전에는 게임오버 순간에 Phaser 로더로 받아 원본(768x1344)을 GPU 에 올리고, 캔버스에 크롭을 굽고, 원본을 지웠다.
+ * 그 디코드 · 업로드가 게임오버 화면과 한 프레임에 겹쳐 longtask 114~205ms (CPU 4배, 2026-10-18 렉 실측)
+ */
+let artPrefetch: { charId: string; src: Promise<CanvasImageSource | null> } | null = null;
+
+/** 디코드된 원본 — createImageBitmap(blob) 은 디코드를 메인 스레드 밖에서 한다. 없으면 img.decode() */
+function fetchArtSource(path: string): Promise<CanvasImageSource | null> {
+  // 실패해도 거절하지 않는다 (null) — 기다리는 쪽이 일러스트 없이 넘어간다
+  const viaImage = () => new Promise<CanvasImageSource | null>((resolve) => {
+    const img = new Image();
+    img.decoding = 'async';
+    img.onload = () => {
+      if (typeof img.decode === 'function') img.decode().then(() => resolve(img), () => resolve(img));
+      else resolve(img);
+    };
+    img.onerror = () => resolve(null);
+    img.src = path;
+  });
+  if (typeof createImageBitmap !== 'function' || typeof fetch !== 'function') return viaImage();
+  return fetch(path)
+    .then(r => (r.ok ? r.blob() : Promise.reject(new Error(String(r.status)))))
+    .then(b => createImageBitmap(b) as Promise<CanvasImageSource>)
+    .catch(viaImage);
+}
+
+/** 받아 둔 원본을 놓는다 — ImageBitmap 은 GC 를 기다리지 않고 닫는다 (기다리던 게임오버 화면은 이미 부서졌다 — dead) */
+function dropPrefetch(): void {
+  const p = artPrefetch;
+  artPrefetch = null;
+  p?.src.then(s => { if (typeof ImageBitmap !== 'undefined' && s instanceof ImageBitmap) s.close(); });
+}
+
+/** 판 중에 부른다 — 이 캐릭터의 크롭이 이미 구워져 있거나 받는 중이면 아무것도 안 한다 */
+export function prefetchGameOverArt(scene: Phaser.Scene, charId: string): void {
+  const w = scene.scale.width, h = Math.round(scene.scale.height * ART_RATIO);
+  if (scene.textures.exists(artKeyOf(charId, w, h))) return;
+  if (artPrefetch?.charId === charId) return;
+  dropPrefetch();
+  artPrefetch = { charId, src: fetchArtSource(getCharacterDef(charId).illustPath) };
+}
+
+/** 판을 떠날 때 (다시 하기가 아닐 때) — 구운 크롭 · 받아 둔 원본을 내린다. 그 텍스처를 쓰던 이미지는 씬과 함께 이미 부서졌다 */
+export function releaseGameOverArt(scene: Phaser.Scene): void {
+  dropPrefetch();
+  for (const k of scene.textures.getTextureKeys()) if (k.startsWith(ART_PREFIX)) scene.textures.remove(k);
+}
 /**
  * 이니셜 기록판 (B안 시안 480x720 좌표: ddong-fx-work/small-screens/4_initials/B_*).
  * y = 판 가운데 (위에서 잰 값) · slots = 글자 칸 가운데의 화면 가운데 기준 x · btnX = 등록 버튼 가운데
@@ -171,40 +225,56 @@ export class GameOverView {
   }
 
   /**
-   * 일러스트 — 원본(768x1344, GPU 약 4MB)을 화면 위 65% 크기로 크롭해 캔버스 한 장에 굽고, 원본은 이 씬이 받은 것이면 바로 지운다.
-   * 아래쪽은 같은 캔버스에서 어둠으로 풀어 둔다 (덮개 오브젝트를 따로 두지 않는다)
+   * 일러스트 — 원본(768x1344)을 화면 위 65% 크기로 크롭해 캔버스 한 장에 굽는다.
+   * 아래쪽은 같은 캔버스에서 어둠으로 풀어 둔다 (덮개 오브젝트를 따로 두지 않는다).
+   *
+   * 원본은 판 중에 미리 받아 디코드해 둔 것(prefetchGameOverArt)을 쓴다 — 원본을 GPU 에 올리지 않는다.
+   * 다시 하기면 구워 둔 크롭을 그대로 띄운다
    */
   private buildArt() {
-    const { scene } = this;
+    const { scene, W } = this;
     const def = getCharacterDef(this.info.charId);
+    const h = Math.round(this.H * ART_RATIO);
+    const key = artKeyOf(def.id, W, h);
     const place = () => {
-      if (this.dead || !scene.textures.exists(def.illustKey)) return;
-      this.bakeArt(def.illustKey);
-      if (loadedHere) scene.textures.remove(def.illustKey);
-      this.artImage = scene.add.image(this.cx, 0, ART_KEY).setOrigin(0.5, 0)
-        .setDisplaySize(this.W, Math.round(this.H * ART_RATIO)).setDepth(DEPTH + 1);
+      if (this.dead || !scene.textures.exists(key)) return;
+      this.artImage = scene.add.image(this.cx, 0, key).setOrigin(0.5, 0)
+        .setDisplaySize(W, h).setDepth(DEPTH + 1);
     };
-    const loadedHere = !scene.textures.exists(def.illustKey);
-    if (!loadedHere) { place(); return; }
-    scene.load.image(def.illustKey, def.illustPath);
-    scene.load.once(`${Phaser.Loader.Events.FILE_KEY_COMPLETE}image-${def.illustKey}`, place);
-    scene.load.start();
+    if (scene.textures.exists(key)) { place(); return; }
+    // 다른 화면이 원본을 이미 올려 두었으면 그걸로 (이 화면은 지우지 않는다 — 올린 쪽 몫)
+    if (scene.textures.exists(def.illustKey)) {
+      this.bakeArt(key, scene.textures.get(def.illustKey).getSourceImage() as CanvasImageSource, h);
+      place();
+      return;
+    }
+    prefetchGameOverArt(scene, def.id);   // 판이 너무 짧아 아직 안 받았으면 지금
+    const pending = artPrefetch;
+    pending?.src.then(src => {
+      if (this.dead || !src || !scene.sys.isActive()) return;
+      if (!scene.textures.exists(key)) this.bakeArt(key, src, h);
+      // 구웠으니 원본은 놓는다 (ImageBitmap 은 바로 닫는다)
+      if (artPrefetch === pending) artPrefetch = null;
+      if (typeof ImageBitmap !== 'undefined' && src instanceof ImageBitmap) src.close();
+      place();
+    });
   }
 
-  private bakeArt(srcKey: string) {
+  private bakeArt(key: string, src: CanvasImageSource, h: number) {
     const { scene, W } = this;
-    if (scene.textures.exists(ART_KEY)) scene.textures.remove(ART_KEY);
-    const h = Math.round(this.H * ART_RATIO);
+    // 한 번에 한 캐릭터 몫만 — 다른 캐릭터 · 다른 화면 크기의 크롭은 내린다
+    for (const k of scene.textures.getTextureKeys()) if (k.startsWith(ART_PREFIX) && k !== key) scene.textures.remove(k);
     const R = Math.min(2, window.devicePixelRatio || 1);
-    const tex = scene.textures.createCanvas(ART_KEY, Math.round(W * R), Math.round(h * R));
+    const tex = scene.textures.createCanvas(key, Math.round(W * R), Math.round(h * R));
     if (!tex) return;
     const ctx = tex.getContext();
     ctx.scale(R, R);
-    const src = scene.textures.get(srcKey).getSourceImage() as HTMLImageElement;
+    const sz = src as { width: number; height: number; naturalWidth?: number; naturalHeight?: number };
+    const iw = sz.naturalWidth || sz.width, ih = sz.naturalHeight || sz.height;
     // 덮어 채우기 — 얼굴이 위에 오게 세로 초점 12%
-    const sc = Math.max(W / src.width, h / src.height);
+    const sc = Math.max(W / iw, h / ih);
     const sw = W / sc, sh = h / sc;
-    ctx.drawImage(src, (src.width - sw) / 2, (src.height - sh) * 0.12, sw, sh, 0, 0, W, h);
+    ctx.drawImage(src, (iw - sw) / 2, (ih - sh) * 0.12, sw, sh, 0, 0, W, h);
     // 아래 55% 부터 어둠으로 풀린다 (점수가 얹히는 자리)
     const g = ctx.createLinearGradient(0, h * 0.45, 0, h * 0.95);
     g.addColorStop(0, 'rgba(10,6,22,0)');
@@ -562,18 +632,16 @@ export class GameOverView {
   }
 
   /**
-   * 씬을 떠날 때 — HTML 입력칸과 크롭 텍스처를 치운다. 메인 메뉴 · 다시 하기 · shutdown 에서 부른다 (두 번 불러도 된다).
+   * 씬을 떠날 때 — HTML 입력칸과 일러스트 이미지를 치운다. 메인 메뉴 · 다시 하기 · shutdown 에서 부른다 (두 번 불러도 된다).
    *
-   * **이미지를 먼저 부수고 텍스처를 지운다.** 버튼은 프레임 안(입력 처리)에서 불리고 씬 전환은 다음 단계에야
-   * 일어나서, 그 사이 같은 프레임의 렌더가 한 번 더 돈다. 텍스처만 지우면 화면에 남은 이미지가 사라진 텍스처를 그리려다
-   * 'glTexture' null 로 렌더러가 터지고 게임 루프가 멈춘다 — 메인 메뉴 · 다시 하기가 안 넘어가던 원인 (2026-10-07).
-   * 스페이스 재시작만 됐던 건 키 이벤트가 프레임 밖에서 와서 전환이 렌더보다 먼저 처리됐기 때문
+   * **크롭 텍스처는 여기서 지우지 않는다** — 다시 하기에서 재사용한다. 지우는 건 releaseGameOverArt (판을 떠날 때,
+   * 씬의 오브젝트가 다 부서진 뒤). 버튼 처리 중에 텍스처를 지우면 같은 프레임의 렌더가 사라진 텍스처를 그리려다
+   * 'glTexture' null 로 렌더러가 멈춘다 — 메인 메뉴 · 다시 하기가 안 넘어가던 원인 (2026-10-07)
    */
   destroy() {
     this.dead = true;
     this.removeInput();
     this.artImage?.destroy();
     this.artImage = null;
-    if (this.scene.textures.exists(ART_KEY)) this.scene.textures.remove(ART_KEY);
   }
 }

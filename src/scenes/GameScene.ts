@@ -36,7 +36,7 @@ import { loadCharacterAssets } from '../utils/characterAssets';
 import BaseScene from './BaseScene';
 import { ACTIVE_BTN } from '../config/activeButton';
 import { addBackground } from '../utils/background';
-import { GameOverView, type RankValue } from './gameOver/GameOverView';
+import { GameOverView, prefetchGameOverArt, releaseGameOverArt, type RankValue } from './gameOver/GameOverView';
 import { HudView, HUD_BOTTOM } from './hud/HudView';
 import { bakeButton, bakeRadialGlow, bakeRoundedImage } from '../utils/buttonSkin';
 
@@ -59,6 +59,8 @@ export default class GameScene extends BaseScene {
   private rankBefore: Promise<{ all: RankValue; char: RankValue }> | null = null;
   private ranksAtStart: { all: RankValue; char: RankValue } | null = null;
   private gameOverView: GameOverView | null = null;
+  /** 다시 하기로 씬을 다시 여는 중 — shutdown 에서 판 몫(게임오버 일러스트 등)을 남길지 가른다 */
+  private restarting = false;
   private charHighScore: number = 0;       // HUD 표시용 (실시간 갱신)
   private charHighScoreAtStart: number = 0; // 신기록 판정용 (게임 시작 시 고정)
   protected gameOver: boolean = false;
@@ -216,6 +218,7 @@ export default class GameScene extends BaseScene {
     this.rankBefore = null;
     this.ranksAtStart = null;
     this.gameOverView = null;
+    this.restarting = false;
     // 디버그 Graphics 참조 초기화 (씬 재시작 시 이전 객체는 Phaser가 파괴하므로 참조만 해제)
     this.manualHitboxDebug = undefined;
     // 피버 타임 초기화
@@ -566,6 +569,16 @@ export default class GameScene extends BaseScene {
     this.sessionPromise = startGameSession(this.scoreDifficulty);
     // 내 순위 (게임오버 순위 변화용) — 게임과 병렬, 실패해도 무시
     this.rankBefore = this.fetchMyRanks();
+
+    // 게임오버 일러스트 원본을 판 중에 받아 메인 스레드 밖에서 디코드해 둔다 — 게임오버 순간에 받으면 디코드 · 업로드가
+    // 게임오버 화면과 한 프레임에 겹친다. 판 첫 몇 초(캐릭터 시트 업로드)와 겹치지 않게 조금 뒤에
+    this.time.delayedCall(4000, () => { if (!this.gameOver) prefetchGameOverArt(this, this.selectedCharId); });
+    // 판을 떠날 때 (다시 하기가 아니면) 판 몫을 내린다. shutdown 순서상 이 씬의 오브젝트는 이미 부서졌다
+    // (DisplayList 가 START 때 먼저 건 shutdown 이 먼저 돈다) — 텍스처를 지워도 그리던 오브젝트가 없다
+    this.events.once('shutdown', () => {
+      if (this.restarting) return;
+      releaseGameOverArt(this);
+    });
 
     // 탭 전환 시 기준점 리셋 — 숨김/복귀 양방향으로 처리
     // 숨김 시: 기준점만 리셋 (lastScoreTime 보존 → 숨기기 직전 이월분 유지)
@@ -2042,6 +2055,7 @@ export default class GameScene extends BaseScene {
 
   /** 다시 하기 — 버튼·스페이스가 같이 쓴다 */
   private restartGame(): void {
+    this.restarting = true;   // shutdown 이 판 몫을 남긴다 (게임오버 일러스트 크롭 재사용)
     this.gameOverView?.destroy();
     this.sound.stopAll();
     if (this.player) this.player.cleanupEffects();
