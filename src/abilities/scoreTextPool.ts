@@ -23,6 +23,8 @@ export class ScoreTextPool {
   private readonly rise: ScoreTextRise;
   private free: Phaser.GameObjects.Text[] = [];
   private all = new Set<Phaser.GameObjects.Text>();
+  /** close 뒤 — 다 떠오른 글자는 숨기지 않고 부순다 */
+  private closing = false;
 
   constructor(style: Phaser.Types.GameObjects.Text.TextStyle, rise: ScoreTextRise, depth = 200) {
     this.style = style;
@@ -47,8 +49,22 @@ export class ScoreTextPool {
     const t = txt;
     scene.tweens.add({
       targets: t, y: y - this.rise.dy, alpha: 0, duration: this.rise.duration, ease: this.rise.ease,
-      onComplete: () => { t.setVisible(false); this.free.push(t); },
+      onComplete: () => {
+        if (this.closing) { this.all.delete(t); t.destroy(); return; }
+        t.setVisible(false);
+        this.free.push(t);
+      },
     });
+  }
+
+  /**
+   * 판 끝 — 숨은 글자는 바로 부수고, 떠오르는 중인 글자는 **마저 떠오르다 사라진 뒤** 부순다
+   * (판 끝에 글자를 끊지 않던 능력 — 센티넬 방전 글자 — 의 모습 그대로)
+   */
+  close(): void {
+    this.closing = true;
+    for (const t of this.free) { this.all.delete(t); if (t.active) t.destroy(); }
+    this.free = [];
   }
 
   /** 판 끝 — 트윈과 같이 전부 파기 */

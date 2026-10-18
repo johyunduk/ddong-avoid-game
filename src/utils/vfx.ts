@@ -1530,6 +1530,16 @@ const FX_SPRITE_SLOT = 'fxsprite';
 const FX_SPRITE_MAX_UNITS = 12;
 
 /**
+ * fxSprite 의 `sheet` 와 **같은 반복 재생**을 호출부가 직접 돌릴 때 (능력의 오브젝트 풀 — src/abilities/fxPool.ts).
+ * 시트의 텍스처 키 · 애니메이션 키. 시트가 아직 안 올라왔으면 null
+ */
+export function fxSheetAnim(scene: Phaser.Scene, key: FxKey): { textureKey: string; animKey: string } | null {
+  const def = FX_REGISTRY[key];
+  const animKey = def ? ensureFxAnim(scene, key, def) : null;
+  return def && animKey ? { textureKey: def.textureKey, animKey } : null;
+}
+
+/**
  * 트윈을 **호출부가 직접 거는** 이펙트 스프라이트.
  *
  * playFx·sweep·projectile 로 표현되지 않는 일회성 연출(칼에 맺히는 오러 등)을 위해 열어 둔다.

@@ -16,6 +16,7 @@ import {
   loadFxPickSheet, preloadFxSheet, fxTextureKeysOf, type FxKey,
 } from '../utils/vfx';
 import { StagedLoader, type StagedItem } from './stagedLoader';
+import { FxPool } from './fxPool';
 
 /** 시트 나눠 올리기 — 판 시작 뒤 쉬는 시간 · 한 장 올린 뒤 다음 장까지 (렉 조사 — 하이디 판 첫 1초) */
 const SHEET_LOAD_START_MS = 300;
@@ -322,6 +323,12 @@ export class HeidiAbility extends BaseAbility {
    */
   private deflectLeft = 0;
 
+  /**
+   * 네지 팔괘 손바닥 풀 — 박자마다 친 똥 수만큼(최대 64) 한 프레임에 만들고 0.56초 뒤 부수던 것을 돌려 쓴다
+   * (렉 수정 1차 5번). 팔괘마다 새로 열고 끝나면 닫는다 — 숨은 손바닥이 네지 텍스처를 붙잡아 묶음을 못 내리면 안 된다
+   */
+  private palms: FxPool<Phaser.GameObjects.Sprite> | null = null;
+
   /** 본체가 변신 중인가 (도약 → 인 → 변신 → 능력 → 착지) */
   private transforming = false;
   /** 이번 판에 변신을 몇 번 했나 — **첫 변신은 기본 뿌요로 고정**한다 */
@@ -590,6 +597,7 @@ export class HeidiAbility extends BaseAbility {
     this.burns = [];
     this.fires = [];
     this.binds = [];
+    this.palms = null;           // 손바닥도 tracked 로 이미 부쉈다
     this.bindG = undefined;      // 오브젝트는 tracked 가 이미 부쉈다
     this.bindPool = undefined;
     this.nui = undefined;
@@ -1601,6 +1609,8 @@ export class HeidiAbility extends BaseAbility {
     this.play(p, 'hakke');
     p.cutT0 = now;            // 시작
     p.chainI = 0;             // 지금까지 친 박자 수
+    this.palms?.close();
+    this.palms = new FxPool(sc => this.track(sc.add.sprite(0, 0, fxPickSheetKey(HEIDI_FX_PALM), 0)));
     const key = fxPickSheetKey(HEIDI_FX_TRIGRAM);
     if (scene.textures.exists(key)) {
       const d = scene.scale.width * P.hakkeW;
@@ -1636,6 +1646,8 @@ export class HeidiAbility extends BaseAbility {
       this.hakkeBeat(api, p, P.hakkeBeats[i], i + 1 >= total, i % 2 === 0 ? -1 : 1);
     }
     if (e < endAt) return;
+    this.palms?.close();      // 숨은 손바닥은 지금, 떠 있는 것은 0.56초 끝에 부서진다
+    this.palms = null;
     this.dropDisc(p);
     this.play(p, 'walk');
   }
@@ -1663,9 +1675,12 @@ export class HeidiAbility extends BaseAbility {
     for (const q of list) {
       if (scene.textures.exists(key)) {
         const s = p.size * P.hakkePalmSize;
-        const fx = this.track(scene.add.sprite(q.x, q.y, key, 0).setDisplaySize(s, s).setDepth(DEPTH_PUYO + 2));
+        // 예전 add.sprite(q, key, 0) · 표시 크기 · 깊이와 같은 모습 — 다시 쓰는 손바닥은 0칸부터 다시 돈다
+        const pool = this.palms ??= new FxPool(sc => this.track(sc.add.sprite(0, 0, key, 0)));
+        const fx = pool.get(scene, DEPTH_PUYO + 2).setPosition(q.x, q.y).setFrame(0).setDisplaySize(s, s);
         if (scene.anims.exists(anim)) fx.play({ key: anim }, true);
-        scene.time.delayedCall(560, () => this.discard(fx));   // 8컷 · 16fps = 0.5초
+        // 8컷 · 16fps = 0.5초. 판이 끝나 이미 부서졌으면 그만 (부서진 스프라이트는 anims 가 없다)
+        scene.time.delayedCall(560, () => { if (!fx.active) return; fx.anims.stop(); pool.release(fx); });
       }
       (q as unknown as PoolablePoopBase).recycle(true);
     }

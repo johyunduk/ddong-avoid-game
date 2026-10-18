@@ -5,6 +5,7 @@ import type PoolablePoopBase from '../objects/PoolablePoopBase';
 import { K_PARAMS } from '../config/abilityParams';
 import { charAnimKey, sheetTextureKey, type CharDir } from '../utils/charAnim';
 import { beam, burst, fxSprite, impact, playFx, projectile } from '../utils/vfx';
+import { FxPool } from './fxPool';
 
 // ── K (아빠) 능력 ────────────────────────────────────────────────────────
 // K_PARAMS.gmhmInterval 점(초사이언 전)마다 현재 캐릭터(움직이던 그 스프라이트)가
@@ -131,6 +132,12 @@ export class KAbility extends BaseAbility {
   private pendingTimers: Phaser.Time.TimerEvent[] = [];
   /** 초사이언 오라 파지직 — 승계 후 계속 도는 반복 타이머 */
   private ssSparkTimer?: Phaser.Time.TimerEvent;
+  /**
+   * 파지직 한 장 풀 — 초사이언 뒤 150ms 마다 2장(판 끝까지) · 빔을 따라 뿌리던 것을 fxSprite 로 만들고 부수던 것을 돌려 쓴다
+   * (렉 수정 1차 5번). 동시 상한은 예전 슬롯 k_spark 와 같다 (12 — 보이는 수로 센다). 판 끝에는 마저 사라진다 (close)
+   */
+  private sparkPool: FxPool<Phaser.GameObjects.Image> | null = null;
+  private static readonly SPARK_MAX = 12;
 
   // ── 태이 동반자: 생성 + 추적 + 특수똥 수집 ─────────────────────────────
   onCreate(api: GameSceneAPI): void {
@@ -240,6 +247,8 @@ export class KAbility extends BaseAbility {
     this.pendingTimers = [];
     this.ssSparkTimer?.remove(false);
     this.ssSparkTimer = undefined;
+    this.sparkPool?.close();   // 떠 있는 파지직은 예전처럼 마저 사라진다
+    this.sparkPool = null;
   }
 
   /**
@@ -247,22 +256,20 @@ export class KAbility extends BaseAbility {
    * proc-streak 은 192px 안에 가로 170px 짜리 얇은 렌즈라 길이만 잡아 주면 된다.
    */
   private _spark(scene: Phaser.Scene, x: number, y: number, len: number, tint: number): void {
-    const img = fxSprite(scene, x, y, SPARK_TEXTURE, {
-      rotation: Phaser.Math.FloatBetween(0, Math.PI * 2),
-      scale: [len / 192, 0.13],
-      tint,
-      alpha: 0.85,
-      depth: 318,
-      blend: 'normal',
-      lifeMs: SPARK_LIFE_MS + 200,
-      slot: 'k_spark',
-      maxConcurrent: 12,
-    });
-    if (!img) return;
+    // 예전 fxSprite(SPARK_TEXTURE · 회전 무작위 · 배율 [len/192, 0.13] · 착색 · 알파 0.85 · 깊이 318 · normal)와 같은 모습을 풀에서
+    if (!scene.textures.exists(SPARK_TEXTURE)) return;
+    const pool = this.sparkPool ??= new FxPool(sc => sc.add.image(0, 0, SPARK_TEXTURE).setBlendMode(Phaser.BlendModes.NORMAL));
+    if (pool.busy() >= KAbility.SPARK_MAX) return;      // 동시 상한 (예전 슬롯 k_spark)
+    const img = pool.get(scene, 318)
+      .setPosition(x, y)
+      .setRotation(Phaser.Math.FloatBetween(0, Math.PI * 2))
+      .setScale(len / 192, 0.13)
+      .setTint(tint)
+      .setAlpha(0.85);
     scene.tweens.add({
       targets: img, alpha: 0, scaleX: (len * 0.5) / 192,
       duration: SPARK_LIFE_MS, ease: 'Quad.easeIn',
-      onComplete: () => img.destroy(),
+      onComplete: () => pool.release(img),
     });
   }
 

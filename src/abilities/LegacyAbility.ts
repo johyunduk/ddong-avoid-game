@@ -3,7 +3,8 @@ import { BaseAbility } from './BaseAbility';
 import type { GameSceneAPI } from './types';
 import type PoolablePoopBase from '../objects/PoolablePoopBase';
 import { LEGACY_PARAMS } from '../config/abilityParams';
-import { beam, burst, fxSprite, impact, playFx } from '../utils/vfx';
+import { beam, burst, fxSheetAnim, fxSprite, impact, playFx } from '../utils/vfx';
+import { FxPool } from './fxPool';
 
 /**
  * 레거시 (UR) — 피버 + 레거시 모드
@@ -43,6 +44,11 @@ export class LegacyAbility extends BaseAbility {
 
   // A: 상시 불꽃 오라
   private oraTimer = 0;
+  /**
+   * 오라 불꽃 풀 — 180ms(레거시 모드 95ms)마다 fxSprite 를 만들고 트윈 끝에 부수던 것을 돌려 쓴다 (렉 수정 1차 5번).
+   * 동시 상한은 예전 슬롯과 같다 (평소 5 · 모드 10 — 보이는 수로 센다). 판 끝(onDestroy)에는 예전처럼 마저 떠오르다 사라진다 (close)
+   */
+  private oraPool: FxPool<Phaser.GameObjects.Sprite> | null = null;
   private static readonly ORA_INTERVAL_NORMAL = 180;
   private static readonly ORA_INTERVAL_LEGACY =  95;
 
@@ -65,6 +71,7 @@ export class LegacyAbility extends BaseAbility {
     this.burnPointsInMode = 0;
     this.burnPointsOutMode = 0;
     this.tickExtraPoints = 0;
+    this.oraPool = null;
     this.startFeverActive = true;
     this.startFeverRain(api);
     this.startFeverEndTimer = api.scene.time.delayedCall(LEGACY_PARAMS.feverDuration, () => {
@@ -155,19 +162,15 @@ export class LegacyAbility extends BaseAbility {
       // 착색하지 않는다 — 색(붉은 겉 → 주황 → 황금 → 흰 심지)이 시트에 구워져 있다.
       // 통째로 tint 를 걸면 그 계조가 한 색으로 눌려 '불'이 아니라 '주황 도형'이 된다.
       // 레거시 모드에서는 밝기만 올려 더 뜨겁게 보이게 한다
-      const img = fxSprite(scene, x, y, 'fx_proc_glow', {
-        sheet: 'legacyFlame',
-        sheetStart: Math.random(),
-        scale: [s, s],
-        origin: [0.5, 0.92],   // 밑동이 좌표에 오도록
-        alpha: 0,
-        blend: 'normal',
-        depth: 88,
-        lifeMs: life + 200,
-        slot: 'legacy_ora',
-        maxConcurrent: leg ? 10 : 5,
-      });
-      if (!img) continue;
+      // (예전 fxSprite(sheet 'legacyFlame' · 반복 · 시작 위상 무작위 · 원점 밑동 · normal · 깊이 88)와 같은 모습을 풀에서)
+      const sheet = fxSheetAnim(scene, 'legacyFlame');
+      if (!sheet) continue;                              // 시트가 아직 안 올라옴
+      const pool = this.oraPool ??= new FxPool(sc => sc.add.sprite(0, 0, sheet.textureKey, 0)
+        .setOrigin(0.5, 0.92).setBlendMode(Phaser.BlendModes.NORMAL));   // 밑동이 좌표에 오도록
+      if (pool.busy() >= (leg ? 10 : 5)) continue;       // 동시 상한 (예전 슬롯 legacy_ora)
+      const img = pool.get(scene, 88).setPosition(x, y).setRotation(0).setScale(s, s).setAlpha(0);
+      img.play({ key: sheet.animKey, repeat: -1 });
+      img.anims.setProgress(Math.random());
 
       scene.tweens.add({
         targets: img, alpha: leg ? 0.9 : 0.72,
@@ -181,7 +184,7 @@ export class LegacyAbility extends BaseAbility {
         alpha:    0,
         duration: life,
         ease:     'Quad.easeOut',
-        onComplete: () => img.destroy(),
+        onComplete: () => { img.anims.stop(); pool.release(img); },
       });
     }
   }
@@ -434,6 +437,8 @@ export class LegacyAbility extends BaseAbility {
     this.legacyPulseTween?.stop();
     this.legacyTopGlow?.destroy();
     this.legacyTopGlow = undefined;
+    this.oraPool?.close();
+    this.oraPool = null;
   }
 
   // ─────────────────────────────────────────────────────────────────

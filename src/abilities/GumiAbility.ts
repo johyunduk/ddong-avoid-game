@@ -6,6 +6,7 @@ import { ensureGlowDot } from '../utils/glowDot';
 import { GUMI_PARAMS, GUMI_DEFERRED_SHEETS } from '../config/abilityParams';
 import { burst, fxSprite, playFx, fxPickSheetKey, loadFxPickSheet } from '../utils/vfx';
 import { StagedLoader } from './stagedLoader';
+import { FxPool } from './fxPool';
 import { ScoreTextPool } from './scoreTextPool';
 
 const HIT_R = 32;
@@ -197,6 +198,20 @@ export class GumiAbility extends BaseAbility {
 
   // ── 무적 오라 ─────────────────────────────────────────────────────
   private auraParticles: AuraParticle[] = [];
+  /**
+   * 튀는 발광 점(glow_dot · 가산) 풀 — 무적 9색 버스트 · 소각 불티(태운 똥마다 7) · 여우불 적중(6)이 만들고 트윈 끝에
+   * 부수던 것을 돌려 쓴다 (렉 수정 1차 5번). 판 끝에는 예전처럼 마저 사라진다 (close)
+   */
+  private sparkPool: FxPool<Phaser.GameObjects.Image> | null = null;
+  /** 발광 점 하나 — 예전 scene.add.image(x, y, 'glow_dot').setDepth · ADD · setTint · setScale 과 같은 모습 */
+  private spark(scene: Phaser.Scene, x: number, y: number, depth: number, tint: number, scale: number): Phaser.GameObjects.Image {
+    const pool = this.sparkPool ??= new FxPool(sc => sc.add.image(0, 0, 'glow_dot').setBlendMode(Phaser.BlendModes.ADD));
+    return pool.get(scene, depth).setPosition(x, y).setTint(tint).setScale(scale).setAlpha(1);
+  }
+  private dropSpark(img: Phaser.GameObjects.Image): void {
+    if (this.sparkPool) this.sparkPool.release(img);
+    else if (img.active) img.destroy();
+  }
 
   // ── 플레이어 depth 설정 (꼬리가 몸통 뒤에 렌더링되도록) ──────────
   override onCreate(api: GameSceneAPI): void {
@@ -215,6 +230,7 @@ export class GumiAbility extends BaseAbility {
     this.rainFull = null;
     this.bow = null;
     this.foxFireCasts = this.tailTriggers = this.rainMelts = this.bowCasts = 0;
+    this.sparkPool = null;
     const scene = api.scene;
     this.rainLoader = new StagedLoader(
       scene,
@@ -306,18 +322,14 @@ export class GumiAbility extends BaseAbility {
     ensureGlowDot(scene);
     for (let i = 0; i < 9; i++) {
       const angle = (i / 9) * Math.PI * 2;
-      const spark = scene.add.image(player.x, player.y, 'glow_dot')
-        .setDepth(210)
-        .setBlendMode(Phaser.BlendModes.ADD)
-        .setTint(FOX_FIRE_COLORS[i])
-        .setScale(0.6);
+      const spark = this.spark(scene, player.x, player.y, 210, FOX_FIRE_COLORS[i], 0.6);
       scene.tweens.add({
         targets: spark,
         x: player.x + Math.cos(angle) * 65,
         y: player.y + Math.sin(angle) * 65,
         scale: 0, alpha: 0, duration: 520,
         ease: 'Quad.easeOut',
-        onComplete: () => spark.destroy(),
+        onComplete: () => this.dropSpark(spark),
       });
     }
   }
@@ -422,11 +434,7 @@ export class GumiAbility extends BaseAbility {
     for (let i = 0; i < 7; i++) {
       const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
       const dist  = Phaser.Math.FloatBetween(12, 26);
-      const spark = scene.add.image(x, y, 'glow_dot')
-        .setDepth(201)
-        .setBlendMode(Phaser.BlendModes.ADD)
-        .setTint(burnColors[i % 3])
-        .setScale(Phaser.Math.FloatBetween(0.18, 0.30));
+      const spark = this.spark(scene, x, y, 201, burnColors[i % 3], Phaser.Math.FloatBetween(0.18, 0.30));
       scene.tweens.add({
         targets: spark,
         x: x + Math.cos(angle) * dist,
@@ -435,7 +443,7 @@ export class GumiAbility extends BaseAbility {
         alpha: 0,
         duration: Phaser.Math.Between(180, 280),
         ease: 'Quad.easeOut',
-        onComplete: () => spark.destroy(),
+        onComplete: () => this.dropSpark(spark),
       });
     }
   }
@@ -594,18 +602,14 @@ export class GumiAbility extends BaseAbility {
   private spawnHitFlash(x: number, y: number, scene: Phaser.Scene): void {
     for (let i = 0; i < 6; i++) {
       const angle = (i / 6) * Math.PI * 2;
-      const spark = scene.add.image(x, y, 'glow_dot')
-        .setDepth(201)
-        .setBlendMode(Phaser.BlendModes.ADD)
-        .setTint(0xffd700)
-        .setScale(0.3);
+      const spark = this.spark(scene, x, y, 201, 0xffd700, 0.3);
       scene.tweens.add({
         targets: spark,
         x: x + Math.cos(angle) * 25,
         y: y + Math.sin(angle) * 25,
         scale: 0, alpha: 0, duration: 300,
         ease: 'Quad.easeOut',
-        onComplete: () => spark.destroy(),
+        onComplete: () => this.dropSpark(spark),
       });
     }
   }
@@ -626,6 +630,8 @@ export class GumiAbility extends BaseAbility {
     this.tailPool = [];
     this.tails = [];
     this._destroyAura();
+    this.sparkPool?.close();   // 떠 있는 불티는 예전처럼 마저 사라진다
+    this.sparkPool = null;
     this.rainLoader?.stop();
     this.rainLoader = null;
     this.meltQueue = [];

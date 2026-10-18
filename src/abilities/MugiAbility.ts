@@ -5,6 +5,7 @@ import type PoolablePoopBase from '../objects/PoolablePoopBase';
 import { MUGI_PARAMS } from '../config/abilityParams';
 import { ensureGlowDot } from '../utils/glowDot';
 import { burst, fxSprite, impact, playFx } from '../utils/vfx';
+import { FxPool } from './fxPool';
 
 interface YeoijuOrb {
   gfx: Phaser.GameObjects.Image;
@@ -74,6 +75,11 @@ export class MugiAbility extends BaseAbility {
   private normalPrefix     = 'mugi_';
   private isGoldForm       = false;
   private auraTimer        = 0;
+  /**
+   * 기운(아우라) 발광 점 풀 — 레벨에 따라 330 · 260ms, 황금 형태는 120ms 마다 4장(초당 33장)을 만들고 트윈 끝에 부수던 것을
+   * 돌려 쓴다 (렉 수정 1차 5번). 판 끝에는 예전처럼 마저 사라진다 (close)
+   */
+  private wispPool: FxPool<Phaser.GameObjects.Image> | null = null;
   private revivalHaloOuter: Phaser.GameObjects.Image | null = null;
   private revivalHaloInner: Phaser.GameObjects.Image | null = null;
 
@@ -97,6 +103,7 @@ export class MugiAbility extends BaseAbility {
     this.normalPrefix       = api.player.getTexturePrefix();
     this.isGoldForm         = false;
     this.auraTimer          = 0;
+    this.wispPool           = null;
     this.revivalHaloOuter   = null;
     this.revivalHaloInner   = null;
     this.revivalCharges     = 1;
@@ -247,9 +254,9 @@ export class MugiAbility extends BaseAbility {
     const sz  = Phaser.Math.FloatBetween(3, 5 + level * 0.6);
     const glowScale = sz / 28;
 
-    const img = scene.add.image(ox, oy, 'glow_dot')
-      .setDepth(6)
-      .setBlendMode(Phaser.BlendModes.ADD)
+    const pool = this.wispPool ??= new FxPool(sc => sc.add.image(0, 0, 'glow_dot').setBlendMode(Phaser.BlendModes.ADD));
+    const img = pool.get(scene, 6)
+      .setPosition(ox, oy)
       .setTint(color)
       .setScale(glowScale)
       .setAlpha(0.85);
@@ -261,7 +268,7 @@ export class MugiAbility extends BaseAbility {
     scene.tweens.add({
       targets: img, x: tx, y: ty, alpha: 0, scale: glowScale * 0.3,
       duration: dur, ease: 'Quad.easeOut',
-      onComplete: () => { if (img.active) img.destroy(); },
+      onComplete: () => pool.release(img),
     });
   }
 
@@ -543,6 +550,8 @@ export class MugiAbility extends BaseAbility {
   // ── 정리 ─────────────────────────────────────────────────────────────
 
   override onDestroy(api: GameSceneAPI): void {
+    this.wispPool?.close();
+    this.wispPool = null;
     this.yeoijuTimer?.remove(false);
     this.yeoijuTimer = null;
     this.yeoijus.forEach(orb => { api.scene.tweens.killTweensOf(orb.gfx); orb.gfx.destroy(); });

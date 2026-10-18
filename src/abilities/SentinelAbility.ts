@@ -359,7 +359,7 @@ export class SentinelAbility extends BaseAbility {
     this.holdTween = null;
     this.holdText?.destroy();
     this.holdText = null;
-    // 방전 글자는 예전처럼 떠오르다 사라지게 둔다 (예전에도 판 끝에 지우지 않았다 — 씬과 같이 사라진다)
+    this.zapText.close();   // 방전 글자는 예전처럼 마저 떠오르다 사라진다 (숨은 것만 바로 부순다)
     this.pulseTimer?.remove();
     this.pulseTimer = null;
     this.zapFxQueue = [];
