@@ -5,6 +5,7 @@ import type PoolablePoopBase from '../objects/PoolablePoopBase';
 import { NOISE_PARAMS, NOISE_DEFERRED_SHEETS } from '../config/abilityParams';
 import { fxPickSheetKey, loadFxPickSheet } from '../utils/vfx';
 import { StagedLoader } from './stagedLoader';
+import { ScoreTextPool } from './scoreTextPool';
 
 /**
  * 노이즈 (SR) v4 — 통신에 잡음이 낀 것 · 안개 · 흐린 신호. 값은 NOISE_PARAMS (planner 1차, v6 는 balance)
@@ -179,7 +180,7 @@ export class NoiseAbility extends BaseAbility {
     this.fxQueue = [];
     this.pending = [];
     this.motes = [];
-    this.texts = new Set();
+    this.scoreText.destroy();   // 비운다 (판마다 새 인스턴스지만 규칙 1)
     this.fogsMade = 0;
     this.passes = 0;
     this.gustsFired = 0;
@@ -264,9 +265,9 @@ export class NoiseAbility extends BaseAbility {
     if (this.ghosted) { _api.player.setAlpha(1); this.ghosted = false; }   // 반투명으로 끝난 판이면 되돌린다
     this.frost = 'idle';
     this.shardQueue = [];
-    const all = [this.fogBack, this.fogFront, this.burstSpr, this.gust, this.tail, this.top, ...this.motes, ...this.texts,
+    const all = [this.fogBack, this.fogFront, this.burstSpr, this.gust, this.tail, this.top, ...this.motes,
       this.frostGather, this.filmBody, ...this.films, ...this.veil, ...this.shells, ...this.shards];
-    this.texts.clear();
+    this.scoreText.destroy();
     for (const o of all) { if (!o) continue; o.scene?.tweens.killTweensOf(o); o.destroy(); }
     this.fogBack = this.fogFront = this.burstSpr = this.gust = this.tail = this.top = null;
     this.frostGather = null;
@@ -656,14 +657,14 @@ export class NoiseAbility extends BaseAbility {
   /** 점수 — awardBonus(→ addAbilityBonus → updateScore, 규칙 3 · 자기 보너스로는 서리가 차지 않음) + '+N' 글자 */
   private award(api: GameSceneAPI, pts: number, x: number, y: number): void {
     this.awardBonus(api, pts);
-    const txt = api.scene.add.text(x, y, `+${pts}`, {
-      fontSize: '20px', fontFamily: 'Arial Black, sans-serif', color: '#ffffff', stroke: '#3a305c', strokeThickness: 4,
-    }).setOrigin(0.5).setDepth(200);
-    this.texts.add(txt);
-    api.scene.tweens.add({ targets: txt, y: y - 40, alpha: 0, duration: 700, ease: 'Quad.easeOut', onComplete: () => { this.texts.delete(txt); txt.destroy(); } });
+    this.scoreText.show(api.scene, x, y, `+${pts}`);
   }
 
-  private texts = new Set<Phaser.GameObjects.Text>();
+  /** 점수 글자 '+N' — 풀에서 다시 쓴다 (렉 수정 1차, 지급마다 Text 를 새로 만들던 것) */
+  private scoreText = new ScoreTextPool(
+    { fontSize: '20px', fontFamily: 'Arial Black, sans-serif', color: '#ffffff', stroke: '#3a305c', strokeThickness: 4 },
+    { dy: 40, duration: 700, ease: 'Quad.easeOut' },
+  );
 
   /** 예약 타이머 — 씬 시계(히트스톱 · 일시정지와 같이 멈춤), onDestroy 에서 전부 뗀다 */
   private later(api: GameSceneAPI, ms: number, fn: () => void): void {

@@ -6,6 +6,7 @@ import { SENTINEL_PARAMS, SENTINEL_DEFERRED_SHEETS } from '../config/abilityPara
 import { POOP_CONFIG } from '../config/poop';
 import { playFx, fxPickSheetKey, loadFxPickSheet } from '../utils/vfx';
 import { StagedLoader } from './stagedLoader';
+import { ScoreTextPool } from './scoreTextPool';
 
 /**
  * 센티넬 (UR) — 보호막 + 과충전 방전 (2026-10 밸런스 개편, 값은 SENTINEL_PARAMS)
@@ -41,6 +42,11 @@ export class SentinelAbility extends BaseAbility {
   /** 초당 보너스 표시 — 작은 '+N' 하나를 만들어 두고 매초 글자 · 위치만 바꿔 깜빡인다 (매초 생성 없음) */
   private holdText: Phaser.GameObjects.Text | null = null;
   private holdTween: Phaser.Tweens.Tween | null = null;
+  /** 방전 점수 글자 '+N' — 풀에서 다시 쓴다 (렉 수정 1차, 방전마다 Text 를 새로 만들던 것) */
+  private zapText = new ScoreTextPool(
+    { fontSize: '20px', fontFamily: 'Arial Black, sans-serif', color: '#ff6666', stroke: '#000000', strokeThickness: 4 },
+    { dy: 50, duration: 800, ease: 'Quad.easeOut' },
+  );
   /**
    * 막은 뒤 남은 막기 무적(ms, v6 B⁶′) — 이 동안 닿은 똥은 GameScene 이 회수만 하고 보호막은 그대로.
    * Player 무적과 섞지 않는다. onUpdate 에서 delta × timeScale 로 줄인다 (히트스톱 · 일시정지 동안 멈춤)
@@ -143,6 +149,7 @@ export class SentinelAbility extends BaseAbility {
     this.blockInvulnMs = 0;
     this.blinking = false;
     this.holdTween = null;
+    this.zapText.destroy();   // 비운다 (판마다 새 인스턴스지만 규칙 1)
     this.pulseMaxMs = 0;
     this.pulseFxDropped = 0;
     this.aliveMs = 0;
@@ -352,6 +359,7 @@ export class SentinelAbility extends BaseAbility {
     this.holdTween = null;
     this.holdText?.destroy();
     this.holdText = null;
+    // 방전 글자는 예전처럼 떠오르다 사라지게 둔다 (예전에도 판 끝에 지우지 않았다 — 씬과 같이 사라진다)
     this.pulseTimer?.remove();
     this.pulseTimer = null;
     this.zapFxQueue = [];
@@ -674,23 +682,7 @@ export class SentinelAbility extends BaseAbility {
   // ─────────────────────────────────────────────────────────────
 
   private showZapBonusText(api: GameSceneAPI, bonus: number): void {
-    const scene = api.scene;
-    const txt = scene.add.text(api.player.x, api.player.y - 40, `+${bonus}`, {
-      fontSize: '20px',
-      fontFamily: 'Arial Black, sans-serif',
-      color: '#ff6666',
-      stroke: '#000000',
-      strokeThickness: 4,
-    }).setOrigin(0.5).setDepth(200);
-
-    scene.tweens.add({
-      targets: txt,
-      y: txt.y - 50,
-      alpha: 0,
-      duration: 800,
-      ease: 'Quad.easeOut',
-      onComplete: () => txt.destroy(),
-    });
+    this.zapText.show(api.scene, api.player.x, api.player.y - 40, `+${bonus}`);
   }
 
   private playShieldBreakEffect(api: GameSceneAPI): void {

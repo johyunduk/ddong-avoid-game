@@ -5,6 +5,7 @@ import type PoolablePoopBase from '../objects/PoolablePoopBase';
 import { MINER_PARAMS, MINER_DEFERRED_SHEETS } from '../config/abilityParams';
 import { fxPickSheetKey, loadFxPickSheet } from '../utils/vfx';
 import { StagedLoader } from './stagedLoader';
+import { ScoreTextPool } from './scoreTextPool';
 
 /**
  * 광부 (SR) — 「발파」. 값은 MINER_PARAMS (planner proposal_v7b §1 정정본)
@@ -44,7 +45,11 @@ export class MinerAbility extends BaseAbility {
   private fxQueue: { x: number; y: number }[] = [];
   private pending: Phaser.Time.TimerEvent[] = [];
   private loader: StagedLoader | null = null;
-  private texts = new Set<Phaser.GameObjects.Text>();
+  /** 점수 글자 '+N' — 풀에서 다시 쓴다 (렉 수정 1차, 지급마다 Text 를 새로 만들던 것) */
+  private scoreText = new ScoreTextPool(
+    { fontSize: '20px', fontFamily: 'Arial Black, sans-serif', color: '#ffffff', stroke: '#5a3812', strokeThickness: 4 },
+    { dy: 40, duration: 700, ease: 'Quad.easeOut' },
+  );
 
   private stickSmall: Phaser.GameObjects.Image | null = null;
   private stickBig: Phaser.GameObjects.Image | null = null;
@@ -86,7 +91,7 @@ export class MinerAbility extends BaseAbility {
     this.bigActive = false;
     this.fxQueue = [];
     this.pending = [];
-    this.texts = new Set();
+    this.scoreText.destroy();   // 비운다 (판마다 새 인스턴스지만 규칙 1)
     this.rocks = [];
     this.stickSmall = this.stickBig = this.blastSmall = this.blastBig = null;
     this.smallBlasts = this.smallKills = this.bigBlasts = this.bigKills = this.rainSpawned = 0;
@@ -138,8 +143,8 @@ export class MinerAbility extends BaseAbility {
     this.loader = null;
     this.fxQueue = [];
     this.bigActive = false;
-    const all = [this.stickSmall, this.stickBig, this.blastSmall, this.blastBig, ...this.rocks, ...this.texts];
-    this.texts.clear();
+    const all = [this.stickSmall, this.stickBig, this.blastSmall, this.blastBig, ...this.rocks];
+    this.scoreText.destroy();
     for (const o of all) { if (!o) continue; o.scene?.tweens.killTweensOf(o); o.destroy(); }
     this.stickSmall = this.stickBig = this.blastSmall = this.blastBig = null;
     this.rocks = [];
@@ -332,11 +337,7 @@ export class MinerAbility extends BaseAbility {
   /** 점수 — awardBonus(→ addAbilityBonus → updateScore, 규칙 3 · 자기 보너스로는 대발파가 차지 않음) + '+N' 글자 */
   private award(api: GameSceneAPI, pts: number, x: number, y: number): void {
     this.awardBonus(api, pts);
-    const txt = api.scene.add.text(x, y, `+${pts}`, {
-      fontSize: '20px', fontFamily: 'Arial Black, sans-serif', color: '#ffffff', stroke: '#5a3812', strokeThickness: 4,
-    }).setOrigin(0.5).setDepth(200);
-    this.texts.add(txt);
-    api.scene.tweens.add({ targets: txt, y: y - 40, alpha: 0, duration: 700, ease: 'Quad.easeOut', onComplete: () => { this.texts.delete(txt); txt.destroy(); } });
+    this.scoreText.show(api.scene, x, y, `+${pts}`);
   }
 
   /** 예약 타이머 — 씬 시계 (히트스톱 · 일시정지와 같이 멈춤), onDestroy 에서 전부 뗀다 */

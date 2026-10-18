@@ -6,6 +6,7 @@ import { ensureGlowDot } from '../utils/glowDot';
 import { GUMI_PARAMS, GUMI_DEFERRED_SHEETS } from '../config/abilityParams';
 import { burst, fxSprite, playFx, fxPickSheetKey, loadFxPickSheet } from '../utils/vfx';
 import { StagedLoader } from './stagedLoader';
+import { ScoreTextPool } from './scoreTextPool';
 
 const HIT_R = 32;
 
@@ -142,7 +143,11 @@ export class GumiAbility extends BaseAbility {
   private rainFull: Phaser.GameObjects.TileSprite | null = null;
   private bow: Phaser.GameObjects.Image | null = null;
   private melts: Phaser.GameObjects.Sprite[] = [];
-  private rainTexts = new Set<Phaser.GameObjects.Text>();
+  /** 점수 글자 '+N' — 풀에서 다시 쓴다 (렉 수정 1차, 지급마다 Text 를 새로 만들던 것) */
+  private scoreText = new ScoreTextPool(
+    { fontSize: '20px', fontFamily: 'Arial Black, sans-serif', color: '#ffffff', stroke: '#b8860b', strokeThickness: 4 },
+    { dy: 40, duration: 700, ease: 'Quad.easeOut' },
+  );
 
   /** 측정용 (밸런스 하네스 — 화면 · 저장 X): 여우불 발동 · 9꼬리 무적 발동 · 녹인 수 (무지개 여우비) · 무지개 여우비 발동 */
   foxFireCasts = 0;
@@ -206,7 +211,7 @@ export class GumiAbility extends BaseAbility {
     this.bowPhase = 'idle';
     this.meltQueue = [];
     this.melts = [];
-    this.rainTexts = new Set();
+    this.scoreText.destroy();   // 비운다 (판마다 새 인스턴스지만 규칙 1)
     this.rainFull = null;
     this.bow = null;
     this.foxFireCasts = this.tailTriggers = this.rainMelts = this.bowCasts = 0;
@@ -625,8 +630,8 @@ export class GumiAbility extends BaseAbility {
     this.rainLoader = null;
     this.meltQueue = [];
     this.bowPhase = 'idle';
-    const all = [this.rainFull, this.bow, ...this.melts, ...this.rainTexts];
-    this.rainTexts.clear();
+    const all = [this.rainFull, this.bow, ...this.melts];
+    this.scoreText.destroy();
     for (const o of all) { if (!o) continue; o.scene?.tweens.killTweensOf(o); o.destroy(); }
     this.rainFull = null;
     this.bow = null;
@@ -756,10 +761,6 @@ export class GumiAbility extends BaseAbility {
   /** 점수 — awardBonus(→ addAbilityBonus → updateScore, 규칙 3 · 자기 보너스로는 여우불 · 꼬리가 차지 않음) + '+N' 글자 */
   private award(api: GameSceneAPI, pts: number, x: number, y: number): void {
     this.awardBonus(api, pts);
-    const txt = api.scene.add.text(x, y, `+${pts}`, {
-      fontSize: '20px', fontFamily: 'Arial Black, sans-serif', color: '#ffffff', stroke: '#b8860b', strokeThickness: 4,
-    }).setOrigin(0.5).setDepth(200);
-    this.rainTexts.add(txt);
-    api.scene.tweens.add({ targets: txt, y: y - 40, alpha: 0, duration: 700, ease: 'Quad.easeOut', onComplete: () => { this.rainTexts.delete(txt); txt.destroy(); } });
+    this.scoreText.show(api.scene, x, y, `+${pts}`);
   }
 }

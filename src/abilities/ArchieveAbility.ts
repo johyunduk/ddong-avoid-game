@@ -5,6 +5,7 @@ import type PoolablePoopBase from '../objects/PoolablePoopBase';
 import { ARCHIEVE_PARAMS, ARCHIEVE_DEFERRED_SHEETS } from '../config/abilityParams';
 import { fxPickSheetKey, loadFxPickSheet } from '../utils/vfx';
 import { StagedLoader } from './stagedLoader';
+import { ScoreTextPool } from './scoreTextPool';
 
 /**
  * 아카이브 (SR) — 점수 배율 1.1 (생존 틱만) + v9 「날려서 맞추기」 · 「거품 분수」. 값은 ARCHIEVE_PARAMS
@@ -51,7 +52,11 @@ export class ArchieveAbility extends BaseAbility {
   /** 발사 연출 — 구슬 반짝(방울이 부풀며 사라짐) 1 · 날아가는 방울 뒤 작은 방울 자국 TRAIL_POOL */
   private flash: Phaser.GameObjects.Sprite | null = null;
   private trail: Phaser.GameObjects.Sprite[] = [];
-  private texts = new Set<Phaser.GameObjects.Text>();
+  /** 점수 글자 '+N' — 풀에서 다시 쓴다 (렉 수정 1차, 지급마다 Text 를 새로 만들던 것) */
+  private scoreText = new ScoreTextPool(
+    { fontSize: '20px', fontFamily: 'Arial Black, sans-serif', color: '#ffffff', stroke: '#1e7a8c', strokeThickness: 4 },
+    { dy: 40, duration: 700, ease: 'Quad.easeOut' },
+  );
 
   /** 측정용 (밸런스 하네스 — 화면 · 저장 X): 발사 · 맞힘 · 빗나감 · 분수 발동 · 분수로 담은 수 */
   shotsFired = 0;
@@ -105,7 +110,7 @@ export class ArchieveAbility extends BaseAbility {
     this.fountainTaken = 0;
     this.shotPool = []; this.wraps = []; this.pops = []; this.tags = []; this.tagTexts = []; this.foam = [];
     this.flash = null; this.trail = [];
-    this.texts = new Set();
+    this.scoreText.destroy();   // 비운다 (판마다 새 인스턴스지만 규칙 1)
     this.shotsFired = this.shotsHit = this.shotsMissed = this.fountainCasts = this.fountainHeld = 0;
     const scene = api.scene;
     this.loader = new StagedLoader(
@@ -143,8 +148,8 @@ export class ArchieveAbility extends BaseAbility {
     this.popQueue = [];
     this.shots = [];
     this.fountainPhase = 'idle';
-    const all = [...this.shotPool, ...this.wraps, ...this.pops, ...this.tags, ...this.tagTexts, ...this.foam, ...this.trail, ...(this.flash ? [this.flash] : []), ...this.texts];
-    this.texts.clear();
+    const all = [...this.shotPool, ...this.wraps, ...this.pops, ...this.tags, ...this.tagTexts, ...this.foam, ...this.trail, ...(this.flash ? [this.flash] : [])];
+    this.scoreText.destroy();
     for (const o of all) { o.scene?.tweens.killTweensOf(o); o.destroy(); }
     this.shotPool = []; this.wraps = []; this.pops = []; this.tags = []; this.tagTexts = []; this.foam = [];
     this.flash = null; this.trail = [];
@@ -423,10 +428,6 @@ export class ArchieveAbility extends BaseAbility {
   /** 점수 — awardBonus(→ addAbilityBonus → updateScore, 규칙 3 · 자기 보너스로는 분수 카운터가 차지 않음) + '+N' 글자 */
   private award(api: GameSceneAPI, pts: number, x: number, y: number): void {
     this.awardBonus(api, pts);
-    const txt = api.scene.add.text(x, y, `+${pts}`, {
-      fontSize: '20px', fontFamily: 'Arial Black, sans-serif', color: '#ffffff', stroke: '#1e7a8c', strokeThickness: 4,
-    }).setOrigin(0.5).setDepth(200);
-    this.texts.add(txt);
-    api.scene.tweens.add({ targets: txt, y: y - 40, alpha: 0, duration: 700, ease: 'Quad.easeOut', onComplete: () => { this.texts.delete(txt); txt.destroy(); } });
+    this.scoreText.show(api.scene, x, y, `+${pts}`);
   }
 }

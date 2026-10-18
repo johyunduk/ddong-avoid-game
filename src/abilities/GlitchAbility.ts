@@ -5,6 +5,7 @@ import type PoolablePoopBase from '../objects/PoolablePoopBase';
 import { GLITCH_PARAMS, GLITCH_DEFERRED_SHEETS } from '../config/abilityParams';
 import { fxPickSheetKey, loadFxPickSheet } from '../utils/vfx';
 import { StagedLoader } from './stagedLoader';
+import { ScoreTextPool } from './scoreTextPool';
 
 /**
  * 글리치 (SR) v2 — 디지털 화면 · 데이터가 깨진다. 값은 GLITCH_PARAMS (planner 1차 · fx 가정, v6 에서 맞춘다)
@@ -49,7 +50,11 @@ export class GlitchAbility extends BaseAbility {
   private bits: Phaser.GameObjects.Image[] = [];
   /** 틈에 걸려 지운 자리 — 좌표 · 텍스처 · 표시 크기만 (똥 참조 없음). 프레임당 FX_PER_FRAME 개씩 연출 */
   /** 떠 있는 점수 글자 — onDestroy 에서 트윈과 같이 지운다 (2d5b6bca 리뷰 2) */
-  private texts = new Set<Phaser.GameObjects.Text>();
+  /** 점수 글자 '+N' — 풀에서 다시 쓴다 (렉 수정 1차, 지급마다 Text 를 새로 만들던 것) */
+  private scoreText = new ScoreTextPool(
+    { fontSize: '20px', fontFamily: 'Arial Black, sans-serif', color: '#ff8ac4', stroke: '#000000', strokeThickness: 4 },
+    { dy: 40, duration: 700, ease: 'Quad.easeOut' },
+  );
   /** 열려 있는 틈 — 판정 [cx, cy, 배율, 각도] · 닫히는 시각(scene.time.now) · 이번 발동 남은 상한 (틈 셋이 나눠 씀) */
   private openSlits: { r: [number, number, number, number]; until: number; budget: { left: number } }[] = [];
   private fxQueue: { x: number; y: number; key: string; frame: string | number; scale: number; disp: number }[] = [];
@@ -102,7 +107,7 @@ export class GlitchAbility extends BaseAbility {
     this.outlineScene = api.scene;
     api.scene.events.on(Phaser.Scenes.Events.POST_UPDATE, this.syncOutlines, this);
     this.openSlits = [];
-    this.texts = new Set();
+    this.scoreText.destroy();   // 비운다 (판마다 새 인스턴스지만 규칙 1)
     this.pending = [];
     this.fxQueue = [];
     this.brackets = null;
@@ -398,11 +403,7 @@ export class GlitchAbility extends BaseAbility {
   private award(api: GameSceneAPI, pts: number, x: number, y: number): void {
     if (pts <= 0) return;
     api.addAbilityBonus(pts);
-    const txt = api.scene.add.text(x, y, `+${pts}`, {
-      fontSize: '20px', fontFamily: 'Arial Black, sans-serif', color: '#ff8ac4', stroke: '#000000', strokeThickness: 4,
-    }).setOrigin(0.5).setDepth(200);
-    this.texts.add(txt);
-    api.scene.tweens.add({ targets: txt, y: y - 40, alpha: 0, duration: 700, ease: 'Quad.easeOut', onComplete: () => { this.texts.delete(txt); txt.destroy(); } });
+    this.scoreText.show(api.scene, x, y, `+${pts}`);
   }
 
   /** 예약 타이머 — 씬 시계(히트스톱 · 일시정지와 같이 멈춤), onDestroy 에서 전부 뗀다 */
@@ -441,11 +442,10 @@ export class GlitchAbility extends BaseAbility {
     this.openSlits = [];
     this.brackets = null;
     const all: Phaser.GameObjects.GameObject[] = [
-      ...this.texts,
       ...(this.bracketG ? [this.bracketG] : []), ...this.outlinePool, ...this.rifts, ...this.sparks, ...this.neon.flat(), ...this.bits,
     ];
     for (const o of all) { o.scene?.tweens.killTweensOf(o); o.destroy(); }
-    this.texts.clear();
+    this.scoreText.destroy();
     this.bracketG = null;
     this.outlinePool = [];
     this.rifts = [];

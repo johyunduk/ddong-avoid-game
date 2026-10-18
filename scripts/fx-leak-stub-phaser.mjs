@@ -498,7 +498,12 @@ export function createFakeScene() {
     text: () => {
       const o = new GameObj(scene);
       o.setOrigin = () => o;
+      // 점수 글자 풀(scoreTextPool)이 숨겨 둔 글자를 다시 쓴다
+      o.setText = t => { o.text = t; return o; };
+      o.setAlpha = a => { o.alpha = a; return o; };
+      o.setVisible = v => { o.visible = v; return o; };
       o.alpha = 1;
+      o.visible = true;
       return o;
     },
   };
@@ -530,7 +535,7 @@ export function createFakeScene() {
       overlap: () => ({ destroy() {} }),
     },
   };
-  scene.children = { moveBelow: () => {} };
+  scene.children = { moveBelow: () => {}, bringToTop: () => {} };
   scene.make = { graphics: () => new GraphicsObj(scene) };
 
   return scene;
