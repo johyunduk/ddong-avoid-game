@@ -31,6 +31,7 @@ import {
 import BaseScene from './BaseScene';
 import { textContentHeight, textContentWidth } from '../utils/textSafety';
 import { bakeButton, clipToViewport, gradientText, hitRect, MIN_TOUCH, setTouchInteractive, wireButton, type ButtonSkin } from '../utils/buttonSkin';
+import { addRoundRect, bakeRoundRect, bakeShape, cssColor } from '../utils/bakeShape';
 
 /**
  * 수집 화면 — 배치 두 가지를 COLLECTION_LAYOUT 하나로 고른다 (docs/ui-collection.md).
@@ -75,6 +76,10 @@ const WP_GAP = 12;
 
 // 각성 단계 (별 개수)
 const STAR_COUNT = 5;
+/** A안 카드 아래 각성 점 — 점 사이 · 반지름, 구운 그림 크기 (점 5개 + 테) */
+const CORE_GAP = 8;
+const CORE_R = 2.6;
+const CORE_W = 40, CORE_H = 8;
 
 /** 한 줄 설명 — 기본 효과 앞부분 (굵게 표시용 ** 는 뺀다) */
 function shortLine(s: string, max = 44): string {
@@ -128,7 +133,7 @@ export default class CharacterSelectScene extends BaseScene {
   // 격자 (아래, 스크롤)
   private cardsContainer!: Phaser.GameObjects.Container;
   private cellPos = new Map<string, { x: number; y: number; w: number; h: number }>();
-  private focusRing!: Phaser.GameObjects.Graphics;
+  private focusRing!: Phaser.GameObjects.Image;
   private equipBadge!: Phaser.GameObjects.Container;
   private countText!: Phaser.GameObjects.Text;
   private gridTop = 0;
@@ -532,10 +537,20 @@ export default class CharacterSelectScene extends BaseScene {
 
   /** 공용 — 고른 칸 흰 테두리 · 장착(사용 중) 금 배지. 격자를 그린 뒤 위에 얹는다 */
   private addGridMarks() {
-    this.focusRing = this.add.graphics();
+    // 테 · 배지 원은 구운 그림 (utils/bakeShape) — Graphics · 도형 테는 매 프레임 다시 그린다
+    this.focusRing = this.add.image(0, 0, '__DEFAULT').setVisible(false);
     this.cardsContainer.add(this.focusRing);
     const badge = this.add.container(0, 0);
-    badge.add(this.add.circle(0, 0, 10, 0xffc94a).setStrokeStyle(2, 0x3a1d00));
+    const disc = bakeShape(this, 'cs_equip_disc', 24, 24, ctx => {
+      ctx.beginPath();
+      ctx.arc(12, 12, 10, 0, Math.PI * 2);
+      ctx.fillStyle = cssColor(0xffc94a);
+      ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = cssColor(0x3a1d00);
+      ctx.stroke();
+    });
+    badge.add(this.add.image(0, 0, disc).setDisplaySize(24, 24));
     badge.add(this.add.text(0, 0, '✓', { fontSize: '12px', color: '#3a1d00', fontStyle: 'bold' }).setOrigin(0.5));
     this.equipBadge = badge;
     this.cardsContainer.add(badge);
@@ -545,11 +560,12 @@ export default class CharacterSelectScene extends BaseScene {
   private updateGridMarks() {
     const focusId = this.activeTab === 'character' ? this.focusedId : this.focusedWpId;
     const equipId = this.activeTab === 'character' ? this.selectedId : this.selectedWpId;
-    this.focusRing.clear();
     const f = this.cellPos.get(focusId);
+    this.focusRing.setVisible(!!f);
     if (f) {
-      this.focusRing.lineStyle(3, 0xffffff, 1);
-      this.focusRing.strokeRoundedRect(f.x - f.w / 2 - 2, f.y - f.h / 2 - 2, f.w + 4, f.h + 4, 16);
+      // 칸보다 사방 2 큰 흰 테 (두께 3) — 칸 가운데에 맞춘다
+      const ring = bakeRoundRect(this, 'cs', f.w + 4, f.h + 4, 16, { line: 0xffffff, lineWidth: 3 });
+      this.focusRing.setTexture(ring.key).setDisplaySize(ring.dw, ring.dh).setPosition(f.x, f.y);
     }
     const e = equipId ? this.cellPos.get(equipId) : undefined;
     this.equipBadge.setVisible(!!e);
@@ -971,7 +987,7 @@ export default class CharacterSelectScene extends BaseScene {
     const cw = Math.floor((W - 32 - gap * 2) / 3);
     const artH = Math.round((cw - 6) * 4 / 3);
     const ch = artH + 30;
-    const cores = this.add.graphics();
+    const cores: Phaser.GameObjects.Image[] = [];
     order.forEach((def, i) => {
       const col = i % 3, row = Math.floor(i / 3);
       this.createCardA(def, 16 + col * (cw + gap) + cw / 2, this.gridTop + row * (ch + gap) + ch / 2, cw, ch, artH, cores);
@@ -984,7 +1000,7 @@ export default class CharacterSelectScene extends BaseScene {
     this.maxScrollOffset = Math.max(0, this.gridTop + rows * (ch + gap) + 8 - this.gridBottom);
   }
 
-  private createCardA(def: CharacterDef, x: number, y: number, cw: number, ch: number, artH: number, cores: Phaser.GameObjects.Graphics) {
+  private createCardA(def: CharacterDef, x: number, y: number, cw: number, ch: number, artH: number, cores: Phaser.GameObjects.Image[]) {
     const owned = this.ownedIds.includes(def.id);
     const [top, bottom] = owned ? (GRADE_FRAME[def.grade] ?? OTHER_FRAME) : LOCK_FRAME;
     const key = `cs_cardA_${top}${bottom}_${cw}x${ch}`.replace(/#/g, '');
@@ -1015,25 +1031,33 @@ export default class CharacterSelectScene extends BaseScene {
     this.cardsContainer.add(this.add.text(x, y + ch / 2 - (owned ? 18 : 14), def.name, {
       fontSize: '13px', color: owned ? '#1a1030' : '#8a8a9a', fontStyle: 'bold',
     }).setOrigin(0.5));
-    // 각성 코어 — 보유 캐릭터만 (등급외 제외)
+    // 각성 코어 — 보유 캐릭터만 (등급외 제외). 점 다섯 개를 단계 · 색마다 한 장으로 구워 둔다 (전엔 Graphics 원 약 100개를 매 프레임)
     if (owned && def.grade !== '등급외') {
       const lv = getAwakeningLevel(def.grade, getDuplicateCount(def.id));
-      const cy = y + ch / 2 - 6;
       const col = Phaser.Display.Color.HexStringToColor(bottom).color;
-      for (let i = 0; i < STAR_COUNT; i++) {
-        const cx = x + (i - 2) * 8;
-        if (i < lv) {
-          cores.fillStyle(col, 1).fillCircle(cx, cy, 2.6);
-        } else {
-          cores.fillStyle(0x141420, 1).fillCircle(cx, cy, 2.6);
-          cores.lineStyle(1, col, 0.5).strokeCircle(cx, cy, 2.6);
-        }
-      }
+      cores.push(this.add.image(x, y + ch / 2 - 6, this.bakeCores(lv, col)).setDisplaySize(CORE_W, CORE_H));
     }
 
     this.cellPos.set(def.id, { x, y, w: cw, h: ch });
     frame.setInteractive(clipToViewport(hitRect(pad, cw, ch), this.gridViewport));
     frame.on('pointerup', (p: Phaser.Input.Pointer) => this.onCellTap(p, () => this.focusCharacter(def.id)));
+  }
+
+  /** 각성 점 다섯 개 — 단계(lv)만큼 등급색으로 채우고 나머지는 어두운 점 + 반투명 테. 그림 가운데가 가운데 점 */
+  private bakeCores(lv: number, col: number): string {
+    return bakeShape(this, `cs_cores_${lv}_${col.toString(16)}`, CORE_W, CORE_H, ctx => {
+      for (let i = 0; i < STAR_COUNT; i++) {
+        ctx.beginPath();
+        ctx.arc(CORE_W / 2 + (i - 2) * CORE_GAP, CORE_H / 2, CORE_R, 0, Math.PI * 2);
+        ctx.fillStyle = cssColor(i < lv ? col : 0x141420);
+        ctx.fill();
+        if (i >= lv) {
+          ctx.lineWidth = 1;
+          ctx.strokeStyle = cssColor(col, 0.5);
+          ctx.stroke();
+        }
+      }
+    });
   }
 
   private buildWallpaperCardsA() {
@@ -1146,6 +1170,9 @@ export default class CharacterSelectScene extends BaseScene {
 
     const panel = this.add.container(0, 0).setDepth(300);
     this.detailPanel = panel;
+    // 상세가 화면을 다 덮는 동안 뒤 격자 · 배너는 그리지 않는다 (닫으면 hideCharacterDetail 이 되살린다)
+    this.cardsContainer.setVisible(false);
+    this.showcase.setVisible(false);
 
     // 바탕 · 아래 목록으로 입력이 새지 않게 막는다
     panel.add(this.add.rectangle(cx, H / 2, W, H, BG_DARK).setInteractive());
@@ -1245,7 +1272,7 @@ export default class CharacterSelectScene extends BaseScene {
       const row: Phaser.GameObjects.GameObject[] = [
         this.add.text(tx, tabY, DETAIL_TAB_LABEL[t], { fontSize: '15px', color: on ? '#ffd34d' : '#b9a3d6', fontStyle: 'bold' }).setOrigin(0.5),
       ];
-      if (on) row.push(this.add.graphics().fillStyle(0xffd34d).fillRoundedRect(tx - 24, tabY + 14, 48, 3, 1.5));
+      if (on) row.push(addRoundRect(this, 'cs', tx - 24, tabY + 14, 48, 3, 1.5, { fill: 0xffd34d }));
       else {
         const zone = setTouchInteractive(this.add.zone(tx, tabY, tw, DETAIL.tabH));
         zone.on('pointerup', () => this.showDetailTab(def, t));
@@ -1506,6 +1533,8 @@ export default class CharacterSelectScene extends BaseScene {
     this.detailPanel?.destroy();
     this.detailPanel = null;
     this.detailIllustKey = null;
+    if (this.cardsContainer?.active) this.cardsContainer.setVisible(true);
+    if (this.showcase?.active) this.showcase.setVisible(true);
     if (release) this.dropUnusedIllusts();
   }
 
