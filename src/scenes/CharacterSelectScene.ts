@@ -165,6 +165,8 @@ export default class CharacterSelectScene extends BaseScene {
   private videoMemo: ReelMemo = newReelMemo();
   /** 그림을 기다리는 상세 — 마지막으로 누른 캐릭터만 연다 (그사이 다른 캐릭터를 누르면 그쪽) */
   private pendingDetailId: string | null = null;
+  /** 열려 있는 상세가 쓰는 일러스트 키 — dropUnusedIllusts 가 이것만 남긴다 */
+  private detailIllustKey: string | null = null;
 
   constructor() {
     super('CharacterSelectScene');
@@ -240,6 +242,7 @@ export default class CharacterSelectScene extends BaseScene {
     this.detailScrollOff = null;
     this.detailReel = null;
     this.pendingDetailId = null;
+    this.detailIllustKey = null;
 
     // 동기화 전 각성 수치 스냅샷 (동기화 후 변화 감지용)
     this._preSyncDupCounts = new Map(
@@ -1122,7 +1125,8 @@ export default class CharacterSelectScene extends BaseScene {
     }
     this.pendingDetailId = id;
     const open = () => {
-      if (this.pendingDetailId !== id) return;
+      // 그사이 다른 캐릭터를 눌렀다 — 늦게 온 이 그림은 쓰지 않으니 내린다
+      if (this.pendingDetailId !== id) { this.dropUnusedIllusts(); return; }
       this.pendingDetailId = null;
       this.buildCharacterDetail(id, 'ability');
     };
@@ -1131,7 +1135,7 @@ export default class CharacterSelectScene extends BaseScene {
 
   /** 상세 화면을 그린다 (탭을 바꾸면 탭 줄 · 내용만 다시 그린다 — showDetailTab) */
   private buildCharacterDetail(id: string, tab: DetailTab): void {
-    this.hideCharacterDetail();
+    this.hideCharacterDetail(false);   // 직전 그림은 새 상세를 다 그린 뒤 내린다 (같은 캐릭터면 그대로 쓴다)
 
     const W = this.scale.width;
     const H = this.scale.height;
@@ -1213,6 +1217,9 @@ export default class CharacterSelectScene extends BaseScene {
     this.buildDetailButton(panel, def, owned, equipped);
 
     this.showDetailTab(def, showTab);
+
+    this.detailIllustKey = def.illustKey;
+    this.dropUnusedIllusts();
   }
 
   /** 이 캐릭터에 보일 탭 — 각성이 없는 등급(등급외)이면 각성 탭을, 시너지 짝이 없으면 시너지 탭을 숨긴다 */
@@ -1488,13 +1495,37 @@ export default class CharacterSelectScene extends BaseScene {
     this.detailThumb = null;
   }
 
-  /** 상세를 닫는다 — 영상은 받던 것까지 끊고 내린다 (utils/videoReel). 일러스트는 나갈 때 releaseTextures 가 내린다 */
-  private hideCharacterDetail(): void {
+  /**
+   * 상세를 닫는다 — 영상은 받던 것까지 끊고 내린다 (utils/videoReel). release 면 그 일러스트도 내린다
+   * (다른 캐릭터 상세로 바꿀 때는 buildCharacterDetail 이 새 상세를 그린 뒤 내린다)
+   */
+  private hideCharacterDetail(release = true): void {
     this.detailReel?.destroy();
     this.detailReel = null;
     this.dropDetailContent();
     this.detailPanel?.destroy();
     this.detailPanel = null;
+    this.detailIllustKey = null;
+    if (release) this.dropUnusedIllusts();
+  }
+
+  /**
+   * 이 씬이 올린 큰 일러스트(illust_*) 중 지금 쓰는 것만 남기고 내린다 — 상세를 닫거나 다른 캐릭터로 바꿀 때 ·
+   * 기다리던 그림이 늦게 왔는데 그사이 다른 캐릭터를 눌렀을 때.
+   * 예전에는 나갈 때만 내려서 한 방문에 상세를 본 캐릭터 수만큼(장당 768x1344 = GPU 4.1MB) 쌓였다 (2026-10-18 렉 점검).
+   * 남기는 것: 열린 상세의 그림 · 받기를 기다리는 상세의 그림 · (C안) 쇼케이스 그림 · 아직 받는 중인 그림 (다 오면 다시 부른다)
+   */
+  private dropUnusedIllusts(): void {
+    const illustOf = (id: string) => (CHARACTERS.find(c => c.id === id) ?? CHARACTERS[0]).illustKey;
+    const keep = new Set<string>();
+    if (this.detailIllustKey) keep.add(this.detailIllustKey);
+    if (this.pendingDetailId) keep.add(illustOf(this.pendingDetailId));
+    if (COLLECTION_LAYOUT === 'C' && this.activeTab === 'character') keep.add(illustOf(this.focusedId));
+    for (const key of [...this.ownKeys]) {
+      if (!key.startsWith('illust_') || keep.has(key) || this.loadingKeys.has(key)) continue;
+      this.ownKeys.delete(key);
+      if (this.textures.exists(key)) this.textures.remove(key);
+    }
   }
 
 
