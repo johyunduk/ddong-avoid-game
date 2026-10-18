@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { getCharacterDef, type CharacterDef } from './character';
-import { destroyVideo } from './video';
+import { destroyVideo, releaseVideoElement } from './video';
 
 /**
  * 캐릭터 영상 줄 — 뽑기 로비(GachaScene) · 캐릭터 상세(CharacterSelectScene)가 같이 쓴다 (대표 2026-10-11 · 10-12).
@@ -231,12 +231,8 @@ export class VideoReel {
     if (this.media === media) this.media = null;
     if (this.video === media.vid) this.video = null;
     const el = media.el;
-    if (el) {
-      media.el = null;
-      el.pause();
-      el.removeAttribute('src');
-      el.load();
-    }
+    media.el = null;
+    releaseVideoElement(el);
     const textures = this.scene.sys.textures;
     if (media.texKey && textures.exists(media.texKey)) textures.remove(media.texKey);
   }

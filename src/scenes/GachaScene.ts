@@ -12,7 +12,7 @@ import {
 import { CHARACTERS, getCharacterDef, addOwnedCharacter, getOwnedCharacters, getDuplicateCount, setDuplicateCount, getGradeImgKey, getGradeColorInt, getAwakeningLevel, type CharacterDef } from '../utils/character';
 import { WALLPAPERS, getWallpaperDef, addOwnedWallpaper, WP_ACCENT_INT, WP_ACCENT_HEX, type BackgroundDef } from '../utils/wallpaper';
 import { getSkorBalance, getCachedSkorBalance, cacheSkorBalance } from '../utils/skor';
-import { destroyVideo } from '../utils/video';
+import { destroyVideo, releaseOnDestroy } from '../utils/video';
 import { VideoReel, newReelMemo, type ReelMemo } from '../utils/videoReel';
 import BaseScene from './BaseScene';
 import { addBackground } from '../utils/background';
@@ -2144,7 +2144,8 @@ export default class GachaScene extends BaseScene {
       const key = 'gacha';
       if (!this.cache.video.exists(key)) { resolve(); return; }
 
-      const vid = this.add.video(width / 2, height / 2, key);
+      // 씬이 연출 도중 닫혀도(화면 목록이 먼저 부순다) 요소 · UUID 텍스처까지 놓는다
+      const vid = releaseOnDestroy(this.add.video(width / 2, height / 2, key));
       vid.play(false);
       this.fitVideoToCanvas(vid, width, height);
 
@@ -2188,7 +2189,7 @@ export default class GachaScene extends BaseScene {
 
     const vidKey = `vid_${pulled.id}`;
     if (this.cache.video.exists(vidKey)) {
-      const vid = this.add.video(width / 2, height / 2, vidKey);
+      const vid = releaseOnDestroy(this.add.video(width / 2, height / 2, vidKey));   // 리빌 도중 씬이 닫혀도 정리 (위 연출과 같다)
       vid.play(false);
       this.fitVideoToCanvas(vid, width, height);
 
