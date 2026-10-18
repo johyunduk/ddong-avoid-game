@@ -1127,8 +1127,7 @@ export default class GachaScene extends BaseScene {
     const x0 = 54, x1 = countRight - Math.max(count.width, 64) - 8;
     const frac = ps ? Phaser.Math.Clamp(ps.points / p.threshold, 0, 1) : 0;
     addRoundRect(this, UI, x0, y - 6, x1 - x0, 12, 6, { fill: 0x000000, fillAlpha: 0.55 });
-    // 찬 몫은 폭마다 구운 그림이라 정수 폭으로
-    if (frac > 0) addRoundRect(this, UI, x0, y - 6, Math.round(Math.max(12, (x1 - x0) * frac)), 12, 6, { fill: ps?.canExchange ? 0xffd34d : 0xffb81a });
+    if (frac > 0) addRoundRect(this, UI, x0, y - 6, Math.max(12, (x1 - x0) * frac), 12, 6, { fill: ps?.canExchange ? 0xffd34d : 0xffb81a });
     addRoundRect(this, UI, x0, y - 6, x1 - x0, 12, 6, { line: 0x8a7ab8, lineAlpha: 0.9, lineWidth: 1 });
     this.add.text(x0, H - LOBBY.pityCaption, pityCaption(b), {
       fontSize: '11px', color: '#e8dcff', fontStyle: 'bold', stroke: '#000000', strokeThickness: 3,
