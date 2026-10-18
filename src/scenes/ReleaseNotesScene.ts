@@ -5,6 +5,7 @@ import { addBackground } from '../utils/background';
 import { textContentHeight } from '../utils/textSafety';
 import { bakeButton, bakeRoundedImage, clipToViewport, gradientText, wireButton } from '../utils/buttonSkin';
 import { getCharacterDef, getGradeColorInt } from '../utils/character';
+import { addCircle, addRoundRect, bakeShape, cssColor } from '../utils/bakeShape';
 
 /**
  * 릴리스 노트 (A안) — 최신 버전은 펼친 큰 카드(그 버전 캐릭터 배너 · NEW · 분류 칩 · 줄), 지난 버전은 접힌 한 줄.
@@ -152,9 +153,7 @@ export default class ReleaseNotesScene extends BaseScene {
         const label = this.add.text(0, 0, `${def.grade} ${def.name}`, { fontSize: '12px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5);
         const lw = label.width + 22;
         const px = bx + 8 + lw / 2, py = y + 78;
-        box.add(this.add.graphics()
-          .fillStyle(0x0a0616, 0.82).fillRoundedRect(px - lw / 2, py - 11, lw, 22, 11)
-          .lineStyle(1.5, getGradeColorInt(def)).strokeRoundedRect(px - lw / 2, py - 11, lw, 22, 11));
+        box.add(addRoundRect(this, 'rn', px - lw / 2, py - 11, lw, 22, 11, { fill: 0x0a0616, fillAlpha: 0.82, line: getGradeColorInt(def), lineWidth: 1.5 }));
         box.add(label.setPosition(px, py));
       });
       y += 92 + 20;
@@ -165,8 +164,7 @@ export default class ReleaseNotesScene extends BaseScene {
     const ver = this.add.text(16, y, note.version, { fontSize: '24px', fontStyle: 'bold', stroke: '#2a0a4a', strokeThickness: 3 }).setOrigin(0, 0.5);
     gradientText(ver, [[0, '#fff7c2'], [1, '#ffb01a']]);
     const nx = 16 + ver.width + 30;
-    box.add([ver, this.add.graphics().fillStyle(0xff3b2f).fillRoundedRect(nx - 23, y - 11, 46, 22, 11)
-      .lineStyle(1.5, 0x5a0a00).strokeRoundedRect(nx - 23, y - 11, 46, 22, 11),
+    box.add([ver, addRoundRect(this, 'rn', nx - 23, y - 11, 46, 22, 11, { fill: 0xff3b2f, line: 0x5a0a00, lineWidth: 1.5 }),
     this.add.text(nx, y, 'NEW', { fontSize: '12px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5),
     this.add.text(cw - 16, y, note.date, { fontSize: '13px', color: '#d9c6f0', fontStyle: 'bold' }).setOrigin(1, 0.5)]);
     y += 20;
@@ -179,8 +177,7 @@ export default class ReleaseNotesScene extends BaseScene {
     if (rest > 0) {
       y += 6;
       const more = this.add.container(cw / 2, y + 14);
-      more.add(this.add.graphics().fillStyle(0xffffff, 0.12).fillRoundedRect(-75, -14, 150, 28, 14)
-        .lineStyle(1, 0xffd34d).strokeRoundedRect(-75, -14, 150, 28, 14));
+      more.add(addRoundRect(this, 'rn', -75, -14, 150, 28, 14, { fill: 0xffffff, fillAlpha: 0.12, line: 0xffd34d, lineWidth: 1 }));
       more.add(this.add.text(-8, 0, this.latestExpanded ? '접기' : `더보기 · ${rest}줄`, { fontSize: '12px', color: '#ffe08a', fontStyle: 'bold' }).setOrigin(0.5));
       more.add(this.chevron(50, 0, 5, this.latestExpanded ? -90 : 90));
       this.makeTappable(more, 150, 44, () => {
@@ -232,7 +229,7 @@ export default class ReleaseNotesScene extends BaseScene {
       if (!this.textures.exists(`rn_face_${id}`)) continue;
       const key = bakeRoundedImage(this, `rn_faceR_${id}`, `rn_face_${id}`, 34, 34, 17);
       row.add(this.add.image(x + 17, 0, key).setDisplaySize(34, 34));
-      row.add(this.add.circle(x + 17, 0, 17).setStrokeStyle(2, getGradeColorInt(getCharacterDef(id))));
+      row.add(addCircle(this, 'rn', x + 17, 0, 17, { line: getGradeColorInt(getCharacterDef(id)), lineWidth: 2 }));   // 도형 테도 매 프레임 다시 그린다 — 구운 그림
       x += 38;
     }
     const summaryW = cw / 2 - 40 - (x + 6);
@@ -278,7 +275,8 @@ export default class ReleaseNotesScene extends BaseScene {
     const chipLabel = this.add.text(0, 0, tag, { fontSize: '10px', color: fg, fontStyle: 'bold' }).setOrigin(0.5);
     const chipW = chipLabel.width + 12;
     const chipY = y + LINE_FONT * 0.65;
-    box.add(this.add.graphics().fillStyle(bg).fillRoundedRect(x, chipY - 9, chipW, 18, 9));
+    // 칩 판은 구운 그림 (utils/bakeShape) — 분류 5종이라 그림도 다섯 장. Graphics 면 줄마다 매 프레임 다시 그린다
+    box.add(addRoundRect(this, 'rn_chip', x, chipY - 9, chipW, 18, 9, { fill: bg }));
     box.add(chipLabel.setPosition(x + chipW / 2, chipY));
 
     const tx = x + chipW + 6, tw = maxW - chipW - 6;
@@ -295,28 +293,50 @@ export default class ReleaseNotesScene extends BaseScene {
     return Math.max(textContentHeight(t), 18) + 8;
   }
 
-  /** 한 줄에 들어가게 뒤를 자르고 '…' 를 붙인다 (force 면 이미 '…' 가 붙은 글이다) */
+  /**
+   * 한 줄에 들어가게 뒤를 자르고 '…' 를 붙인다 (force 면 이미 '…' 가 붙은 글이다). t 의 글자는 바꾸지 않는다 — 부르는 쪽이 한 번 setText.
+   * 폭은 t 의 글꼴로 measureText 해 Phaser 와 같은 식(줄 바꿈 없이 · 올림 · 외곽선 · 여백)으로 잰다.
+   * 예전에는 한 글자씩 지우며 매번 setText 했다 — Text 는 setText 마다 캔버스를 다시 그리고 GPU 로 올려서,
+   * 지난 버전 요약 줄만으로 화면을 열 때 약 600번이었다 (2026-10-18 렉 점검). 이제 이진 탐색으로 고른 길이가 예전과 같다
+   */
   private fitOneLine(t: Phaser.GameObjects.Text, s: string, maxW: number, force = false): string {
-    const ww = t.style.wordWrapWidth, adv = t.style.wordWrapUseAdvanced;
-    t.setWordWrapWidth(null);
-    let out = s;
-    t.setText(out);
-    if (!force && t.width <= maxW) { t.setWordWrapWidth(ww, adv); return out; }
-    let body = force ? s.slice(0, -1) : s;
-    do {
-      body = body.slice(0, -1);
-      out = body.trimEnd() + '…';
-      t.setText(out);
-    } while (t.width > maxW && body.length > 1);
-    t.setWordWrapWidth(ww, adv);
-    return out;
+    const ctx = t.context;
+    t.style.syncFont(t.canvas, ctx);
+    const pad = (t.padding.left ?? 0) + (t.padding.right ?? 0);
+    const fits = (str: string) => Math.ceil(t.style.strokeThickness + ctx.measureText(str).width) + pad <= maxW;
+    if (!force && fits(s)) return s;
+    const body = force ? s.slice(0, -1) : s;
+    const cut = (n: number) => body.slice(0, n).trimEnd() + '…';
+    // 앞 n 글자 + '…' 가 들어가는 가장 큰 n (1 ~ 길이-1). 하나도 안 들어가면 1 — 예전 루프와 같다
+    let lo = 1, hi = body.length - 1;
+    if (hi < 1) return cut(Math.max(0, hi));
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (fits(cut(mid))) lo = mid; else hi = mid - 1;
+    }
+    return cut(lo);
   }
 
-  /** '>' 꺾쇠 — angle 90 이면 아래를 본다 */
+  /**
+   * '>' 꺾쇠 — angle 90 이면 아래를 본다. 크기마다 한 번 구운 그림 (utils/bakeShape) — 지난 버전 줄마다 하나라 Graphics 면 매 프레임 다시 그린다.
+   * 그림 가운데가 꺾쇠의 (0, 0) 이라 Graphics 처럼 그 점을 축으로 돈다. 모서리는 Phaser 선처럼 깎인 모양(bevel) · 끝은 자른 모양(butt)
+   */
   private chevron(x: number, y: number, size: number, angle: number) {
-    return this.add.graphics({ x, y }).lineStyle(2.5, 0xffd34d)
-      .beginPath().moveTo(-size / 2, -size).lineTo(size / 2, 0).lineTo(-size / 2, size).strokePath()
-      .setAngle(angle);
+    const LW = 2.5;
+    const bw = Math.ceil(size + LW * 2), bh = Math.ceil(size * 2 + LW * 2);
+    const key = bakeShape(this, `rn_chevron_${size}`, bw, bh, ctx => {
+      ctx.translate(bw / 2, bh / 2);
+      ctx.beginPath();
+      ctx.moveTo(-size / 2, -size);
+      ctx.lineTo(size / 2, 0);
+      ctx.lineTo(-size / 2, size);
+      ctx.lineWidth = LW;
+      ctx.lineJoin = 'bevel';
+      ctx.lineCap = 'butt';
+      ctx.strokeStyle = cssColor(0xffd34d);
+      ctx.stroke();
+    });
+    return this.add.image(x, y, key).setDisplaySize(bw, bh).setAngle(angle);
   }
 
   /**
