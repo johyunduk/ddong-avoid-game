@@ -17,6 +17,7 @@ import { VideoReel, newReelMemo, type ReelMemo } from '../utils/videoReel';
 import BaseScene from './BaseScene';
 import { addBackground } from '../utils/background';
 import { bakeButton, bakeRadialGlow, bakeRoundedImage, gradientText, setTouchInteractive, touchArea, wireButton } from '../utils/buttonSkin';
+import { addCircle, addRoundRect, bakeCircle } from '../utils/bakeShape';
 
 // 개인 영상이 있는 캐릭터 — **캐릭터 정의에서 그대로 읽는다.** 영상 유무는 이미
 // `videoKey`/`videoPath` 가 말하고 있어서, 목록을 따로 두면 캐릭터를 추가할 때
@@ -38,6 +39,14 @@ const WP_CARD_TEAL = 0x40c8ff;
 
 /** 진열이 넘어가는 간격 (ms) — 상시 영상을 못 틀 때의 일러스트 번갈아 보이기 */
 const SLIDE_MS = 3000;
+
+/**
+ * 로비의 알약 · 원 · 막대는 구운 그림 (utils/bakeShape) — Graphics 는 매 프레임 다시 그려서, 영상을 멈춰도 로비가
+ * 6ms/f · 할당 24MB/s 였다 (2026-10-18 dev 실측). gacha_ 접두사라 씬을 나갈 때 같이 내린다
+ */
+const UI = 'gacha_ui';
+/** 얼굴 원 테 (반지름) */
+const FACE_RING_R = 15;
 
 // ── 픽업 배너 (정의서 ~/ddong-fx-work/gacha/banner_spec_v1.md §5) ──────────────
 // 배너 정의 · 확률 · 교환 후보는 src/config/banners.ts 와 utils/gacha.ts 가 계산한다. 이 화면은 그리기만 한다 —
@@ -254,7 +263,7 @@ export default class GachaScene extends BaseScene {
   private slideshowActive = false;
   private slideTimer: Phaser.Time.TimerEvent | null = null;
   /** 얼굴 줄 (상시 = 진열 얼굴, 픽업 = 함께 픽업 SR) */
-  private faceChips: { chip: Phaser.GameObjects.Container; ring: Phaser.GameObjects.Graphics; color: number }[] = [];
+  private faceChips: { chip: Phaser.GameObjects.Container; ring: Phaser.GameObjects.Image; color: number }[] = [];
   private faceRowSlides = false;
 
   constructor() {
@@ -748,9 +757,7 @@ export default class GachaScene extends BaseScene {
   /** SKOR 알약 — 잔액 글자를 돌려준다 */
   private createSkorPill(x: number, y: number, value: string): Phaser.GameObjects.Text {
     const w = 128, h = 30;
-    const g = this.add.graphics();
-    g.fillStyle(0x0a0618, 0.85).fillRoundedRect(x - w / 2, y - h / 2, w, h, h / 2);
-    g.lineStyle(1.5, 0xffd34d).strokeRoundedRect(x - w / 2, y - h / 2, w, h, h / 2);
+    addRoundRect(this, UI, x - w / 2, y - h / 2, w, h, h / 2, { fill: 0x0a0618, fillAlpha: 0.85, line: 0xffd34d, lineWidth: 1.5 });
     this.add.text(x - 46, y, '💰', { fontSize: '14px' }).setOrigin(0.5);
     this.add.text(x + w / 2 - 12, y, 'SKOR', { fontSize: '9px', color: '#d9c6f0', fontStyle: 'bold' }).setOrigin(1, 0.5);
     // 잔액은 'SKOR' 왼쪽에 오른쪽 맞춤 — 자릿수가 늘어도 겹치지 않게
@@ -770,14 +777,14 @@ export default class GachaScene extends BaseScene {
       const nb = this.neighborOf(visible, cur, dir);
       if (!nb) continue;
       const box = this.add.container(dir < 0 ? 17 : W - 17, y);
-      box.add(this.add.graphics().fillStyle(0x0a0618, 0.5).fillRoundedRect(-14, -32, 28, 64, 10));
+      box.add(addRoundRect(this, UI, -14, -32, 28, 64, 10, { fill: 0x0a0618, fillAlpha: 0.5 }));
       box.add(this.add.text(0, -3, dir < 0 ? '‹' : '›', {
         fontSize: '36px', color: '#ffffff', fontStyle: 'bold', stroke: '#000000', strokeThickness: 4,
       }).setOrigin(0.5));
       // 이웃 배너의 천장 교환이 되면 화살표 판의 화면 안쪽 위 모서리에 작은 빨간 점 (이웃 이름 글자는 두지 않는다 — 대표)
       if (this.canExchangeOf(nb)) {
         const dx = dir < 0 ? 11 : -11;
-        box.add(this.add.graphics().fillStyle(0xff5a3a).fillCircle(dx, -29, 4).lineStyle(1.2, 0xffffff).strokeCircle(dx, -29, 4));
+        box.add(addCircle(this, UI, dx, -29, 4, { fill: 0xff5a3a, line: 0xffffff, lineWidth: 1.2 }));
       }
       wireButton(this, box, 28, 64, () => this.stepBanner(dir), true);
       // 눌리는 폭 44 를 화면 안에서 다 받게 안쪽으로 민다 — 판(28)이 가장자리에 붙어 있어 가운데로 넓히면
@@ -812,12 +819,11 @@ export default class GachaScene extends BaseScene {
   private buildDots(visible: BannerDef[], cur: BannerDef) {
     const W = this.scale.width, y = this.scale.height - LOBBY.dots;
     const gap = 13, x0 = W / 2 - gap * (visible.length - 1) / 2;
-    const g = this.add.graphics();
     visible.forEach((b, i) => {
       const x = x0 + i * gap;
-      if (b === cur) g.fillStyle(0xffd34d).fillRoundedRect(x - 8, y - 3.5, 16, 7, 3.5);
-      else if (this.canExchangeOf(b)) g.fillStyle(0xff5a3a).fillCircle(x, y, 3.6);
-      else g.fillStyle(0xffffff, 0.55).fillCircle(x, y, 3.2);
+      if (b === cur) addRoundRect(this, UI, x - 8, y - 3.5, 16, 7, 3.5, { fill: 0xffd34d });
+      else if (this.canExchangeOf(b)) addCircle(this, UI, x, y, 3.6, { fill: 0xff5a3a });
+      else addCircle(this, UI, x, y, 3.2, { fill: 0xffffff, fillAlpha: 0.55 });
     });
   }
 
@@ -843,9 +849,9 @@ export default class GachaScene extends BaseScene {
     ids.forEach((id, i) => {
       const def = getCharacterDef(id);
       const chip = this.add.container(x + d / 2, y);
-      chip.add(this.add.graphics().fillStyle(0x0a0618, 0.9).fillCircle(0, 0, d / 2 + 2));
+      chip.add(addCircle(this, UI, 0, 0, d / 2 + 2, { fill: 0x0a0618, fillAlpha: 0.9 }));
       chip.add(this.faceImage(id, d));
-      const ring = this.add.graphics();
+      const ring = this.add.image(0, 0, '__DEFAULT');   // 테는 refreshFaces 가 구운 그림으로 바꿔 낀다
       chip.add(ring);
       this.faceChips.push({ chip, ring, color: getGradeColorInt(def) });
       if (slides) {
@@ -881,9 +887,15 @@ export default class GachaScene extends BaseScene {
   private refreshFaces() {
     this.faceChips.forEach(({ chip, ring, color }, i) => {
       const on = this.faceRowSlides && i === this.slideshowIndex;
-      ring.clear().lineStyle(on ? 2.5 : 2, on ? 0xffd34d : color).strokeCircle(0, 0, 15);
+      this.setFaceRing(ring, on ? 2.5 : 2, on ? 0xffd34d : color);
       chip.setScale(on ? 1.15 : 1);
     });
+  }
+
+  /** 얼굴 원 테 (반지름 FACE_RING_R) — 두께 · 색마다 구운 그림으로 바꿔 낀다 */
+  private setFaceRing(ring: Phaser.GameObjects.Image, lineWidth: number, color: number) {
+    const b = bakeCircle(this, UI, FACE_RING_R, { line: color, lineWidth });
+    ring.setTexture(b.key).setDisplaySize(b.size, b.size);
   }
 
   private restartSlideTimer() {
@@ -933,9 +945,7 @@ export default class GachaScene extends BaseScene {
   private ratesButton(x: number, y: number, b: BannerDef) {
     const w = 84, h = 28;
     const box = this.add.container(x, y);
-    box.add(this.add.graphics()
-      .fillStyle(0x0a0618, 0.84).fillRoundedRect(-w / 2, -h / 2, w, h, h / 2)
-      .lineStyle(1.5, 0xd9c6f0).strokeRoundedRect(-w / 2, -h / 2, w, h, h / 2));
+    box.add(addRoundRect(this, UI, -w / 2, -h / 2, w, h, h / 2, { fill: 0x0a0618, fillAlpha: 0.84, line: 0xd9c6f0, lineWidth: 1.5 }));
     box.add(this.add.text(0, 0, '확률 보기', { fontSize: '12px', color: '#f1e6ff', fontStyle: 'bold' }).setOrigin(0.5));
     wireButton(this, box, w, h, () => this.openRates(b), true);
   }
@@ -1038,10 +1048,10 @@ export default class GachaScene extends BaseScene {
     }).setOrigin(1, 0.5);
     const x0 = 54, x1 = countRight - Math.max(count.width, 64) - 8;
     const frac = ps ? Phaser.Math.Clamp(ps.points / p.threshold, 0, 1) : 0;
-    const g = this.add.graphics();
-    g.fillStyle(0x000000, 0.55).fillRoundedRect(x0, y - 6, x1 - x0, 12, 6);
-    if (frac > 0) g.fillStyle(ps?.canExchange ? 0xffd34d : 0xffb81a).fillRoundedRect(x0, y - 6, Math.max(12, (x1 - x0) * frac), 12, 6);
-    g.lineStyle(1, 0x8a7ab8, 0.9).strokeRoundedRect(x0, y - 6, x1 - x0, 12, 6);
+    addRoundRect(this, UI, x0, y - 6, x1 - x0, 12, 6, { fill: 0x000000, fillAlpha: 0.55 });
+    // 찬 몫은 폭마다 구운 그림이라 정수 폭으로
+    if (frac > 0) addRoundRect(this, UI, x0, y - 6, Math.round(Math.max(12, (x1 - x0) * frac)), 12, 6, { fill: ps?.canExchange ? 0xffd34d : 0xffb81a });
+    addRoundRect(this, UI, x0, y - 6, x1 - x0, 12, 6, { line: 0x8a7ab8, lineAlpha: 0.9, lineWidth: 1 });
     this.add.text(x0, H - LOBBY.pityCaption, pityCaption(b), {
       fontSize: '11px', color: '#e8dcff', fontStyle: 'bold', stroke: '#000000', strokeThickness: 3,
     }).setOrigin(0, 0.5);
@@ -1083,12 +1093,12 @@ export default class GachaScene extends BaseScene {
     }
     const d = 28, gap = 16;   // 얼굴 사이 16 — 손가락 영역(44)이 겹치지 않는다
     x += 10;
-    const chips: { id: string; chip: Phaser.GameObjects.Container; ring: Phaser.GameObjects.Graphics }[] = [];
+    const chips: { id: string; chip: Phaser.GameObjects.Container; ring: Phaser.GameObjects.Image }[] = [];
     for (const id of b.starter?.pickFrom ?? []) {
       const chip = this.add.container(x + d / 2, y);
-      chip.add(this.add.graphics().fillStyle(0x0a0618, 0.9).fillCircle(0, 0, d / 2 + 2));
+      chip.add(addCircle(this, UI, 0, 0, d / 2 + 2, { fill: 0x0a0618, fillAlpha: 0.9 }));
       chip.add(this.faceImage(id, d));
-      const ring = this.add.graphics();
+      const ring = this.add.image(0, 0, '__DEFAULT');   // 테는 paint 가 구운 그림으로 바꿔 낀다
       chip.add(ring);
       chips.push({ id, chip, ring });
       x += d + gap;
@@ -1097,7 +1107,7 @@ export default class GachaScene extends BaseScene {
     const paint = (cur: string | null) => {
       for (const c of chips) {
         const on = c.id === cur;
-        c.ring.clear().lineStyle(on ? 2.5 : 2, on ? 0xffd34d : 0x8a7ab8).strokeCircle(0, 0, d / 2 + 1);
+        this.setFaceRing(c.ring, on ? 2.5 : 2, on ? 0xffd34d : 0x8a7ab8);   // 반지름 d / 2 + 1 = FACE_RING_R
         c.chip.setScale(on ? 1.15 : 1).setAlpha(st.urHit ? 0.4 : on || !cur ? 1 : 0.6);
       }
       if (st.urHit) pickText.setVisible(false);
@@ -1154,9 +1164,9 @@ export default class GachaScene extends BaseScene {
     box.add(label);
 
     // 값 알약
-    const pg = this.add.graphics();
-    pg.fillStyle(multi ? 0x000000 : 0x5a2e0e, multi ? 0.6 : 0.85).fillRoundedRect(-52, 7, 104, 24, 12);
-    if (multi) pg.lineStyle(1, 0xffd34d).strokeRoundedRect(-52, 7, 104, 24, 12);
+    const pg = addRoundRect(this, UI, -52, 7, 104, 24, 12, multi
+      ? { fill: 0x000000, fillAlpha: 0.6, line: 0xffd34d, lineWidth: 1 }
+      : { fill: 0x5a2e0e, fillAlpha: 0.85 });
     box.add([
       pg,
       this.add.text(6, 19, String(pullPriceOf(b, type, this.gstate)), { fontSize: '14px', color: '#fff0c2', fontStyle: 'bold' }).setOrigin(1, 0.5),
