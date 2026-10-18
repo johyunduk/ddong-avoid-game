@@ -27,7 +27,11 @@ const config: Phaser.Types.Core.GameConfig = {
       // 등속이라 평균 낙하 속도는 주사율과 무관(프레임 2배면 프레임당 이동량 절반).
       // (fixedStep:true는 60Hz 임계값 경계 판정으로 뚝뚝 끊김 발생.
       //  초기 배터리 버벅임의 진짜 원인은 GPU 스로틀 → 위 render.powerPreference로 해소.)
-      fixedStep: false
+      fixedStep: false,
+      // 공간 트리(RBush) 끔 — 켜 두면 매 스텝 동적 바디 전부로 트리를 다시 짓는다 (할당 샘플에서 toBBox 가 10초에
+      // 1.6~3.5MB, 2026-10-18 렉 실측). 바디는 플레이어 1 + 똥 풀 최대 140 이고 겹침 검사는 플레이어 대 그룹뿐이라
+      // 그룹 자식을 직접 훑는 쪽이 싸다. 트리에 기대는 overlapRect · closest 는 쓰지 않는다
+      useTree: false
     }
   },
   input: {
