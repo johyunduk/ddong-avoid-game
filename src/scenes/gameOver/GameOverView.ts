@@ -93,7 +93,11 @@ export function prefetchGameOverArt(scene: Phaser.Scene, charId: string): void {
   if (scene.textures.exists(artKeyOf(charId, w, h))) return;
   if (artPrefetch?.charId === charId) return;
   dropPrefetch();
-  artPrefetch = { charId, src: fetchArtSource(getCharacterDef(charId).illustPath) };
+  const entry = { charId, src: fetchArtSource(getCharacterDef(charId).illustPath) };
+  artPrefetch = entry;
+  // 받기에 실패하면(null) 준비 상태로 남기지 않는다 — 같은 캐릭터라도 다음 프리페치 · 게임오버가 다시 받는다
+  // (남겨 두면 null 로 끝난 요청을 계속 재사용해, 네트워크가 돌아와도 메뉴로 나가기 전까지 일러스트가 안 나온다)
+  entry.src.then(s => { if (!s && artPrefetch === entry) artPrefetch = null; });
 }
 
 /** 판을 떠날 때 (다시 하기가 아닐 때) — 구운 크롭 · 받아 둔 원본을 내린다. 그 텍스처를 쓰던 이미지는 씬과 함께 이미 부서졌다 */
