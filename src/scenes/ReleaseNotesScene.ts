@@ -91,7 +91,11 @@ export default class ReleaseNotesScene extends BaseScene {
     // 목록 — 마스크 안에서 움직인다
     const maskShape = this.make.graphics({ x: 0, y: 0 });
     maskShape.fillRect(0, top, W, bottom - top);
-    this.events.once('shutdown', () => maskShape.destroy());
+    this.events.once('shutdown', () => {
+      maskShape.destroy();
+      // 이 씬의 그림(rn_* — 배너 · 얼굴 · 구운 판 · 칩)은 여기서만 쓴다 — 나갈 때 내린다 (DisplayList 가 먼저 이미지를 부순다)
+      for (const key of this.textures.getTextureKeys()) if (key.startsWith('rn_')) this.textures.remove(key);
+    });
     this.list = this.add.container(0, top);
     this.list.setMask(maskShape.createGeometryMask());
 

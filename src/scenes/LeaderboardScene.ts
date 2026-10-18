@@ -139,10 +139,11 @@ export default class LeaderboardScene extends BaseScene {
       this.charOverlayObjects.forEach(o => o.destroy());
       this.charOverlayObjects = [];
       this.cancelCharSelectOpen();
-      // 카드 썸네일(시상대 · 캐릭터 고르기)은 이 씬에서만 쓴다 — 나갈 때 내린다.
+      // 카드 썸네일(시상대 · 캐릭터 고르기)과 목록 얼굴은 이 씬에서만 쓴다 — 나갈 때 내린다.
       // DisplayList 의 SHUTDOWN 리스너가 부팅 때 걸려 먼저 돌아서, 여기 올 때는 이 그림을 쓰던 이미지가 이미 다 부서져 있다
+      const own = ['rank_cardsrc_', 'rank_card_', 'rank_facesrc_', 'rank_face_'];
       for (const key of this.textures.getTextureKeys()) {
-        if (key.startsWith('rank_cardsrc_') || key.startsWith('rank_card_')) this.textures.remove(key);
+        if (own.some(p => key.startsWith(p))) this.textures.remove(key);
       }
     });
 

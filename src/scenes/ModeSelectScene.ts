@@ -36,6 +36,10 @@ export default class ModeSelectScene extends BaseScene {
     ];
     const sel = getCharacterDef(getSafeSelectedCharacter());
     ui.push([`menu_charface_${sel.id}`, `charface/${sel.id}`]);
+    // 캐릭터 면 그림은 지금 고른 캐릭터 것만 남긴다 — 고른 캐릭터가 바뀔 때마다 하나씩(306x148) 쌓였다
+    for (const key of this.textures.getTextureKeys()) {
+      if (key.startsWith('menu_charface_') && key !== `menu_charface_${sel.id}`) this.textures.remove(key);
+    }
     for (const [k, f] of ui) {
       if (!this.textures.exists(k)) this.load.image(k, `assets/ui/menu/${f}.webp`);
     }
