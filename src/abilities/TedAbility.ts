@@ -15,6 +15,11 @@ const ASCENT_DEPTH = 212;
 /** 수묵 시트 나눠 올리기 — 판 시작 뒤 쉬는 시간 · 한 장 올린 뒤 다음 장까지 (렉 조사 #5) */
 const INK_LOAD_START_MS = 600;
 const INK_LOAD_GAP_MS = 120;
+/**
+ * 이미 미리 그려 둔 수묵 텍스처 (텍스처 객체 기준 — 같은 캐릭터로 다시 하기면 GPU 에 그대로 있어 다시 그리지 않는다.
+ * 캐릭터를 바꿔 내렸다 다시 올리면 새 텍스처 객체라 다시 그린다)
+ */
+const INK_WARMED = new WeakSet<object>();
 /** `proc-ring.png` 에서 밝은 선이 있는 **지름**(px). 링 배율을 이걸로 나눠야
  *  보이는 링과 지워지는 범위가 맞는다 (레드 포효에서 짚은 함정) */
 const RING_ART_D = 174.8;
@@ -640,6 +645,14 @@ export class TedAbility extends BaseAbility {
   /** 수묵 시트 나눠 올리기 — 남은 [키, 경로] · 받는 중 · 다음 장을 걸 시각 · 다 올리고 구웠다 */
   private inkLoader: StagedLoader | null = null;
   private inkReady = false;
+  /**
+   * 첫 컷신 전에 **한 장씩 실제로 그려 둔다** (렉 수정 1차 3번 — dev 실측: 첫 액티브 컷신 21.7fps + 1.03초 공백,
+   * 두 번째(29초)는 30fps). 처음 그려지는 큰 시트들이 컷신 첫 박자에 몰려 걸렸다. 다 올라오고 구운 뒤,
+   * INK_LOAD_GAP_MS 마다 한 장을 화면 구석 1px · 거의 투명으로 한 프레임 그린다. 다 그리면 inkReady (그때까지 액티브 잠김)
+   */
+  private inkWarm: string[] = [];
+  private inkWarmAt = 0;
+  private inkWarmImg: Phaser.GameObjects.Image | null = null;
   /** 이 시각까지 무적 (컷신 동안) */
   private ascentInvincibleUntil = 0;
   /** 소환 큐브가 머리 옆을 도는 끝 시각 (0 = 없음). 도는 동안 떨어지는 말이 소닉붐을 일으킨다 */
@@ -1547,12 +1560,36 @@ export class TedAbility extends BaseAbility {
 
   private stepInkLoad(scene: Phaser.Scene): void {
     const L = this.inkLoader;
-    if (!L) return;
-    L.step();
-    if (!L.done) return;
-    this.bakeInkTextures(scene);                      // 진한 먹·흰 눈동자·아지랑이 — s3·s7 이 있어야 굽는다
-    this.inkReady = true;
-    this.inkLoader = null;
+    if (L) {
+      L.step();
+      if (!L.done) return;
+      this.bakeInkTextures(scene);                    // 진한 먹·흰 눈동자·아지랑이 — s3·s7 이 있어야 굽는다
+      this.inkLoader = null;
+      const S = TED_INK;
+      this.inkWarm = [
+        ...Object.keys(getCharacterDef('ted').deferredSpriteSheets ?? {}),
+        S.burstKey, ...S.iris.flatMap((_, i) => [`${S.irisHazeKey}_${i}`, `${S.irisCoreKey}_${i}`]),
+      ].filter(k => scene.textures.exists(k) && !INK_WARMED.has(scene.textures.get(k)));
+      this.inkWarmAt = scene.time.now;
+    }
+    this.stepInkWarm(scene);
+  }
+
+  /** 미리 그리기 한 걸음 — 지난 장을 거두고 다음 장을 한 프레임 그린다. 다 그렸으면 inkReady */
+  private stepInkWarm(scene: Phaser.Scene): void {
+    if (scene.time.now < this.inkWarmAt) return;
+    const key = this.inkWarm.shift();
+    if (key === undefined) {
+      this.inkWarmImg?.destroy();
+      this.inkWarmImg = null;
+      this.inkReady = true;
+      return;
+    }
+    // 배경보다 아래 깊이 · 1px · 알파 0.01 — 그려지기만 하면 된다 (알파 0 이나 숨김은 렌더러가 건너뛴다)
+    this.inkWarmImg ??= scene.add.image(0, 0, key, 0).setOrigin(0, 0).setScrollFactor(0).setDepth(-1000).setAlpha(0.01);
+    this.inkWarmImg.setTexture(key, 0).setDisplaySize(1, 1);
+    INK_WARMED.add(scene.textures.get(key));
+    this.inkWarmAt = scene.time.now + INK_LOAD_GAP_MS;
   }
 
   override onActiveSkill(api: GameSceneAPI): void {
@@ -2277,6 +2314,9 @@ export class TedAbility extends BaseAbility {
     this.inkLoader?.stop();
     this.inkLoader = null;
     this.inkReady = false;
+    this.inkWarm = [];
+    this.inkWarmImg?.destroy();
+    this.inkWarmImg = null;
     // 액티브 — 큐를 비우지 않으면 씬이 내려간 뒤에도 컷신이 이어진다
     this.ascentCues = [];
     this.ascentInvincibleUntil = 0;
