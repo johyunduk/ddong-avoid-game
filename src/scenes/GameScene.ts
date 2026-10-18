@@ -95,15 +95,21 @@ export default class GameScene extends BaseScene {
   private lastChargeScore: number = 0;
   /** 시간 충전 액티브(getActiveChargeMs > 0)의 다음 칸까지 쌓인 게임 시간(ms) */
   private activeChargeElapsedMs: number = 0;
-  private activeBtn?: Phaser.GameObjects.Arc;
+  /**
+   * 눌리는 원 — 그리지 않는 Zone. 예전 투명 Arc(fillAlpha 0)는 안 보여도 isFilled 라 매 프레임 Earcut 으로 채웠다
+   * (2026-10-18 렉 실측: 버튼 도형 넷이 판 중 할당의 약 30%)
+   */
+  private activeBtn?: Phaser.GameObjects.Zone;
+  /** 버튼 판의 중심 · 반지름 — 링 · 칸 점을 이 자리에 놓는다 */
+  private activeBtnGeom = { x: 0, y: 0, r: 0 };
   private activeBtnLabel?: Phaser.GameObjects.Text;
   /** 테두리·링 굵기 배율 — 판 반지름 / 처음 설계 반지름 */
   private activeBtnScale = 1;
   /** 버튼 판 (발동 가능 / 흐림 두 장을 구워 두고 갈아 끼운다) */
   private activePlate?: Phaser.GameObjects.Image;
   private activePlateKeys = { on: '', off: '' };
-  /** 칸 점 — 충전 칸 수만큼 */
-  private activeDots?: Phaser.GameObjects.Graphics;
+  /** 칸 점 — 충전 칸 수만큼. 칸 수가 바뀔 때만 캔버스에 다시 굽는다 (Graphics 는 매 프레임 다시 테셀한다) */
+  private activeDots?: Phaser.GameObjects.Image;
   private lastDotsKey = '';
   /** 꽉 찼을 때 — 금빛 후광 + READY */
   private activeHalo?: Phaser.GameObjects.Image;
@@ -111,8 +117,8 @@ export default class GameScene extends BaseScene {
   private activeShownFull = false;
   /** 마지막으로 버튼에 그린 발동 가능 여부 — 바뀌면 다시 그린다 (테드 소환 중 등) */
   private activeUsable = true;
-  /** 다음 칸까지 차오르는 테두리 */
-  private activeRing?: Phaser.GameObjects.Graphics;
+  /** 다음 칸까지 차오르는 테두리 — 1% 단위로 바뀔 때만 캔버스에 다시 굽는다 */
+  private activeRing?: Phaser.GameObjects.Image;
   /** 마지막으로 그린 진행률(%) — 같으면 다시 그리지 않는다 */
   private lastRingPct: number = -1;
   // 피버 타임 관련
@@ -145,6 +151,10 @@ export default class GameScene extends BaseScene {
   private static readonly SPECIAL_ICON: Record<string, string> = {
     gold: 'gold_poop', diamond: 'diamond_poop', topaz: 'topaz_poop', rainbow: 'rainbow_poop',
   };
+  /** 액티브 버튼의 구운 도형 배율 — 1배 화면에 2배로 굽고 1배로 띄운다 */
+  private static readonly BAKE_RES = 2;
+  /** 칸 점 — 간격 · 반지름 · 캔버스 여백 · 판 아래 거리 */
+  private static readonly ACTIVE_DOT = { gap: 12, r: 4, pad: 6, below: 12 } as const;
   /** 레인보우 피버 변환 시 방울 터짐 효과 색상 */
   private static readonly BUBBLE_COLORS = [0xff00ff, 0x00ffff, 0xffee00, 0x00ff88, 0xff6600, 0xcc00ff];
   private selectedCharId: string = 'chibi'; // 선택된 캐릭터 ID
@@ -190,6 +200,7 @@ export default class GameScene extends BaseScene {
     this.lastChargeScore = 0;
     this.activeChargeElapsedMs = 0;
     this.activeBtn = undefined;
+    this.activeBtnGeom = { x: 0, y: 0, r: 0 };
     this.activeBtnLabel = undefined;
     this.activeBtnScale = 1;
     this.activePlate = undefined;
@@ -1026,20 +1037,66 @@ export default class GameScene extends BaseScene {
     });
   }
 
-  /** 칸 점 — 판 아래에 최대 칸 수만큼, 찬 칸은 금색. 칸 수가 바뀔 때만 다시 그린다 */
+  /** 칸 점 — 판 아래에 최대 칸 수만큼, 찬 칸은 금색. 칸 수가 바뀔 때만 캔버스에 다시 굽는다 */
   private drawActiveDots(max: number): void {
-    const g = this.activeDots, btn = this.activeBtn;
-    if (!g || !btn) return;
+    const img = this.activeDots;
+    if (!img) return;
     const key = `${this.activeCharges}/${max}`;
     if (key === this.lastDotsKey) return;
     this.lastDotsKey = key;
-    g.clear();
-    const gap = 12, y = btn.y + btn.radius + 12, x0 = btn.x - ((max - 1) * gap) / 2;
-    for (let i = 0; i < max; i++) {
-      const on = i < this.activeCharges;
-      g.fillStyle(on ? 0xffd166 : 0x15161c, on ? 1 : 0.8).fillCircle(x0 + i * gap, y, 4);
-      g.lineStyle(1, on ? 0x7a4a00 : 0x3a3d45).strokeCircle(x0 + i * gap, y, 4);
+    const { gap, r, pad } = GameScene.ACTIVE_DOT;
+    const w = (max - 1) * gap + pad * 2, h = pad * 2;
+    const tex = this.bakedCanvas(`hud_active_dots_${max}`, w, h);
+    if (!tex) return;
+    if (img.texture.key !== tex.key) img.setTexture(tex.key).setDisplaySize(w, h);
+    this.repaint(tex, (ctx) => {
+      for (let i = 0; i < max; i++) {
+        const on = i < this.activeCharges;
+        ctx.beginPath();
+        ctx.arc(pad + i * gap, pad, r, 0, Math.PI * 2);
+        ctx.fillStyle = on ? '#ffd166' : 'rgba(21,22,28,0.8)';
+        ctx.fill();
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = on ? '#7a4a00' : '#3a3d45';
+        ctx.stroke();
+      }
+    });
+  }
+
+  /** 링 크기 — 판 반지름 + 6 (배율), 굵기 4 (배율). half = 구운 캔버스의 1배 반폭 */
+  private ringMetrics(): { R: number; lw: number; half: number } {
+    const s = this.activeBtnScale;
+    const R = this.activeBtnGeom.r + 6 * s, lw = 4 * s;
+    return { R, lw, half: Math.ceil(R + lw / 2 + 1) };
+  }
+
+  /** 2배 캔버스 텍스처 (w·h = 1배 크기). 있으면 그대로 쓴다 — 전역이라 다음 판도 같은 캔버스를 다시 칠한다 */
+  private bakedCanvas(key: string, w: number, h: number): Phaser.Textures.CanvasTexture | null {
+    const W = Math.ceil(w * GameScene.BAKE_RES), H = Math.ceil(h * GameScene.BAKE_RES);
+    if (this.textures.exists(key)) {
+      const t = this.textures.get(key);
+      if (t instanceof Phaser.Textures.CanvasTexture && t.width === W && t.height === H) return t;
+      this.textures.remove(key);
     }
+    return this.textures.createCanvas(key, W, H);
+  }
+
+  /** 구운 캔버스를 비우고 1배 좌표로 다시 칠한 뒤 GPU 에 올린다 */
+  private repaint(tex: Phaser.Textures.CanvasTexture, draw: (ctx: CanvasRenderingContext2D) => void): void {
+    const ctx = tex.getContext();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, tex.width, tex.height);
+    ctx.setTransform(GameScene.BAKE_RES, 0, 0, GameScene.BAKE_RES, 0, 0);
+    draw(ctx);
+    tex.refresh();
+  }
+
+  /** 안 바뀌는 도형 — 키가 없을 때만 한 번 굽는다 */
+  private bakedOnce(key: string, w: number, h: number, draw: (ctx: CanvasRenderingContext2D) => void): string {
+    if (this.textures.exists(key)) return key;
+    const tex = this.bakedCanvas(key, w, h);
+    if (tex) this.repaint(tex, draw);
+    return key;
   }
 
   /** 꽉 찼을 때 — 금빛 후광이 숨 쉬고 READY 꼬리표. 상태가 바뀔 때만 */
@@ -1061,27 +1118,33 @@ export default class GameScene extends BaseScene {
    *
    * 칸 수만 보이면 0 → 1 이 되기 전까지 진행이 안 보여 "안 차는 건지 아직인 건지"
    * 알 수 없다 (실제로 그렇게 버그 신고가 들어왔다). 점수가 오를 때마다 불리지만
-   * **1% 단위로 바뀔 때만** 다시 그린다 — 초당 10번 Graphics 를 비우고 그릴 필요가 없다.
+   * **1% 단위로 바뀔 때만** 캔버스에 다시 굽는다. Graphics 로 그리면 안 바뀌어도 매 프레임 다시 테셀한다.
+   * lastRingPct 는 링이 숨어 있어도(능력이 충전 표시를 그리는 테드) 갱신한다 — tickActiveChargeTime 이 그걸로
+   * updateActiveChargeView 를 거른다
    */
   private drawActiveRing(): void {
-    const ring = this.activeRing;
-    const btn = this.activeBtn;
-    if (!ring || !btn) return;
+    const img = this.activeRing;
+    if (!img) return;
     const frac = this.activeProgress(this.ability.getActiveMaxCharges());
     const pct = Math.floor(frac * 100);
     if (pct === this.lastRingPct) return;
     this.lastRingPct = pct;
+    if (!img.visible) return;
 
-    const s = this.activeBtnScale;
-    const R = btn.radius + 6 * s;
-    ring.clear();
-    ring.lineStyle(4 * s, 0x2a2d36, 0.8).strokeCircle(btn.x, btn.y, R);  // 빈 트랙
-    if (frac <= 0) return;
-    const start = -Math.PI / 2;                                           // 12시에서 시작
-    ring.lineStyle(4 * s, 0xffd166, 1);
-    ring.beginPath();
-    ring.arc(btn.x, btn.y, R, start, start + Math.PI * 2 * frac, false);
-    ring.strokePath();
+    const { R, lw, half } = this.ringMetrics();
+    this.repaint(img.texture as Phaser.Textures.CanvasTexture, (ctx) => {
+      ctx.lineWidth = lw;
+      ctx.strokeStyle = 'rgba(42,45,54,0.8)';                             // 빈 트랙
+      ctx.beginPath();
+      ctx.arc(half, half, R, 0, Math.PI * 2);
+      ctx.stroke();
+      if (frac <= 0) return;
+      const start = -Math.PI / 2;                                         // 12시에서 시작
+      ctx.strokeStyle = '#ffd166';
+      ctx.beginPath();
+      ctx.arc(half, half, R, start, start + Math.PI * 2 * frac, false);
+      ctx.stroke();
+    });
   }
 
   /**
@@ -1117,13 +1180,18 @@ export default class GameScene extends BaseScene {
     });
     this.activePlateKeys = { on: on.key, off: off.key };
     this.activePlate = this.add.image(cx, cy, on.key).setOrigin(0.5, on.originY).setDepth(11).setScrollFactor(0);
-    // 눌리는 원 — 판과 같은 크기 (투명). 링·진행 표시는 이 원의 중심·반지름을 기준으로 그린다
-    this.activeBtn = this.add.circle(cx, cy, R, 0x000000, 0).setDepth(11.2).setScrollFactor(0);
+    // 눌리는 원 — 판과 같은 크기, 그리지 않는다 (Zone). 링·진행 표시는 activeBtnGeom 을 기준으로 놓는다
+    this.activeBtnGeom = { x: cx, y: cy, r: R };
+    this.activeBtn = this.add.zone(cx, cy, R * 2, R * 2).setDepth(11.2).setScrollFactor(0);
     this.activeBtnLabel = this.add.text(cx, cy, '0', {
       fontSize: '24px', color: '#ffd166', fontStyle: 'bold',
     }).setOrigin(0.5).setDepth(12).setScrollFactor(0);
 
-    this.activeRing = this.add.graphics().setDepth(12).setScrollFactor(0);
+    // 진행 링 — 구운 캔버스 한 장 (drawActiveRing 이 1% 단위로 다시 칠한다)
+    const { half } = this.ringMetrics();
+    const ringTex = this.bakedCanvas('hud_active_ring', half * 2, half * 2);
+    this.activeRing = this.add.image(cx, cy, ringTex?.key ?? '__DEFAULT')
+      .setDisplaySize(half * 2, half * 2).setDepth(12).setScrollFactor(0);
     // 능력이 충전 표시를 직접 그리면(테드의 충전 큐브) 숫자와 진행 링은 능력 몫 — 판은 그대로.
     // 큐브 배율은 판과 따로 (ACTIVE_BTN.viewScale) — 판을 키워도 큐브는 판 안에 들어간다
     if (this.ability.createActiveChargeView(this.abilityAPI, { x: cx, y: cy, r: R, s: ACTIVE_BTN.viewScale })) {
@@ -1131,20 +1199,43 @@ export default class GameScene extends BaseScene {
       this.activeRing.setVisible(false);
     }
 
-    // 칸 점 (판 아래) · 얼굴 칩 (왼쪽 위) · Space 키캡 (PC, 왼쪽 아래) · READY 꼬리표 (위)
-    this.activeDots = this.add.graphics().setDepth(12).setScrollFactor(0);
+    // 칸 점 (판 아래) · 얼굴 칩 (왼쪽 위) · Space 키캡 (PC, 왼쪽 아래) · READY 꼬리표 (위).
+    // 도형은 전부 캔버스에 구워 Image 로 띄운다 — Graphics · Arc 는 안 바뀌어도 매 프레임 다시 테셀한다
+    this.activeDots = this.add.image(cx, cy + R + GameScene.ACTIVE_DOT.below, '__DEFAULT').setDepth(12).setScrollFactor(0);
     const faceSrc = `hud_facesrc_${this.selectedCharId}`;
     if (this.textures.exists(faceSrc)) {
       const fx = cx - R * 0.78, fy = cy - R * 0.78;
       this.add.image(fx, fy, bakeRoundedImage(this, `hud_face_${this.selectedCharId}_22`, faceSrc, 22, 22, 11))
         .setDisplaySize(22, 22).setDepth(12.6).setScrollFactor(0);
-      this.add.circle(fx, fy, 11).setStrokeStyle(1.5, 0xffffff).setDepth(12.7).setScrollFactor(0);
+      // 흰 테두리 (반지름 11 · 굵기 1.5) — 한 번 굽는다
+      const ring = this.bakedOnce('hud_face_ring_11', 26, 26, (ctx) => {
+        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(13, 13, 11, 0, Math.PI * 2);
+        ctx.stroke();
+      });
+      this.add.image(fx, fy, ring).setDisplaySize(26, 26).setDepth(12.7).setScrollFactor(0);
     }
     if (this.sys.game.device.os.desktop) {
       const kx = cx - R - 4, ky = cy + R * 0.8;
-      this.add.graphics().setDepth(12.6).setScrollFactor(0)
-        .fillStyle(0xffffff, 0.94).fillRoundedRect(kx - 21, ky - 9, 42, 18, 9)
-        .lineStyle(1.5, 0x121633).strokeRoundedRect(kx - 21, ky - 9, 42, 18, 9);
+      // 키캡 판 42x18 (반지름 9) — 흰 판 + 남색 테두리 1.5, 한 번 굽는다
+      const cap = this.bakedOnce('hud_keycap_space', 45, 21, (ctx) => {
+        const x = 1.5, y = 1.5, w = 42, h = 18, r = 9;
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.arcTo(x + w, y, x + w, y + h, r);
+        ctx.arcTo(x + w, y + h, x, y + h, r);
+        ctx.arcTo(x, y + h, x, y, r);
+        ctx.arcTo(x, y, x + w, y, r);
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(255,255,255,0.94)';
+        ctx.fill();
+        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = '#121633';
+        ctx.stroke();
+      });
+      this.add.image(kx, ky, cap).setDisplaySize(45, 21).setDepth(12.6).setScrollFactor(0);
       this.add.text(kx, ky, 'Space', { fontSize: '10px', color: '#121633', fontStyle: 'bold' })
         .setOrigin(0.5).setDepth(12.7).setScrollFactor(0);
     }
