@@ -54,6 +54,19 @@ export class StagedLoader {
     return this.queue.length === 0 && this.inflight === null;
   }
 
+  /**
+   * 줄 뒤에 더 건다 (하이디 — 다음 변신 닌자 묶음을 그때그때). 이미 있는 키 · 줄에 있거나 받는 중인 키는 건너뛴다.
+   * 멈춘 로더에는 걸지 않는다. 스텁(로더에 start 없음)이면 생성자처럼 걸자마자 다 받은 것으로 친다
+   */
+  add(items: StagedItem[]): void {
+    if (this.stopped) return;
+    for (const it of items) {
+      if (this.scene.textures.exists(it.key) || it.key === this.inflight || this.queue.some(q => q.key === it.key)) continue;
+      if (typeof this.scene.load.start !== 'function') { it.enqueue(this.scene); this.onLoaded(it.key); continue; }
+      this.queue.push(it);
+    }
+  }
+
   step(): void {
     if (this.stopped || this.inflight !== null || this.scene.time.now < this.nextAt) return;
     let it = this.queue.shift();

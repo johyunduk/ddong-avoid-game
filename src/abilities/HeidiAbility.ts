@@ -493,12 +493,18 @@ export class HeidiAbility extends BaseAbility {
   private lastWallRight?: boolean;  // 지난번에 짚은 쪽. 없으면 아직 한 번도 안 뛰었다
   private pending = false;       // 점수는 찼는데 **거리가 모자라** 아직 안 뛴 상태
   /**
-   * 시트 나눠 올리기 — 묶음(base · 닌자 8명) 순서로 한 장씩. 묶음마다 텍스처 키 목록을 들고 있다가
-   * 다 올라왔는지 본다 (변신 뽑기 · 첫 발동 가드). 다 올라온 묶음은 readyGroups 에 남긴다
+   * 시트 나눠 올리기 — **기본 묶음(base) · 지금 닌자 · 다음 닌자** 묶음만 한 장씩 올린다 (렉 점검 2026-10-18).
+   * 예전엔 판마다 닌자 여덟 묶음까지 121장(약 57MB)을 다 올려 판 끝까지 들고 있었다 — 한 판에 실제로 변신하는 닌자는 몇 명뿐.
+   * 다음 변신은 미리 뽑아 두고(nextChar) 그 묶음을 먼저 올린다. 변신이 지나간 닌자 묶음은 그 그림을 쓰는
+   * 오브젝트가 화면에서 다 사라진 뒤 내린다 (syncSheets). 묶음마다 올릴 일 목록을 들고, 다 올라온 묶음은 readyGroups 에 남긴다
    */
   private sheetLoader: StagedLoader | null = null;
-  private sheetGroups = new Map<string, string[]>();
+  private sheetGroups = new Map<string, StagedItem[]>();
   private readyGroups = new Set<string>();
+  /** 다음 변신 캐릭터 — 변신할 때 그다음 차례를 뽑아 그 묶음을 미리 올린다 */
+  private nextChar = 'puyo';
+  /** 내릴 묶음이 아직 화면에서 쓰이고 있어 다시 볼 시각 (scene.time.now). 0 = 내릴 것 없음 */
+  private unloadAt = 0;
 
   /** 같은 점수로 두 번 발동하지 않게 하는 기준선 */
   private lastFireScore = 0;
@@ -608,10 +614,9 @@ export class HeidiAbility extends BaseAbility {
     if (this.dead) return;
     const { scene, player } = api;
     const now = scene.time.now;
-    if (this.sheetLoader) {
-      this.sheetLoader.step();
-      if (this.sheetLoader.done) this.sheetLoader = null;
-    }
+    // 로더는 판 내내 둔다 — 변신마다 다음 닌자 묶음을 더 건다
+    this.sheetLoader?.step();
+    if (this.unloadAt > 0 && now >= this.unloadAt) this.syncSheets(scene);
     this.groundY = player.y + player.displayHeight / 2;
 
     for (const p of this.puyos) {
@@ -1045,8 +1050,9 @@ export class HeidiAbility extends BaseAbility {
 
     const forced = P.debugCloneChar;
     // 랜덤 — 단 **방금 변신했던 캐릭터는 빼고** 뽑는다. 8명 중 1/8 로 같은 게 연달아 나오면
-    // 기술이 안 바뀐 것처럼 보인다
-    // **다 올라온 닌자만** — 덜 올라온 닌자로 변신하면 그 시트 대신 기본 뿌요 그림이 나온다
+    // 기술이 안 바뀐 것처럼 보인다. 뽑기는 **한 변신 앞서** 해 둔다 (nextChar — 그 묶음만 미리 올린다)
+    // **다 올라온 닌자만** — 덜 올라온 닌자로 변신하면 그 시트 대신 기본 뿌요 그림이 나온다.
+    // 미리 뽑은 닌자가 아직 덜 올라왔으면(드물다) 다 올라온 캐릭터 중에서 방금 캐릭터를 빼고 뽑는다
     const pool = HEIDI_CLONE_CHARS.filter(c => c !== p.char && this.groupReady(scene, c));
     // **첫 변신은 기본 뿌요 고정** (사람 지시) — 판의 첫 기술로 그림자 분신술을 보여 준다.
     // 그다음부터 무작위 (방금 캐릭터는 빼고)
@@ -1054,7 +1060,9 @@ export class HeidiAbility extends BaseAbility {
     this.transformCount++;
     const who = (forced && (HEIDI_CLONE_CHARS as readonly string[]).includes(forced) && this.groupReady(scene, forced))
       ? forced
-      : first || pool.length === 0 ? 'puyo'
+      : first ? 'puyo'
+      : this.nextChar !== p.char && this.groupReady(scene, this.nextChar) ? this.nextChar
+      : pool.length === 0 ? 'puyo'
       : pool[Math.floor(Math.random() * pool.length)];
 
     // **펑 — 흰 연기가 티 나게.** 공용 smoke 는 하늘색 에셋이라 아무리 짙게 해도 희지 않아서
@@ -1074,6 +1082,10 @@ export class HeidiAbility extends BaseAbility {
     impact(scene, { flash: { alpha: 0.55, ms: P.finFlashMs } });
 
     p.char = who;
+    // 그다음 차례를 뽑아 그 묶음을 올리고, 지나간 닌자 묶음은 그 그림이 화면에서 사라지면 내린다.
+    // 미리 뽑은 닌자를 못 썼으면(덜 올라옴) 그대로 둔다 — 받던 것을 마저 받아 다음에 쓴다
+    if (this.nextChar === who) this.nextChar = this.pickNext(who);
+    this.syncSheets(scene);
     p.form = HEIDI_CLONE_FIN[who] ?? 'clone';
     p.summon = true;
     p.finisher = true;
@@ -3878,54 +3890,122 @@ export class HeidiAbility extends BaseAbility {
    */
   /**
    * 시트 나눠 올리기 시작 — preload 에는 배회 두 장(walk · idle)만 있다.
-   * 묶음 순서 = 처음 필요한 순서: base(60점 분신술 · 120점 아랑아) → 닌자 8명(180점부터 무작위 변신).
+   * 올리는 순서 = 처음 필요한 순서: base(60점 분신술 · 120점 아랑아) → 다음 변신 닌자 한 묶음.
+   * 닌자 묶음은 그 뒤 변신할 때마다 하나씩 더 건다 (syncSheets). 지난 판에서 남은 닌자 묶음은 여기서 내린다 (다시 하기).
    * 한 장 올라올 때마다 애니메이션을 다시 등록한다 (registerAnims 는 이미 있는 건 건너뛴다)
    */
   private startSheetLoad(scene: Phaser.Scene): void {
     this.sheetLoader?.stop();
     this.sheetGroups.clear();
     this.readyGroups.clear();
-    const items: StagedItem[] = [];
-    const seen = new Set<string>();
-    const sheet = (f: string): string | null => {
-      const key = fxPickSheetKey(f);
-      if (seen.has(key)) return null;
-      seen.add(key);
-      items.push({ key, enqueue: (sc) => loadFxPickSheet(sc, f) });
-      return key;
-    };
-    const anim = (k: string): string | null => {
-      const key = fxTextureKeysOf(k as FxKey)[0];
-      if (!key || seen.has(key)) return null;
-      seen.add(key);
-      items.push({ key, enqueue: (sc) => preloadFxSheet(sc, k as FxKey) });
-      return key;
-    };
+    // 묶음마다 제 시트를 다 든다 (묶음끼리 겹치는 시트가 있어도 — 내릴 때 남길 묶음의 것은 남긴다)
     const group = (id: string, files: string[], anims: string[] = []) => {
-      const keys = [...files.map(sheet), ...anims.map(anim)].filter((k): k is string => k !== null);
-      this.sheetGroups.set(id, keys);
+      const seen = new Set<string>();
+      const items: StagedItem[] = [];
+      for (const f of files) {
+        const key = fxPickSheetKey(f);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        items.push({ key, enqueue: (sc) => loadFxPickSheet(sc, f) });
+      }
+      for (const k of anims) {
+        const key = fxTextureKeysOf(k as FxKey)[0];
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        items.push({ key, enqueue: (sc) => preloadFxSheet(sc, k as FxKey) });
+      }
+      this.sheetGroups.set(id, items);
     };
-    group('base', HEIDI_BASE_SHEETS);
-    group('puyo', []);                                   // 기본 뿌요 변신 = base 와 같은 묶음
+    // 안전망 — 어느 묶음에도 안 든 시트는 base 에 (목록이 어긋나도 빠지지 않게)
+    const grouped = new Set<string>(HEIDI_BASE_SHEETS);
     for (const c of HEIDI_CLONE_CHARS) {
       if (c === 'puyo') continue;
       const fx = HEIDI_CLONE_FX[c] ?? { sheets: [], anims: [] };
-      group(c, [...Object.values(HEIDI_CLONE_SHEETS[c] ?? {}), ...fx.sheets], fx.anims);
+      const files = [...Object.values(HEIDI_CLONE_SHEETS[c] ?? {}), ...fx.sheets];
+      files.forEach(f => grouped.add(f));
+      group(c, files, fx.anims);
     }
-    // 안전망 — 어느 묶음에도 안 든 시트 (목록이 어긋나도 빠지지 않게 맨 뒤에)
-    group('rest', HEIDI_DEFERRED_SHEETS);
-    this.sheetLoader = new StagedLoader(scene, items, SHEET_LOAD_GAP_MS, SHEET_LOAD_START_MS,
+    group('base', [...HEIDI_BASE_SHEETS, ...HEIDI_DEFERRED_SHEETS.filter(f => !grouped.has(f))]);
+    // 첫 변신은 기본 뿌요 고정 — 그다음 차례를 지금 뽑아 base 다음에 올린다
+    this.nextChar = this.pickNext('puyo');
+    this.sheetLoader = new StagedLoader(scene, [], SHEET_LOAD_GAP_MS, SHEET_LOAD_START_MS,
       () => this.registerAnims(scene));
-    if (this.sheetLoader.done) this.sheetLoader = null;
+    this.syncSheets(scene);
   }
 
-  /** 그 묶음의 텍스처가 다 올라왔나 (base · puyo · 닌자 id). 한 번 다 올라오면 기억한다 */
+  /** 다음 변신 캐릭터를 뽑는다 — 방금 캐릭터(exclude)는 빼고 무작위. debugCloneChar 가 있으면 그것 */
+  private pickNext(exclude: string): string {
+    const forced = HEIDI_PARAMS.debugCloneChar;
+    if (forced && (HEIDI_CLONE_CHARS as readonly string[]).includes(forced)) return forced;
+    const pool = HEIDI_CLONE_CHARS.filter(c => c !== exclude);
+    return pool[Math.floor(Math.random() * pool.length)] ?? 'puyo';
+  }
+
+  /** 캐릭터가 쓰는 묶음 id — 기본 뿌요(변신 전 포함)는 base */
+  private groupOf(c: string | undefined): string {
+    return !c || c === 'puyo' ? 'base' : c;
+  }
+
+  /**
+   * 지금 필요한 묶음(base · 지금 닌자 · 다음 닌자)은 로더에 걸고, 나머지 닌자 묶음은 내린다.
+   * **그 그림을 화면에서 쓰는 오브젝트가 남아 있으면 내리지 않고** 조금 뒤 다시 본다 — 지나간 닌자의 기술
+   * 연출(불기둥 · 검기 · 두꺼비 …)이 아직 돌거나, 인을 맺는 몸이 아직 그 닌자 그림일 수 있다.
+   * 쓰는 중에 지우면 사라진 텍스처를 그리다 렌더러가 멈춘다 (characterAssets — a99cd14d)
+   */
+  private syncSheets(scene: Phaser.Scene): void {
+    const want = new Set(['base', this.groupOf(this.main?.char), this.groupOf(this.nextChar)]);
+    const keep = new Set<string>();
+    for (const id of want) {
+      const items = this.sheetGroups.get(id) ?? [];
+      this.sheetLoader?.add(items);
+      for (const it of items) keep.add(it.key);
+    }
+    this.unloadAt = 0;
+    const drop = new Set<string>();
+    for (const [id, items] of this.sheetGroups) {
+      if (want.has(id)) continue;
+      for (const it of items) if (!keep.has(it.key) && scene.textures.exists(it.key)) drop.add(it.key);
+    }
+    if (drop.size === 0) return;
+    if (this.texturesInUse(scene, drop)) { this.unloadAt = scene.time.now + 500; return; }
+    this.unloadTextures(scene, drop);
+    for (const id of [...this.readyGroups]) if (!want.has(id)) this.readyGroups.delete(id);
+  }
+
+  /** 화면(레이어 · 컨테이너 안까지)에 그 텍스처를 그리거나 그 텍스처의 애니메이션을 돌리는 오브젝트가 있나 */
+  private texturesInUse(scene: Phaser.Scene, keys: Set<string>): boolean {
+    type Node = { texture?: { key?: string }; list?: unknown; anims?: { currentAnim?: Phaser.Animations.Animation | null } };
+    const stack: Node[] = [...((scene.children?.list ?? []) as unknown as Node[])];
+    while (stack.length > 0) {
+      const o = stack.pop()!;
+      if (o.texture?.key && keys.has(o.texture.key)) return true;
+      const cur = o.anims?.currentAnim;
+      if (cur && cur.frames.some(f => keys.has(f.textureKey))) return true;
+      if (Array.isArray(o.list)) stack.push(...(o.list as Node[]));
+    }
+    return false;
+  }
+
+  /**
+   * 텍스처와 **그 텍스처를 프레임으로 쓰는 애니메이션**을 같이 내린다 — 애니메이션이 남으면 다시 올렸을 때
+   * anims.exists 가 참이라 지워진 프레임을 그린다 (characterAssets.releasePreviousCharacter 와 같은 규칙).
+   * 다시 올리면 registerAnims · vfx 가 애니메이션을 새로 만든다
+   */
+  private unloadTextures(scene: Phaser.Scene, keys: Set<string>): void {
+    if (typeof scene.textures.remove !== 'function') return;   // 하네스 스텁 — 지울 텍스처가 없다
+    // (공개 API toJSON — 애니메이션마다 프레임의 key 가 텍스처 키다)
+    const gone = scene.anims.toJSON().anims.filter(a => a.frames.some(f => keys.has(f.key))).map(a => a.key);
+    for (const k of gone) scene.anims.remove(k);
+    for (const k of keys) if (scene.textures.exists(k)) scene.textures.remove(k);
+  }
+
+  /** 그 묶음의 텍스처가 다 올라왔나 (base · puyo · 닌자 id). 다 올라오면 기억한다 (내리면 잊는다) */
   private groupReady(scene: Phaser.Scene, id: string): boolean {
-    if (id === 'puyo') id = 'base';
+    id = this.groupOf(id);
     if (this.readyGroups.has(id)) return true;
-    const keys = this.sheetGroups.get(id);
-    if (!keys) return true;                              // 묶음 목록에 없는 것은 막지 않는다
-    if (!keys.every(k => scene.textures.exists(k))) return false;
+    const items = this.sheetGroups.get(id);
+    if (!items) return true;                             // 묶음 목록에 없는 것은 막지 않는다
+    if (!items.every(it => scene.textures.exists(it.key))) return false;
     this.readyGroups.add(id);
     return true;
   }
