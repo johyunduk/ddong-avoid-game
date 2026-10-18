@@ -215,8 +215,11 @@ export default class GachaScene extends BaseScene {
   private illustLoads = new Map<string, Promise<void>>();
   /** 무거운 일(큰 일러스트 올리기 · 이벤트 줄기 굽기)의 차례 — 한 프레임에 하나 (nextTurn) */
   private heavyChain: Promise<void> = Promise.resolve();
-  /** 화면을 다시 그릴 때마다(clearUI) 오른다 — 늦게 온 일러스트가 이미 지운 로비의 그림을 바꾸지 않게 */
-  private uiGen = 0;
+  /**
+   * 자리 그림을 깔아 둔 일러스트 자리 → 그 자리가 지금 기다리는 키 (putIllust). 일러스트가 올라오면 loadIllust 가 그 키를
+   * 기다리는 자리만 바꿔 낀다 — 그사이 슬라이드를 넘겼으면 그 자리는 넘긴 쪽 키를 기다린다. 로비를 다시 그리면(clearUI) 비운다
+   */
+  private illustWant = new Map<Phaser.GameObjects.Image, string>();
   private revealItems: Array<{ kind: 'character'; data: PulledCharacter } | { kind: 'wallpaper'; data: PulledWallpaper }> = [];
   private revealItemIndex = 0;
   private terminalTexts: Phaser.GameObjects.Text[] = [];
@@ -282,6 +285,7 @@ export default class GachaScene extends BaseScene {
   init() {
     this.ownKeys = new Set();   // preload · loadIllust 가 채운다
     this.illustLoads = new Map();
+    this.illustWant = new Map();
     this.heavyChain = Promise.resolve();
     this.skorBalance = -1;
     this.chosenBanner = null;
@@ -354,6 +358,7 @@ export default class GachaScene extends BaseScene {
     this.redrawAfter = Date.now() + this.inputGuardMs + 100;
     this.events.once('shutdown', () => {
       this.dropReel();   // 영상 텍스처(UUID 키)까지 — releaseTextures 의 gacha_ 접두사에 안 걸린다
+      this.illustWant.clear();
       this.releaseTextures();
     });
     this.buildLobby();
@@ -364,7 +369,8 @@ export default class GachaScene extends BaseScene {
   /**
    * 큰 일러스트(768x1344) 하나를 올린다 — 브라우저가 먼저 풀고(img.decode, 메인 스레드 밖) 텍스처 올리기는 한 프레임에 한 장.
    * 예전에는 preload 가 4장을 받아 한꺼번에 풀고 올려서 들어갈 때마다 긴 멈춤이었다 (최장 약 330ms · 합 약 800ms, 2026-10-18 dev 실측).
-   * 못 받으면 그냥 끝난다 — 그 배너는 자리 그림(뽑기 배경)으로 남는다
+   * 올리면 그 키를 기다리던 자리(illustWant)를 바로 바꿔 낀다.
+   * 못 받으면 그 자리는 자리 그림(뽑기 배경)으로 남고 영상 · 다른 진열은 그대로 돈다. 받기 기록도 지워 그 배너를 다시 그릴 때 다시 받는다
    */
   private loadIllust(def: CharacterDef): Promise<void> {
     const key = def.illustKey;
@@ -375,10 +381,17 @@ export default class GachaScene extends BaseScene {
     const img = new Image();
     img.src = def.illustPath;
     const p = img.decode().then(() => true, () => false).then(ok => {
+      if (!ok) {
+        if (this.illustLoads.get(key) === p) this.illustLoads.delete(key);
+        return;
+      }
       return this.nextTurn().then(() => {
-        if (!ok || run !== this.runId || !this.scene.isActive() || this.textures.exists(key)) return;
+        if (run !== this.runId || !this.scene.isActive() || this.textures.exists(key)) return;
         this.textures.addImage(key, img);
         this.ownKeys.add(key);
+        for (const [slot, want] of this.illustWant) {
+          if (want === key && slot.active) this.putIllust(slot, def);
+        }
       });
     });
     this.illustLoads.set(key, p);
@@ -395,25 +408,29 @@ export default class GachaScene extends BaseScene {
     return turn;
   }
 
-  /** 큰 일러스트가 아직 없을 때의 자리 — 뽑기 배경(없으면 어두운 판). 일러스트가 오면 swapIllust 로 바꿔 낀다 */
-  private illustImage(x: number, key: string): Phaser.GameObjects.Image {
-    if (this.textures.exists(key)) return this.add.image(x, 0, key);
-    if (this.textures.exists('gacha_background')) return this.add.image(x, 0, 'gacha_background');
-    return this.add.image(x, 0, '__WHITE').setTint(0x150a2a);
+  /** 일러스트 자리 하나 — 화면 덮기로 맞춘다 (putIllust) */
+  private illustImage(x: number, def: CharacterDef): Phaser.GameObjects.Image {
+    return this.putIllust(this.add.image(x, 0, '__WHITE'), def);
   }
 
-  private swapIllust(img: Phaser.GameObjects.Image, key: string) {
-    img.setTexture(key).clearTint();
+  /**
+   * 일러스트 자리에 그 캐릭터 일러스트를 낀다 — 아직 안 올라왔으면 자리 그림(뽑기 배경, 없으면 어두운 판)을 깔고
+   * 그 키를 기다린다 (illustWant · loadIllust 가 올리자마자 바꿔 낀다). **자리의 그림은 이걸로만 바꾼다** —
+   * 직접 setTexture 하면 먼저 기다리던 키가 늦게 올라와 지금 그림을 덮는다
+   */
+  private putIllust(img: Phaser.GameObjects.Image, def: CharacterDef): Phaser.GameObjects.Image {
+    const key = def.illustKey;
+    if (this.textures.exists(key)) {
+      this.illustWant.delete(img);
+      img.setTexture(key).clearTint();
+    } else {
+      this.illustWant.set(img, key);
+      if (this.textures.exists('gacha_background')) img.setTexture('gacha_background').clearTint();
+      else img.setTexture('__WHITE').setTint(0x150a2a);
+      void this.loadIllust(def);
+    }
     this.coverIllust(img);
-  }
-
-  /** 이 일러스트들이 다 올라오면 then — 그사이 화면을 다시 그렸거나(uiGen) 씬을 나갔으면 하지 않는다 */
-  private whenIllusts(defs: CharacterDef[], then: () => void) {
-    const run = this.runId, gen = this.uiGen;
-    void Promise.all(defs.map(d => this.loadIllust(d))).then(() => {
-      if (!this.isCurrent(run) || gen !== this.uiGen || !defs.every(d => this.textures.exists(d.illustKey))) return;
-      then();
-    });
+    return img;
   }
 
   // ═══════════════════════════════════════════════════
@@ -557,20 +574,11 @@ export default class GachaScene extends BaseScene {
     this.slideshowIsA = true;
     this.featured = featuredIds().map(id => getCharacterDef(id));
     const first = this.featured[0];
-    // bgA: 처음엔 현재 일러스트 (alpha=1), bgB: 다음 일러스트 대기 (alpha=0)
-    const a = this.slideshowBgA = this.illustImage(cx, first.illustKey);
-    const b = this.slideshowBgB = this.illustImage(cx, first.illustKey).setAlpha(0);
-    this.coverIllust(a);
-    this.coverIllust(b);
-    // 진열 영상 번갈아 (대표 2026-10-11) — 못 트는 동안은 위 두 레이어의 일러스트 번갈아 보이기 그대로
-    const start = () => this.startReel(this.featured.map(d => d.id), 0, b, (def, i) => this.setShowcaseBase(def, i));
-    if (this.featured.every(d => this.textures.exists(d.illustKey))) { start(); return; }
-    // 진열 일러스트가 아직이다 — 다 올라오면 그 자리에서 바꿔 끼우고 영상을 튼다 (그전에는 슬라이드도 넘기지 않는다 — showSlide)
-    this.whenIllusts(this.featured, () => {
-      this.swapIllust(a, first.illustKey);
-      this.swapIllust(b, first.illustKey);
-      start();
-    });
+    // bgA: 처음엔 현재 일러스트 (alpha=1), bgB: 다음 일러스트 대기 (alpha=0). 아직 안 올라온 일러스트는 올라오면 그 자리에서 바뀐다 (putIllust)
+    this.slideshowBgA = this.illustImage(cx, first);
+    this.slideshowBgB = this.illustImage(cx, first).setAlpha(0);
+    // 진열 영상 번갈아 (대표 2026-10-11) — 못 트는 동안은 위 두 레이어의 일러스트 번갈아 보이기 그대로. 일러스트를 기다리지 않는다
+    this.startReel(this.featured.map(d => d.id), 0, this.slideshowBgB, (def, i) => this.setShowcaseBase(def, i));
   }
 
   /**
@@ -579,14 +587,9 @@ export default class GachaScene extends BaseScene {
    */
   private buildPickupBody(b: BannerDef) {
     const def = getCharacterDef(b.pickupUR ?? '');
-    const illust = this.illustImage(this.scale.width / 2, def.illustKey);
-    this.coverIllust(illust);
-    if (this.textures.exists(def.illustKey)) { this.startReel([def.id], 0, illust, null); return; }
-    // 일러스트가 아직이다 — 올라오면 그 자리에서 바꿔 끼우고 영상을 튼다
-    this.whenIllusts([def], () => {
-      this.swapIllust(illust, def.illustKey);
-      this.startReel([def.id], 0, illust, null);
-    });
+    // 일러스트가 아직이면 자리 그림 — 올라오면 그 자리에서 바뀐다 (putIllust). 영상은 기다리지 않는다
+    const illust = this.illustImage(this.scale.width / 2, def);
+    this.startReel([def.id], 0, illust, null);
   }
 
   /**
@@ -630,10 +633,9 @@ export default class GachaScene extends BaseScene {
   private setShowcaseBase(def: CharacterDef, i: number) {
     const current = this.slideshowIsA ? this.slideshowBgA : this.slideshowBgB;
     const other = this.slideshowIsA ? this.slideshowBgB : this.slideshowBgA;
-    if (!current?.active || !other?.active || !this.textures.exists(def.illustKey)) return;
+    if (!current?.active || !other?.active) return;
     this.tweens.killTweensOf([current, other]);
-    current.setTexture(def.illustKey).setAlpha(1);
-    this.coverIllust(current);
+    this.putIllust(current, def).setAlpha(1);
     other.setAlpha(0);
     this.slideshowIndex = i;
     this.refreshFaces();
@@ -993,17 +995,16 @@ export default class GachaScene extends BaseScene {
     if (!this.slideshowActive || !this.scene.isActive() || this.modal) return;
     if (index === this.slideshowIndex) return;
     const nextDef = this.featured[index];
-    if (!this.textures.exists(nextDef.illustKey)) return;   // 아직 받는 중 (loadIllust) — 다 오면 넘긴다
 
     // 현재/다음 레이어 결정
     const current  = this.slideshowIsA ? this.slideshowBgA : this.slideshowBgB;
     const incoming = this.slideshowIsA ? this.slideshowBgB : this.slideshowBgA;
     if (!current || !incoming) return;
 
-    // 다음 일러스트를 incoming 레이어에 세팅 (일러스트마다 크기가 다를 수 있어 다시 맞춘다)
+    // 다음 일러스트를 incoming 레이어에 세팅 (일러스트마다 크기가 다를 수 있어 다시 맞춘다).
+    // 아직 받는 중이거나 못 받았으면 자리 그림으로 넘기고, 올라오면 그 자리에서 바뀐다 — 못 받은 한 장에서 번갈아 보이기가 서지 않게
     this.tweens.killTweensOf([current, incoming]);
-    incoming.setTexture(nextDef.illustKey).setAlpha(0);
-    this.coverIllust(incoming);
+    this.putIllust(incoming, nextDef).setAlpha(0);
 
     // 상태 + 텍스트를 일러스트 전환 시작과 동시에 즉시 교체
     this.slideshowIsA = !this.slideshowIsA;
@@ -2243,11 +2244,12 @@ export default class GachaScene extends BaseScene {
    * 순서: DisplayList 의 SHUTDOWN 리스너가 부팅 때 걸려 먼저 돈다 — 여기 올 때는 이 그림을 쓰던 이미지가 이미 다 부서져 있다
    */
   private releaseTextures() {
+    // 이벤트 큰 줄기(gacha_evstrip_*, 장당 약 0.4MB)는 지금 화면 크기의 것만 남긴다 — 다음에 들어올 때 일러스트 4장을 다시 풀어 굽지 않게.
+    // 키에 화면 크기가 들어가 있어 다른 크기의 줄기는 다시 쓰지 않는다 (화면 크기가 바뀔 때마다 쌓였다 — 리뷰 ee3b5b0f P2)
+    const keepStrips = new Set(BANNERS.filter(b => b.kind === 'event').flatMap(b => this.eventStrips(b).map(s => s.key)));
     for (const key of this.textures.getTextureKeys()) {
       const own = this.ownKeys.has(key) && (key.startsWith('illust_') || /^wp_.+_bg$/.test(key));
-      // 이벤트 큰 줄기(gacha_evstrip_*, 장당 약 0.4MB)는 남긴다 — 다음에 들어올 때 일러스트 4장을 다시 풀어 굽지 않게
-      const keepStrip = key.startsWith('gacha_evstrip_');
-      if ((key.startsWith('gacha_') && !keepStrip) || own) this.textures.remove(key);
+      if ((key.startsWith('gacha_') && !keepStrips.has(key)) || own) this.textures.remove(key);
     }
     this.ownKeys.clear();
   }
@@ -2605,7 +2607,7 @@ export default class GachaScene extends BaseScene {
   }
 
   private clearUI() {
-    this.uiGen++;
+    this.illustWant.clear();   // 기다리던 자리는 아래에서 다 부서진다
     // 창이 떠 있으면 먼저 닫는다 — 창이 건 씬 입력 · 마스크를 정리한다
     this.modal?.close();
     this.modal = null;
