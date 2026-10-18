@@ -219,6 +219,7 @@ export default class GameScene extends BaseScene {
     this.ranksAtStart = null;
     this.gameOverView = null;
     this.restarting = false;
+    this.maehwaFx = null;   // 지난 판 이미터 · 이미지는 씬과 함께 부서졌다
     // 디버그 Graphics 참조 초기화 (씬 재시작 시 이전 객체는 Phaser가 파괴하므로 참조만 해제)
     this.manualHitboxDebug = undefined;
     // 피버 타임 초기화
@@ -1677,58 +1678,106 @@ export default class GameScene extends BaseScene {
     });
   }
 
+  /**
+   * 매화×매화 버스트 연출 한 벌 — 판에 하나, 처음 쓸 때 만든다 (init 에서 비운다 · 씬과 함께 부서진다).
+   * 전에는 버스트 한 번에 똥마다 Graphics 11개(칼날 1 + 꽃잎 10) + 트윈을 만들고 부쉈다 — 똥 40개면 한 프레임에 440개,
+   * Graphics 라 사는 동안 매 프레임 다시 테셀했다. 이제 칼날 · 꽃잎은 이미터 두 개가 explode 로 내보내고
+   * (입자는 이미터가 돌려 쓴다), 눈보라는 구운 꽃잎 이미지 풀을 같은 식으로 움직인다
+   */
+  private maehwaFx: {
+    slashes: Phaser.GameObjects.Particles.ParticleEmitter;
+    petals: Phaser.GameObjects.Particles.ParticleEmitter;
+    petalKey: string;
+    stormFree: Phaser.GameObjects.Image[];
+  } | null = null;
+
+  private ensureMaehwaFx(): NonNullable<GameScene['maehwaFx']> {
+    if (this.maehwaFx) return this.maehwaFx;
+    // 꽃잎 — 흰 타원 8x12 (1배, 2배로 굽는다). 색은 틴트로
+    const petalKey = this.bakedOnce('maehwa_petal', 8, 12, (ctx) => {
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.ellipse(4, 6, 4, 6, 0, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    // 칼날 (↗ 방향 마름모꼴) — 예전 Graphics 와 같은 점 · 색 · 선
+    const slashKey = this.bakedOnce('maehwa_slash', 56, 56, (ctx) => {
+      const c = 28, len = 26, wid = 7;
+      ctx.fillStyle = 'rgba(255,51,102,0.9)';
+      ctx.beginPath();
+      ctx.moveTo(c - len, c + len);
+      ctx.lineTo(c - wid * 0.4, c + wid);
+      ctx.lineTo(c + len, c - len);
+      ctx.lineTo(c + wid * 0.4, c - wid);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(c - len, c + len);
+      ctx.lineTo(c + len, c - len);
+      ctx.stroke();
+    });
+    const res = GameScene.BAKE_RES;
+    const slashes = this.add.particles(0, 0, slashKey, {
+      emitting: false, lifespan: 300, speed: 0, scale: 1 / res, alpha: { start: 1, end: 0 },   // 트윈 기본(선형) 300ms
+    }).setDepth(195);
+    type Petal = Phaser.GameObjects.Particles.Particle & { a0?: number; da?: number };
+    const petals = this.add.particles(0, 0, petalKey, {
+      emitting: false,
+      lifespan: { min: 500, max: 900 },
+      speed: 0,
+      // scaleX · scaleY 를 따로 둔다 — scale 하나로 주면 scaleY 가 scaleX 를 따라간다 (입자마다 가로 · 세로가 다르다)
+      scaleX: 1, scaleY: 1,
+      tint: 0xff3377,
+      alpha: { start: 0.9, end: 0, ease: 'Quad.easeOut' },
+      rotate: {
+        onEmit: () => 0,
+        onUpdate: (p: Petal, _k: string, t: number) => (p.a0 ?? 0) + (p.da ?? 0) * t * (2 - t),   // Quad.easeOut
+      },
+      emitCallback: (p: Petal) => {
+        const w = Phaser.Math.Between(4, 8), h = Phaser.Math.Between(7, 12);
+        p.scaleX = w / (8 * res);
+        p.scaleY = h / (12 * res);
+        p.a0 = Phaser.Math.Between(0, 360);
+        p.da = Phaser.Math.Between(-180, 180);
+        p.angle = p.a0;
+        p.rotation = Phaser.Math.DegToRad(p.a0);
+        // 예전 트윈과 같은 길 — 사방 40~90 + 아래로 20~50 을 Quad.easeOut 으로.
+        // easeOut(quad) = 처음 속도 2D/T 에서 끝에 0 이 되도록 고르게 줄이는 것과 같다
+        const ang = Phaser.Math.DegToRad(Phaser.Math.Between(0, 360));
+        const dist = Phaser.Math.Between(40, 90), drop = Phaser.Math.Between(20, 50);
+        const T = p.life / 1000;
+        p.velocityX = (2 * Math.cos(ang) * dist) / T;
+        p.velocityY = (2 * (Math.sin(ang) * dist + drop)) / T;
+        p.accelerationX = -p.velocityX / T;
+        p.accelerationY = -p.velocityY / T;
+      },
+    }).setDepth(190);
+    this.maehwaFx = { slashes, petals, petalKey, stormFree: [] };
+    return this.maehwaFx;
+  }
+
   /** 매화 꽃잎 폭발 — 한 지점에서 칼날 이펙트 + 꽃잎 여러 장 사방으로 비산 */
   private spawnMaehwaBurst(cx: number, cy: number): void {
-    // 칼날 이펙트 (↗ 방향 마름모꼴)
-    const slash = this.add.graphics().setDepth(195);
-    const len = 26, wid = 7;
-    slash.fillStyle(0xff3366, 0.9);
-    slash.fillPoints([
-      new Phaser.Geom.Point(cx - len, cy + len),
-      new Phaser.Geom.Point(cx - wid * 0.4, cy + wid),
-      new Phaser.Geom.Point(cx + len, cy - len),
-      new Phaser.Geom.Point(cx + wid * 0.4, cy - wid),
-    ], true);
-    slash.lineStyle(3, 0xffffff, 0.5);
-    slash.lineBetween(cx - len, cy + len, cx + len, cy - len);
-    this.tweens.add({ targets: slash, alpha: 0, duration: 300, onComplete: () => slash.destroy() });
-
-    const COUNT = 10;
-    for (let i = 0; i < COUNT; i++) {
-      const petal = this.add.graphics().setDepth(190);
-      petal.setPosition(cx, cy);
-      const w = Phaser.Math.Between(4, 8);
-      const h = Phaser.Math.Between(7, 12);
-      petal.fillStyle(0xff3377, 0.9);
-      petal.fillEllipse(0, 0, w, h);
-      petal.setAngle(Phaser.Math.Between(0, 360));
-
-      const angle = Phaser.Math.Between(0, 360);
-      const dist  = Phaser.Math.Between(40, 90);
-      this.tweens.add({
-        targets: petal,
-        x: cx + Math.cos(Phaser.Math.DegToRad(angle)) * dist,
-        y: cy + Math.sin(Phaser.Math.DegToRad(angle)) * dist + Phaser.Math.Between(20, 50),
-        angle: petal.angle + Phaser.Math.Between(-180, 180),
-        alpha: 0,
-        duration: Phaser.Math.Between(500, 900),
-        ease: 'Quad.easeOut',
-        onComplete: () => petal.destroy(),
-      });
-    }
+    const fx = this.ensureMaehwaFx();
+    fx.slashes.explode(1, cx, cy);
+    fx.petals.explode(10, cx, cy);
   }
 
   /**
-   * 꽃잎 눈보라 — 위에서 바람에 날려 쏟아지는 폭풍 이펙트
-   * 단일 Graphics 객체 사용: 55개 개별 객체(55 draw call/frame) → 1개(1 draw call/frame)
+   * 꽃잎 눈보라 — 위에서 바람에 날려 쏟아지는 폭풍 이펙트.
+   * 꽃잎 55장 — 구운 타원 이미지를 풀에서 꺼내 같은 식으로 움직인다 (Graphics 한 장에 매 프레임 타원 55개를 다시 테셀하던 것)
    */
   private spawnMaehwaStorm(): void {
     const W = this.scale.width;
     const H = this.scale.height;
     const COUNT = 55;
     const DURATION = 2200;
-
-    const gfx = this.add.graphics().setDepth(194);
+    const fx = this.ensureMaehwaFx();
+    const res = GameScene.BAKE_RES;
+    const imgs = Array.from({ length: COUNT }, () => fx.stormFree.pop()
+      ?? this.add.image(0, 0, fx.petalKey).setDepth(194).setVisible(false));
 
     const petals = Array.from({ length: COUNT }, () => ({
       startX:     Phaser.Math.Between(-30, W + 30),
@@ -1744,26 +1793,28 @@ export default class GameScene extends BaseScene {
       baseAlpha:  0.65 + Math.random() * 0.35,
     }));
 
+    petals.forEach((p, i) => {
+      imgs[i].setTint(p.color).setScale(p.size / (8 * res), Math.round(p.size * 1.7) / (12 * res));
+    });
+
     this.tweens.addCounter({
       from: 0,
       to: 1,
       duration: DURATION,
       onUpdate: (tween) => {
         const g = tween.getValue() ?? 0;
-        gfx.clear();
-        for (const p of petals) {
+        petals.forEach((p, i) => {
           const t = Math.max(0, (g - p.delay) / (1 - p.delay));
           const ft = Math.min(t * p.fallSpeed, 1);
           const sinW = Math.sin(ft * Math.PI * 2 * p.wobbleFreq + p.wobblePhase);
           const x = p.startX + ft * p.windDrift + sinW * p.wobbleAmp;
           const y = p.startY + ft * (H + 140);
           const alpha = (ft > 0.78 ? 1 - (ft - 0.78) / 0.22 : 1) * p.baseAlpha;
-          if (alpha <= 0) continue;
-          gfx.fillStyle(p.color, alpha);
-          gfx.fillEllipse(x, y, p.size, Math.round(p.size * 1.7));
-        }
+          imgs[i].setVisible(alpha > 0).setPosition(x, y).setAlpha(Math.max(0, alpha));
+        });
       },
-      onComplete: () => gfx.destroy(),
+      // 풀로 돌려놓는다 (씬이 끝나면 씬과 함께 부서진다)
+      onComplete: () => { for (const im of imgs) { im.setVisible(false); fx.stormFree.push(im); } },
     });
   }
 
