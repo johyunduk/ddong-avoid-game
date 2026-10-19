@@ -363,10 +363,13 @@ export class HeidiAbility extends BaseAbility {
     ph: number;
     /** 발밑 그림자 웅덩이의 가로 반지름 — 가닥은 웅덩이 **가장자리**에서 나온다 */
     pr: number;
+    /** 가닥을 그리나 — bindLineMax 를 넘는 몫은 그리지 않고 잡기만 한다 (가닥 없이 멈춘 잔상) */
+    line: boolean;
   }[] = [];
   /**
    * 가닥 전부를 그리는 그래픽스 **하나** (렉 점검 2026-10-18). 예전엔 가닥마다 하나씩(똥 수만큼) 만들어 매 프레임 지우고
-   * 다시 그렸다 — 깊이가 같고 만든 순서대로 겹치므로 한 장에 같은 순서로 그리면 보이는 것은 같다
+   * 다시 그렸다 — 깊이가 같고 만든 순서대로 겹치므로 한 장에 같은 순서로 그리면 보이는 것은 같다.
+   * 그리는 줄은 bindLineMax 까지 (묶기는 전부)
    */
   private bindG?: Phaser.GameObjects.Graphics;
   /** 발밑 그림자 웅덩이 */
@@ -1922,7 +1925,7 @@ export class HeidiAbility extends BaseAbility {
 
   /**
    * **시카마루 — 그림자 흉내 (땅 판본).** 착지한 자리에서 쪼그려 쥐 인을 맺으면 발밑
-   * 그림자에서 가닥이 (화면 안 일반 똥마다, 가장 아래부터 최대 bindMax 24) 땅을 타고 뻗어, 위로 꺾여 똥을 하나씩 잡는다. 잡힌 똥은
+   * 그림자에서 가닥이 (화면 안 일반 똥마다 — 그리는 줄은 bindLineMax 24 까지) 땅을 타고 뻗어, 위로 꺾여 똥을 하나씩 잡는다. 잡힌 똥은
    * 그 자리에 **뚝 멈춘다.** 전부 묶이면 0.5초 정적 — 그리고 한꺼번에 조여 터진다.
    *
    * 다른 일곱이 "순간에 지우는" 동안 시카마루만 **멈춤 → 정적 → 동시 소멸**의 박자다
@@ -1948,8 +1951,10 @@ export class HeidiAbility extends BaseAbility {
   }
 
   /**
-   * 가닥 목표 — 화면 안의 일반 똥을 **가장 아래부터 bindMax 개** (0 이면 전부). 남은 똥은 이어지는 꿰매기 바늘이 맡는다.
-   * 단 땅 가까이 **이미 떨어져 내려온 똥은 뺀다** (bindMinRiseH — 화면 높이 대비)
+   * 가닥 목표 — **화면 안의 일반 똥 전부** (bindMax 가 0 이 아니면 가장 아래부터 그 수만큼).
+   * 단 땅 가까이 **이미 떨어져 내려온 똥은 뺀다** (bindMinRiseH — 화면 높이 대비).
+   * 잡기는 전부, **그리는 가닥은 bindLineMax 줄까지** — 묶는 순서 전체에 고르게 고른다
+   * (아래 몇 줄만 그리면 위쪽 똥은 가닥 없이 멈춘 띠로 보이고, 뒤쪽 시차에 뻗는 가닥이 없어진다)
    */
   private spawnBinds(api: GameSceneAPI, p: Puyo, now: number): void {
     const P = HEIDI_PARAMS;
@@ -1965,11 +1970,15 @@ export class HeidiAbility extends BaseAbility {
       ? Math.min(P.bindStaggerMs, P.bindStaggerSpan / (pool.length - 1)) : 0;
     this.bindReachEnd = P.bindSealMs + P.bindCreepMs + P.bindDashMs + gap * Math.max(0, pool.length - 1);
     if (pool.length > 0) this.bindG = this.track(scene.add.graphics().setDepth(DEPTH_PUYO - 1));
+    const n = pool.length;
+    const lines = P.bindLineMax > 0 ? Math.min(P.bindLineMax, n) : n;
     pool.forEach((q, i) => {
       this.binds.push({
         t0: now + i * gap, q, tx: q.x, ty: q.y,
         sx: p.ob.x, sy: this.groundY, gw: 0, gh: 0, ph: Math.random() * Math.PI * 2,
         pr: p.size * 0.75 * 0.85,
+        // i 번째에서 ceil(i·lines/n) 이 오르면 그린다 — 첫 가닥부터 lines 줄이 고르게 (lines = n 이면 전부)
+        line: Math.ceil((i + 1) * lines / n) > Math.ceil(i * lines / n),
       });
     });
     if (P.debugFinLog) console.log('[하이디] 그림자 가닥', pool.length);
@@ -2188,7 +2197,8 @@ export class HeidiAbility extends BaseAbility {
 
   /**
    * 가닥을 그린다. 발밑 → 땅을 타고 목표 x → 위로 꺾여 목표까지. 진행도만큼만 그린다.
-   * 잡으면 그 똥을 조용히 회수하고 **멈춘 잔상**을 남긴다. squeeze(0~1)는 조르기 진행도
+   * 잡으면 그 똥을 조용히 회수하고 **멈춘 잔상**을 남긴다. squeeze(0~1)는 조르기 진행도.
+   * 잡기는 가닥마다 전부, 그리기는 line 인 것만 (bindLineMax)
    */
   private drawBinds(api: GameSceneAPI, now: number, squeeze: number): void {
     const P = HEIDI_PARAMS;
@@ -2196,7 +2206,6 @@ export class HeidiAbility extends BaseAbility {
     const g = this.bindG;
     if (g?.active) g.clear();
     for (const b of this.binds) {
-      if (!g?.active) break;
       // 아직 안 잡았으면 목표는 떨어지는 똥을 따라간다
       if (!b.ghost && b.q?.active) { b.tx = b.q.x; b.ty = b.q.y; }
       const el = now - b.t0;
@@ -2212,6 +2221,8 @@ export class HeidiAbility extends BaseAbility {
         }
         b.q = undefined;
       }
+      // 여기부터 그리기 — 상한 밖 몫은 가닥 · 고리 없이 잔상만 (잡기 · 조르기 · 점수는 위와 squeezeBinds 가 전부 맡는다)
+      if (!b.line || !g?.active) continue;
       // **곡선 길.** 예전엔 땅을 타다 직각으로 꺾여 올라갔다 (사람 판정: 개선해 달라).
       // 이제 웅덩이 가장자리에서 땅을 따라 나오다(시작 접선 수평) 똥 아래에서 위로
       // 휘어 올라가는(끝 접선 수직) 3차 베지어다. 길이를 알아야 "몇 px 뻗었나"를 그리므로
