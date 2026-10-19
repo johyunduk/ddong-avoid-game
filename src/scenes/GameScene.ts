@@ -1820,6 +1820,13 @@ export default class GameScene extends BaseScene {
     const reused = fx.stormFree.splice(0, COUNT);
     const imgs = [...reused, ...Array.from({ length: COUNT - reused.length },
       () => this.add.image(0, 0, fx.petalKey).setDepth(194).setVisible(false))];
+    // 재사용한 이미지는 표시 목록에서 먼저 끝난 묶음의 자리에 그대로 있다 — 아직 떠 있는 다른 눈보라가 있으면 그 아래에 그려진다.
+    // 새로 만든 것처럼 p0 → p54 순서로 맨 위에 올리고 depth 정렬을 다시 건다 (bringToTop 은 정렬 플래그를 세우지 않는다).
+    // 예전 Graphics 는 발동마다 새로 만들어져 같은 depth 194 안에서 살아 있는 묶음 위에 그려졌다
+    for (const im of imgs) {
+      this.children.bringToTop(im);
+      im.setDepth(194);
+    }
 
     const petals = Array.from({ length: COUNT }, () => ({
       startX:     Phaser.Math.Between(-30, W + 30),
