@@ -217,9 +217,14 @@ export default class GachaScene extends BaseScene {
   private heavyChain: Promise<void> = Promise.resolve();
   /**
    * 자리 그림을 깔아 둔 일러스트 자리 → 그 자리가 지금 기다리는 키 (putIllust). 일러스트가 올라오면 loadIllust 가 그 키를
-   * 기다리는 자리만 바꿔 낀다 — 그사이 슬라이드를 넘겼으면 그 자리는 넘긴 쪽 키를 기다린다. 로비를 다시 그리면(clearUI) 비운다
+   * 기다리는 자리만 바꿔 낀다 — 보여 준 그림이 아직 없는 자리만 여기 든다 (진열에서 이미 보이는 그림은 slideWant). 로비를 다시 그리면(clearUI) 비운다
    */
   private illustWant = new Map<Phaser.GameObjects.Image, string>();
+  /**
+   * 진열이 넘어갔는데 그 일러스트가 아직이다 — 그 키 (holdShowcase). 지금 보이는 그림은 그대로 두고, 올라왔을 때도 이 키면
+   * 그때 크로스페이드한다. 다른 진열로 넘기면 바뀌어 늦게 온 것은 버린다. 로비를 다시 그리면(clearUI) 비운다
+   */
+  private slideWant: string | null = null;
   private revealItems: Array<{ kind: 'character'; data: PulledCharacter } | { kind: 'wallpaper'; data: PulledWallpaper }> = [];
   private revealItemIndex = 0;
   private terminalTexts: Phaser.GameObjects.Text[] = [];
@@ -286,6 +291,7 @@ export default class GachaScene extends BaseScene {
     this.ownKeys = new Set();   // preload · loadIllust 가 채운다
     this.illustLoads = new Map();
     this.illustWant = new Map();
+    this.slideWant = null;
     this.heavyChain = Promise.resolve();
     this.skorBalance = -1;
     this.chosenBanner = null;
@@ -629,16 +635,21 @@ export default class GachaScene extends BaseScene {
     if (this.banner.kind === 'standard' && this.slideshowActive && !this.slideTimer) this.restartSlideTimer();
   }
 
-  /** 상시 영상 밑 바탕 — 지금 보이는 진열 레이어를 그 캐릭터 일러스트로 바로 바꾸고 다른 레이어는 숨긴다 */
+  /**
+   * 상시 영상 밑 바탕 — 지금 보이는 진열 레이어를 그 캐릭터 일러스트로 바로 바꾸고 다른 레이어는 숨긴다.
+   * 그 일러스트가 아직이면 지금 그림을 그대로 두고 올라오면 크로스페이드 (holdShowcase — 영상이 덮고 있으면 안 보인다)
+   */
   private setShowcaseBase(def: CharacterDef, i: number) {
     const current = this.slideshowIsA ? this.slideshowBgA : this.slideshowBgB;
     const other = this.slideshowIsA ? this.slideshowBgB : this.slideshowBgA;
     if (!current?.active || !other?.active) return;
+    this.slideshowIndex = i;
+    this.refreshFaces();
+    if (this.holdShowcase(current, def)) return;
     this.tweens.killTweensOf([current, other]);
     this.putIllust(current, def).setAlpha(1);
     other.setAlpha(0);
-    this.slideshowIndex = i;
-    this.refreshFaces();
+    this.illustWant.delete(other);   // 숨긴 레이어는 기다리지 않는다 — 다음 전환이 그림을 낀다
   }
 
 
@@ -990,33 +1001,65 @@ export default class GachaScene extends BaseScene {
     this.showSlide((this.slideshowIndex + 1) % this.featured.length, false);
   }
 
-  /** index 번째 진열 캐릭터로 넘긴다. 사람이 눌렀으면 자동 전환 타이머를 처음부터 다시 */
+  /**
+   * index 번째 진열 캐릭터로 넘긴다. 사람이 눌렀으면 자동 전환 타이머를 처음부터 다시.
+   * 선택 · 얼굴 테 · 영상 차례는 바로 넘어가고, 그림은 fadeShowcase 가 바꾼다 (아직 안 올라왔으면 올라올 때까지 지금 그림 그대로)
+   */
   private showSlide(index: number, byUser = true) {
     if (!this.slideshowActive || !this.scene.isActive() || this.modal) return;
     if (index === this.slideshowIndex) return;
-    const nextDef = this.featured[index];
-
-    // 현재/다음 레이어 결정
-    const current  = this.slideshowIsA ? this.slideshowBgA : this.slideshowBgB;
-    const incoming = this.slideshowIsA ? this.slideshowBgB : this.slideshowBgA;
-    if (!current || !incoming) return;
-
-    // 다음 일러스트를 incoming 레이어에 세팅 (일러스트마다 크기가 다를 수 있어 다시 맞춘다).
-    // 아직 받는 중이거나 못 받았으면 자리 그림으로 넘기고, 올라오면 그 자리에서 바뀐다 — 못 받은 한 장에서 번갈아 보이기가 서지 않게
-    this.tweens.killTweensOf([current, incoming]);
-    this.putIllust(incoming, nextDef).setAlpha(0);
+    if (!this.slideshowBgA || !this.slideshowBgB) return;
 
     // 상태 + 텍스트를 일러스트 전환 시작과 동시에 즉시 교체
-    this.slideshowIsA = !this.slideshowIsA;
     this.slideshowIndex = index;
     this.refreshFaces();
     if (byUser) this.restartSlideTimer();
     // 사람이 진열 얼굴을 눌렀다 — 그 캐릭터 영상으로 (돌던 영상은 내린다. 첫 프레임이 나오면 타이머는 영상이 멈춘다)
     if (byUser) this.reel?.jump(index);
 
+    this.fadeShowcase(this.featured[index]);
+  }
+
+  /** 진열 그림을 그 캐릭터 일러스트로 크로스페이드 (600ms). 아직 안 올라왔으면 지금 그림 그대로 두고 기다린다 (holdShowcase) */
+  private fadeShowcase(def: CharacterDef) {
+    // 현재/다음 레이어 결정
+    const current  = this.slideshowIsA ? this.slideshowBgA : this.slideshowBgB;
+    const incoming = this.slideshowIsA ? this.slideshowBgB : this.slideshowBgA;
+    if (!current?.active || !incoming?.active) return;
+    if (this.holdShowcase(current, def)) return;
+    if (current.texture.key === def.illustKey) return;   // 기다리는 동안 보이던 그 진열로 돌아왔다 — 바꿀 것이 없다
+
+    // 다음 일러스트를 incoming 레이어에 세팅 (일러스트마다 크기가 다를 수 있어 다시 맞춘다)
+    this.tweens.killTweensOf([current, incoming]);
+    this.putIllust(incoming, def).setAlpha(0);
+    this.illustWant.delete(current);   // 걷히는 자리 그림은 더 기다리지 않는다 — 페이드 중에 다른 그림으로 바뀌지 않게
+    this.slideshowIsA = !this.slideshowIsA;
+
     // crossfade: 현재 fade-out, 다음 fade-in
     this.tweens.add({ targets: current,  alpha: 0, duration: 600, ease: 'Sine.easeInOut' });
     this.tweens.add({ targets: incoming, alpha: 1, duration: 600, ease: 'Sine.easeInOut' });
+  }
+
+  /**
+   * 진열 그림이 그 캐릭터로 바로 못 바뀌면 true — 일러스트가 아직(받는 중 · 못 받음)이다.
+   * - 이미 캐릭터 그림이 보이면 **그대로 둔다** — 자리 그림으로 덮지 않는다. 올라왔을 때도 그 진열을 기다리고 있으면(slideWant)
+   *   그때 크로스페이드, 그사이 다른 진열로 넘겼으면 버린다. 못 받으면 지금 그림 그대로 (다음 차례에 다시 받는다 — loadIllust)
+   * - 보여 준 그림이 아직 없으면(처음 들어와 자리 그림) 자리 그림이 그 키를 기다린다 — 올라오면 그 자리에서 바뀐다 (putIllust)
+   */
+  private holdShowcase(current: Phaser.GameObjects.Image, def: CharacterDef): boolean {
+    const key = def.illustKey;
+    this.slideWant = null;
+    if (this.textures.exists(key)) return false;
+    if (this.illustWant.has(current)) {
+      this.putIllust(current, def);
+      return true;
+    }
+    this.slideWant = key;
+    const run = this.runId;
+    void this.loadIllust(def).then(() => {
+      if (this.isCurrent(run) && this.slideWant === key && this.textures.exists(key)) this.fadeShowcase(def);
+    });
+    return true;
   }
 
   /** [확률 보기] — 그 배너의 전체 확률표 창 */
@@ -2607,6 +2650,7 @@ export default class GachaScene extends BaseScene {
 
   private clearUI() {
     this.illustWant.clear();   // 기다리던 자리는 아래에서 다 부서진다
+    this.slideWant = null;
     // 창이 떠 있으면 먼저 닫는다 — 창이 건 씬 입력 · 마스크를 정리한다
     this.modal?.close();
     this.modal = null;
