@@ -254,6 +254,8 @@ export const CHARACTERS: CharacterDef[] = [
     imagePath: 'assets/players/ted_front.webp',
     illustKey: 'illust_ted',
     illustPath: 'assets/illustrations/ted.webp',
+    videoKey: 'vid_ted',
+    videoPath: 'assets/vids/ted.mp4',
     basicEffect: TED_DESC.basicEffect,
     specialAbility: TED_DESC.specialAbility,
     extraFxSheets: ['chess_96x128.png',
@@ -304,6 +306,8 @@ export const CHARACTERS: CharacterDef[] = [
     imagePath: 'assets/players/heidi_front.webp',
     illustKey: 'illust_heidi',
     illustPath: 'assets/illustrations/heidi.webp',
+    videoKey: 'vid_heidi',
+    videoPath: 'assets/vids/heidi.mp4',
     basicEffect: HEIDI_DESC.basicEffect,
     specialAbility: HEIDI_DESC.specialAbility,
     // 강아지 뿌요 + 변신 캐릭터 여덟의 시트. 재생용이 아니라 텍스처만 올리고 애니메이션은
