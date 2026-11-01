@@ -21,7 +21,7 @@ import {
   type BackgroundDef,
 } from '../utils/wallpaper';
 import { syncOwnedCharacters, syncOwnedWallpapers, visibleBanners } from '../utils/gacha';
-import { VideoReel, newReelMemo, type ReelMemo } from '../utils/videoReel';
+import { VideoReel, fitInArea, newReelMemo, type ReelArea, type ReelMemo } from '../utils/videoReel';
 import { standardPool } from '../config/banners';
 import { getSynergy, type WallpaperSynergy } from '../config/synergyMap';
 import {
@@ -102,9 +102,10 @@ type DetailTab = 'ability' | 'awaken' | 'synergy';
 const DETAIL_TAB_LABEL: Record<DetailTab, string> = { ability: '능력', awaken: '각성', synergy: '시너지' };
 /**
  * 캐릭터 상세 배치 — mediaRatio = 위 영상 · 일러스트 칸 (화면 높이 비율, 시트가 그 아래), sheetOverlap = 그림을 시트 밑으로 더 깔아
- * 둥근 모서리 틈이 비지 않게, nameDy = 시트 위 이름 줄, tabH = 탭 줄 높이, buttonArea = 아래 버튼 칸 (내용 창은 그 위까지)
+ * 둥근 모서리 틈이 비지 않게, nameDy = 시트 위 이름 줄, tabH = 탭 줄 높이, buttonArea = 아래 버튼 칸 (내용 창은 그 위까지),
+ * fullMs = 그림만 크게 보기로 넘어가는 시간 (그림 칸을 누르면 시트를 걷고 그림이 화면을 꽉 채운다 · 다시 누르면 돌아온다)
  */
-const DETAIL = { mediaRatio: 0.55, sheetOverlap: 20, nameDy: 26, tabH: 44, buttonArea: 76, sheetColor: 0x140a2a } as const;
+const DETAIL = { mediaRatio: 0.55, sheetOverlap: 20, nameDy: 26, tabH: 44, buttonArea: 76, sheetColor: 0x140a2a, fullMs: 220 } as const;
 
 export default class CharacterSelectScene extends BaseScene {
   private returnScene: string = 'ModeSelectScene';
@@ -172,6 +173,16 @@ export default class CharacterSelectScene extends BaseScene {
   private pendingDetailId: string | null = null;
   /** 열려 있는 상세가 쓰는 일러스트 키 — dropUnusedIllusts 가 이것만 남긴다 */
   private detailIllustKey: string | null = null;
+  /**
+   * 그림만 크게 보기 (대표 2026-11-01 — 시트가 영상 아래를 가린다) — 그림 칸을 누르면 시트 · 이름 · 버튼을 걷고 그림이 화면을 꽉 채운다
+   * (비율 유지 덮기 — 그림이 화면보다 넓어 좌우가 조금 잘린다), 아무 데나 다시 누르면 돌아온다.
+   * media = 그림 칸 두 가지(시트 위 · 화면 전체) · 바탕 · 일러스트 · 누르는 칸 (일러스트를 못 받았으면 null — 끈다)
+   */
+  private detailFull = false;
+  private detailMedia: {
+    half: ReelArea; full: ReelArea; bg: Phaser.GameObjects.GameObject; illust: Phaser.GameObjects.Image;
+    tapHalf: Phaser.GameObjects.Zone; tapFull: Phaser.GameObjects.Zone;
+  } | null = null;
 
   constructor() {
     super('CharacterSelectScene');
@@ -248,6 +259,8 @@ export default class CharacterSelectScene extends BaseScene {
     this.detailReel = null;
     this.pendingDetailId = null;
     this.detailIllustKey = null;
+    this.detailFull = false;
+    this.detailMedia = null;
 
     // 동기화 전 각성 수치 스냅샷 (동기화 후 변화 감지용)
     this._preSyncDupCounts = new Map(
@@ -1175,16 +1188,17 @@ export default class CharacterSelectScene extends BaseScene {
     this.showcase.setVisible(false);
 
     // 바탕 · 아래 목록으로 입력이 새지 않게 막는다
-    panel.add(this.add.rectangle(cx, H / 2, W, H, BG_DARK).setInteractive());
+    const bg = this.add.rectangle(cx, H / 2, W, H, BG_DARK).setInteractive();
+    panel.add(bg);
 
     // ── 위 — 일러스트를 깔고 그 위에서 영상 반복 (비율 유지 화면 덮기 · 늘이지 않는다) ──
     const mediaH = Math.round(H * DETAIL.mediaRatio);
-    const area = { x: 0, y: 0, w: W, h: mediaH + DETAIL.sheetOverlap, focusY: 0.15 };
+    const area: ReelArea = { x: 0, y: 0, w: W, h: mediaH + DETAIL.sheetOverlap, focusY: 0.15 };
     let illust: Phaser.GameObjects.Image;
     if (this.textures.exists(def.illustKey)) {
       illust = this.add.image(cx, 0, def.illustKey).setOrigin(0.5, 0);
-      const sc = Math.max(area.w / illust.width, area.h / illust.height);
-      illust.setScale(sc).setY(area.y - (illust.height * sc - area.h) * area.focusY);
+      const fit = fitInArea(illust.width, illust.height, area);
+      illust.setScale(fit.scale).setY(fit.y);
     } else {
       // 일러스트를 못 받았다 — 게임 스프라이트를 칸 안에 비율대로 (늘이지 않는다). 영상이 오면 그 위를 덮는다
       illust = this.add.image(cx, area.h * 0.55, def.imageKey).setOrigin(0.5, 0.5);
@@ -1195,6 +1209,17 @@ export default class CharacterSelectScene extends BaseScene {
       ids: [def.id], anchor: illust, area, memo: this.videoMemo,
       canPlay: () => this.detailPanel === panel,
     }).start();
+
+    // 그림만 크게 보기 — 그림 칸을 누르면 시트를 걷고 그림이 화면을 꽉 채운다, 크게 보는 동안은 아무 데나 누르면 돌아온다.
+    // 누르는 칸은 일러스트 바로 위 (← 는 그 위라 먼저 받는다). 일러스트를 못 받아 스프라이트를 깔았으면 켜지 않는다
+    if (this.textures.exists(def.illustKey)) {
+      const tapHalf = setTouchInteractive(this.add.zone(cx, mediaH / 2, W, mediaH));
+      const tapFull = setTouchInteractive(this.add.zone(cx, H / 2, W, H)).setVisible(false);
+      tapHalf.on('pointerup', () => this.setDetailFull(true));
+      tapFull.on('pointerup', () => this.setDetailFull(false));
+      panel.add([tapHalf, tapFull]);
+      this.detailMedia = { half: area, full: { x: 0, y: 0, w: W, h: H, focusY: 0.5 }, bg, illust, tapHalf, tapFull };
+    }
 
     // 위 · 아래 어둠 — ← 와 이름이 그림 위에서 읽히게
     panel.add(this.add.image(cx, 0, this.bakeFade('cs_dfade_top', W, 90, 0.6, 0)).setOrigin(0.5, 0));
@@ -1247,6 +1272,43 @@ export default class CharacterSelectScene extends BaseScene {
 
     this.detailIllustKey = def.illustKey;
     this.dropUnusedIllusts();
+  }
+
+  /**
+   * 그림만 크게 보기 ↔ 시트 — 시트 · 이름 · 탭 · 내용 · 버튼 · ← 를 걷고(되살리고) 일러스트 · 영상이 화면 전체를 덮게 옮긴다.
+   * 걷은 것은 다 사라지면 숨겨서 눌리지 않게 하고, 크게 보는 동안은 화면 전체를 덮는 칸이 맨 위에서 돌아오기를 받는다
+   */
+  private setDetailFull(full: boolean): void {
+    const m = this.detailMedia, panel = this.detailPanel;
+    if (!m || !panel || this.detailFull === full) return;
+    this.detailFull = full;
+    const keep = new Set<Phaser.GameObjects.GameObject>([m.bg, m.illust, m.tapHalf, m.tapFull]);
+    if (this.detailReel?.video) keep.add(this.detailReel.video);
+    type Fade = Phaser.GameObjects.GameObject & { alpha: number; setVisible(v: boolean): unknown };
+    const overlays = [...panel.list.filter(o => !keep.has(o)), this.detailContent, this.detailThumb]
+      .filter((o): o is Fade => !!o);
+    this.tweens.killTweensOf(overlays);
+    const ms = DETAIL.fullMs;
+    if (full) {
+      panel.bringToTop(m.tapFull);
+      m.tapFull.setVisible(true);
+      for (const o of overlays) if (o.getData('detailAlpha') === undefined) o.setData('detailAlpha', o.alpha);
+      this.tweens.add({
+        targets: overlays, alpha: 0, duration: ms * 0.6,
+        onComplete: () => { if (this.detailFull) for (const o of overlays) o.setVisible(false); },
+      });
+    } else {
+      m.tapFull.setVisible(false);
+      for (const o of overlays) {
+        o.setVisible(true);
+        this.tweens.add({ targets: o, alpha: o.getData('detailAlpha') ?? 1, duration: ms });
+      }
+    }
+    const area = full ? m.full : m.half;
+    const fit = fitInArea(m.illust.width, m.illust.height, area);
+    this.tweens.killTweensOf(m.illust);
+    this.tweens.add({ targets: m.illust, y: fit.y, scale: fit.scale, duration: ms, ease: 'Cubic.easeOut' });
+    this.detailReel?.setArea(area, ms);
   }
 
   /** 이 캐릭터에 보일 탭 — 각성이 없는 등급(등급외)이면 각성 탭을, 시너지 짝이 없으면 시너지 탭을 숨긴다 */
@@ -1338,7 +1400,8 @@ export default class CharacterSelectScene extends BaseScene {
       if (thumb) thumb.y = vp.y + (vp.height - thumbH) * (scroll / maxScroll);
     };
     let drag: { y: number; s: number } | null = null;
-    const down = (p: Phaser.Input.Pointer) => { drag = maxScroll > 0 && vp.contains(p.x, p.y) ? { y: p.y, s: scroll } : null; };
+    // 그림만 크게 보는 동안은 숨은 내용을 끌지 않는다 (돌아왔을 때 스크롤이 바뀌어 있지 않게)
+    const down = (p: Phaser.Input.Pointer) => { drag = !this.detailFull && maxScroll > 0 && vp.contains(p.x, p.y) ? { y: p.y, s: scroll } : null; };
     const move = (p: Phaser.Input.Pointer) => {
       if (!drag || !p.isDown) return;
       scroll = Phaser.Math.Clamp(drag.s + (drag.y - p.y), 0, maxScroll);
@@ -1346,7 +1409,7 @@ export default class CharacterSelectScene extends BaseScene {
     };
     const up = () => { drag = null; };
     const wheel = (p: Phaser.Input.Pointer, _over: unknown, _dx: number, dy: number) => {
-      if (maxScroll <= 0 || !vp.contains(p.x, p.y)) return;
+      if (this.detailFull || maxScroll <= 0 || !vp.contains(p.x, p.y)) return;
       scroll = Phaser.Math.Clamp(scroll + dy * 0.5, 0, maxScroll);
       apply();
     };
@@ -1529,6 +1592,10 @@ export default class CharacterSelectScene extends BaseScene {
   private hideCharacterDetail(release = true): void {
     this.detailReel?.destroy();
     this.detailReel = null;
+    this.detailFull = false;
+    this.detailMedia = null;
+    if (this.detailPanel) this.tweens.killTweensOf(this.detailPanel.list);   // 크게 보기 트윈이 부서진 것을 만지지 않게
+    if (this.detailContent) this.tweens.killTweensOf(this.detailContent);
     this.dropDetailContent();
     this.detailPanel?.destroy();
     this.detailPanel = null;

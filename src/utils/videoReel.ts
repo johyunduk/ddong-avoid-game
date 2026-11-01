@@ -14,7 +14,8 @@ import { destroyVideo, releaseVideoElement } from './video';
  * - **빈 화면 없음** — 첫 프레임 전 · 못 받음 · 자동재생 막힘 · 그림을 못 풂(metadata 의 videoWidth 0)이면 밑의 일러스트가 그대로 보인다.
  *   못 받은 캐릭터는 memo.failed, 자동재생 막힘은 memo.locked 에 적어 이 씬 실행 동안 다시 받지 않는다
  * - 영상은 anchor(바탕 일러스트) **바로 위**에 놓는다 — 위 · 아래 어둠 · 글자 · 버튼 밑. anchor 가 컨테이너 안이면 그 컨테이너 안에
- * - 화면 덮기(cover, 비율 유지 · 위쪽 focusY 기준) — 늘이지 않는다
+ * - 화면 덮기(cover, 비율 유지 · 위쪽 focusY 기준) — 늘이지 않는다. 칸은 setArea 로 바꿀 수 있다
+ *   (캐릭터 상세에서 그림을 누르면 시트를 걷고 화면 전체를 덮기, 대표 2026-11-01)
  * - 내릴 때(destroy) 받던 것까지 끊는다 — Phaser 는 요소를 뗄 때 src 속성만 지워서 브라우저가 계속 받을 수 있다.
  *   그래서 src 를 지우고 load() 로 비운 뒤 destroyVideo (영상 텍스처(UUID 키)까지)
  * - 앱이 백그라운드로 가면 Phaser 가 게임과 같이 멈췄다 돌린다
@@ -36,13 +37,22 @@ export function newReelMemo(): ReelMemo {
   return { failed: new Set(), locked: false };
 }
 
+/** 영상 · 일러스트를 덮어 채울 칸 — anchor 와 같은 좌표계 (화면 또는 그 컨테이너). focusY = 넘치는 곳을 자를 세로 기준 (0 위 ~ 1 아래) */
+export interface ReelArea { x: number; y: number; w: number; h: number; focusY: number }
+
+/** w x h 그림으로 칸을 덮는 배율과 위 y (비율 유지 · 가로는 칸 가운데, origin (0.5, 0) 기준) — 영상과 그 밑 일러스트가 같은 식으로 맞춘다 */
+export function fitInArea(w: number, h: number, area: ReelArea): { scale: number; y: number } {
+  const scale = Math.max(area.w / w, area.h / h);
+  return { scale, y: area.y - (h * scale - area.h) * area.focusY };
+}
+
 export interface VideoReelOptions {
   /** 차례로 돌 캐릭터 (하나면 자기를 되풀이) */
   ids: readonly string[];
   /** 영상을 그 바로 위에 놓을 바탕 일러스트 */
   anchor: Phaser.GameObjects.Image;
-  /** 덮어 채울 칸 — anchor 와 같은 좌표계 (화면 또는 그 컨테이너). focusY = 세로 맞춤 기준 (0 위 ~ 1 아래) */
-  area: { x: number; y: number; w: number; h: number; focusY: number };
+  /** 영상을 놓을 칸 — 나중에 setArea 로 바꿀 수 있다 */
+  area: ReelArea;
   memo: ReelMemo;
   /** 영상 밑 바탕을 그 캐릭터 일러스트로 바꾸기 — 여럿을 번갈아 돌 때만 (크로스페이드의 도착 그림) */
   setBase?: ((def: CharacterDef, i: number) => void) | null;
@@ -110,6 +120,21 @@ export class VideoReel {
     }
   }
 
+  /**
+   * 칸을 바꾼다 — 지금 영상도 새 칸에 맞춰 ms 동안 옮긴다 (캐릭터 상세의 그림만 크게 보기).
+   * 첫 프레임 전이면 나올 때 새 칸으로 맞춘다. 알파 페이드 트윈은 그대로 둔다 (배율 · 위치만 움직인다)
+   */
+  setArea(area: ReelArea, ms = 0): void {
+    this.opts.area = area;
+    const vid = this.video;
+    const frame = vid?.active ? (vid.getData('frame') as { w: number; h: number } | undefined) : undefined;
+    if (!vid || !frame) return;
+    const { scale, y } = fitInArea(frame.w, frame.h, area);
+    const x = area.x + area.w / 2;
+    if (ms > 0) this.scene.tweens.add({ targets: vid, x, y, scale, duration: ms, ease: 'Cubic.easeOut' });
+    else vid.setPosition(x, y).setScale(scale);
+  }
+
   /** 멈추고 내린다 (받던 것까지 끊는다). 다시 쓰지 않는다 */
   destroy(): void {
     this.dead = true;
@@ -159,9 +184,10 @@ export class VideoReel {
     };
     vid.once('created', (_v: Phaser.GameObjects.Video, w: number, h: number) => {
       if (this.video !== vid || !w || !h) return;
-      // 화면 덮기 — 일러스트와 같은 맞춤 (비율 유지, 위쪽 focusY 기준)
-      const sc = Math.max(area.w / w, area.h / h);
-      vid.setScale(sc).setY(area.y - (h * sc - area.h) * area.focusY);
+      // 일러스트와 같은 맞춤 (비율 유지, focusY 기준) — 그사이 setArea 로 칸이 바뀌었을 수 있어 지금 칸으로
+      const now = this.opts.area;
+      const { scale, y } = fitInArea(w, h, now);
+      vid.setScale(scale).setPosition(now.x + now.w / 2, y).setData('frame', { w, h });
       const i = this.i;
       this.opts.onFirstFrame?.(def, i);
       this.scene.tweens.add({
