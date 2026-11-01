@@ -13,7 +13,7 @@ Claude 는 구현자, Codex 는 독립 검증자다. **Codex 는 코드를 수�
 herdr agent list
 ```
 
-`reviewer` (kind: codex, 워크스페이스 `똥피·검증`) 가 idle 인지 확인한다.
+`reviewer` (kind: codex, 워크스페이스 `똥피하기·검증`) 가 idle 인지 확인한다.
 없으면 워크스페이스의 셸 페인에서:
 
 ```bash
