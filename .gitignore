@@ -27,6 +27,7 @@ dist-ssr
 *.sln
 *.sw?
 
+# 앱인토스(granite) 빌드 산출물 — 2026-11-01 토스 연동을 걷어냈지만 예전 worktree 들에 아직 남아 있다 (poop-avoid.ait 는 100MB 넘는다)
 .granite
 poop-avoid.ait
 public/assets_backup

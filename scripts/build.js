@@ -3,10 +3,10 @@
 /**
  * Vercel 빌드 스크립트
  * - Vercel 환경 변수를 .env 파일로 생성
- * - granite build 실행
+ * - tsc (타입 검사) + vite build 실행 → dist/web
  */
 
-import { writeFileSync, existsSync } from 'fs';
+import { writeFileSync, existsSync, rmSync } from 'fs';
 import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -48,19 +48,25 @@ if (envContent) {
   console.warn('⚠️ [Build] Build will use default/fallback values');
 }
 
-// granite build 실행
-console.log('🚀 [Build] Running granite build...');
+// 타입 검사 + 웹 빌드 — 예전 granite.config.ts 의 web.commands.build('tsc && vite build')와 같은 일이다.
+// granite build 는 먼저 dist/ 를 통째로 지우고, vite 가 dist/ 에 낸 결과를 dist/web 으로 옮겼다.
+// 지우는 건 여기서 그대로 하고, dist/web 이라는 위치는 이제 vite.config.ts 의 build.outDir 가 정한다.
+// 그 위치는 vercel.json 의 outputDirectory 와 같아야 한다 — 어긋나면 운영 사이트가 빈 화면으로 배포된다 (2026-11-01 토스 연동 걷어냄)
+console.log('🚀 [Build] Running tsc + vite build...');
 try {
-  execSync('npm run build:granite', {
-    cwd: rootDir,
-    stdio: 'inherit',
-    env: {
-      ...process.env,
-      // 환경 변수 명시적 전달
-      VITE_GAME_SECRET_KEY: viteGameSecretKey || '',
-      VITE_API_BASE_URL: viteApiBaseUrl || ''
-    }
-  });
+  rmSync(join(rootDir, 'dist'), { recursive: true, force: true });
+  for (const cmd of ['npx tsc', 'npx vite build']) {
+    execSync(cmd, {
+      cwd: rootDir,
+      stdio: 'inherit',
+      env: {
+        ...process.env,
+        // 환경 변수 명시적 전달
+        VITE_GAME_SECRET_KEY: viteGameSecretKey || '',
+        VITE_API_BASE_URL: viteApiBaseUrl || ''
+      }
+    });
+  }
   console.log('✅ [Build] Build completed successfully');
 } catch (error) {
   console.error('❌ [Build] Build failed:', error.message);

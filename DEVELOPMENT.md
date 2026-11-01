@@ -2,7 +2,7 @@
 
 ## 프로젝트 개요
 
-똥 피하기 게임은 Phaser 3 프레임워크를 사용한 하이퍼캐주얼 게임으로, 토스 인앱 게임 플랫폼에 배포할 수 있도록 설계되었습니다.
+똥 피하기 게임은 Phaser 3 프레임워크를 사용한 하이퍼캐주얼 웹 게임으로, Vercel 로 배포합니다.
 
 ## 아키텍처
 
@@ -17,9 +17,7 @@ src/
 │   ├── Player.ts        # 플레이어 캐릭터
 │   └── Poop.ts          # 똥 장애물
 ├── types/               # TypeScript 타입 정의
-│   └── toss-sdk.d.ts    # 토스 SDK 타입
 ├── utils/               # 유틸리티 함수들
-│   └── tossSDK.ts       # 토스 SDK 래퍼
 └── style.css            # 글로벌 스타일
 ```
 
@@ -74,7 +72,6 @@ src/
 
 - 매 0.1초마다 1점씩 증가
 - 게임 오버 시 최종 점수 표시
-- 토스 SDK를 통해 리더보드에 제출 (선택)
 
 ### 난이도 시스템
 
@@ -206,87 +203,6 @@ this.physics.add.overlap(
 );
 ```
 
-## 토스 SDK 연동 상세
-
-### 개발 환경 설정
-
-현재는 Mock SDK를 사용합니다. `src/utils/tossSDK.ts` 참조.
-
-### 프로덕션 환경 설정
-
-1. **패키지 설치:**
-
-```bash
-npm install @toss/games-sdk
-```
-
-2. **SDK 초기화:**
-
-`src/main.ts`에 추가:
-
-```typescript
-import { initTossSDK } from './utils/tossSDK';
-
-// 게임 시작 전
-const sdk = initTossSDK('YOUR_APP_ID');
-
-// 로그인
-const user = await sdk.login();
-console.log('사용자:', user);
-```
-
-3. **점수 제출:**
-
-`src/scenes/GameScene.ts`의 `hitPoop()` 메서드에서:
-
-```typescript
-import { submitScore } from '../utils/tossSDK';
-
-private hitPoop() {
-  // ... 게임 오버 처리
-
-  // 점수 제출
-  submitScore(this.score);
-
-  // 또는 직접 SDK 사용
-  // sdk.leaderboard.submitScore({ score: this.score, userId: user.id });
-}
-```
-
-4. **토스 포인트 지급:**
-
-```typescript
-import { rewardPoints } from '../utils/tossSDK';
-
-// 특정 점수 달성 시
-if (this.score >= 1000) {
-  rewardPoints(100, '점수 1000점 달성');
-}
-```
-
-### 광고 통합 (선택)
-
-```typescript
-// 게임 오버 시 광고 표시
-const sdk = getTossSDK();
-
-if (sdk) {
-  await sdk.ads.showInterstitialAd();
-}
-
-// 재시작용 리워드 광고
-const watched = await new Promise((resolve) => {
-  sdk.ads.showRewardedAd({
-    onComplete: () => resolve(true),
-    onSkip: () => resolve(false)
-  });
-});
-
-if (watched) {
-  // 추가 생명 또는 보너스 지급
-}
-```
-
 ## 성능 최적화
 
 ### 1. 객체 풀링
@@ -342,15 +258,6 @@ physics: {
 }
 ```
 
-### 콘솔 로그
-
-토스 SDK 유틸리티는 자동으로 콘솔 로그를 출력합니다:
-
-```
-[Mock Toss SDK] Initialized with appId: test-app
-[Mock Toss SDK] Submit score: { score: 1234, userId: 'test-user' }
-```
-
 ## 테스트
 
 ### 로컬 테스트
@@ -388,17 +295,19 @@ npm run dev -- --host
 npm run build
 ```
 
-빌드된 파일은 `dist/` 폴더에 생성됩니다.
+빌드된 파일은 `dist/web/` 폴더에 생성됩니다. 위치는 `vite.config.ts` 의 `build.outDir` 가 정하고,
+Vercel 은 `vercel.json` 의 `outputDirectory` 를 내보낸다 — 둘이 어긋나면 운영 사이트가 빈 화면으로 배포된다.
 
 ### 빌드 최적화
 
-`vite.config.js` 생성:
+`vite.config.ts` 의 `build` 에 옵션을 더한다 (`outDir` 는 그대로 둔다):
 
-```javascript
+```typescript
 import { defineConfig } from 'vite';
 
 export default defineConfig({
   build: {
+    outDir: 'dist/web',
     minify: 'terser',
     terserOptions: {
       compress: {
@@ -412,12 +321,8 @@ export default defineConfig({
 ### 배포 체크리스트
 
 - [ ] 프로덕션 빌드 생성
-- [ ] 토스 SDK 실제 연동
-- [ ] 앱 ID 설정
-- [ ] 광고 SDK 연동 (선택)
 - [ ] 성능 테스트 (60 FPS 유지)
 - [ ] 모바일 기기 테스트
-- [ ] 토스 앱인토스 검수 가이드 확인
 
 ## 추가 기능 아이디어
 
@@ -484,7 +389,6 @@ socket.on('player-move', (data) => {
 
 - [Phaser 3 공식 문서](https://phaser.io/phaser3)
 - [Phaser 3 예제](https://phaser.io/examples)
-- [토스 개발자 센터](https://developers-apps-in-toss.toss.im/)
 - [TypeScript 핸드북](https://www.typescriptlang.org/docs/)
 
 ## 기여 가이드

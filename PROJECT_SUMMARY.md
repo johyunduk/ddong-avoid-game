@@ -2,7 +2,7 @@
 
 ## 프로젝트 개요
 
-토스 인앱 게임 플랫폼용 하이퍼캐주얼 게임 "똥 피하기"가 성공적으로 생성되었습니다.
+웹 브라우저용 하이퍼캐주얼 게임 "똥 피하기"가 성공적으로 생성되었습니다.
 
 ## 완성된 기능
 
@@ -18,13 +18,6 @@
 - [x] 실시간 점수 증가
 - [x] 최종 점수 표시
 - [x] 난이도 자동 증가
-
-### ✅ 토스 SDK 연동 준비
-- [x] Mock SDK 구현
-- [x] 타입 정의
-- [x] 리더보드 인터페이스
-- [x] 포인트 리워드 인터페이스
-- [x] 광고 인터페이스
 
 ### ✅ 기술 구현
 - [x] Phaser 3 프레임워크
@@ -44,12 +37,10 @@ ddong-avoid-game/
 │   ├── objects/
 │   │   ├── Player.ts            # 플레이어 캐릭터
 │   │   └── Poop.ts              # 똥 장애물
-│   ├── types/
-│   │   └── toss-sdk.d.ts        # 토스 SDK 타입 정의
-│   ├── utils/
-│   │   └── tossSDK.ts           # 토스 SDK 유틸리티
+│   ├── types/                   # 타입 정의
+│   ├── utils/                   # 유틸리티
 │   └── style.css                # 스타일시트
-├── dist/                        # 빌드 결과물
+├── dist/web/                    # 빌드 결과물 (vercel.json 이 이 폴더를 내보낸다)
 ├── index.html                   # HTML 템플릿
 ├── package.json                 # 의존성 설정
 ├── tsconfig.json                # TypeScript 설정
@@ -86,7 +77,7 @@ npm run dev
 ```bash
 npm run build
 ```
-→ `dist/` 폴더에 결과물 생성
+→ `dist/web/` 폴더에 결과물 생성 (`vite.config.ts` 의 `build.outDir`)
 
 ### 빌드 미리보기
 ```bash
@@ -114,27 +105,6 @@ npm run preview
 - 생존 시간이 곧 점수
 - 게임 오버 시 최종 점수 표시
 
-## 토스 SDK 연동 가이드
-
-### 현재 상태 (개발 환경)
-- Mock SDK 사용 중
-- 콘솔 로그로 동작 확인 가능
-- 로컬스토리지에 점수 임시 저장
-
-### 실제 배포 시
-1. 토스 SDK 설치
-   ```bash
-   npm install @toss/games-sdk
-   ```
-
-2. 앱 ID 설정
-   - 토스 개발자 콘솔에서 앱 등록
-   - `src/main.ts`에서 앱 ID 설정
-
-3. SDK 활성화
-   - `src/utils/tossSDK.ts`에서 주석 해제
-   - Mock SDK 대신 실제 SDK 사용
-
 ## 다음 단계
 
 ### 즉시 가능한 작업
@@ -156,16 +126,6 @@ npm run preview
 - [ ] 소셜 공유 기능
 - [ ] 업적 시스템
 
-### 토스 플랫폼 배포
-1. 토스 개발자 콘솔 가입
-   - https://developers-apps-in-toss.toss.im/
-
-2. 앱 등록 및 검수
-
-3. SDK 연동
-
-4. 최종 테스트 및 배포
-
 ## 기술 스택
 
 | 항목 | 기술 |
@@ -174,7 +134,7 @@ npm run preview
 | 언어 | TypeScript 5.9.3 |
 | 빌드 도구 | Vite 7.1.7 |
 | 물리 엔진 | Arcade Physics |
-| 플랫폼 | 토스 앱인토스 (준비 완료) |
+| 플랫폼 | 웹 (Vercel) |
 
 ## 성능
 
