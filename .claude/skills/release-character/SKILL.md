@@ -44,6 +44,6 @@ description: 캐릭터 하나를 컨셉부터 공개까지 끌고 가는 상위 
 
 ## Herdr 역할
 
-명단과 자리별 담당은 `docs/team/roster.json` · `docs/team/<이름>.md` 가 기준이다.
+명단과 자리별 담당은 컨트롤타워 `C:\Users\user\Projects\control-tower\team\` 의 `roster.json` · `<이름>.md` 가 기준이다.
 이 흐름에 걸리는 자리: `builder`(컨셉·일러스트) → `composer`(곡) → `dev`(게임 반영) →
 `reviewer`(`/review`) → `ops`(SNS·공개).

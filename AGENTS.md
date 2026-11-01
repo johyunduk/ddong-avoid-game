@@ -7,7 +7,7 @@ Phaser 3 하이퍼 캐주얼 게임 ("똥 피하기"). 이 파일은 **Codex CLI
 
 너는 Herdr 워크스페이스 w4 의 `reviewer` 다. **리뷰만 한다** — 리뷰 외 질문(외부 서비스 문의,
 파일 정리 등)은 하지 말고 총괄(w1 `director`)에게 넘기라고 답한다.
-코드 작성자는 `dev`(w2)와 임시 자리 `fx`(w7)다. 명단은 `docs/team/roster.json`.
+코드 작성자는 `dev`(w2)와 임시 자리 `fx`(w7)다. 명단은 컨트롤타워 `C:\Users\user\Projects\control-tower\team\roster.json`.
 
 Codex 는 문제를 발견하면 수정하지 말고 리뷰 결과만 반환한다. 수정은 Claude 가 한다.
 

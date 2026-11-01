@@ -154,11 +154,13 @@ python scripts/review-status.py --id <배치>
 이 저장소에는 역할이 다른 에이전트가 동시에 붙어 있다. **자기 역할 밖의 일은 하지 않는다** —
 필요하면 총괄(w1 `director`)에게 넘긴다.
 
-**명단은 `docs/team/roster.json` 하나다.** 자리별 담당은 `docs/team/<이름>.md`. 여기 표로 베끼지 않는다.
+**명단 · 역할 문서는 이 저장소 밖 컨트롤타워에 있다** — `C:\Users\user\Projects\control-tower\team\`
+(`roster.json` 하나 + 자리별 `<이름>.md`). 팀은 이 게임만의 것이 아니라서 꺼냈다 (2026-11-01 재편). 여기 표로 베끼지 않는다.
 
-- 역할은 기억이 아니라 **주입**이다 — SessionStart 훅(`scripts/team-role.py`)이
-  `HERDR_WORKSPACE_ID` 로 명단을 찾아 시작·`/clear`·대화 요약 때마다 역할 문서를 넣는다
-- 워크스페이스를 명단대로 맞추려면 `python scripts/team-up.py` (`--check` 는 보고만).
+- 역할은 기억이 아니라 **주입**이다 — 사용자 설정(`~/.claude/settings.json`)의 SessionStart 훅
+  (`control-tower/team/team-role.py`)이 `HERDR_WORKSPACE_ID` 로 명단을 찾아 시작·`/clear`·대화 요약 때마다 역할 문서를 넣는다.
+  `scripts/team-role.py` 는 옛 설정을 든 세션을 위한 다리일 뿐이다
+- 워크스페이스를 명단대로 맞추려면 컨트롤타워 폴더에서 `python team/team-up.py` (`--check` 는 보고만).
   세션이 이상하면 고치지 말고 이걸 다시 돌린다
 - 일은 총괄이 `herdr agent prompt <이름>` 으로만 보낸다. 워커(w5)는 에이전트가 아니다 — 지시를 받지 못한다
 

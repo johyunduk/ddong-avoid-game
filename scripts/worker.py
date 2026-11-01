@@ -27,7 +27,7 @@ builder 가 그림을 뽑는 동안 composer 가 곡을 뽑는다.
 다시 쓰기 때문에, 같은 파일을 두 프로세스가 쓰면 서로의 표시를 지운다.
 **같은 라인을 두 프로세스가 맡는 일은 없어야 한다** — 같은 건을 두 번 보낸다.
 
-Herdr 세션 안에서 실행한다 (w5 `실행·워커`). 표준 라이브러리만 사용.
+Herdr 세션 안에서 실행한다 (w5 `똥피·워커`). 표준 라이브러리만 사용.
 """
 from __future__ import annotations
 
@@ -57,11 +57,11 @@ STATE_FILE = STATE_FILES["all"]  # main() 이 --queues 에 맞춰 바꾼다
 COMFY_CANDIDATES = ["http://127.0.0.1:8188", "http://127.0.0.1:8000"]
 COMFY = os.environ.get("COMFYUI_SERVER", COMFY_CANDIDATES[0]).rstrip("/")
 
-BUILDER = "builder"        # w3 제작·Claude — 컨셉·일러스트·능력 제안
-DEFAULT_IMAGER = BUILDER   # 이미지도 builder 가 뽑는다 (docs/team/builder.md)
+BUILDER = "builder"        # w3 IP·제작 — 컨셉·일러스트·능력 제안
+DEFAULT_IMAGER = BUILDER   # 이미지도 builder 가 뽑는다 (control-tower/team/builder.md)
 IMAGER = DEFAULT_IMAGER    # 이미지 담당. main() 이 --imager 로 바꾼다
-INTEGRATOR = "dev"         # w2 개발·Claude — 게임 반영·검증
-COMPOSER = "composer"      # w8 음악·Claude — 가사·Suno·곡 후보 업로드
+INTEGRATOR = "dev"         # w2 똥피·개발 — 게임 반영·검증
+COMPOSER = "composer"      # w8 IP·음악 — 가사·Suno·곡 후보 업로드
 
 # **이미지 담당은 Codex 일 수도 Claude 일 수도 있다** — `--imager <에이전트>` 로 고른다.
 # 둘은 지시문이 달라진다:

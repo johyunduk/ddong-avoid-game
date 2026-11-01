@@ -3,17 +3,5 @@
     "deny": [
       "Read(./.entire/metadata/**)"
     ]
-  },
-  "hooks": {
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python \"$CLAUDE_PROJECT_DIR/scripts/team-role.py\""
-          }
-        ]
-      }
-    ]
   }
 }
