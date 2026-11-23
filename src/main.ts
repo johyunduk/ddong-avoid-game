@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import BootScene from './scenes/BootScene';
+import TitleScene from './scenes/TitleScene';
 import ModeSelectScene from './scenes/ModeSelectScene';
 import DifficultySelectScene from './scenes/DifficultySelectScene';
 import GameScene from './scenes/GameScene';
@@ -39,8 +40,8 @@ const config: Phaser.Types.Core.GameConfig = {
       capture: false // CSS touch-action: none이 스크롤 방지 → preventDefault 불필요, 컴포지터 블로킹 제거
     }
   },
-  // BootScene 이 맨 앞 — 게임 글꼴을 기다렸다가 ModeSelectScene 을 연다
-  scene: [BootScene, ModeSelectScene, DifficultySelectScene, GameScene, LeaderboardScene, ReleaseNotesScene, CharacterSelectScene, GachaScene],
+  // BootScene 이 맨 앞 — 게임 글꼴을 기다렸다가 TitleScene 을 연다. 타이틀을 누르면 홈(ModeSelectScene)
+  scene: [BootScene, TitleScene, ModeSelectScene, DifficultySelectScene, GameScene, LeaderboardScene, ReleaseNotesScene, CharacterSelectScene, GachaScene],
   scale: {
     mode: Phaser.Scale.RESIZE,
     autoCenter: Phaser.Scale.CENTER_BOTH

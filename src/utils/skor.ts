@@ -126,12 +126,20 @@ export function cacheSkorBalance(balance: number): void {
   localStorage.setItem(SKOR_BALANCE_CACHE_KEY, String(Math.floor(balance)));
 }
 
+/** getSkorBalance 요청 번호(시작 순서) · 지금 캐시에 든 값을 쓴 요청 번호 */
+let balanceSeq = 0;
+let cachedSeq = 0;
+
 /**
  * 현재 SKOR 잔액 조회 (DB) 후 캐시 갱신
  * 행이 없는 유저(신규)는 서버가 웰컴 보너스로 행을 만든 뒤 그 잔액을 돌려준다 — get_skor_balance RPC
  * (보너스 값은 supabase/migrations/20261011000001_skor_welcome_server.sql 한 곳. 클라이언트는 user_skor 에 쓰지 않는다)
+ *
+ * 조회가 겹치면(홈을 다시 그리며 새로 조회하는 등) **더 나중에 시작한 조회가 이미 캐시에 썼을 때만** 먼저 시작한 응답을
+ * 버린다. 나중 조회가 실패하면 먼저 시작한 성공 응답은 그대로 캐시에 쓴다. 돌려주는 값은 그대로다
  */
 export async function getSkorBalance(): Promise<number> {
+  const seq = ++balanceSeq;
   // 세션 확보 (없으면 익명 로그인) — submitSkor와 동일한 패턴
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) {
@@ -144,6 +152,9 @@ export async function getSkorBalance(): Promise<number> {
   }
 
   const balance = Number(data);
-  cacheSkorBalance(balance);
+  if (seq > cachedSeq) {
+    cachedSeq = seq;
+    cacheSkorBalance(balance);
+  }
   return balance;
 }

@@ -3,7 +3,7 @@ import { loadGameFont } from '../utils/gameFont';
 import { discardPendingLoads } from '../utils/characterAssets';
 
 /**
- * 첫 씬 — 게임 글꼴이 올라오는 동안 '러너' 로딩 화면 (A안, 2026-10-08 대표 채택), 다 오면 메인(ModeSelectScene).
+ * 첫 씬 — 게임 글꼴이 올라오는 동안 '러너' 로딩 화면 (A안, 2026-10-08 대표 채택), 다 오면 타이틀(TitleScene → 터치하면 홈 ModeSelectScene).
  *
  * 화면: 위에 타이틀 간판 · 땅 위에서 제자리로 달리는 치비 + 흙먼지 ·
  *   구름(0.25배) · 먼 빌딩(0.5배) · 땅 줄무늬(1배)가 왼쪽으로 흐르는 시차 스크롤 (끝없는 루프).
@@ -158,7 +158,7 @@ export default class BootScene extends Phaser.Scene {
   }
 
   /**
-   * 메인으로. 아직 받는 중인 두 장은 끊고(늦게 와서 텍스처로 되살아나지 않게),
+   * 타이틀로. 아직 받는 중인 두 장은 끊고(늦게 와서 텍스처로 되살아나지 않게),
    * **그림을 먼저 부수고 텍스처를 나중에 지운다** — 화면에 남은 그림이 지운 텍스처를 그리다 렌더러가 멈추지 않게
    */
   private leave() {
@@ -171,6 +171,7 @@ export default class BootScene extends Phaser.Scene {
     this.title = null;
     this.anims.remove(RUN_ANIM);
     for (const k of [CHIBI.key, TITLE.key]) if (this.textures.exists(k)) this.textures.remove(k);
-    this.scene.start('ModeSelectScene');
+    this.sound.stopAll();   // 씬 전환 규칙 — 로딩 화면은 소리를 내지 않지만 넘어가기 전에 늘 끈다
+    this.scene.start('TitleScene');
   }
 }

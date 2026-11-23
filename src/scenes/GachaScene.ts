@@ -287,14 +287,18 @@ export default class GachaScene extends BaseScene {
     super('GachaScene');
   }
 
-  init() {
+  /** data.bannerId — 홈 뽑기 판이 보이던 배너. 열려 있으면 그 배너로 연다 (pickBanner) */
+  init(data?: { bannerId?: string }) {
     this.ownKeys = new Set();   // preload · loadIllust 가 채운다
     this.illustLoads = new Map();
     this.illustWant = new Map();
     this.slideWant = null;
     this.heavyChain = Promise.resolve();
     this.skorBalance = -1;
-    this.chosenBanner = null;
+    this.chosenBanner = data?.bannerId ?? null;
+    // 한 번 쓰고 지운다 — Phaser 는 start('GachaScene') 를 데이터 없이 부르면 지난번 데이터를 그대로 다시 넘긴다
+    // (Systems.start 가 data 가 있을 때만 바꾼다). 안 지우면 수집 화면에서 들어와도 홈에서 골랐던 배너가 열린다
+    if (data) delete data.bannerId;
     try { localStorage.removeItem(OLD_TAB_KEY); } catch { /* 못 지워도 읽지 않는다 */ }
     this.gstate = getCachedGachaState();
     this.modal = null;
