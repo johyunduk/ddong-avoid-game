@@ -214,7 +214,7 @@ export class SentinelAbility extends BaseAbility {
       if (d2 <= r2) found.push({ p, d2 });
     }
     found.sort((a, b) => a.d2 - b.d2);
-    const camH = api.scene.cameras.main.height;
+    const camH = api.scene.scale.height;
     for (const { p } of found) {
       // 파괴 이펙트는 recycle() 이 그리는 조건(화면 안)과 같을 때만 좌표로 담는다 — 그리기는 drainZapFx 가 나눠서
       if (p.y >= -POOP_CONFIG.destroyOffset && p.y <= camH) this.zapFxQueue.push({ x: p.x, y: p.y, t: api.scene.time.now });

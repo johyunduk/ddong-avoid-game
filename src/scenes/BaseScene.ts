@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { setupHiDpiCamera, useCssScale } from '../utils/hidpi';
 
 /**
  * 씬 전환 시 이전 포인터 이벤트가 새 씬으로 전파되는 것을 방지하는 기본 씬.
@@ -9,6 +10,11 @@ export default class BaseScene extends Phaser.Scene {
   /** 씬 전환 후 입력 차단 시간(ms). 0이면 즉시 허용 */
   protected inputGuardMs = 200;
 
+  constructor(config: string | Phaser.Types.Scenes.SettingsConfig) {
+    super(config);
+    useCssScale(this);   // this.scale.width/height = CSS px (utils/hidpi)
+  }
+
   /** 자주 쓰는 화면 치수를 한 번에 반환. 600px 기준 레이아웃의 수직 오프셋 포함. */
   protected getScaleInfo() {
     const W = this.scale.width;
@@ -17,6 +23,7 @@ export default class BaseScene extends Phaser.Scene {
   }
 
   create() {
+    setupHiDpiCamera(this);   // 월드 좌표 = CSS px, 그리기는 DPR 배로 촘촘하게 (utils/hidpi)
     if (this.inputGuardMs > 0) {
       this.input.enabled = false;
 

@@ -2071,7 +2071,7 @@ export default class GachaScene extends BaseScene {
    */
   private showWallpaperRevealCard(wp: PulledWallpaper, def: BackgroundDef | undefined) {
     this.clearUI();
-    const { width: W, height: H } = this.cameras.main;
+    const { width: W, height: H } = this.scale;   // CSS px (utils/hidpi)
     const cx = W / 2;
     const isLast = this.revealItemIndex >= this.revealItems.length - 1;
     const final = isLast && this.pullResults.length <= 1;   // 1회 뽑기의 마지막 장 = 결과 화면
@@ -2184,7 +2184,7 @@ export default class GachaScene extends BaseScene {
 
   private playCommonVideo(_videoType?: string): Promise<void> {
     return new Promise(resolve => {
-      const { width, height } = this.cameras.main;
+      const { width, height } = this.scale;   // CSS px (utils/hidpi)
       this.clearUI();
       this.add.rectangle(width / 2, height / 2, width, height, 0x000000);
 
@@ -2231,7 +2231,7 @@ export default class GachaScene extends BaseScene {
     const pulled = item.data;
     const def = getCharacterDef(pulled.id);
 
-    const { width, height } = this.cameras.main;
+    const { width, height } = this.scale;   // CSS px (utils/hidpi)
     this.clearUI();
 
     const vidKey = `vid_${pulled.id}`;
@@ -2378,7 +2378,7 @@ export default class GachaScene extends BaseScene {
 
   /** 배경 — 뽑기 배경 + 어둡게 누르기 (높은 등급일수록 더 어둡게 눌러 카드를 띄운다) */
   private resultBackdrop(dim: number) {
-    const { width: W, height: H } = this.cameras.main;
+    const { width: W, height: H } = this.scale;   // CSS px (utils/hidpi)
     if (this.textures.exists('gacha_background')) addBackground(this, 'gacha_background', W, H);
     else this.add.rectangle(W / 2, H / 2, W, H, 0x050510);
     this.add.rectangle(W / 2, H / 2, W, H, 0x000000, dim);
@@ -2497,7 +2497,7 @@ export default class GachaScene extends BaseScene {
   /** 슬롯 하나의 리빌 (10회 · 배경화면 섞인 뽑기) — 큰 카드 + 탭 안내. 1회 뽑기는 곧장 결과(showSummary)로 */
   private showRevealCard(pulled: PulledCharacter, def: CharacterDef) {
     this.clearUI();
-    const { width: W, height: H } = this.cameras.main;
+    const { width: W, height: H } = this.scale;   // CSS px (utils/hidpi)
     const cx = W / 2;
     this.resultBackdrop(def.grade === 'UR' ? 0.68 : 0.58);
 
@@ -2547,7 +2547,7 @@ export default class GachaScene extends BaseScene {
 
   private showSummary() {
     this.clearUI();
-    const { width: W, height: H } = this.cameras.main;
+    const { width: W, height: H } = this.scale;   // CSS px (utils/hidpi)
     const cx = W / 2;
     const btnY = H - 80;
 

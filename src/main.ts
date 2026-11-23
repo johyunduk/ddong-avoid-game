@@ -12,7 +12,17 @@ import { ensureLoggedIn } from './utils/auth';
 import { isBgmMuted } from './utils/settings';
 import { installTextSafety } from './utils/textSafety';
 import { installGameFont } from './utils/gameFont';
+import { DPR, installHiDpi } from './utils/hidpi';
 import './style.css';
+
+/** 게임 칸(#game-container)의 CSS 크기 — 최대 480 × 720 은 style.css 가 정한다 */
+function hostSize(): { w: number; h: number } {
+  const r = document.getElementById('game-container')?.getBoundingClientRect();
+  return { w: Math.max(1, Math.round(r?.width || window.innerWidth)), h: Math.max(1, Math.round(r?.height || window.innerHeight)) };
+}
+
+// 포인터 · 카메라 좌표를 CSS 값으로 (utils/hidpi) — 장면보다 먼저
+installHiDpi();
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.WEBGL,
@@ -42,8 +52,13 @@ const config: Phaser.Types.Core.GameConfig = {
   },
   // BootScene 이 맨 앞 — 게임 글꼴을 기다렸다가 TitleScene 을 연다. 타이틀을 누르면 홈(ModeSelectScene)
   scene: [BootScene, TitleScene, ModeSelectScene, DifficultySelectScene, GameScene, LeaderboardScene, ReleaseNotesScene, CharacterSelectScene, GachaScene],
+  // 또렷하게 그리기 (utils/hidpi) — 캔버스 픽셀 = 게임 칸(CSS) × DPR, 보이는 크기는 zoom 1/DPR 로 CSS 그대로.
+  // 전에는 RESIZE 로 CSS 크기만큼만 그려 브라우저가 배율만큼 늘려 보였다(흐림). 칸 크기는 아래 fitToHost 가 맞춘다
   scale: {
-    mode: Phaser.Scale.RESIZE,
+    mode: Phaser.Scale.NONE,
+    width: hostSize().w * DPR,
+    height: hostSize().h * DPR,
+    zoom: 1 / DPR,
     autoCenter: Phaser.Scale.CENTER_BOTH
   },
   render: {
@@ -76,6 +91,14 @@ installGameFont();
 
 // 게임 인스턴스는 동기적으로 즉시 생성 (키보드 입력 정상 동작 보장)
 const game = new Phaser.Game(config);
+
+// 칸 크기가 바뀌면(창 크기 · 회전 · 주소창) 캔버스 픽셀을 다시 맞춘다 — RESIZE 모드가 해 주던 일
+const fitToHost = () => {
+  const { w, h } = hostSize();
+  if (game.scale.width !== w * DPR || game.scale.height !== h * DPR) game.scale.resize(w * DPR, h * DPR);
+};
+window.addEventListener('resize', fitToHost);
+window.visualViewport?.addEventListener('resize', fitToHost);
 
 // 저장된 뮤트 설정 복원
 game.events.once('ready', () => {

@@ -651,9 +651,9 @@ export class GumiAbility extends BaseAbility {
   /** 시트 한 장이 올라왔다 — 그 시트를 쓰는 오브젝트를 판에 한 번 만든다 */
   private onRainSheet(scene: Phaser.Scene, key: string): void {
     if (!scene.textures.exists(key)) return;
-    const K = GumiAbility.K, cam = scene.cameras.main;
+    const K = GumiAbility.K, view = scene.scale;
     if (key === K.rain && !this.rainFull) {
-      this.rainFull = scene.add.tileSprite(0, 0, cam.width, cam.height, key, 2).setOrigin(0, 0).setDepth(6).setAlpha(GumiAbility.RAIN_ALPHA).setVisible(false);
+      this.rainFull = scene.add.tileSprite(0, 0, view.width, view.height, key, 2).setOrigin(0, 0).setDepth(6).setAlpha(GumiAbility.RAIN_ALPHA).setVisible(false);
     } else if ((key === K.tail || key === K.tip) && this.tailPool.length === 0 && scene.textures.exists(K.tail) && scene.textures.exists(K.tip)) {
       this.buildTails(scene);
       for (let i = 0; i < this.tailCount; i++) this.showTail(scene, i, false);
@@ -661,7 +661,7 @@ export class GumiAbility extends BaseAbility {
       if (!scene.anims.exists('gumi_melt')) scene.anims.create({ key: 'gumi_melt', frames: scene.anims.generateFrameNumbers(key, { start: 0, end: 3 }), frameRate: 13, repeat: 0 });
       for (let i = 0; i < GumiAbility.MELT_POOL; i++) this.melts.push(scene.add.sprite(0, 0, key, 0).setOrigin(0.5, 27 / 96).setDepth(6.3).setVisible(false));
     } else if (key === K.bow && !this.bow) {
-      this.bow = scene.add.image(cam.width / 2, 0, key).setOrigin(0.5, 1).setDepth(5.9).setVisible(false);
+      this.bow = scene.add.image(view.width / 2, 0, key).setOrigin(0.5, 1).setDepth(5.9).setVisible(false);
     }
   }
 
@@ -711,7 +711,7 @@ export class GumiAbility extends BaseAbility {
         const b = this.bow;
         if (b) {
           scene.tweens.killTweensOf(b);
-          b.setPosition(scene.cameras.main.width / 2, scene.cameras.main.height * 0.56).setAlpha(0).setVisible(true);
+          b.setPosition(scene.scale.width / 2, scene.scale.height * 0.56).setAlpha(0).setVisible(true);
           scene.tweens.add({ targets: b, alpha: 0.9, duration: 150 });
         }
       }
@@ -734,7 +734,7 @@ export class GumiAbility extends BaseAbility {
 
   /** 조건에 맞는 화면 안 일반 똥을 **이 프레임에** 최대 max 개 녹여 회수 — 녹는 연출은 대기열로. 후보 배열은 함수 안에서만 */
   private meltWhere(api: GameSceneAPI, ok: (p: PoolablePoopBase) => boolean, max: number, nearX?: number, nearY?: number): number {
-    const H = api.scene.cameras.main.height;
+    const H = api.scene.scale.height;
     const cand: { p: PoolablePoopBase; d: number }[] = [];
     for (const obj of api.poops.getChildren()) {
       const p = obj as PoolablePoopBase;
@@ -761,7 +761,7 @@ export class GumiAbility extends BaseAbility {
     if (f) { api.scene.tweens.killTweensOf(f); f.setAlpha(GumiAbility.RAIN_ALPHA).setVisible(true); }
     const n = this.meltWhere(api, () => true, P.bowMax, api.player.x, api.player.y);
     // 발동당 정액 + 개당 — 한 번에 awardBonus (자기 보너스라 여우불 · 꼬리 카운터에 안 들어간다, v6 G1)
-    this.award(api, P.bowFlatPoints + n * P.bowPoints, api.scene.cameras.main.width / 2, 260);
+    this.award(api, P.bowFlatPoints + n * P.bowPoints, api.scene.scale.width / 2, 260);
   }
 
   /** 점수 — awardBonus(→ addAbilityBonus → updateScore, 규칙 3 · 자기 보너스로는 여우불 · 꼬리가 차지 않음) + '+N' 글자 */

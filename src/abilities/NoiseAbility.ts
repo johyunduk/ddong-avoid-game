@@ -227,11 +227,11 @@ export class NoiseAbility extends BaseAbility {
     } else if (key === K.mote && this.motes.length === 0) {
       for (let i = 0; i < NoiseAbility.MOTE_POOL; i++) this.motes.push(scene.add.image(0, 0, key, i % 4).setDepth(5.3).setVisible(false));
     } else if (key === K.film && this.films.length === 0) {
-      const F = NoiseAbility.FROST, cam = scene.cameras.main;
-      const n = Math.ceil(cam.width / F.filmW) + 1;
+      const F = NoiseAbility.FROST, view = scene.scale;
+      const n = Math.ceil(view.width / F.filmW) + 1;
       // 위 가장자리 결 — 윗선이 아래로 늘어지게 뒤집어 화면 위에 건다 (위쪽이 조금 짙게)
       for (let i = 0; i < n; i++) this.films.push(scene.add.image(i * F.filmW, 0, key, i % 4).setOrigin(0, 0).setFlipY(true).setDepth(4).setVisible(false));
-      this.filmBody = scene.add.rectangle(0, 0, cam.width, cam.height, F.bodyColor, F.bodyAlpha).setOrigin(0, 0).setDepth(3.9).setVisible(false);
+      this.filmBody = scene.add.rectangle(0, 0, view.width, view.height, F.bodyColor, F.bodyAlpha).setOrigin(0, 0).setDepth(3.9).setVisible(false);
     } else if (key === K.shell && this.shells.length === 0) {
       for (let i = 0; i < NOISE_PARAMS.frostMax; i++) this.shells.push(scene.add.image(0, 0, key, i % 3).setDepth(4.5).setVisible(false));
     } else if (key === K.shard && this.shards.length === 0) {
@@ -240,10 +240,10 @@ export class NoiseAbility extends BaseAbility {
       for (let i = 0; i < NOISE_PARAMS.frostMax; i++) this.shards.push(scene.add.sprite(0, 0, key, 0).setOrigin(F.shardOriginX, F.shardOriginY).setDepth(5.4).setVisible(false));
     }
     if (key === K.fog && this.veil.length === 0) {
-      const F = NoiseAbility.FROST, cam = scene.cameras.main;
+      const F = NoiseAbility.FROST, view = scene.scale;
       for (let r = 0; r < F.veilRows; r++) {
         for (let c = 0; c < F.veilCols; c++) {
-          const x = (c + 0.5) * cam.width / F.veilCols + (r % 2 ? 24 : -24), y = (r + 0.5) * cam.height / F.veilRows;
+          const x = (c + 0.5) * view.width / F.veilCols + (r % 2 ? 24 : -24), y = (r + 0.5) * view.height / F.veilRows;
           this.veil.push(scene.add.sprite(x, y, key, 2 + (r * F.veilCols + c) % 4).setScale(F.veilScale).setFlipX((r + c) % 2 === 1)
             .setTint(F.tint).setDepth(3.95).setVisible(false));
         }
@@ -332,7 +332,7 @@ export class NoiseAbility extends BaseAbility {
   }
 
   private spawnFog(api: GameSceneAPI): void {
-    const scene = api.scene, base = api.player.y + 44, W = scene.cameras.main.width, half = NoiseAbility.FOG_DISPLAY_W / 2;
+    const scene = api.scene, base = api.player.y + 44, W = scene.scale.width, half = NoiseAbility.FOG_DISPLAY_W / 2;
     // 가려는 방향의 앞쪽 — 방금(MOVING_MS 안) 움직이고 있었으면 그 방향으로 fogAhead, 아니면 제자리. 화면 밖으로 안 나가게
     const moving = this.gameMs - this.lastMoveAt <= NoiseAbility.MOVING_MS;
     const x = Phaser.Math.Clamp(api.player.x + (moving ? this.moveDir * NOISE_PARAMS.fogAhead : 0), half, W - half);
@@ -535,11 +535,11 @@ export class NoiseAbility extends BaseAbility {
    * 안개 칸은 제 반복(fogLoop)으로 천천히 일렁인다
    */
   private showVeil(api: GameSceneAPI): void {
-    const F = NoiseAbility.FROST, scene = api.scene, cam = scene.cameras.main;
+    const F = NoiseAbility.FROST, scene = api.scene, view = scene.scale;
     const dur = NOISE_PARAMS.frostFillSec * 1000, px = api.player.x, py = api.player.y;
     this.veilUnderPoops(api);
     for (const v of this.veil) {
-      const edge = Math.abs(v.x - cam.width / 2) / (cam.width / 2), top = 1 - v.y / cam.height;
+      const edge = Math.abs(v.x - view.width / 2) / (view.width / 2), top = 1 - v.y / view.height;
       let a = F.veilBase + F.veilEdge * edge + F.veilTop * top;
       if (Math.hypot(v.x - px, v.y - py) < F.nearR) a *= F.nearK;
       scene.tweens.killTweensOf(v);
@@ -577,11 +577,11 @@ export class NoiseAbility extends BaseAbility {
    * (화면 아래 0~50px 의 안 보이는 똥은 회수 전이라 활성이지만 고르지 않는다). 후보 배열은 이 함수 안에서만 쓰고 버린다
    */
   private freezeOnScreen(api: GameSceneAPI): void {
-    const P = NOISE_PARAMS, cam = api.scene.cameras.main, px = api.player.x, py = api.player.y;
+    const P = NOISE_PARAMS, view = api.scene.scale, px = api.player.x, py = api.player.y;
     const cand: { p: PoolablePoopBase; d: number }[] = [];
     for (const obj of api.poops.getChildren()) {
       const p = obj as PoolablePoopBase;
-      if (!p.active || p.y < -20 || p.y > cam.height || p.abilityTag === -this.frostSerial) continue;
+      if (!p.active || p.y < -20 || p.y > view.height || p.abilityTag === -this.frostSerial) continue;
       cand.push({ p, d: (p.x - px) ** 2 + (p.y - py) ** 2 });
     }
     cand.sort((a, b) => a.d - b.d);
@@ -610,7 +610,7 @@ export class NoiseAbility extends BaseAbility {
     this.frozenNow = 0;
     this.frostFrozenLast = n;
     this.frostFrozenTotal += n;
-    if (n > 0 && P.frostPoints > 0) this.award(api, n * P.frostPoints, scene.cameras.main.width / 2, Math.max(120, sy / n - 60));
+    if (n > 0 && P.frostPoints > 0) this.award(api, n * P.frostPoints, scene.scale.width / 2, Math.max(120, sy / n - 60));
     for (const f of this.films) scene.tweens.add({ targets: f, alpha: 0, duration: F.fadeMs, onComplete: () => f.setVisible(false) });
     for (const v of this.veil) { scene.tweens.killTweensOf(v); scene.tweens.add({ targets: v, alpha: 0, duration: F.fadeMs, onComplete: () => { v.anims.stop(); v.setVisible(false); } }); }
     const body = this.filmBody;

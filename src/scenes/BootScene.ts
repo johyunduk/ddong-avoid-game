@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { setupHiDpiCamera, useCssScale } from '../utils/hidpi';
 import { loadGameFont } from '../utils/gameFont';
 import { discardPendingLoads } from '../utils/characterAssets';
 
@@ -44,6 +45,7 @@ export default class BootScene extends Phaser.Scene {
 
   constructor() {
     super('BootScene');
+    useCssScale(this);
   }
 
   init() {
@@ -60,6 +62,7 @@ export default class BootScene extends Phaser.Scene {
   }
 
   create() {
+    setupHiDpiCamera(this);
     const { width: W, height: H } = this.scale;
     // 하늘 — 첫 프레임부터
     this.add.graphics().fillGradientStyle(0x7ec8ff, 0x7ec8ff, 0xd8f2ff, 0xd8f2ff, 1).fillRect(0, 0, W, H);

@@ -256,7 +256,7 @@ export class ArchieveAbility extends BaseAbility {
   /** 날아가는 방울 — 휜 궤적을 따라가며, 표시 없는 일반 똥에 닿으면 그 프레임에 감싼다. 겨냥 자리를 지나면 곧게 계속 · 화면 밖에서 빗나감 */
   private flyShots(api: GameSceneAPI, dt: number): void {
     if (this.shots.length === 0) return;
-    const cam = api.scene.cameras.main, R2 = ArchieveAbility.HIT_R ** 2;
+    const view = api.scene.scale, R2 = ArchieveAbility.HIT_R ** 2;
     const poops = api.poops.getChildren() as unknown as PoolablePoopBase[];
     this.shots = this.shots.filter(s => {
       s.t += dt;
@@ -271,14 +271,14 @@ export class ArchieveAbility extends BaseAbility {
       }
       s.spr.setPosition(x, y);
       // 화면 밖이면 먼저 빗나감 — 위 밖에서 대기 중인 똥(y < −20)을 잡아 바로 퐁 · 점수가 되던 것 (5763c85a 리뷰)
-      if (x < -40 || x > cam.width + 40 || y < -40 || y > cam.height + 40) {
+      if (x < -40 || x > view.width + 40 || y < -40 || y > view.height + 40) {
         this.shotsMissed++;
         s.spr.anims.stop(); s.spr.setVisible(false);
         return false;
       }
       this.dropTrail(api, s, x, y);
       for (const p of poops) {
-        if (!p.active || p.abilityTag !== 0 || p.y < -20 || p.y > cam.height) continue;
+        if (!p.active || p.abilityTag !== 0 || p.y < -20 || p.y > view.height) continue;
         if ((p.x - x) ** 2 + (p.y - y) ** 2 > R2) continue;
         p.abilityTag = ArchieveAbility.BUBBLE_BASE + (++this.bubbleSerial);   // 이 프레임부터 판정 없음
         this.shotsHit++;
@@ -323,7 +323,7 @@ export class ArchieveAbility extends BaseAbility {
     for (let k = w; k < this.wraps.length; k++) if (this.wraps[k].visible) { this.wraps[k].anims.stop(); this.wraps[k].setVisible(false); }
     for (let k = tg; k < this.tags.length; k++) { this.tags[k].setVisible(false); this.tagTexts[k]?.setVisible(false); }
     if (popped > 0) this.award(api, popped * P.bubblePoints, api.player.x, 60);
-    if (fPopped > 0) { this.fountainHeld += fPopped; this.award(api, fPopped * P.fountainPoints, api.scene.cameras.main.width / 2, 70); }
+    if (fPopped > 0) { this.fountainHeld += fPopped; this.award(api, fPopped * P.fountainPoints, api.scene.scale.width / 2, 70); }
   }
 
   // ─────────────────────────────────────────────────────────────
@@ -342,7 +342,7 @@ export class ArchieveAbility extends BaseAbility {
   }
 
   private startFountain(api: GameSceneAPI): void {
-    const P = ARCHIEVE_PARAMS, scene = api.scene, cam = scene.cameras.main;
+    const P = ARCHIEVE_PARAMS, scene = api.scene, view = scene.scale;
     this.fountainPhase = 'gather';
     this.fountainT = this.gameMs;
     this.fountainSerial++;
@@ -353,7 +353,7 @@ export class ArchieveAbility extends BaseAbility {
     const floorY = api.player.y + 30;
     this.foam.slice(0, 12).forEach((f, i) => {
       scene.tweens.killTweensOf(f);
-      f.setPosition(Phaser.Math.FloatBetween(16, cam.width - 16), floorY + Phaser.Math.FloatBetween(-6, 10))
+      f.setPosition(Phaser.Math.FloatBetween(16, view.width - 16), floorY + Phaser.Math.FloatBetween(-6, 10))
         .setScale(0).setAlpha(0.85).setVisible(true);
       scene.tweens.add({ targets: f, scale: Phaser.Math.FloatBetween(0.3, 0.5), duration: 200 + i * 25, ease: 'Back.easeOut' });
     });
@@ -361,7 +361,7 @@ export class ArchieveAbility extends BaseAbility {
 
   private stepFountain(api: GameSceneAPI): void {
     if (this.fountainPhase === 'idle') return;
-    const P = ARCHIEVE_PARAMS, cam = api.scene.cameras.main;
+    const P = ARCHIEVE_PARAMS, view = api.scene.scale;
     const t = this.gameMs - this.fountainT, floorY = api.player.y + 40;
     if (this.fountainPhase === 'gather') {
       if (t < P.fountainGatherSec * 1000) return;
@@ -378,7 +378,7 @@ export class ArchieveAbility extends BaseAbility {
         const cand: { p: PoolablePoopBase; y: number }[] = [];
         for (const obj of api.poops.getChildren()) {
           const p = obj as PoolablePoopBase;
-          if (!p.active || p.abilityTag !== 0 || p.y < front || p.y < -20 || p.y > cam.height) continue;
+          if (!p.active || p.abilityTag !== 0 || p.y < front || p.y < -20 || p.y > view.height) continue;
           cand.push({ p, y: p.y });
         }
         cand.sort((a, b) => b.y - a.y);
@@ -400,21 +400,21 @@ export class ArchieveAbility extends BaseAbility {
           p.recycle(true); n++;
         }
         this.fountainHeld += n;
-        if (n > 0) this.award(api, n * P.fountainPoints, cam.width / 2, 70);
+        if (n > 0) this.award(api, n * P.fountainPoints, view.width / 2, 70);
       }
       this.fountainPhase = 'idle';
       this.lastShotAt = this.gameMs;   // 분수 뒤 기본 사격은 주기를 새로 센다
-      this.award(api, P.fountainFlatPoints, cam.width / 2, 260);
+      this.award(api, P.fountainFlatPoints, view.width / 2, 260);
     }
   }
 
   /** 분수 거품 — 풀 전부를 바닥 전체에서 솟구치게 (크기 0.35 ~ 1.0 섞임, 위쪽은 성기게). 위로 갈수록 옅어지며 사라짐 */
   private launchFoam(api: GameSceneAPI, floorY: number): void {
-    const P = ARCHIEVE_PARAMS, scene = api.scene, cam = scene.cameras.main, rise = P.fountainRiseSec * 1000;
+    const P = ARCHIEVE_PARAMS, scene = api.scene, view = scene.scale, rise = P.fountainRiseSec * 1000;
     const sizes = [0.35, 0.35, 0.5, 0.5, 0.7, 0.7, 0.85, 1.0];
     this.foam.forEach((f, i) => {
       scene.tweens.killTweensOf(f);
-      const x = Phaser.Math.FloatBetween(-10, cam.width + 10);
+      const x = Phaser.Math.FloatBetween(-10, view.width + 10);
       const topY = -40 + Math.pow(Math.random(), 0.6) * floorY * 0.9;
       const s = sizes[i % sizes.length];
       const delay = Math.random() * rise * 0.35;

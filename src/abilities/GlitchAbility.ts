@@ -189,7 +189,7 @@ export class GlitchAbility extends BaseAbility {
   private compress(api: GameSceneAPI): void {
     const P = GLITCH_PARAMS;
     const px = api.player.x, head = api.player.y - 40;
-    const top = head - api.scene.cameras.main.height * P.compressHeightRatio;
+    const top = head - api.scene.scale.height * P.compressHeightRatio;
     const found: { p: PoolablePoopBase; d2: number }[] = [];
     for (const obj of api.poops.getChildren()) {
       const p = obj as PoolablePoopBase;
@@ -275,7 +275,7 @@ export class GlitchAbility extends BaseAbility {
 
   /** 같은 규칙으로 틈 3개 뽑기 — [cx, cy, 배율, 각도]. 화면 밖 6px 넘거나 · 교차 · 가까우면 다시 */
   private layout(api: GameSceneAPI): [number, number, number, number][] {
-    const P = GLITCH_PARAMS, W = api.scene.cameras.main.width, H = api.scene.cameras.main.height;
+    const P = GLITCH_PARAMS, W = api.scene.scale.width, H = api.scene.scale.height;
     const out: [number, number, number, number][] = [];
     const ends = ([cx, cy, s, a]: [number, number, number, number]): number[][] => {
       const h = GlitchAbility.RIFT_LEN * s / 2;

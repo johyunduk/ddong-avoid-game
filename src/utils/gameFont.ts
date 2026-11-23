@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { DPR } from './hidpi';
 
 /**
  * 게임 기본 글꼴 — **한 곳에서** 정한다 (2026-10-07 대표 지시).
@@ -33,6 +34,8 @@ export function installGameFont(): void {
     if (setDefaults && (!style || (style.fontFamily === undefined && style.font === undefined))) {
       style = { ...(style ?? {}), fontFamily: GAME_FONT };
     }
+    // 글자 텍스처를 화면 배율만큼 촘촘하게 (utils/hidpi) — 따로 준 resolution 은 그대로
+    if (setDefaults && (!style || style.resolution === undefined)) style = { ...(style ?? {}), resolution: DPR };
     return setStyle.call(this, style, updateText, setDefaults);
   };
 }

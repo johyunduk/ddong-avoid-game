@@ -66,14 +66,14 @@ export default class PoolablePoopBase extends Phaser.Physics.Arcade.Sprite {
   private playDestroyFx() {
     const scene = this.scene;
     if (!scene) return;
-    const cam = scene.cameras.main;
-    if (!cam || this.y < -POOP_CONFIG.destroyOffset || this.y > cam.height) return;
+    const view = scene.scale;   // CSS px (utils/hidpi) — 카메라 크기는 기기 픽셀이라 쓰지 않는다
+    if (!view || this.y < -POOP_CONFIG.destroyOffset || this.y > view.height) return;
     playFx(scene, 'impactHit', this.x, this.y);
   }
 
   update() {
     if (!this.active) return;
-    if (this.y > this.scene.cameras.main.height + POOP_CONFIG.destroyOffset) {
+    if (this.y > this.scene.scale.height + POOP_CONFIG.destroyOffset) {
       this.recycle();
     }
   }

@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import BaseScene from './BaseScene';
 import { addBackground } from '../utils/background';
 import { RELEASE_NOTES } from '../data/releaseNotes';
+import { DPR } from '../utils/hidpi';
 
 /**
  * 타이틀 (홈 전 화면) — 대표 확정 2026-11-22. BootScene → 여기 → ModeSelectScene(홈). 화면 어디를 눌러도 홈으로 간다.
@@ -97,8 +98,11 @@ type Glitch = {
 type Seg = { a: number; b: number; dx: number; dy: number };
 type Part = { img: Phaser.GameObjects.Image; x: number; y: number; vx: number; vy: number; life: number; age: number; s: number; poop: boolean; live: boolean };
 type Column = { img: Phaser.GameObjects.Image; x: number; y: number; v: number; len: number; on: boolean; g: boolean };
-/** 로고 한 층 — 같은 그림을 띠마다 잘라 쓰는 조각 묶음. side: 분홍 +1 · 파랑 -1 (깨질 때만 보인다) · 글자 · 부제 0 */
-type Layer = { pool: Phaser.GameObjects.Image[]; x: number; y: number; w: number; h: number; side: 0 | 1 | -1 };
+/**
+ * 로고 한 층 — 같은 그림을 띠마다 잘라 쓰는 조각 묶음. side: 분홍 +1 · 파랑 -1 (깨질 때만 보인다) · 글자 · 부제 0.
+ * x · y · w · h 는 화면(CSS) px, tw · th 는 텍스처 px (DPR 배로 굽는다 — 자르기 setCrop 은 텍스처 px 로 준다)
+ */
+type Layer = { pool: Phaser.GameObjects.Image[]; x: number; y: number; w: number; h: number; tw: number; th: number; side: 0 | 1 | -1 };
 
 export default class TitleScene extends BaseScene {
   private G!: Glitch;
@@ -223,15 +227,19 @@ export default class TitleScene extends BaseScene {
 
   // ── 굽기 ──────────────────────────────────────────────────────────────
 
-  /** 원본을 표시 크기로 한 번 굽는다 (부드럽게 줄임). 원본 텍스처는 바로 지운다 */
+  /**
+   * 원본을 표시 크기 × DPR 로 한 번 굽는다 (부드럽게 줄임) — 쓰는 쪽은 1/DPR 배로 놓는다 (utils/hidpi, 또렷하게 그리기).
+   * extra 는 화면(CSS) px 로 그린다. 원본 텍스처는 바로 지운다
+   */
   private bakeScaled(src: string, dst: string, w: number, h: number, extra?: (ctx: CanvasRenderingContext2D) => void) {
     if (!this.textures.exists(src) || this.textures.exists(dst)) return;
-    const tex = this.textures.createCanvas(dst, Math.max(1, Math.round(w)), Math.max(1, Math.round(h)));
+    const tex = this.textures.createCanvas(dst, Math.max(1, Math.round(w * DPR)), Math.max(1, Math.round(h * DPR)));
     if (!tex) return;
     const ctx = tex.getContext();
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(this.textures.get(src).getSourceImage() as HTMLImageElement, 0, 0, tex.width, tex.height);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
     extra?.(ctx);
     tex.refresh();
   }
@@ -249,8 +257,10 @@ export default class TitleScene extends BaseScene {
     const L = LOGO.letters, U = LOGO.sub, Q = LOGO.square;
     this.bakeScaled('title_src_letters', 'title_letters', L.w * k, L.h * k);
     this.bakeScaled('title_src_sub', 'title_sub', U.w * k, U.h * k, ctx => {
+      // 네모는 하드 엣지 — 기기 픽셀 눈금에 맞춘다 (DPR 1.5 에서 반 칸 번짐 없게)
+      const snap = (v: number) => Math.round(v * DPR) / DPR;
       ctx.fillStyle = GREEN_CSS;
-      ctx.fillRect(Math.round(Q.x * k), Math.round(Q.y * k), Math.round(Q.s * k), Math.round(Q.s * k));
+      ctx.fillRect(snap(Q.x * k), snap(Q.y * k), snap(Q.s * k), snap(Q.s * k));
     });
     // 똥 — 먼 것 6u · 가까운 것 9.5u · 조각 속 선글라스 똥은 가장 큰 24칸
     this.bakeScaled('title_src_poop', 'title_poop', 6 * u, 6 * u);
@@ -380,7 +390,7 @@ export default class TitleScene extends BaseScene {
       const key = `title_${p.tex}`;
       if (!this.textures.exists(key)) continue;
       const size = (p.far ? 6 : 9.5) * u;
-      const img = this.add.image(0, 0, key).setAlpha(p.far ? 0.5 : 1);
+      const img = this.add.image(0, 0, key).setScale(1 / DPR).setAlpha(p.far ? 0.5 : 1);   // DPR 배로 구웠다
       this.poops.push({ img, x: W * p.left + size / 2, dur: p.dur, delay: p.delay });
     }
     this.updatePoops();
@@ -409,18 +419,19 @@ export default class TitleScene extends BaseScene {
   private createLogo() {
     const k = this.k;
     const L = LOGO.letters, U = LOGO.sub;
+    // 텍스처 px (DPR 배) — 화면 크기는 그 1/DPR
     const lw = this.texW('title_letters'), lh = this.texH('title_letters');
     const sw = this.texW('title_sub'), sh = this.texH('title_sub');
-    const mk = (key: string, side: 0 | 1 | -1, x: number, y: number, w: number, h: number): Layer => {
+    const mk = (key: string, side: 0 | 1 | -1, x: number, y: number, tw: number, th: number): Layer => {
       const pool: Phaser.GameObjects.Image[] = [];
       if (this.textures.exists(key)) {
         for (let i = 0; i < SLICES; i++) {
-          const img = this.add.image(0, 0, key).setOrigin(0).setVisible(false);
+          const img = this.add.image(0, 0, key).setOrigin(0).setScale(1 / DPR).setVisible(false);
           if (side !== 0) img.setTintFill(side > 0 ? MAG : CYAN).setAlpha(SPLIT_ALPHA);
           pool.push(img);
         }
       }
-      return { pool, x, y, w, h, side };
+      return { pool, x, y, w: tw / DPR, h: th / DPR, tw, th, side };
     };
     const lx = Math.round(L.x * k), ly = Math.round(L.y * k);
     this.layers = [
@@ -552,9 +563,10 @@ export default class TitleScene extends BaseScene {
         const ly = layer.y + (layer.side < 0 && G.jy ? Math.round(k) : 0);
         for (let i = 0; i < ns; i++) {
           const s = this.segs[i];
-          const r0 = Math.max(0, s.a - ly - s.dy), r1 = Math.min(layer.h, s.b - ly - s.dy);
-          if (r1 <= r0 || used >= layer.pool.length) continue;
-          layer.pool[used++].setPosition(this.ox + lx + s.dx, this.oy + ly + s.dy).setCrop(0, r0, layer.w, r1 - r0).setVisible(true);
+          // 화면 px 구간 → 텍스처 px 줄 (DPR 배로 구웠다). 이웃 구간과 같은 반올림이라 이음매가 벌지 않는다
+          const t0 = Math.max(0, Math.round((s.a - ly - s.dy) * DPR)), t1 = Math.min(layer.th, Math.round((s.b - ly - s.dy) * DPR));
+          if (t1 <= t0 || used >= layer.pool.length) continue;
+          layer.pool[used++].setPosition(this.ox + lx + s.dx, this.oy + ly + s.dy).setCrop(0, t0, layer.tw, t1 - t0).setVisible(true);
         }
       }
       for (let i = used; i < layer.pool.length; i++) layer.pool[i].setVisible(false);

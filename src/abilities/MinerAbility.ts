@@ -213,7 +213,7 @@ export class MinerAbility extends BaseAbility {
     if (this.stickSmall) { api.scene.tweens.killTweensOf(this.stickSmall); this.stickSmall.setVisible(false); }
     // 무적 — 모으기 동안 (+ 여유 한두 프레임: 물리 겹침이 폭발 회수보다 먼저 돈다)
     api.player.setInvincibleBriefly(P.bigGatherSec * 1000 + 100);
-    const bx = Phaser.Math.Clamp(api.player.x, P.bigRadius * 0.4, api.scene.cameras.main.width - P.bigRadius * 0.4);
+    const bx = Phaser.Math.Clamp(api.player.x, P.bigRadius * 0.4, api.scene.scale.width - P.bigRadius * 0.4);
     const by = api.player.y - P.bigHeight;
     this.fly(api, this.stickBig, 1.7, bx, by, P.bigGatherSec * 1000, () => {
       this.bigKills += this.blast(api, bx, by, P.bigRadius, P.bigMax, P.bigPoints, this.blastBig, P.bigScale, 12);
@@ -224,7 +224,7 @@ export class MinerAbility extends BaseAbility {
 
   /** 특수 똥 비 — 금 · 다이아 · 무지개를 섞어 rainSpawnSec 에 나눠 뿌린다. 폭발점 ±rainSpread 부채꼴 · 속도 rainSpeed 배 */
   private rain(api: GameSceneAPI, bx: number, by: number): void {
-    const P = MINER_PARAMS, W = api.scene.cameras.main.width;
+    const P = MINER_PARAMS, W = api.scene.scale.width;
     const kinds: SpecialPoopType[] = [
       ...Array<SpecialPoopType>(P.rainGold).fill('gold'),
       ...Array<SpecialPoopType>(P.rainDiamond).fill('diamond'),
@@ -279,7 +279,7 @@ export class MinerAbility extends BaseAbility {
 
   /** 반경 안 화면 안 일반 똥 수 (던질 x 고르기) */
   private countIn(api: GameSceneAPI, x: number, y: number, r: number): number {
-    const H = api.scene.cameras.main.height;
+    const H = api.scene.scale.height;
     let n = 0;
     for (const obj of api.poops.getChildren()) {
       const p = obj as PoolablePoopBase;
@@ -294,7 +294,7 @@ export class MinerAbility extends BaseAbility {
    */
   private blast(api: GameSceneAPI, x: number, y: number, r: number, max: number, pts: number,
     spr: Phaser.GameObjects.Sprite | null, scale: number, rocks: number): number {
-    const H = api.scene.cameras.main.height;
+    const H = api.scene.scale.height;
     const cand: { p: PoolablePoopBase; d: number }[] = [];
     for (const obj of api.poops.getChildren()) {
       const p = obj as PoolablePoopBase;
