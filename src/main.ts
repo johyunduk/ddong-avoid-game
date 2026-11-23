@@ -18,7 +18,18 @@ import './style.css';
 /** 게임 칸(#game-container)의 CSS 크기 — 최대 480 × 720 은 style.css 가 정한다 */
 function hostSize(): { w: number; h: number } {
   const r = document.getElementById('game-container')?.getBoundingClientRect();
-  return { w: Math.max(1, Math.round(r?.width || window.innerWidth)), h: Math.max(1, Math.round(r?.height || window.innerHeight)) };
+  // 반올림하지 않는다 — 소수 폭(예: 479.67)을 여기서 올리면 devicePx 의 내림으로도 칸보다 커져 1px 밀린다 (리뷰 HiDPI 3회차).
+  // 정수로 만드는 건 devicePx 한 번뿐이다
+  return { w: Math.max(1, r?.width || window.innerWidth), h: Math.max(1, r?.height || window.innerHeight) };
+}
+
+/**
+ * CSS px → 캔버스(기기) px, 정수로 — DPR 1.5 에서 479 × 1.5 = 718.5 처럼 소수가 되면 Phaser 크기와 canvas.width 가 어긋난다 (리뷰 HiDPI 1회차).
+ * 내림이다: 올리면 보이는 크기(정수 ÷ DPR)가 칸보다 커져 CENTER_BOTH 가 음수 여백을 내림해 1px 밀린다 (리뷰 HiDPI 2회차).
+ * 내리면 칸보다 1/DPR px 미만 작을 뿐이고 여백은 0 이다
+ */
+function devicePx(v: number): number {
+  return Math.max(1, Math.floor(v * DPR));
 }
 
 // 포인터 · 카메라 좌표를 CSS 값으로 (utils/hidpi) — 장면보다 먼저
@@ -56,8 +67,8 @@ const config: Phaser.Types.Core.GameConfig = {
   // 전에는 RESIZE 로 CSS 크기만큼만 그려 브라우저가 배율만큼 늘려 보였다(흐림). 칸 크기는 아래 fitToHost 가 맞춘다
   scale: {
     mode: Phaser.Scale.NONE,
-    width: hostSize().w * DPR,
-    height: hostSize().h * DPR,
+    width: devicePx(hostSize().w),
+    height: devicePx(hostSize().h),
     zoom: 1 / DPR,
     autoCenter: Phaser.Scale.CENTER_BOTH
   },
@@ -95,10 +106,14 @@ const game = new Phaser.Game(config);
 // 칸 크기가 바뀌면(창 크기 · 회전 · 주소창) 캔버스 픽셀을 다시 맞춘다 — RESIZE 모드가 해 주던 일
 const fitToHost = () => {
   const { w, h } = hostSize();
-  if (game.scale.width !== w * DPR || game.scale.height !== h * DPR) game.scale.resize(w * DPR, h * DPR);
+  const W = devicePx(w), H = devicePx(h);
+  if (game.scale.width !== W || game.scale.height !== H) game.scale.resize(W, H);
 };
 window.addEventListener('resize', fitToHost);
 window.visualViewport?.addEventListener('resize', fitToHost);
+// 창 크기 이벤트 없이 칸만 바뀌는 경우도 맞춘다 — Scale.NONE 은 부모 크기를 캔버스에 옮기지 않는다 (리뷰 HiDPI 1회차)
+const host = document.getElementById('game-container');
+if (host && typeof ResizeObserver !== 'undefined') new ResizeObserver(fitToHost).observe(host);
 
 // 저장된 뮤트 설정 복원
 game.events.once('ready', () => {

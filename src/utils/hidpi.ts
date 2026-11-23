@@ -44,6 +44,24 @@ export function installHiDpi(): void {
   Cam.getWorldPoint = function <O extends Phaser.Math.Vector2>(this: Phaser.Cameras.Scene2D.BaseCamera, x: number, y: number, output?: O): O {
     return getWorldPoint.call(this, x * DPR, y * DPR, output) as O;
   };
+  // 카메라 아래 포인터 판정 — Phaser 는 pointer.x/y 를 카메라 뷰포트(기기 px)와 견준다. 기기 px 로 넘긴다
+  // (안 그러면 DPR 2 에서 캔버스 밖 포인터도 카메라 안으로 잡힌다 — 리뷰 HiDPI 1회차)
+  const CM = Phaser.Cameras.Scene2D.CameraManager.prototype;
+  const below = CM.getCamerasBelowPointer;
+  CM.getCamerasBelowPointer = function (this: Phaser.Cameras.Scene2D.CameraManager, pointer: Phaser.Input.Pointer) {
+    return below.call(this, { x: pointer.x * DPR, y: pointer.y * DPR } as Phaser.Input.Pointer);
+  };
+  // 흔들림 — Phaser 는 강도에 camera.width(기기 px) 와 zoom 을 곱하고, 그 오프셋을 확대된 행렬에 옮긴다.
+  // 그래서 CSS 화면에서는 DPR² 배로 커진다 (DPR 2 에서 4배). 강도를 DPR² 로 나눠 DPR 1 과 같은 크기로 (리뷰 HiDPI 1회차)
+  const Cam2D = Phaser.Cameras.Scene2D.Camera.prototype;
+  const shake = Cam2D.shake;
+  Cam2D.shake = function (this: Phaser.Cameras.Scene2D.Camera, duration?: number, intensity?: number | Phaser.Math.Vector2,
+    force?: boolean, callback?: Phaser.Types.Cameras.Scene2D.CameraShakeCallback, context?: unknown) {
+    const k = 1 / (DPR * DPR);
+    const i = intensity ?? 0.05;   // Phaser 기본값 (Shake.start)
+    const scaled = typeof i === 'number' ? i * k : new Phaser.Math.Vector2(i.x * k, i.y * k);
+    return shake.call(this, duration, scaled, force, callback, context);
+  };
 }
 
 const proxies = new WeakMap<Phaser.Scale.ScaleManager, Phaser.Scale.ScaleManager>();
