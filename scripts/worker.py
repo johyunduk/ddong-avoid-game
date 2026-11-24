@@ -62,6 +62,9 @@ DEFAULT_IMAGER = BUILDER   # 이미지도 builder 가 뽑는다 (control-tower/t
 IMAGER = DEFAULT_IMAGER    # 이미지 담당. main() 이 --imager 로 바꾼다
 INTEGRATOR = "dev"         # w2 똥피하기·개발 — 게임 반영·검증
 COMPOSER = "composer"      # w8 IP·음악 — 가사·Suno·곡 후보 업로드
+# 곡 작업본 자리 — 2026-11-24 노래 스킬을 사용자 레벨(~/.claude/skills/create-music)로, 작업본 · 제출 스크립트를
+# 컨트롤타워로 옮겼다(재편 3단계 · 음악). composer 는 컨트롤타워에서 뜨므로 게임 파일은 절대 경로로 알려 준다
+MUSIC_HOME = Path(os.environ.get("DDONG_MUSIC_HOME", r"C:\Users\user\Projects\control-tower"))
 
 # **이미지 담당은 Codex 일 수도 Claude 일 수도 있다** — `--imager <에이전트>` 로 고른다.
 # 둘은 지시문이 달라진다:
@@ -438,16 +441,17 @@ def _music_jobs(env: dict, state: dict) -> list[dict]:
                 mood,
                 again,
                 "",
-                "1. `src/utils/character.ts` 에서 이 캐릭터의 `illustPath` 를 찾아 "
-                "**그 이미지를 직접 열어 보고**, `src/config/abilityParams.ts` 의 설명과 "
+                f"1. `{(ROOT / 'src' / 'utils' / 'character.ts').as_posix()}` 에서 이 캐릭터의 `illustPath` 를 찾아 "
+                f"**그 이미지를 직접 열어 보고**(`{(ROOT / 'public').as_posix()}` 아래), "
+                f"`{(ROOT / 'src' / 'config' / 'abilityParams.ts').as_posix()}` 의 설명과 "
                 "등급까지 읽어 곡의 분위기를 잡아라.",
-                "2. 가사와 Suno 스타일을 `creative/_music/<캐릭터id>/` 에 쓴다.",
-                "3. `python scripts/suno-submit.py` 로 곡을 뽑는다. "
+                f"2. 가사와 Suno 스타일을 `{(MUSIC_HOME / 'creative' / '_music').as_posix()}/<캐릭터id>/` 에 쓴다.",
+                "3. /create-music 스킬대로 곡을 뽑는다(Suno MCP 먼저). "
                 "**Suno 로그인이 풀려 있으면 거기서 멈춰라** — "
-                f"`python scripts/music-order.py --id {o['id']} --status pending` 으로 되돌리고 "
+                f"`python {(ROOT / 'scripts' / 'music-order.py').as_posix()} --id {o['id']} --status pending` 으로 되돌리고 "
                 "PushNotification 으로 알린 뒤 끝낸다.",
                 "4. **음원은 내려받지 않는다.** 곡마다 공유 링크를 복사해 올린다: "
-                f"`python scripts/music-order.py --id {o['id']} --title \"<제목>\" "
+                f"`python {(ROOT / 'scripts' / 'music-order.py').as_posix()} --id {o['id']} --title \"<제목>\" "
                 "--links <링크1> <링크2> --labels \"<한 줄>\" \"<한 줄>\"`",
                 "5. PushNotification 으로 심사 대기를 알린다. "
                 "**사람이 Suno 에서 직접 듣고 고른다. 여기서 끝이다.**",

@@ -125,8 +125,11 @@ python scripts/worker.py --queues character   # w5:p1
 python scripts/worker.py --queues music       # w5:p2
 ```
 
-Suno 는 공개 API 가 없어 브라우저로 몬다. 호출은 `scripts/suno-submit.py` 한 곳으로만 —
-공식 API(`platform.suno.com`)가 열리면 그 파일만 바꾼다.
+**곡은 이 레포 밖에서 만든다 (2026-11-24 재편 3단계 · 음악).** 노래 스킬 `/create-music` 은 사용자 레벨
+(`~/.claude/skills/create-music/` — 어느 폴더 세션에서든 보인다), 곡 작업본 · 틀 · `suno-submit.py` 는 컨트롤타워
+(`C:\Users\user\Projects\control-tower\creative\_music\` · `creative\_template\` · `scripts\`), composer 도 거기서 뜬다.
+이 레포에 남은 것은 심사실 곡 주문(`scripts/music-order.py` — Supabase 열쇠가 여기 `.env.local` 에 있다)과 워커의 지시문뿐이다.
+Suno 는 공식 MCP 로 먼저 만들고, 못 쓸 때만 컨트롤타워 `scripts/suno-submit.py`(브라우저) 로 간다.
 **음원은 저장하지 않는다** — 심사실에는 Suno 공유 링크만 올라가고 사람이 거기서 듣는다.
 
 **일러스트 후보는 심사실에 올리지 않는다 (2026-09-17).** ComfyUI 출력 디렉터리
