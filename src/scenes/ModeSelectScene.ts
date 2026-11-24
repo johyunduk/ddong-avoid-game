@@ -194,6 +194,7 @@ export default class ModeSelectScene extends BaseScene {
     this.createRail(L);
 
     // 아래부터 쌓는다: [스토리 | 시작] → [캐릭터 무대 | 뽑기 판]
+    // 칸(x, y, w, h)은 보이는 바깥 끝이다 — 테두리 · 턱이 있는 무대 · 시작도 그 안에 그려 같은 줄끼리 위아래 끝이 맞는다
     const lastH = 17 * u, lastTop = H - g - lastH;
     const pullH = 36 * u, pullTop = lastTop - 3 * u - pullH;
     const inner = fw - g * 2, gap = 2.6 * u;
@@ -458,6 +459,8 @@ export default class ModeSelectScene extends BaseScene {
    */
   private createCharStage(def: CharacterDef, x: number, y: number, w: number, h: number, u: number) {
     const bw = Math.max(2, 0.6 * u), lip = 1.4 * u, r = 3.4 * u, P = 6;
+    // 테두리 · 아래 턱까지 칸 안에 — 면은 그만큼 안쪽. 옆 뽑기 판과 위아래 끝 · 아래 줄과 왼쪽 끝이 맞는다 (대표 11-24 「줄마다 높이를 맞춰」)
+    x += bw; y += bw; w -= bw * 2; h -= bw * 2 + lip;
     const key = this.bakeStage(`home_stage_${Math.round(w)}x${Math.round(h)}`, w, h, r, bw, lip, P);
     const box = this.makeBox(x, y, w, h, () => this.go('CharacterSelectScene'));
     const texH = h + P * 2 + bw * 2 + lip;
@@ -857,6 +860,8 @@ export default class ModeSelectScene extends BaseScene {
   /** 게임 시작 — 클래식 그림(하늘 · 도시 · 똥 무리)을 단추 면에, 남색 테두리 · 아래 턱, 흰 글자 + 남색 외곽선 */
   private createStartButton(x: number, y: number, w: number, h: number, u: number) {
     const bw = Math.max(2, 0.6 * u), lip = 1.4 * u, r = 3.4 * u, P = 6;
+    // 테두리 · 아래 턱까지 칸 안에 — 옆 스토리 칸과 위아래 끝이 맞는다 (캐릭터 무대와 같은 까닭)
+    x += bw; y += bw; w -= bw * 2; h -= bw * 2 + lip;
     const key = this.bakeStart(`home_start_${Math.round(w)}x${Math.round(h)}`, w, h, r, bw, lip, P);
     const box = this.makeBox(x, y, w, h, () => this.startGame(GameMode.CLASSIC));
     const texH = h + P * 2 + bw * 2 + lip;
