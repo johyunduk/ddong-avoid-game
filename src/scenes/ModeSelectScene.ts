@@ -16,7 +16,9 @@ import { bakeButton, bakeRoundedImage, bakeShine, gradientText, wireButton } fro
 // ── 홈 (L1 큰 픽업 배너 · 7번 하늘 + 노랑 · 시작 = 클래식 그림 · 뽑기 노랑) ─────────────
 // 2026-11-22 대표 시안 https://claude.ai/artifact/EzjTqGPKX2Rhkp9SS1UvJe 의 4Y.
 // 화면 가득 고른 캐릭터 일러스트 → 위 [캐릭터 칩 · SKOR · 설정] · 오른쪽 [랭킹 · 노트] →
-// 왼쪽 [말풍선 · 등급 + 이름 · 기록 + 바꾸기] → 넓은 뽑기 판 → 아래 [스토리 | 게임 시작].
+// [캐릭터 무대 | 뽑기 판] → 아래 [스토리 | 게임 시작].
+// 2026-11-24 대표: 뽑기 판 위 캐릭터 묶음(말풍선 · 등급 + 이름 · 기록 + 바꾸기)을 빼고 뽑기 왼쪽에 캐릭터 버튼 —
+// 시안 https://claude.ai/artifact/Fr6KdCQG3MPgszNLr3k5zg 의 D(도트 무대). 이름 · 이번 달 기록은 위 캐릭터 칩에 남는다.
 // 치수는 폰 폭(fw)의 % 단위(u) — 시안의 cqw 와 같다. 넓은 화면에서는 가운데 폰 폭 기둥에만 놓는다
 
 /** 7번 판 색 — 하늘 바탕 · 남색 글자 · 노란 뽑기 */
@@ -24,9 +26,6 @@ const C = {
   bg: '#E3F2FF', text: '#0E1E36', sub: '#5B6B86', navy: 0x0e1e36,
   pull: '#FFC21A', pullInt: 0xffc21a, onPull: '#2A1D00', pullLip: '#A87A00', acc: 0x2f8bff,
 } as const;
-
-/** 말풍선 대사 — 캐릭터별 대사는 IP 쪽이 정하면 채운다. 그 전엔 모두 이 한 줄 */
-const DEFAULT_LINE = '오늘도 피해 볼까?';
 
 /** 상시 판 줄기 순서 — 센티넬을 왼쪽에 (대표 2026-11-23). 여기 없는 UR 은 풀 순서대로 그 뒤에 */
 const STANDARD_UR_ORDER = ['sentinel', 'legacy'];
@@ -194,12 +193,13 @@ export default class ModeSelectScene extends BaseScene {
     this.createTopBar(def, L);
     this.createRail(L);
 
-    // 아래부터 쌓는다: [스토리 | 시작] → 뽑기 판 → 캐릭터 이름 묶음
+    // 아래부터 쌓는다: [스토리 | 시작] → [캐릭터 무대 | 뽑기 판]
     const lastH = 17 * u, lastTop = H - g - lastH;
     const pullH = 36 * u, pullTop = lastTop - 3 * u - pullH;
-    this.createWho(def, L, pullTop - 3.4 * u);
-    this.createPullCard(L, pullTop, pullH);
     const inner = fw - g * 2, gap = 2.6 * u;
+    const stageW = 26 * u;
+    this.createCharStage(def, x0 + g, pullTop, stageW, pullH, u);
+    this.createPullCard(x0 + g + stageW + gap, pullTop, inner - stageW - gap, pullH, u);
     const storyW = (inner - gap) / 2.35;
     this.createStoryCard(x0 + g, lastTop, storyW, lastH, u);
     this.createStartButton(x0 + g + storyW + gap, lastTop, inner - storyW - gap, lastH, u);
@@ -451,44 +451,90 @@ export default class ModeSelectScene extends BaseScene {
     });
   }
 
-  /** 왼쪽 캐릭터 묶음 — 아래가 bottom. 아래에서부터 [기록 · 바꾸기] → [등급 · 이름] → 말풍선 */
-  private createWho(def: CharacterDef, L: { x0: number; u: number; g: number }, bottom: number) {
-    const { x0, u, g } = L;
-    const left = x0 + g;
-    const glow = (t: Phaser.GameObjects.Text, k: number) =>
-      t.setStroke('#ffffff', Math.max(2, k * u)).setShadow(0, 0, 'rgba(255,255,255,0.9)', 2 * u, true, true);
+  /**
+   * 캐릭터 무대 — 뽑기 판 왼쪽. 옥상 스테이지(background2) 위에 고른 캐릭터의 게임 속 도트 그림이 서서 들썩이고,
+   * 위에 「캐릭터」, 아래 가장자리에 등급 · 이름표. 누르면 캐릭터 고르기 (대표 2026-11-24 시안 D).
+   * 테두리 · 아래 턱은 게임 시작 단추와 같은 남색 — 아래 줄 [스토리 | 시작] 과 짝이 맞게
+   */
+  private createCharStage(def: CharacterDef, x: number, y: number, w: number, h: number, u: number) {
+    const bw = Math.max(2, 0.6 * u), lip = 1.4 * u, r = 3.4 * u, P = 6;
+    const key = this.bakeStage(`home_stage_${Math.round(w)}x${Math.round(h)}`, w, h, r, bw, lip, P);
+    const box = this.makeBox(x, y, w, h, () => this.go('CharacterSelectScene'));
+    const texH = h + P * 2 + bw * 2 + lip;
+    box.add(this.add.image(0, 0, key).setDisplaySize(w + P * 2 + bw * 2, texH).setOrigin(0.5, (P + bw + h / 2) / texH));
 
-    // 기록 · 바꾸기
-    const subY = bottom - 2.3 * u;
-    const best = bestThisMonth();
-    const rec = glow(this.add.text(left, subY, best > 0 ? `이번 달 최고 ${best.toLocaleString()}` : '이번 달 기록 없음', {
-      fontSize: this.fs(3, u), color: C.sub, fontStyle: 'bold',
-    }).setOrigin(0, 0.5).setDepth(5), 0.5);
-    const swapT = this.add.text(0, 0, '⇄ 바꾸기', { fontSize: this.fs(2.9, u), color: C.text, fontStyle: 'bold' }).setOrigin(0.5);
-    const sw = swapT.width + 4.8 * u, sh = 5.2 * u;
-    const swap = this.makeBox(left + rec.width + 2 * u, subY - sh / 2, sw, sh, () => this.go('CharacterSelectScene'));
-    swap.add([this.glass(sw, sh, sh / 2), swapT]);
+    // 발밑 그림자 + 도트 캐릭터(앞모습). 키 19u 에 맞추되 넓은 그림은 폭 20u 를 넘지 않게
+    const footY = h / 2 - 3.6 * u;
+    box.add(this.add.ellipse(0, footY, 10 * u, 1.8 * u, C.navy, 0.28));
+    if (this.textures.exists(def.imageKey)) {
+      const spr = this.add.image(0, footY + 0.4 * u, def.imageKey).setOrigin(0.5, 1);
+      spr.setScale(Math.min(19 * u / spr.height, 20 * u / spr.width));
+      box.add(spr);
+      // 들썩임 — 0.45초마다 0.7u 위아래로 뚝뚝 (도트 걷기 느낌, 부드러운 트윈이 아니라)
+      const y0 = spr.y;
+      this.time.addEvent({ delay: 450, loop: true, callback: () => spr.setY(spr.y === y0 ? y0 - 0.7 * u : y0) });
+    }
 
-    // 등급 · 이름
-    const nameY = subY - 2.3 * u - 1.4 * u - 4.3 * u;
-    const gradeT = this.add.text(0, 0, def.grade, { fontSize: this.fs(3.2, u), color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5);
-    const gw = gradeT.width + 3.6 * u, gh = 5.4 * u;
+    // 「캐릭터」 — 게임 시작과 같은 흰 글자 + 남색 외곽선 · 아래 그림자
+    box.add(this.add.text(0, -h / 2 + 4.6 * u, '캐릭터', {
+      fontSize: this.fs(4.2, u), color: '#ffffff', fontStyle: 'bold', stroke: '#0e1e36', strokeThickness: Math.max(3, 0.8 * u),
+    }).setOrigin(0.5).setShadow(0, 0.7 * u, '#0e1e36', 0, true, false));
+
+    // 등급 · 이름표 — 아래 가장자리에 걸친 흰 알약(남색 테). 아래 턱을 덮고 아래 줄과는 띄운다
+    const nameT = this.add.text(0, 0, def.name, { fontSize: this.fs(2.8, u), color: C.text, fontStyle: 'bold' }).setOrigin(0, 0.5);
+    const gradeT = this.add.text(0, 0, def.grade, { fontSize: this.fs(2.2, u), color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5);
+    const gw = gradeT.width + 2.2 * u, gh = 3.4 * u;
+    const th = gh + 1.2 * u, tw = 0.6 * u + gw + 0.9 * u + nameT.width + 1.8 * u;
+    const ty = h / 2 - 0.6 * u, tx = -tw / 2;
     const gc = Phaser.Display.Color.HexStringToColor(def.gradeColor).color;
-    this.add.graphics().setDepth(5).fillStyle(gc, 1).fillRoundedRect(left, nameY - gh / 2, gw, gh, 1.2 * u);
-    gradeT.setPosition(left + gw / 2, nameY).setDepth(6);
-    glow(this.add.text(left + gw + 2 * u, nameY, def.name, {
-      fontSize: this.fs(8.6, u), color: C.text, fontStyle: 'bold',
-    }).setOrigin(0, 0.5).setDepth(5), 0.9);
+    box.add(this.add.graphics()
+      .fillStyle(0xffffff, 1).fillRoundedRect(tx, ty - th / 2, tw, th, th / 2)
+      .lineStyle(Math.max(1.5, 0.5 * u), C.navy, 1).strokeRoundedRect(tx, ty - th / 2, tw, th, th / 2)
+      .fillStyle(gc, 1).fillRoundedRect(tx + 0.6 * u, ty - gh / 2, gw, gh, gh / 2));
+    box.add(gradeT.setPosition(tx + 0.6 * u + gw / 2, ty));
+    box.add(nameT.setPosition(tx + 0.6 * u + gw + 0.9 * u, ty));
+  }
 
-    // 말풍선 — 꼬리는 왼쪽 아래
-    const lineT = this.add.text(0, 0, DEFAULT_LINE, { fontSize: this.fs(3.2, u), color: C.text, fontStyle: 'bold' });
-    const bw = lineT.width + 6 * u, bh = 7.4 * u;
-    const by = nameY - 4.3 * u - 1.4 * u - 1.6 * u - bh;
-    this.add.graphics().setDepth(5)
-      .fillStyle(0x0e1e36, 0.12).fillRoundedRect(left, by + 0.8 * u, bw, bh, 3.4 * u)
-      .fillStyle(0xffffff, 1).fillRoundedRect(left, by, bw, bh, 3.4 * u)
-      .fillTriangle(left + 5 * u, by + bh - 1, left + 8.2 * u, by + bh - 1, left + 5 * u, by + bh + 1.6 * u);
-    lineT.setOrigin(0, 0.5).setPosition(left + 3 * u, by + bh / 2).setDepth(6);
+  /** 캐릭터 무대 그림 — 옥상 스테이지 아래쪽(도시 · 옥상 바닥)을 면에, 남색 테두리 + 아래 턱. 시작 단추 굽기와 같은 꼴 */
+  private bakeStage(key: string, w: number, h: number, r: number, bw: number, lip: number, P: number): string {
+    if (this.textures.exists(key)) return key;
+    const R = 2;
+    const TW = w + P * 2 + bw * 2, TH = h + P * 2 + bw * 2 + lip;
+    const tex = this.textures.createCanvas(key, Math.round(TW * R), Math.round(TH * R));
+    if (!tex) return key;
+    const ctx = tex.getContext();
+    ctx.scale(R, R);
+    const bx = P + bw, by = P + bw;
+    const rr = (x: number, y: number, ww: number, hh: number, rad: number) => {
+      ctx.beginPath();
+      ctx.moveTo(x + rad, y);
+      ctx.arcTo(x + ww, y, x + ww, y + hh, rad);
+      ctx.arcTo(x + ww, y + hh, x, y + hh, rad);
+      ctx.arcTo(x, y + hh, x, y, rad);
+      ctx.arcTo(x, y, x + ww, y, rad);
+      ctx.closePath();
+    };
+    // 아래 턱 + 테두리 (남색 덩어리)
+    ctx.fillStyle = '#0e1e36';
+    rr(bx - bw, by - bw + lip, w + bw * 2, h + bw * 2, r + bw);
+    ctx.fill();
+    rr(bx - bw, by - bw, w + bw * 2, h + bw * 2, r + bw);
+    ctx.fill();
+    // 면 — 스테이지 그림을 무대 폭의 1.7배로 키워 아래 가운데를 보인다 (옥상 바닥이 발밑에 오게)
+    ctx.save();
+    rr(bx, by, w, h, r);
+    ctx.clip();
+    ctx.fillStyle = '#8fd0ff';
+    ctx.fillRect(bx, by, w, h);
+    if (this.textures.exists('background2')) {
+      const src = this.textures.get('background2').getSourceImage() as HTMLImageElement;
+      const sc = w * 1.7 / src.width;
+      const sw = w / sc, sh = Math.min(src.height, h / sc);
+      ctx.drawImage(src, (src.width - sw) / 2, src.height - sh, sw, sh, bx, by + h - sh * sc, w, sh * sc);
+    }
+    ctx.restore();
+    tex.refresh();
+    return key;
   }
 
   /**
@@ -497,20 +543,21 @@ export default class ModeSelectScene extends BaseScene {
    * 누르면 그때 보이던 배너로 뽑기 화면을 연다. 좌우로 밀면 앞 · 뒤 배너로 넘어가고(끝 다음은 처음), 자동 넘김은 다시 3.5초부터.
    * 밀기와 누르기를 가르려고 wireButton 대신 손가락을 뗄 때 판정한다. 노란 테두리 · 빛 번짐 · 지나가는 빛은 판 공통
    */
-  private createPullCard(L: { x0: number; fw: number; u: number; g: number }, top: number, h: number) {
-    const { x0, fw, u, g } = L;
-    const w = fw - g * 2, r = 3.4 * u;
+  private createPullCard(x: number, top: number, w: number, h: number, u: number) {
+    const r = 3.4 * u;
+    // 판이 좁으면(왼쪽 캐릭터 무대 몫만큼) 글씨 · 여백을 줄이고 그림 줄기를 오른쪽으로 — 폭 78u 에서 1, 0.8 아래로는 안 줄인다
+    const tk = Phaser.Math.Clamp(w / (78 * u), 0.8, 1);
     const open = visibleBanners();
     const list = open.length > 0 ? open : [BANNERS[0]];
     let idx = 0;
-    const box = this.add.container(x0 + g + w / 2, top + h / 2).setDepth(5).setSize(w, h);
+    const box = this.add.container(x + w / 2, top + h / 2).setDepth(5).setSize(w, h);
     box.setInteractive(new Phaser.Geom.Rectangle(0, 0, w, h), Phaser.Geom.Rectangle.Contains);
     if (box.input) box.input.cursor = 'pointer';
     this.menuButtons.push(box);
 
     const slides = list.map((b, i) => {
       const slide = this.add.container(0, 0).setAlpha(i === 0 ? 1 : 0);
-      this.fillPullSlide(slide, b, w, h, r, u);
+      this.fillPullSlide(slide, b, w, h, r, u, tk);
       box.add(slide);
       return slide;
     });
@@ -520,7 +567,7 @@ export default class ModeSelectScene extends BaseScene {
       .setDisplaySize(16 * u, h * 1.4).setAngle(18).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.7);
     box.add(shine);
     const maskG = this.make.graphics({}, false);
-    maskG.fillStyle(0xffffff).fillRoundedRect(x0 + g, top, w, h, r);
+    maskG.fillStyle(0xffffff).fillRoundedRect(x, top, w, h, r);
     shine.setMask(maskG.createGeometryMask());
     this.tweens.add({ targets: shine, x: w / 2 + 12 * u, duration: 1000, repeat: -1, repeatDelay: 1800, ease: 'Cubic.easeInOut' });
     this.events.once('shutdown', () => maskG.destroy());
@@ -601,7 +648,7 @@ export default class ModeSelectScene extends BaseScene {
     // 점 — 판 왼쪽 아래. 지금 판은 노란 긴 알약
     const dots = this.add.graphics();
     box.add(dots);
-    const dy = h / 2 - 2.8 * u, d = 1.4 * u, lx = -w / 2 + 4 * u;
+    const dy = h / 2 - 2.8 * u, d = 1.4 * u, lx = -w / 2 + 4 * tk * u;
     const drawDots = () => {
       dots.clear();
       let x = lx;
@@ -633,40 +680,42 @@ export default class ModeSelectScene extends BaseScene {
    * 뽑기 판 한 장 — 구운 판 그림 + 배지 · 제목 · 설명. 값 단추(1회 · 10회)는 두지 않는다 — 값은 뽑기 화면에서 본다
    * (대표 2026-11-23 「1회 10회 버튼은 저기에 없어도 될 듯」). 판 어디를 눌러도 뽑기 화면이다
    */
-  private fillPullSlide(slide: Phaser.GameObjects.Container, b: BannerDef, w: number, h: number, r: number, u: number) {
+  private fillPullSlide(slide: Phaser.GameObjects.Container, b: BannerDef, w: number, h: number, r: number, u: number, tk: number) {
     const P = 18;
-    const key = this.bakePullCard(`home_pull_${b.id}_${Math.round(w)}x${Math.round(h)}`, b, w, h, r, P, Math.max(2.5, 0.7 * u));
+    const key = this.bakePullCard(`home_pull_${b.id}_${Math.round(w)}x${Math.round(h)}`, b, w, h, r, P, Math.max(2.5, 0.7 * u), tk < 1);
     slide.add(this.add.image(0, 0, key).setDisplaySize(w + P * 2, h + P * 2));
 
     // 글 — 왼쪽, 위에서 아래로 배지 · 제목 · 설명. 줄 칸 높이(u)를 정해 두고 판 가운데(점 자리만큼 위)에 묶어 놓는다
     // (Text 높이는 textSafety 여백이 붙어 실제 글자보다 커서, 그 높이로 쌓으면 판 밖으로 샌다)
     const txt = pullTexts(b);
     const acc = accentOf(b), navy = '#0e1e36';
-    const lx = -w / 2 + 4 * u;
-    const bh = 4.2 * u, titleH = 9 * u, subH = 3.8 * u;
-    let y = -(bh + 1.6 * u + titleH + 0.8 * u + subH) / 2 - 1.4 * u;
+    // 글 치수는 모두 tk 배 (판이 좁으면 0.8 까지) — u 대신 k 로 잰다
+    const k = u * tk;
+    const lx = -w / 2 + 4 * k;
+    const bh = 4.2 * k, titleH = 9 * k, subH = 3.8 * k;
+    let y = -(bh + 1.6 * k + titleH + 0.8 * k + subH) / 2 - 1.4 * u;
     // 배지 — 배너 색 바탕 흰 글자
-    const badgeT = this.add.text(0, 0, txt.badge, { fontSize: this.fs(2.8, u), color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5);
-    const bw = badgeT.width + 4 * u;
+    const badgeT = this.add.text(0, 0, txt.badge, { fontSize: this.fs(2.8, k), color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5);
+    const bw = badgeT.width + 4 * k;
     slide.add(this.add.graphics().fillStyle(Phaser.Display.Color.HexStringToColor(acc).color, 1).fillRoundedRect(lx, y, bw, bh, bh / 2));
     slide.add(badgeT.setPosition(lx + bw / 2, y + bh / 2));
-    y += bh + 1.6 * u;
+    y += bh + 1.6 * k;
     // 제목 — 흰 글자 + 남색 외곽선(「게임 시작」과 같은 결). 뒤에 남색 두께(아래)와 배너 색 그림자(오른쪽 아래)를
     // 같은 글자 두 장으로 깐다 — Text 그림자는 하나뿐이라. 외곽선은 가운데에 그려져 바깥으로 절반(0.45u)만 보인다
-    const ty = y + titleH / 2, st = Math.max(3, 0.9 * u);
-    const titleStyle = (fill: string, stroke: string) => ({ fontSize: this.fs(8, u), color: fill, fontStyle: 'bold', stroke, strokeThickness: st });
-    slide.add(this.add.text(lx + 0.9 * u, ty + 1.5 * u, txt.title, titleStyle(acc, acc)).setOrigin(0, 0.5));
-    slide.add(this.add.text(lx + 0.3 * u, ty + 0.9 * u, txt.title, titleStyle(navy, navy)).setOrigin(0, 0.5));
+    const ty = y + titleH / 2, st = Math.max(3, 0.9 * k);
+    const titleStyle = (fill: string, stroke: string) => ({ fontSize: this.fs(8, k), color: fill, fontStyle: 'bold', stroke, strokeThickness: st });
+    slide.add(this.add.text(lx + 0.9 * k, ty + 1.5 * k, txt.title, titleStyle(acc, acc)).setOrigin(0, 0.5));
+    slide.add(this.add.text(lx + 0.3 * k, ty + 0.9 * k, txt.title, titleStyle(navy, navy)).setOrigin(0, 0.5));
     slide.add(this.add.text(lx, ty, txt.title, titleStyle('#ffffff', navy)).setOrigin(0, 0.5));
-    y += titleH + 0.8 * u;
+    y += titleH + 0.8 * k;
     // 설명 — 남색, 「확률 UP」 · 「UR」 만 배너 색. 그림 위로 걸려도 읽히게 옅은 흰 테
     let sx = lx;
     for (const [t, isAcc] of txt.sub) {
       const part = this.add.text(sx, y + subH / 2, t, {
-        fontSize: this.fs(3, u), color: isAcc ? acc : navy, fontStyle: 'bold', stroke: '#ffffff', strokeThickness: Math.max(2, 0.5 * u),
+        fontSize: this.fs(3, k), color: isAcc ? acc : navy, fontStyle: 'bold', stroke: '#ffffff', strokeThickness: Math.max(2, 0.5 * u),
       }).setOrigin(0, 0.5);
       slide.add(part);
-      sx += part.width + 0.4 * u;
+      sx += part.width + 0.4 * k;
     }
   }
 
@@ -682,7 +731,7 @@ export default class ModeSelectScene extends BaseScene {
   }
 
   /** 뽑기 판 그림 — 흰 판 · 오른쪽에 배너 그림 · 왼쪽 흰 덮개 · 노란 테두리 + 빛 번짐. 한 번 굽는다 */
-  private bakePullCard(key: string, b: BannerDef, w: number, h: number, r: number, P: number, bw: number): string {
+  private bakePullCard(key: string, b: BannerDef, w: number, h: number, r: number, P: number, bw: number, narrow: boolean): string {
     if (this.textures.exists(key)) return key;
     const R = 2;
     const tex = this.textures.createCanvas(key, Math.round((w + P * 2) * R), Math.round((h + P * 2) * R));
@@ -725,8 +774,8 @@ export default class ModeSelectScene extends BaseScene {
     ctx.fillRect(0, 0, w, h);
     const art = this.pullArt(b);
     if (art.strips) {
-      // 비스듬한 세로 줄기 — 판 오른쪽 70%(폭 30% 부터)를 그림 수만큼 나눈다. 줄기 사이는 흰 선
-      const x0 = w * 0.3, n = art.ids.length, sw = (w - x0) / n, k = w * 0.035;
+      // 비스듬한 세로 줄기 — 판 오른쪽(폭 30% 부터, 좁은 판은 제목과 덜 겹치게 38% 부터)을 그림 수만큼 나눈다. 줄기 사이는 흰 선
+      const x0 = w * (narrow ? 0.38 : 0.3), n = art.ids.length, sw = (w - x0) / n, k = w * 0.035;
       for (let i = 0; i < n; i++) {
         const a = x0 + i * sw, z = i === n - 1 ? w + k * 2 : a + sw;
         ctx.save();
@@ -766,11 +815,12 @@ export default class ModeSelectScene extends BaseScene {
     } else {
       cover('menu_gacha_face', 0, 0, w, h, 0.75, 0.28);
     }
-    // 왼쪽 흰 덮개 — 10% 까지 흰색, 24% 에 0.6, 42% 에 사라진다 (대표 11-23 「흰 부분 너무 넓다」 → 시안 「좁게」)
+    // 왼쪽 흰 덮개 — 10% 까지 흰색, 24% 에 0.6, 42% 에 사라진다 (대표 11-23 「흰 부분 너무 넓다」 → 시안 「좁게」).
+    // 좁은 판은 글이 판 폭에서 차지하는 몫이 커서 14% · 32% · 52% 로
     const fade = ctx.createLinearGradient(0, 0, w, 0);
-    fade.addColorStop(0.1, 'rgba(255,255,255,1)');
-    fade.addColorStop(0.24, 'rgba(255,255,255,0.6)');
-    fade.addColorStop(0.42, 'rgba(255,255,255,0)');
+    fade.addColorStop(narrow ? 0.14 : 0.1, 'rgba(255,255,255,1)');
+    fade.addColorStop(narrow ? 0.32 : 0.24, 'rgba(255,255,255,0.6)');
+    fade.addColorStop(narrow ? 0.52 : 0.42, 'rgba(255,255,255,0)');
     ctx.fillStyle = fade;
     ctx.fillRect(0, 0, w, h);
     ctx.restore();
