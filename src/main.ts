@@ -73,6 +73,10 @@ const config: Phaser.Types.Core.GameConfig = {
     autoCenter: Phaser.Scale.CENTER_BOTH
   },
   render: {
+    // 도트 모드를 끈다 — Phaser 는 scale.zoom 이 1 이 아니면(위 zoom 1/DPR) pixelArt 를 저절로 켜고, 그러면 antialias 까지 꺼서
+    // 모든 그림을 최근접으로 줄이고 늘린다(일러스트가 자글자글 · 캔버스 pixelated — 대표 11-24 「전반적으로 화질이 안 좋아졌다」).
+    // 또렷하게 그리기 전(zoom 1)처럼 선형으로 그린다. 도트로 남길 그림은 setFilter(NEAREST) 로 따로 한다 (TitleScene 로고 · vfx)
+    pixelArt: false,
     antialias: true,
     roundPixels: true,
     // 배터리 모드에서 브라우저/OS가 WebGL 컨텍스트를 저전력 GPU·다운클럭으로 돌리는 것을 억제하는 힌트.
