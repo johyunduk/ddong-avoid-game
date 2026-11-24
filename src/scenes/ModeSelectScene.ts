@@ -571,6 +571,14 @@ export default class ModeSelectScene extends BaseScene {
     shine.setMask(maskG.createGeometryMask());
     this.tweens.add({ targets: shine, x: w / 2 + 12 * u, duration: 1000, repeat: -1, repeatDelay: 1800, ease: 'Cubic.easeInOut' });
     this.events.once('shutdown', () => maskG.destroy());
+    // 넘김 · 밀기로 판이 옆으로 비켜도 판 밖(왼쪽 캐릭터 무대 위)에 비치지 않게 자른다.
+    // 판보다 2.4u 넓게 — 구운 판의 빛 번짐(캔버스 16px = 8px)이 잘리지 않을 만큼, 무대와의 틈(2.6u)보다는 좁게
+    const e = 2.4 * u;
+    const slideMaskG = this.make.graphics({}, false);
+    slideMaskG.fillStyle(0xffffff).fillRoundedRect(x - e, top - e, w + e * 2, h + e * 2, r + e);
+    const slideMask = slideMaskG.createGeometryMask();
+    for (const s of slides) s.setMask(slideMask);
+    this.events.once('shutdown', () => slideMaskG.destroy());
 
     // 누르기 · 밀기 — 누른 자리에서 8px 넘게 움직이면 밀기. 판 폭 12% 넘게 밀고 떼면 넘기고, 덜 밀면 제자리로.
     // 누르고 있는 동안은 자동 넘김을 멈춘다 — 손가락 아래서 판이 바뀌지 않게
